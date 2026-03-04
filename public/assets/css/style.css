@@ -1071,6 +1071,12 @@
 .editor-layout[data-view="preview"] .preview-pane {
   flex: 1;
 }
+.editor-layout[data-view="preview"] .preview-content {
+  max-width: 1080px;
+}
+.editor-layout[data-view="preview"] .preview-content p {
+  max-width: 84ch;
+}
 .editor-layout[data-view="editor"] .editor-pane {
   flex: 1;
 }
