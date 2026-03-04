@@ -38,6 +38,10 @@ attachCollaborationGateway({
   wsBasePath: config.wsBasePath,
 });
 
+function getDisplayHost(host) {
+  return host === '127.0.0.1' ? 'localhost' : host;
+}
+
 function shutdown(signal) {
   console.log(`[server] Received ${signal}, shutting down`);
 
@@ -57,7 +61,7 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 httpServer.listen(config.port, config.host, () => {
   console.log('');
   console.log('  CollabMD Collaboration Server');
-  console.log(`  http://${config.host}:${config.port}`);
+  console.log(`  http://${getDisplayHost(config.host)}:${config.port}`);
   console.log(`  ws route: ${config.wsBasePath}/:room`);
   console.log(`  persistence: ${config.persistenceDir}`);
   console.log('');
