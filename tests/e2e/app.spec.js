@@ -13,11 +13,40 @@ async function appendEditorContent(page, content) {
   await page.keyboard.type(content, { delay: 5 });
 }
 
+async function replaceEditorContent(page, content) {
+  const editor = page.locator('.cm-content').first();
+  await editor.click();
+  await page.keyboard.press('Meta+A');
+  await page.keyboard.insertText(content);
+}
+
 function createLongMarkdownDocument(lineCount = 80) {
   const lines = ['# Follow Target', ''];
 
   for (let index = 1; index <= lineCount; index += 1) {
     lines.push(`Line ${index} for follow testing.`);
+  }
+
+  return lines.join('\n');
+}
+
+function createScrollSyncRegressionDocument(itemCount = 80) {
+  const lines = [
+    '# Scroll Sync Regression',
+    '',
+    '## First section',
+    '',
+  ];
+
+  for (let index = 1; index <= itemCount; index += 1) {
+    lines.push(`- First section item ${index}.`);
+  }
+
+  lines.push('', '## Second section', '');
+
+  for (let index = 1; index <= itemCount; index += 1) {
+    const suffix = index === 52 ? ' sync target.' : '.';
+    lines.push(`- Second section item ${index}${suffix}`);
   }
 
   return lines.join('\n');
@@ -73,6 +102,67 @@ test('follows another user to their current cursor position', async ({ browser }
 
   await followerPage.close();
   await targetPage.close();
+});
+
+test('keeps preview and outline aligned when scrolling list-heavy editor content', async ({ page }) => {
+  await page.goto('/#room=e2e-scroll-sync');
+  await waitForEditor(page);
+
+  await replaceEditorContent(page, createScrollSyncRegressionDocument());
+  await expect(page.locator('#previewContent')).toContainText('Second section item 80.');
+
+  await page.locator('#outlineToggle').click();
+  await expect(page.locator('#outlinePanel')).toBeVisible();
+
+  const targetEditorLine = page.locator('.cm-line', { hasText: 'Second section item 52 sync target.' }).first();
+  await targetEditorLine.evaluate((element) => {
+    element.scrollIntoView({ block: 'start' });
+  });
+
+  await expect.poll(async () => {
+    const activeItem = page.locator('#outlineNav .outline-item.active').first();
+    return activeItem.textContent();
+  }).toContain('Second section');
+
+  const targetPreviewOffset = await page.locator('#previewContent li', { hasText: 'Second section item 52 sync target.' }).evaluate((item) => {
+    const container = document.getElementById('previewContainer');
+    const containerRect = container.getBoundingClientRect();
+    const itemRect = item.getBoundingClientRect();
+    return Math.abs(itemRect.top - containerRect.top);
+  });
+
+  expect(targetPreviewOffset).toBeLessThan(220);
+});
+
+test('scrolls the editor to the selected heading when navigating from the outline', async ({ page }) => {
+  await page.goto('/#room=e2e-outline-editor-sync');
+  await waitForEditor(page);
+
+  await replaceEditorContent(page, createScrollSyncRegressionDocument());
+  await expect(page.locator('#previewContent')).toContainText('Second section item 80.');
+
+  await page.locator('#outlineToggle').click();
+  await expect(page.locator('#outlinePanel')).toBeVisible();
+  await page.locator('#outlineNav .outline-item', { hasText: 'Second section' }).click();
+
+  const editorHeadingOffset = await page.locator('.cm-line', { hasText: '## Second section' }).first().evaluate((line) => {
+    const scroller = document.querySelector('.cm-scroller');
+    const scrollerRect = scroller.getBoundingClientRect();
+    const lineRect = line.getBoundingClientRect();
+    return Math.abs(lineRect.top - scrollerRect.top);
+  });
+
+  expect(editorHeadingOffset).toBeLessThan(220);
+
+  const previewHeadingOffset = await page.locator('#previewContent h2', { hasText: 'Second section' }).evaluate((heading) => {
+    const container = document.getElementById('previewContainer');
+    const containerRect = container.getBoundingClientRect();
+    const headingRect = heading.getBoundingClientRect();
+    return Math.abs(headingRect.top - containerRect.top);
+  });
+
+  expect(previewHeadingOffset).toBeLessThan(220);
+  await expect(page.locator('#outlineNav .outline-item.active').first()).toHaveText('Second section');
 });
 
 test('keeps the outline open on desktop after selecting a section', async ({ page }) => {

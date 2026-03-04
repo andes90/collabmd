@@ -250,7 +250,7 @@ export class EditorSession {
     return this.editorView?.scrollDOM ?? null;
   }
 
-  getTopVisibleLineNumber() {
+  getTopVisibleLineNumber(viewportRatio = 0) {
     if (!this.editorView) {
       return 1;
     }
@@ -263,7 +263,7 @@ export class EditorSession {
     );
     const position = this.editorView.posAtCoords({
       x,
-      y: scrollerRect.top + 8,
+      y: scrollerRect.top + Math.max(scrollerRect.height * viewportRatio, 8),
     });
 
     if (typeof position === 'number') {
@@ -297,7 +297,7 @@ export class EditorSession {
     return this.lineWrappingEnabled;
   }
 
-  scrollToLine(lineNumber) {
+  scrollToLine(lineNumber, viewportRatio = 0) {
     if (!this.editorView) {
       return false;
     }
@@ -307,13 +307,18 @@ export class EditorSession {
       this.editorView.state.doc.lines,
     );
     const line = this.editorView.state.doc.line(targetLineNumber);
+    const scroller = this.editorView.scrollDOM;
+    const lineBlock = this.editorView.lineBlockAt(line.from);
+    const maxScrollTop = Math.max(scroller.scrollHeight - scroller.clientHeight, 0);
+    const viewportOffset = viewportRatio > 0
+      ? scroller.clientHeight * viewportRatio
+      : 8;
+    const nextScrollTop = Math.min(
+      Math.max(lineBlock.top - viewportOffset, 0),
+      maxScrollTop,
+    );
 
-    this.editorView.dispatch({
-      effects: EditorView.scrollIntoView(line.from, {
-        y: 'start',
-        yMargin: 8,
-      }),
-    });
+    scroller.scrollTo({ top: nextScrollTop });
 
     return true;
   }

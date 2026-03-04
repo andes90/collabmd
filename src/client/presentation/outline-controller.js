@@ -1,13 +1,16 @@
 export class OutlineController {
-  constructor() {
+  constructor({ onNavigateToHeading } = {}) {
     this.outlineOpen = false;
-    this.observer = null;
+    this.activeHeadingFrame = null;
     this.activeHeadingId = null;
+    this.headings = [];
+    this.onNavigateToHeading = onNavigateToHeading;
     this.panel = document.getElementById('outlinePanel');
     this.navigation = document.getElementById('outlineNav');
     this.previewContainer = document.getElementById('previewContainer');
     this.toggleButton = document.getElementById('outlineToggle');
     this.mobileBreakpointQuery = window.matchMedia('(max-width: 768px)');
+    this.handlePreviewScroll = () => this.scheduleActiveHeadingUpdate();
   }
 
   initialize() {
@@ -76,8 +79,9 @@ export class OutlineController {
     this.navigation.querySelectorAll('.outline-item').forEach((button) => {
       button.addEventListener('click', () => {
         const target = document.getElementById(button.dataset.target);
-        this.scrollHeadingIntoView(target);
-        this.setActiveItem(button.dataset.target);
+        this.notifyHeadingNavigation(target, button.dataset.target);
+        this.scrollHeadingIntoView(target, { behavior: 'auto' });
+        this.setActiveItem(button.dataset.target, { behavior: 'auto' });
 
         if (this.mobileBreakpointQuery.matches) {
           this.close();
@@ -89,23 +93,28 @@ export class OutlineController {
   }
 
   cleanup() {
-    if (this.observer) {
-      this.observer.disconnect();
-      this.observer = null;
+    if (this.activeHeadingFrame) {
+      cancelAnimationFrame(this.activeHeadingFrame);
+      this.activeHeadingFrame = null;
     }
+
+    this.previewContainer?.removeEventListener('scroll', this.handlePreviewScroll);
+    this.headings = [];
   }
 
-  setActiveItem(id) {
+  setActiveItem(id, { scrollIntoView = true, behavior = 'smooth' } = {}) {
     this.activeHeadingId = id;
 
     this.navigation?.querySelectorAll('.outline-item').forEach((item) => {
       item.classList.toggle('active', item.dataset.target === id);
     });
 
-    this.navigation?.querySelector('.outline-item.active')?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'nearest',
-    });
+    if (scrollIntoView) {
+      this.navigation?.querySelector('.outline-item.active')?.scrollIntoView({
+        behavior,
+        block: 'nearest',
+      });
+    }
   }
 
   observeHeadings(headings) {
@@ -115,32 +124,68 @@ export class OutlineController {
       return;
     }
 
-    this.observer = new IntersectionObserver((entries) => {
-      let topEntry = null;
-
-      for (const entry of entries) {
-        if (!entry.isIntersecting) {
-          continue;
-        }
-
-        if (!topEntry || entry.boundingClientRect.top < topEntry.boundingClientRect.top) {
-          topEntry = entry;
-        }
-      }
-
-      if (topEntry) {
-        this.setActiveItem(topEntry.target.id);
-      }
-    }, {
-      root: this.previewContainer,
-      rootMargin: '-12px 0px -70% 0px',
-      threshold: 0,
-    });
-
-    headings.forEach((heading) => this.observer.observe(heading));
+    this.headings = headings;
+    this.previewContainer.addEventListener('scroll', this.handlePreviewScroll, { passive: true });
+    this.updateActiveHeading();
   }
 
-  scrollHeadingIntoView(target) {
+  scheduleActiveHeadingUpdate() {
+    if (this.activeHeadingFrame) {
+      return;
+    }
+
+    this.activeHeadingFrame = requestAnimationFrame(() => {
+      this.activeHeadingFrame = null;
+      this.updateActiveHeading();
+    });
+  }
+
+  updateActiveHeading() {
+    if (!this.previewContainer || this.headings.length === 0) {
+      return;
+    }
+
+    const focusLine = this.previewContainer.scrollTop + (this.previewContainer.clientHeight * 0.35);
+    let activeHeading = this.headings[0];
+
+    for (const heading of this.headings) {
+      const headingOffset = this.getHeadingScrollTop(heading);
+      if (headingOffset > focusLine) {
+        break;
+      }
+
+      activeHeading = heading;
+    }
+
+    this.setActiveItem(activeHeading.id, {
+      behavior: 'auto',
+      scrollIntoView: true,
+    });
+  }
+
+  getHeadingScrollTop(heading) {
+    if (!this.previewContainer) {
+      return 0;
+    }
+
+    const previewRect = this.previewContainer.getBoundingClientRect();
+    const headingRect = heading.getBoundingClientRect();
+    return this.previewContainer.scrollTop + (headingRect.top - previewRect.top);
+  }
+
+  notifyHeadingNavigation(target, headingId) {
+    if (!target) {
+      return;
+    }
+
+    const sourceLine = Number.parseInt(target.getAttribute('data-source-line') || '', 10);
+    this.onNavigateToHeading?.({
+      headingId,
+      sourceLine: Number.isFinite(sourceLine) ? sourceLine : null,
+    });
+  }
+
+  scrollHeadingIntoView(target, { behavior = 'smooth' } = {}) {
     if (!target || !this.previewContainer) {
       return;
     }
@@ -150,7 +195,7 @@ export class OutlineController {
     const nextScrollTop = this.previewContainer.scrollTop + (targetRect.top - previewRect.top) - 12;
 
     this.previewContainer.scrollTo({
-      behavior: 'smooth',
+      behavior,
       top: Math.max(nextScrollTop, 0),
     });
   }

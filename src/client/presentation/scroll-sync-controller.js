@@ -1,4 +1,5 @@
-const PREVIEW_TOP_OFFSET = 12;
+const VIEWPORT_FOCUS_RATIO = 0.35;
+const MIN_VIEWPORT_FOCUS_OFFSET = 12;
 
 function getScrollableRange(element) {
   return Math.max(element.scrollHeight - element.clientHeight, 0);
@@ -12,10 +13,18 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
+function getViewportFocusOffset(element) {
+  return Math.max(element.clientHeight * VIEWPORT_FOCUS_RATIO, MIN_VIEWPORT_FOCUS_OFFSET);
+}
+
 function getElementScrollTop(container, element) {
   const containerRect = container.getBoundingClientRect();
   const elementRect = element.getBoundingClientRect();
   return elementRect.top - containerRect.top + container.scrollTop;
+}
+
+function isLeafSourceBlock(element) {
+  return !element.querySelector('[data-source-line]');
 }
 
 export class ScrollSyncController {
@@ -34,6 +43,7 @@ export class ScrollSyncController {
     this.pendingSync = null;
     this.frameId = null;
     this.previewBlocks = null;
+    this.suspendedUntil = 0;
 
     this.handleEditorScroll = () => {
       this.scheduleSync(this.editorScroller, this.previewContainer);
@@ -73,6 +83,7 @@ export class ScrollSyncController {
     this.pendingSync = null;
     this.previewBlocks = null;
     this.lockedElements.clear();
+    this.suspendedUntil = 0;
 
     if (this.frameId) {
       cancelAnimationFrame(this.frameId);
@@ -81,7 +92,7 @@ export class ScrollSyncController {
   }
 
   scheduleSync(source, target) {
-    if (!source || !target || this.lockedElements.has(source)) {
+    if (!source || !target || this.lockedElements.has(source) || this.isSuspended()) {
       return;
     }
 
@@ -107,8 +118,16 @@ export class ScrollSyncController {
     this.previewBlocks = null;
   }
 
+  suspendSync(durationMs = 250) {
+    this.suspendedUntil = performance.now() + durationMs;
+  }
+
+  isSuspended() {
+    return performance.now() < this.suspendedUntil;
+  }
+
   sync(source, target) {
-    if (!source || !target || this.lockedElements.has(source)) {
+    if (!source || !target || this.lockedElements.has(source) || this.isSuspended()) {
       return;
     }
 
@@ -124,7 +143,7 @@ export class ScrollSyncController {
       const targetLine = this.getEditorLineNumberForPreviewScroll();
       if (targetLine !== null) {
         this.lockedElements.add(target);
-        this.scrollEditorToLine?.(targetLine);
+        this.scrollEditorToLine?.(targetLine, VIEWPORT_FOCUS_RATIO);
         requestAnimationFrame(() => {
           this.lockedElements.delete(target);
         });
@@ -165,8 +184,9 @@ export class ScrollSyncController {
     const sourceSpan = Math.max(block.end - block.start, 1);
     const progress = clamp((lineNumber - block.start) / sourceSpan, 0, 1);
     const maxScrollTop = getScrollableRange(this.previewContainer);
+    const focusOffset = getViewportFocusOffset(this.previewContainer);
 
-    return clamp(block.top + (previewSpan * progress) - PREVIEW_TOP_OFFSET, 0, maxScrollTop);
+    return clamp(block.top + (previewSpan * progress) - focusOffset, 0, maxScrollTop);
   }
 
   getEditorLineNumberForPreviewScroll() {
@@ -179,7 +199,7 @@ export class ScrollSyncController {
       return null;
     }
 
-    const previewTop = this.previewContainer.scrollTop + PREVIEW_TOP_OFFSET;
+    const previewTop = this.previewContainer.scrollTop + getViewportFocusOffset(this.previewContainer);
     const { block, index } = this.findBlockForScrollTop(blocks, previewTop);
     const previewSpan = this.getPreviewSpan(blocks, index);
     const sourceSpan = Math.max(block.end - block.start, 1);
@@ -197,7 +217,7 @@ export class ScrollSyncController {
       return [];
     }
 
-    const blocks = Array.from(this.previewElement.querySelectorAll('[data-source-line]'))
+    const allBlocks = Array.from(this.previewElement.querySelectorAll('[data-source-line]'))
       .map((element) => {
         const start = Number.parseInt(element.getAttribute('data-source-line') || '', 10);
         const end = Number.parseInt(element.getAttribute('data-source-line-end') || '', 10);
@@ -220,8 +240,11 @@ export class ScrollSyncController {
         || left.end - right.end
       ));
 
-    this.previewBlocks = blocks.filter((block, index) => {
-      const previousBlock = blocks[index - 1];
+    const blocks = allBlocks.filter((block) => isLeafSourceBlock(block.element));
+    const resolvedBlocks = blocks.length > 0 ? blocks : allBlocks;
+
+    this.previewBlocks = resolvedBlocks.filter((block, index) => {
+      const previousBlock = resolvedBlocks[index - 1];
       return !previousBlock
         || Math.abs(previousBlock.top - block.top) > 1
         || previousBlock.start !== block.start
@@ -232,11 +255,29 @@ export class ScrollSyncController {
   }
 
   findBlockForLine(blocks, lineNumber) {
+    let matchedBlock = null;
+    let matchedIndex = -1;
+
     for (let index = 0; index < blocks.length; index += 1) {
       const block = blocks[index];
       if (lineNumber >= block.start && lineNumber < block.end) {
-        return { block, index };
+        if (!matchedBlock) {
+          matchedBlock = block;
+          matchedIndex = index;
+          continue;
+        }
+
+        const matchedSpan = matchedBlock.end - matchedBlock.start;
+        const candidateSpan = block.end - block.start;
+        if (candidateSpan < matchedSpan || (candidateSpan === matchedSpan && block.start >= matchedBlock.start)) {
+          matchedBlock = block;
+          matchedIndex = index;
+        }
       }
+    }
+
+    if (matchedBlock) {
+      return { block: matchedBlock, index: matchedIndex };
     }
 
     let fallbackIndex = 0;
