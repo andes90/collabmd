@@ -30,8 +30,10 @@ export class CollabMdApp {
       roomName: document.getElementById('roomName'),
       shareButton: document.getElementById('shareBtn'),
       toastContainer: document.getElementById('toastContainer'),
+      toggleWrapButton: document.getElementById('toggleWrapBtn'),
       userAvatars: document.getElementById('userAvatars'),
       userCount: document.getElementById('userCount'),
+      wrapToggleLabel: document.getElementById('wrapToggleLabel'),
     };
 
     this.session = null;
@@ -40,6 +42,7 @@ export class CollabMdApp {
     this.sessionLoadToken = 0;
     this.connectionHelpShown = false;
     this.userNameStorageKey = 'collabmd-user-name';
+    this.lineWrappingStorageKey = 'collabmd-editor-line-wrap';
 
     this.toastController = new ToastController(this.elements.toastContainer);
     this.outlineController = new OutlineController();
@@ -67,6 +70,7 @@ export class CollabMdApp {
     this.layoutController.initialize();
     this.scrollSyncController.initialize();
     this.syncCurrentUserName();
+    this.syncWrapToggle();
     this.bindEvents();
 
     window.addEventListener('hashchange', () => this.handleHashChange());
@@ -117,6 +121,10 @@ export class CollabMdApp {
       event.preventDefault();
       this.handleDisplayNameSubmit();
     });
+
+    this.elements.toggleWrapButton?.addEventListener('click', () => {
+      this.toggleLineWrapping();
+    });
   }
 
   createResizeHandler() {
@@ -153,6 +161,7 @@ export class CollabMdApp {
     this.elements.userCount.textContent = 'Offline';
     this.elements.userCount.style.opacity = '0.6';
     this.syncCurrentUserName();
+    this.syncWrapToggle();
   }
 
   async showEditor(roomId) {
@@ -173,6 +182,7 @@ export class CollabMdApp {
 
     const session = new EditorSession({
       editorContainer: this.elements.editorContainer,
+      lineWrappingEnabled: this.getStoredLineWrapping(),
       initialTheme: this.themeController.getTheme(),
       lineInfoElement: this.elements.lineInfo,
       onAwarenessChange: (users) => this.updateOnlineUsers(users),
@@ -193,6 +203,7 @@ export class CollabMdApp {
 
       this.scrollSyncController.attachEditorScroller(session.getScrollContainer());
       session.applyTheme(this.themeController.getTheme());
+      this.syncWrapToggle();
       this.previewRenderer.queueRender();
     } catch (error) {
       console.error('[app] Failed to initialize editor:', error);
@@ -207,6 +218,7 @@ export class CollabMdApp {
       }
 
       this.showEditorLoadError();
+      this.syncWrapToggle();
       this.toastController.show('Failed to initialize editor');
     }
   }
@@ -216,6 +228,17 @@ export class CollabMdApp {
     this.session = null;
     this.scrollSyncController.attachEditorScroller(null);
     this.outlineController.cleanup();
+  }
+
+  toggleLineWrapping() {
+    const currentState = this.session?.isLineWrappingEnabled() ?? this.getStoredLineWrapping();
+    const nextState = !currentState;
+
+    this.session?.setLineWrapping(nextState);
+    this.storeLineWrapping(nextState);
+    this.syncWrapToggle(nextState);
+    this.session?.requestMeasure();
+    this.scrollSyncController.syncPreviewToEditor();
   }
 
   handleThemeChange(theme) {
@@ -361,6 +384,22 @@ export class CollabMdApp {
     }
   }
 
+  getStoredLineWrapping() {
+    try {
+      return window.localStorage.getItem(this.lineWrappingStorageKey) !== 'false';
+    } catch {
+      return true;
+    }
+  }
+
+  storeLineWrapping(enabled) {
+    try {
+      window.localStorage.setItem(this.lineWrappingStorageKey, String(Boolean(enabled)));
+    } catch {
+      // Ignore storage errors.
+    }
+  }
+
   syncCurrentUserName() {
     const button = this.elements.editNameButton;
     const label = this.elements.currentUserName;
@@ -373,6 +412,22 @@ export class CollabMdApp {
     if (button) {
       button.title = `Change display name (${currentUserName})`;
       button.setAttribute('aria-label', `Change display name. Current name: ${currentUserName}`);
+    }
+  }
+
+  syncWrapToggle(isWrapped = this.session?.isLineWrappingEnabled() ?? this.getStoredLineWrapping()) {
+    const button = this.elements.toggleWrapButton;
+    const label = this.elements.wrapToggleLabel;
+    const nextAction = isWrapped ? 'Disable line wrap' : 'Enable line wrap';
+
+    if (label) {
+      label.textContent = isWrapped ? 'Wrap on' : 'Wrap off';
+    }
+
+    if (button) {
+      button.classList.toggle('active', isWrapped);
+      button.title = nextAction;
+      button.setAttribute('aria-label', nextAction);
     }
   }
 

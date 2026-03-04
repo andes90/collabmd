@@ -586,6 +586,12 @@
   flex-shrink: 0;
   height: 28px;
 }
+.pane-header-meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+}
 .pane-label {
   font-size: 11px;
   font-weight: 500;
@@ -934,6 +940,7 @@
   gap: var(--space-1);
   font-size: 11px;
   color: var(--color-text-muted);
+  white-space: nowrap;
   transition: color var(--transition-interactive), background var(--transition-interactive);
 }
 .pane-header-btn:hover {

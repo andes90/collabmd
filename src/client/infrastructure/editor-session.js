@@ -96,6 +96,7 @@ function createEditorTheme(theme) {
 export class EditorSession {
   constructor({
     editorContainer,
+    lineWrappingEnabled = true,
     initialTheme,
     lineInfoElement,
     onAwarenessChange,
@@ -104,6 +105,7 @@ export class EditorSession {
     preferredUserName,
   }) {
     this.editorContainer = editorContainer;
+    this.lineWrappingEnabled = lineWrappingEnabled;
     this.initialTheme = initialTheme;
     this.lineInfoElement = lineInfoElement;
     this.onAwarenessChange = onAwarenessChange;
@@ -116,6 +118,7 @@ export class EditorSession {
     this.localUser = null;
     this.themeCompartment = new Compartment();
     this.syntaxThemeCompartment = new Compartment();
+    this.lineWrappingCompartment = new Compartment();
     this.ydoc = null;
     this.ytext = null;
     this.wsBaseUrl = '';
@@ -210,9 +213,9 @@ export class EditorSession {
           markdown({ base: markdownLanguage, codeLanguages: languages }),
           this.themeCompartment.of(createEditorTheme(this.initialTheme)),
           this.syntaxThemeCompartment.of(this.initialTheme === 'dark' ? oneDark : []),
+          this.lineWrappingCompartment.of(this.lineWrappingEnabled ? EditorView.lineWrapping : []),
           yCollab(this.ytext, awareness, { undoManager }),
           updateListener,
-          EditorView.lineWrapping,
         ],
       }),
     });
@@ -253,6 +256,26 @@ export class EditorSession {
 
   getLocalUser() {
     return this.localUser;
+  }
+
+  isLineWrappingEnabled() {
+    return this.lineWrappingEnabled;
+  }
+
+  setLineWrapping(enabled) {
+    this.lineWrappingEnabled = Boolean(enabled);
+
+    if (!this.editorView) {
+      return this.lineWrappingEnabled;
+    }
+
+    this.editorView.dispatch({
+      effects: this.lineWrappingCompartment.reconfigure(
+        this.lineWrappingEnabled ? EditorView.lineWrapping : [],
+      ),
+    });
+
+    return this.lineWrappingEnabled;
   }
 
   setUserName(name) {
