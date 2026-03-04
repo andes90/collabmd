@@ -59,14 +59,7 @@ export class OutlineController {
     this.navigation.querySelectorAll('.outline-item').forEach((button) => {
       button.addEventListener('click', () => {
         const target = document.getElementById(button.dataset.target);
-        if (!target || !this.previewContainer) {
-          return;
-        }
-
-        this.previewContainer.scrollTo({
-          behavior: 'smooth',
-          top: target.offsetTop - 12,
-        });
+        this.scrollHeadingIntoView(target);
 
         this.setActiveItem(button.dataset.target);
       });
@@ -120,10 +113,25 @@ export class OutlineController {
       }
     }, {
       root: this.previewContainer,
-      rootMargin: '0px 0px -70% 0px',
+      rootMargin: '-12px 0px -70% 0px',
       threshold: 0,
     });
 
     headings.forEach((heading) => this.observer.observe(heading));
+  }
+
+  scrollHeadingIntoView(target) {
+    if (!target || !this.previewContainer) {
+      return;
+    }
+
+    const previewRect = this.previewContainer.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const nextScrollTop = this.previewContainer.scrollTop + (targetRect.top - previewRect.top) - 12;
+
+    this.previewContainer.scrollTo({
+      behavior: 'smooth',
+      top: Math.max(nextScrollTop, 0),
+    });
   }
 }

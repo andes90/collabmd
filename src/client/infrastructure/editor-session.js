@@ -254,6 +254,29 @@ export class EditorSession {
     return this.editorView?.scrollDOM ?? null;
   }
 
+  getTopVisibleLineNumber() {
+    if (!this.editorView) {
+      return 1;
+    }
+
+    const scrollerRect = this.editorView.scrollDOM.getBoundingClientRect();
+    const contentRect = this.editorView.contentDOM.getBoundingClientRect();
+    const x = Math.min(
+      Math.max(contentRect.left + 24, scrollerRect.left + 24),
+      scrollerRect.right - 24,
+    );
+    const position = this.editorView.posAtCoords({
+      x,
+      y: scrollerRect.top + 8,
+    });
+
+    if (typeof position === 'number') {
+      return this.editorView.state.doc.lineAt(position).number;
+    }
+
+    return 1;
+  }
+
   getLocalUser() {
     return this.localUser;
   }
@@ -276,6 +299,25 @@ export class EditorSession {
     });
 
     return this.lineWrappingEnabled;
+  }
+
+  scrollToLine(lineNumber) {
+    if (!this.editorView) {
+      return;
+    }
+
+    const targetLineNumber = Math.min(
+      Math.max(Math.round(lineNumber), 1),
+      this.editorView.state.doc.lines,
+    );
+    const line = this.editorView.state.doc.line(targetLineNumber);
+
+    this.editorView.dispatch({
+      effects: EditorView.scrollIntoView(line.from, {
+        y: 'start',
+        yMargin: 8,
+      }),
+    });
   }
 
   setUserName(name) {

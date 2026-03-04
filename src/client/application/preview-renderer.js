@@ -63,6 +63,23 @@ function createMarkdownRenderer() {
     typographer: true,
   });
 
+  markdown.core.ruler.push('collabmd-source-lines', (state) => {
+    state.tokens.forEach((token) => {
+      if (!token.map) {
+        return;
+      }
+
+      const [start, end] = token.map;
+      const sourceStart = start + 1;
+      const sourceEnd = Math.max(end, start + 1);
+
+      if (token.nesting === 1 || token.type === 'fence' || token.type === 'code_block' || token.type === 'html_block') {
+        token.attrSet('data-source-line', String(sourceStart));
+        token.attrSet('data-source-line-end', String(sourceEnd));
+      }
+    });
+  });
+
   let mermaidCounter = 0;
   const fallbackFence = markdown.renderer.rules.fence ?? ((tokens, index, options, env, self) => (
     self.renderToken(tokens, index, options)
@@ -71,13 +88,26 @@ function createMarkdownRenderer() {
   markdown.renderer.rules.fence = (tokens, index, options, env, self) => {
     const token = tokens[index];
     const info = token.info ? token.info.trim().toLowerCase() : '';
+    const sourceLine = token.attrGet('data-source-line');
+    const sourceLineEnd = token.attrGet('data-source-line-end');
+    const sourceAttributes = sourceLine
+      ? ` data-source-line="${sourceLine}" data-source-line-end="${sourceLineEnd}"`
+      : '';
 
     if (info === 'mermaid') {
       mermaidCounter += 1;
-      return `<div class="mermaid" id="mermaid-${mermaidCounter}">${markdown.utils.escapeHtml(token.content)}</div>`;
+      return `<div class="mermaid" id="mermaid-${mermaidCounter}"${sourceAttributes}>${markdown.utils.escapeHtml(token.content)}</div>`;
     }
 
-    return fallbackFence(tokens, index, options, env, self);
+    const rendered = fallbackFence(tokens, index, options, env, self);
+    if (!sourceLine) {
+      return rendered;
+    }
+
+    return rendered.replace(
+      /^<pre/,
+      `<pre data-source-line="${sourceLine}" data-source-line-end="${sourceLineEnd}"`,
+    );
   };
 
   markdown.renderer.rules.list_item_open = (tokens, index, options, env, self) => {
@@ -85,7 +115,7 @@ function createMarkdownRenderer() {
     const content = inlineToken?.content ?? '';
 
     if (content.startsWith('[ ] ') || content.startsWith('[x] ') || content.startsWith('[X] ')) {
-      return '<li class="task-list-item">';
+      tokens[index].attrJoin('class', 'task-list-item');
     }
 
     return self.renderToken(tokens, index, options);

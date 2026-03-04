@@ -59,7 +59,10 @@ export class CollabMdApp {
       onMeasureEditor: () => this.session?.requestMeasure(),
     });
     this.scrollSyncController = new ScrollSyncController({
+      getEditorLineNumber: () => this.session?.getTopVisibleLineNumber() ?? 1,
       previewContainer: this.elements.previewContainer,
+      previewElement: this.elements.previewContent,
+      scrollEditorToLine: (lineNumber) => this.session?.scrollToLine(lineNumber),
     });
   }
 
