@@ -688,6 +688,7 @@
   flex: 1;
   overflow: hidden;
   min-height: 0;
+  position: relative;
 }
 
 /* Preview container */
@@ -1140,10 +1141,24 @@
   }
 
   .outline-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+    border-left: none;
+    border-top: 1px solid var(--color-divider);
+    background: oklch(from var(--color-surface) l c h / 0.98);
+    backdrop-filter: blur(10px);
+    box-shadow: var(--shadow-lg);
+    z-index: 6;
+  }
+  .outline-panel.hidden {
     display: none !important;
   }
   #outlineToggle {
-    display: none !important;
+    display: inline-flex !important;
   }
   
   .toolbar {

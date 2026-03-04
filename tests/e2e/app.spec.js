@@ -2,7 +2,6 @@ import { test, expect } from '@playwright/test';
 
 async function waitForEditor(page) {
   await expect(page.locator('.cm-editor')).toBeVisible();
-  await expect(page.locator('#previewContent')).toBeVisible();
 }
 
 async function appendEditorContent(page, content) {
@@ -74,4 +73,40 @@ test('follows another user to their current cursor position', async ({ browser }
 
   await followerPage.close();
   await targetPage.close();
+});
+
+test('keeps the outline open on desktop after selecting a section', async ({ page }) => {
+  await page.goto('/#room=e2e-desktop-outline');
+  await waitForEditor(page);
+
+  await page.locator('#outlineToggle').click();
+  await expect(page.locator('#outlinePanel')).toBeVisible();
+
+  await page.locator('#outlineNav .outline-item', { hasText: 'Features' }).click();
+
+  await expect(page.locator('#outlinePanel')).toBeVisible();
+});
+
+test.describe('mobile outline', () => {
+  test.use({
+    viewport: { width: 390, height: 844 },
+  });
+
+  test('closes the outline after selecting a section on mobile', async ({ page }) => {
+    await page.goto('/#room=e2e-mobile-outline');
+    await waitForEditor(page);
+
+    await page.locator('#mobileViewToggle').click();
+
+    await expect(page.locator('#outlineToggle')).toBeVisible();
+    await page.locator('#outlineToggle').click();
+
+    await expect(page.locator('#outlinePanel')).toBeVisible();
+    await expect(page.locator('#outlineNav')).toContainText('Welcome to CollabMD');
+    await expect(page.locator('#outlineNav')).toContainText('Features');
+
+    await page.locator('#outlineNav .outline-item', { hasText: 'Features' }).click();
+
+    await expect(page.locator('#outlinePanel')).toBeHidden();
+  });
 });

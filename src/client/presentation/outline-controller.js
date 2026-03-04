@@ -7,6 +7,7 @@ export class OutlineController {
     this.navigation = document.getElementById('outlineNav');
     this.previewContainer = document.getElementById('previewContainer');
     this.toggleButton = document.getElementById('outlineToggle');
+    this.mobileBreakpointQuery = window.matchMedia('(max-width: 768px)');
   }
 
   initialize() {
@@ -14,13 +15,24 @@ export class OutlineController {
   }
 
   toggle() {
-    this.outlineOpen = !this.outlineOpen;
+    this.setOpenState(!this.outlineOpen);
+  }
+
+  close() {
+    this.setOpenState(false);
+  }
+
+  setOpenState(nextState) {
+    this.outlineOpen = nextState;
     this.panel?.classList.toggle('hidden', !this.outlineOpen);
     this.toggleButton?.classList.toggle('active', this.outlineOpen);
 
     if (this.outlineOpen) {
       this.refresh();
+      return;
     }
+
+    this.cleanup();
   }
 
   refresh() {
@@ -65,8 +77,11 @@ export class OutlineController {
       button.addEventListener('click', () => {
         const target = document.getElementById(button.dataset.target);
         this.scrollHeadingIntoView(target);
-
         this.setActiveItem(button.dataset.target);
+
+        if (this.mobileBreakpointQuery.matches) {
+          this.close();
+        }
       });
     });
 
