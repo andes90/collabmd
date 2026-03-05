@@ -172,6 +172,18 @@
             <div class="preview-body">
               <div id="previewContainer" class="preview-container">
                 <div id="previewContent" class="preview-content"></div>
+
+                <!-- Backlinks (Linked Mentions) -->
+                <div id="backlinksPanel" class="backlinks-panel hidden">
+                  <div class="backlinks-header" role="button" tabindex="0" aria-expanded="false">
+                    <svg class="backlinks-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    <span class="backlinks-toggle">0 Linked Mentions</span>
+                    <span class="backlinks-count"></span>
+                  </div>
+                  <div class="backlinks-body" aria-hidden="true">
+                    <div class="backlinks-list" id="backlinksList"></div>
+                  </div>
+                </div>
               </div>
               <aside id="outlinePanel" class="outline-panel hidden" aria-label="Document outline">
                 <div class="outline-header">

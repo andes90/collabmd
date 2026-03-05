@@ -86,7 +86,7 @@ function jsonResponse(res, statusCode, data) {
   res.end(body);
 }
 
-export function createRequestHandler(config, vaultFileStore) {
+export function createRequestHandler(config, vaultFileStore, backlinkIndex) {
   const readStaticFile = createStaticFileReader();
 
   return async function handleRequest(req, res) {
@@ -193,6 +193,7 @@ export function createRequestHandler(config, vaultFileStore) {
           jsonResponse(res, 409, { error: result.error });
           return;
         }
+        backlinkIndex?.onFileCreated(body.path, body.content || '');
         jsonResponse(res, 201, { ok: true, path: body.path });
       } catch (error) {
         console.error('[api] Failed to create file:', error.message);
@@ -215,6 +216,7 @@ export function createRequestHandler(config, vaultFileStore) {
           jsonResponse(res, 400, { error: result.error });
           return;
         }
+        backlinkIndex?.onFileDeleted(filePath);
         jsonResponse(res, 200, { ok: true });
       } catch (error) {
         console.error('[api] Failed to delete file:', error.message);
@@ -236,6 +238,7 @@ export function createRequestHandler(config, vaultFileStore) {
           jsonResponse(res, 400, { error: result.error });
           return;
         }
+        backlinkIndex?.onFileRenamed(body.oldPath, body.newPath);
         jsonResponse(res, 200, { ok: true, path: body.newPath });
       } catch (error) {
         console.error('[api] Failed to rename file:', error.message);
@@ -261,6 +264,26 @@ export function createRequestHandler(config, vaultFileStore) {
       } catch (error) {
         console.error('[api] Failed to create directory:', error.message);
         jsonResponse(res, 500, { error: 'Failed to create directory' });
+      }
+      return;
+    }
+
+    // GET /api/backlinks?file=... — backlinks for a file
+    if (requestUrl.pathname === '/api/backlinks' && req.method === 'GET') {
+      const filePath = requestUrl.searchParams.get('file');
+      if (!filePath) {
+        jsonResponse(res, 400, { error: 'Missing file parameter' });
+        return;
+      }
+
+      try {
+        const backlinks = backlinkIndex
+          ? await backlinkIndex.getBacklinks(filePath)
+          : [];
+        jsonResponse(res, 200, { file: filePath, backlinks });
+      } catch (error) {
+        console.error('[api] Failed to get backlinks:', error.message);
+        jsonResponse(res, 500, { error: 'Failed to get backlinks' });
       }
       return;
     }

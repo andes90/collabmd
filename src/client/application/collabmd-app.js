@@ -4,6 +4,7 @@ import { resolveWikiTarget } from '../domain/vault-utils.js';
 import { EditorSession } from '../infrastructure/editor-session.js';
 import { LobbyPresence } from '../infrastructure/lobby-presence.js';
 import { getFileFromHash, navigateToFile } from '../infrastructure/runtime-config.js';
+import { BacklinksPanel } from '../presentation/backlinks-panel.js';
 import { FileExplorerController } from '../presentation/file-explorer-controller.js';
 import { LayoutController } from '../presentation/layout-controller.js';
 import { OutlineController } from '../presentation/outline-controller.js';
@@ -36,6 +37,7 @@ export class CollabMdApp {
       sidebarToggle: document.getElementById('sidebarToggle'),
       sidebar: document.getElementById('sidebar'),
       emptyState: document.getElementById('emptyState'),
+      backlinksPanel: document.getElementById('backlinksPanel'),
     };
 
     this.session = null;
@@ -96,6 +98,11 @@ export class CollabMdApp {
       previewElement: this.elements.previewContent,
       scrollEditorToLine: (lineNumber, viewportRatio) => this.session?.scrollToLine(lineNumber, viewportRatio),
     });
+    this.backlinksPanel = new BacklinksPanel({
+      panelElement: this.elements.backlinksPanel,
+      onFileSelect: (filePath) => navigateToFile(filePath),
+    });
+    this._backlinkRefreshTimer = null;
   }
 
   initialize() {
@@ -192,6 +199,7 @@ export class CollabMdApp {
     // Re-render global presence (users are still visible on the empty state)
     this.renderAvatars();
     this.renderPresence();
+    this.backlinksPanel.clear();
 
     if (this.elements.activeFileName) {
       this.elements.activeFileName.textContent = 'CollabMD';
@@ -229,7 +237,10 @@ export class CollabMdApp {
       lineInfoElement: this.elements.lineInfo,
       onAwarenessChange: (users) => this.updateFileAwareness(users),
       onConnectionChange: (state) => this.handleConnectionChange(state),
-      onContentChange: () => this.previewRenderer.queueRender(),
+      onContentChange: () => {
+        this.previewRenderer.queueRender();
+        this.scheduleBacklinkRefresh();
+      },
       preferredUserName: this.getStoredUserName(),
       localUser: this.lobby.getLocalUser(),
       getFileList: () => this.fileExplorer.flatFiles,
@@ -249,6 +260,7 @@ export class CollabMdApp {
       session.applyTheme(this.themeController.getTheme());
       this.syncWrapToggle();
       this.previewRenderer.queueRender();
+      this.backlinksPanel.load(filePath);
     } catch (error) {
       console.error('[app] Failed to initialize editor:', error);
       session.destroy();
@@ -272,6 +284,7 @@ export class CollabMdApp {
     this.outlineController.cleanup();
     // Keep followedUserClientId — follow persists across file switches
     this.followedCursorSignature = '';
+    clearTimeout(this._backlinkRefreshTimer);
   }
 
   handleWikiLinkClick(target) {
@@ -638,6 +651,22 @@ export class CollabMdApp {
     const button = this.elements.toggleWrapButton;
     if (label) label.textContent = enabled ? 'Wrap on' : 'Wrap off';
     if (button) button.setAttribute('aria-label', enabled ? 'Disable line wrap' : 'Enable line wrap');
+  }
+
+  // Backlinks
+
+  /**
+   * Schedule a debounced backlinks refresh.
+   * Called on every content change — the server index updates on persist
+   * (500ms debounce), so we wait a bit longer before re-fetching.
+   */
+  scheduleBacklinkRefresh() {
+    clearTimeout(this._backlinkRefreshTimer);
+    this._backlinkRefreshTimer = setTimeout(() => {
+      if (this.currentFilePath) {
+        this.backlinksPanel.load(this.currentFilePath);
+      }
+    }, 2000);
   }
 
   // Editor loading states

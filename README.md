@@ -19,10 +19,6 @@ CollabMD starts a local server, scans for markdown files, and opens a browser-ba
 
 Your filesystem is the source of truth. CollabMD reads `.md` files from disk, uses Yjs for the realtime collaboration layer, and writes plain text back to disk when the last editor disconnects.
 
-## Apakah ini masuk? 
-
-## Mantap
-
 ## Architecture
 
 ```text

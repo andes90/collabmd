@@ -68,10 +68,11 @@ function readAwarenessEntries(update) {
 }
 
 export class CollaborationRoom {
-  constructor({ name, maxBufferedAmountBytes, vaultFileStore, onEmpty }) {
+  constructor({ name, maxBufferedAmountBytes, vaultFileStore, backlinkIndex, onEmpty }) {
     this.name = name;
     this.maxBufferedAmountBytes = maxBufferedAmountBytes;
     this.vaultFileStore = vaultFileStore;
+    this.backlinkIndex = backlinkIndex;
     this.onEmpty = onEmpty;
     this.doc = new Y.Doc({ gc: true });
     this.awareness = new awarenessProtocol.Awareness(this.doc);
@@ -179,6 +180,11 @@ export class CollaborationRoom {
 
     const content = this.doc.getText('codemirror').toString();
     await this.vaultFileStore.writeMarkdownFile(this.name, content);
+
+    // Keep the backlink index in sync with every save
+    if (this.backlinkIndex) {
+      this.backlinkIndex.updateFile(this.name, content);
+    }
   }
 
   async addClient(ws) {

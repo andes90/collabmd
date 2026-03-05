@@ -1,6 +1,7 @@
 import { createServer } from 'http';
 
 import { loadConfig } from './config/env.js';
+import { BacklinkIndex } from './domain/backlink-index.js';
 import { CollaborationRoom } from './domain/collaboration/collaboration-room.js';
 import { RoomRegistry } from './domain/collaboration/room-registry.js';
 import { createRequestHandler } from './infrastructure/http/create-request-handler.js';
@@ -30,6 +31,7 @@ function closeHttpServer(httpServer) {
 
 export function createAppServer(config = loadConfig()) {
   const vaultFileStore = new VaultFileStore({ vaultDir: config.vaultDir });
+  const backlinkIndex = new BacklinkIndex({ vaultFileStore });
   const roomRegistry = new RoomRegistry({
     createRoom: ({ name, onEmpty }) => new CollaborationRoom({
       maxBufferedAmountBytes: config.wsMaxBufferedAmountBytes,
@@ -37,9 +39,10 @@ export function createAppServer(config = loadConfig()) {
       onEmpty,
       // The __lobby__ room is awareness-only (global presence) — no file.
       vaultFileStore: name === '__lobby__' ? null : vaultFileStore,
+      backlinkIndex: name === '__lobby__' ? null : backlinkIndex,
     }),
   });
-  const requestHandler = createRequestHandler(config, vaultFileStore);
+  const requestHandler = createRequestHandler(config, vaultFileStore, backlinkIndex);
   const httpServer = createServer((req, res) => {
     requestHandler(req, res).catch((error) => {
       console.error('[http] Unhandled request error:', error.message);
@@ -65,6 +68,7 @@ export function createAppServer(config = loadConfig()) {
 
   async function listen() {
     vaultFileCount = await vaultFileStore.countMarkdownFiles();
+    await backlinkIndex.build();
 
     return new Promise((resolve, reject) => {
       httpServer.once('error', reject);
