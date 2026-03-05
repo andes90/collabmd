@@ -10,46 +10,9 @@
  * incrementally whenever a file is persisted, created, deleted, or renamed.
  */
 
-import { resolveWikiTargetPath } from '../../domain/wiki-link-resolver.js';
+import { createWikiTargetIndex, resolveWikiTargetWithIndex } from '../../domain/wiki-link-resolver.js';
 
 const WIKI_LINK_RE = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
-
-/**
- * Extract all wiki-link targets from markdown content.
- * Returns an array of raw target strings (e.g. "My Note", "folder/page").
- */
-function extractWikiLinkTargets(content) {
-  const targets = [];
-  let match;
-  WIKI_LINK_RE.lastIndex = 0;
-  while ((match = WIKI_LINK_RE.exec(content)) !== null) {
-    const target = match[1].trim();
-    if (target) targets.push(target);
-  }
-  return targets;
-}
-
-/**
- * Extract backlink context — the line(s) surrounding each [[link]] occurrence.
- * Returns an array of { target, context } objects.
- */
-function extractLinkContexts(content, targetPath) {
-  const lines = content.split('\n');
-  const contexts = [];
-
-  for (const line of lines) {
-    WIKI_LINK_RE.lastIndex = 0;
-    let match;
-    while ((match = WIKI_LINK_RE.exec(line)) !== null) {
-      const target = match[1].trim();
-      // We compare the resolved target, but also collect the raw context
-      // The caller will filter by targetPath
-      contexts.push({ target, context: line.trim() });
-    }
-  }
-
-  return contexts;
-}
 
 export class BacklinkIndex {
   constructor({ vaultFileStore }) {
@@ -58,8 +21,13 @@ export class BacklinkIndex {
     this.forward = new Map();
     /** @type {Map<string, Set<string>>} targetPath → set of source paths */
     this.reverse = new Map();
+    /** @type {Map<string, Map<string, string[]>>} sourcePath → targetPath → contexts[] */
+    this.contextsBySource = new Map();
     /** @type {string[]} cached flat file list for link resolution */
     this._fileList = [];
+    /** @type {Set<string>} file path membership set */
+    this._fileSet = new Set();
+    this._wikiTargetIndex = createWikiTargetIndex(this._fileList);
     this._built = false;
   }
 
@@ -68,8 +36,14 @@ export class BacklinkIndex {
    * Called once at server startup.
    */
   async build() {
+    this.forward.clear();
+    this.reverse.clear();
+    this.contextsBySource.clear();
+
     const tree = await this.vaultFileStore.tree();
     this._fileList = flattenTree(tree);
+    this._fileSet = new Set(this._fileList);
+    this._refreshWikiTargetIndex();
 
     for (const filePath of this._fileList) {
       const content = await this.vaultFileStore.readMarkdownFile(filePath);
@@ -90,22 +64,26 @@ export class BacklinkIndex {
     // Remove old forward links for this file
     this._removeForwardLinks(filePath);
 
+    if (!this._fileSet.has(filePath)) {
+      this._fileSet.add(filePath);
+      this._fileList.push(filePath);
+      this._refreshWikiTargetIndex();
+    }
+
     // Re-index with new content
     this._indexFile(filePath, content);
-
-    // Refresh the file list if this is a new file
-    if (!this._fileList.includes(filePath)) {
-      this._fileList.push(filePath);
-    }
   }
 
   /**
    * Handle file creation — add to file list and index its content.
    */
   onFileCreated(filePath, content = '') {
-    if (!this._fileList.includes(filePath)) {
+    if (!this._fileSet.has(filePath)) {
+      this._fileSet.add(filePath);
       this._fileList.push(filePath);
+      this._refreshWikiTargetIndex();
     }
+
     if (content) {
       this._indexFile(filePath, content);
     }
@@ -116,7 +94,10 @@ export class BacklinkIndex {
    */
   onFileDeleted(filePath) {
     this._removeForwardLinks(filePath);
-    this._fileList = this._fileList.filter((f) => f !== filePath);
+    if (this._fileSet.delete(filePath)) {
+      this._fileList = this._fileList.filter((f) => f !== filePath);
+      this._refreshWikiTargetIndex();
+    }
 
     // Also remove this file as a reverse entry (no one can link to a deleted file)
     this.reverse.delete(filePath);
@@ -126,6 +107,13 @@ export class BacklinkIndex {
    * Handle file rename — re-map all index entries from oldPath to newPath.
    */
   onFileRenamed(oldPath, newPath) {
+    // Move cached contexts for the renamed source file.
+    if (this.contextsBySource.has(oldPath)) {
+      const sourceContexts = this.contextsBySource.get(oldPath);
+      this.contextsBySource.delete(oldPath);
+      this.contextsBySource.set(newPath, sourceContexts);
+    }
+
     // Move forward links
     const oldForward = this.forward.get(oldPath);
     if (oldForward) {
@@ -146,7 +134,10 @@ export class BacklinkIndex {
     const oldReverse = this.reverse.get(oldPath);
     if (oldReverse) {
       this.reverse.delete(oldPath);
-      this.reverse.set(newPath, oldReverse);
+      const mergedReverse = this.reverse.has(newPath)
+        ? new Set([...this.reverse.get(newPath), ...oldReverse])
+        : oldReverse;
+      this.reverse.set(newPath, mergedReverse);
 
       // Update forward entries: replace oldPath with newPath in all sources
       for (const sourcePath of oldReverse) {
@@ -155,11 +146,22 @@ export class BacklinkIndex {
           targets.delete(oldPath);
           targets.add(newPath);
         }
+
+        const sourceContexts = this.contextsBySource.get(sourcePath);
+        if (sourceContexts?.has(oldPath)) {
+          const previous = sourceContexts.get(newPath) ?? [];
+          sourceContexts.set(newPath, [...previous, ...sourceContexts.get(oldPath)]);
+          sourceContexts.delete(oldPath);
+        }
       }
     }
 
     // Update file list
-    this._fileList = this._fileList.map((f) => (f === oldPath ? newPath : f));
+    if (this._fileSet.delete(oldPath)) {
+      this._fileSet.add(newPath);
+      this._fileList = this._fileList.map((f) => (f === oldPath ? newPath : f));
+      this._refreshWikiTargetIndex();
+    }
   }
 
   /**
@@ -175,19 +177,13 @@ export class BacklinkIndex {
     const results = [];
 
     for (const sourcePath of sources) {
-      const content = await this.vaultFileStore.readMarkdownFile(sourcePath);
-      if (content === null) continue;
-
-      const linkContexts = extractLinkContexts(content, filePath);
-      // Filter to only contexts that resolve to the target file
-      const relevantContexts = linkContexts
-        .filter((lc) => this._resolveTarget(lc.target) === filePath)
-        .map((lc) => lc.context);
+      const sourceContexts = this.contextsBySource.get(sourcePath);
+      const relevantContexts = sourceContexts?.get(filePath) ?? [];
 
       if (relevantContexts.length > 0) {
         results.push({
           file: sourcePath,
-          contexts: relevantContexts,
+          contexts: [...relevantContexts],
         });
       }
     }
@@ -207,17 +203,37 @@ export class BacklinkIndex {
   // --- Private methods ---
 
   _indexFile(filePath, content) {
-    const targets = extractWikiLinkTargets(content);
     const resolvedTargets = new Set();
+    const contextsByTarget = new Map();
+    const lines = content.split('\n');
 
-    for (const target of targets) {
-      const resolved = this._resolveTarget(target);
-      if (resolved && resolved !== filePath) {
+    for (const line of lines) {
+      WIKI_LINK_RE.lastIndex = 0;
+      let match;
+      while ((match = WIKI_LINK_RE.exec(line)) !== null) {
+        const target = match[1].trim();
+        if (!target) {
+          continue;
+        }
+
+        const resolved = this._resolveTarget(target);
+        if (!resolved || resolved === filePath) {
+          continue;
+        }
+
         resolvedTargets.add(resolved);
+
+        if (!contextsByTarget.has(resolved)) {
+          contextsByTarget.set(resolved, []);
+        }
+        contextsByTarget.get(resolved).push(line.trim());
       }
     }
 
+    this.contextsBySource.delete(filePath);
+
     if (resolvedTargets.size > 0) {
+      this.contextsBySource.set(filePath, contextsByTarget);
       this.forward.set(filePath, resolvedTargets);
 
       for (const targetPath of resolvedTargets) {
@@ -230,6 +246,8 @@ export class BacklinkIndex {
   }
 
   _removeForwardLinks(filePath) {
+    this.contextsBySource.delete(filePath);
+
     const oldTargets = this.forward.get(filePath);
     if (!oldTargets) return;
 
@@ -251,7 +269,11 @@ export class BacklinkIndex {
    * Same logic as the client's resolveWikiTarget.
    */
   _resolveTarget(target) {
-    return resolveWikiTargetPath(target, this._fileList);
+    return resolveWikiTargetWithIndex(target, this._wikiTargetIndex);
+  }
+
+  _refreshWikiTargetIndex() {
+    this._wikiTargetIndex = createWikiTargetIndex(this._fileList);
   }
 }
 
