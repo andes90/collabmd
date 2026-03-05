@@ -7,6 +7,7 @@ export class FileExplorerController {
     this.panel = document.getElementById('fileExplorer');
     this.treeContainer = document.getElementById('fileTree');
     this.newFileButton = document.getElementById('newFileBtn');
+    this.newDrawingButton = document.getElementById('newDrawingBtn');
     this.newFolderButton = document.getElementById('newFolderBtn');
     this.refreshButton = document.getElementById('refreshFilesBtn');
     this.searchInput = document.getElementById('fileSearchInput');
@@ -19,6 +20,7 @@ export class FileExplorerController {
 
   initialize() {
     this.newFileButton?.addEventListener('click', () => this.handleNewFile());
+    this.newDrawingButton?.addEventListener('click', () => this.handleNewDrawing());
     this.newFolderButton?.addEventListener('click', () => this.handleNewFolder());
     this.refreshButton?.addEventListener('click', () => this.refresh());
     this.searchInput?.addEventListener('input', (e) => {
@@ -42,7 +44,7 @@ export class FileExplorerController {
   flattenTree(nodes) {
     const files = [];
     for (const node of nodes) {
-      if (node.type === 'file') {
+      if (node.type === 'file' || node.type === 'excalidraw') {
         files.push(node.path);
       } else if (node.type === 'directory' && node.children) {
         files.push(...this.flattenTree(node.children, node.path));
@@ -113,7 +115,7 @@ export class FileExplorerController {
         const dir = this.createDirectoryItem(node, depth);
         container.appendChild(dir);
       } else {
-        const file = this.createFileItem(node.name, node.path, depth);
+        const file = this.createFileItem(node.name, node.path, depth, node.type === 'excalidraw');
         container.appendChild(file);
       }
     }
@@ -157,19 +159,28 @@ export class FileExplorerController {
     return wrapper;
   }
 
-  createFileItem(name, filePath, depth) {
+  createFileItem(name, filePath, depth, isExcalidraw = false) {
     const button = document.createElement('button');
     button.className = 'file-tree-item file-tree-file';
+    if (isExcalidraw) {
+      button.classList.add('is-excalidraw');
+    }
     if (filePath === this.activeFilePath) {
       button.classList.add('active');
     }
     button.style.paddingLeft = `${8 + depth * 16 + 14}px`;
     button.dataset.path = filePath;
 
-    const displayName = name.replace(/\.md$/i, '');
+    const displayName = isExcalidraw
+      ? name.replace(/\.excalidraw$/i, '')
+      : name.replace(/\.md$/i, '');
+
+    const iconSvg = isExcalidraw
+      ? '<svg class="file-tree-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>'
+      : '<svg class="file-tree-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
 
     button.innerHTML = `
-      <svg class="file-tree-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      ${iconSvg}
       <span class="file-tree-name">${escapeHtml(displayName)}</span>
     `;
 
@@ -270,13 +281,46 @@ export class FileExplorerController {
     }
   }
 
+  async handleNewDrawing() {
+    const name = prompt('New drawing name (e.g., "architecture"):');
+    if (!name) return;
+
+    const fileName = name.endsWith('.excalidraw') ? name : `${name}.excalidraw`;
+    const emptyScene = JSON.stringify({
+      type: 'excalidraw',
+      version: 2,
+      source: 'collabmd',
+      elements: [],
+      appState: { viewBackgroundColor: '#ffffff', gridSize: null },
+      files: {},
+    });
+
+    try {
+      const response = await fetch('/api/file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: fileName, content: emptyScene }),
+      });
+      const data = await response.json();
+      if (data.ok) {
+        await this.refresh();
+      } else {
+        alert(data.error || 'Failed to create drawing');
+      }
+    } catch (error) {
+      alert(`Failed to create drawing: ${error.message}`);
+    }
+  }
+
   async handleRename(filePath) {
     const currentName = filePath.split('/').pop();
     const newName = prompt('New name:', currentName);
     if (!newName || newName === currentName) return;
 
     const dir = filePath.includes('/') ? filePath.substring(0, filePath.lastIndexOf('/') + 1) : '';
-    const newPath = dir + (newName.endsWith('.md') ? newName : `${newName}.md`);
+    const isExcalidraw = currentName.toLowerCase().endsWith('.excalidraw');
+    const ext = isExcalidraw ? '.excalidraw' : '.md';
+    const newPath = dir + (newName.endsWith(ext) ? newName : `${newName}${ext}`);
 
     try {
       const response = await fetch('/api/file', {

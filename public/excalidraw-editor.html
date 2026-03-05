@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Excalidraw — CollabMD</title>
+  <link rel="stylesheet" href="https://esm.sh/@excalidraw/excalidraw@0.18.0/dist/prod/index.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; }
+    #root { width: 100%; height: 100%; }
+    .loading-state {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      font-family: system-ui, -apple-system, sans-serif;
+      color: #888;
+      font-size: 14px;
+    }
+    .loading-state.error { color: #e55; }
+  </style>
+  <script>
+    window.EXCALIDRAW_ASSET_PATH = "https://esm.sh/@excalidraw/excalidraw@0.18.0/dist/prod/";
+  </script>
+  <link rel="modulepreload" href="https://esm.sh/react@19.2.0">
+  <link rel="modulepreload" href="https://esm.sh/react-dom@19.2.0/client">
+  <link rel="modulepreload" href="https://esm.sh/@excalidraw/excalidraw@0.18.0?bundle&external=react,react-dom,react-dom/client">
+  <script type="importmap">
+  {
+    "imports": {
+      "react": "https://esm.sh/react@19.2.0",
+      "react/jsx-runtime": "https://esm.sh/react@19.2.0/jsx-runtime",
+      "react-dom": "https://esm.sh/react-dom@19.2.0",
+      "react-dom/client": "https://esm.sh/react-dom@19.2.0/client"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="root">
+    <div class="loading-state" id="loadingState">Loading Excalidraw...</div>
+  </div>
+
+  <script type="module">
+    // Parse params from URL
+    const params = new URLSearchParams(window.location.search);
+    const filePath = params.get('file');
+    const parentOrigin = window.location.origin;
+
+    // State
+    let excalidrawAPI = null;
+    let saveTimer = null;
+    let lastSavedJson = '';
+    let currentTheme = params.get('theme') || 'dark';
+    const SAVE_DEBOUNCE_MS = 1500;
+    const RUNTIME_PROVIDER = {
+      react: 'react',
+      reactDomClient: 'react-dom/client',
+      excalidraw: 'https://esm.sh/@excalidraw/excalidraw@0.18.0?bundle&external=react,react-dom,react-dom/client',
+      assetPath: 'https://esm.sh/@excalidraw/excalidraw@0.18.0/dist/prod/',
+    };
+
+    function createEmptyScene() {
+      return {
+        type: 'excalidraw',
+        version: 2,
+        source: 'collabmd',
+        elements: [],
+        appState: {
+          gridSize: null,
+          viewBackgroundColor: '#ffffff',
+        },
+        files: {},
+      };
+    }
+
+    function sceneToInitialData(parsedScene) {
+      return {
+        elements: parsedScene.elements || [],
+        appState: {
+          theme: currentTheme,
+          viewBackgroundColor: parsedScene.appState?.viewBackgroundColor ?? '#ffffff',
+          gridSize: parsedScene.appState?.gridSize ?? null,
+        },
+        files: parsedScene.files || {},
+      };
+    }
+
+    async function loadRuntimeModules() {
+      window.EXCALIDRAW_ASSET_PATH = RUNTIME_PROVIDER.assetPath;
+      const [{ default: React }, ReactDomClientModule, ExcalidrawLib] = await Promise.all([
+        import(RUNTIME_PROVIDER.react),
+        import(RUNTIME_PROVIDER.reactDomClient),
+        import(RUNTIME_PROVIDER.excalidraw),
+      ]);
+      return {
+        React,
+        createRoot: ReactDomClientModule.createRoot,
+        ExcalidrawLib,
+      };
+    }
+
+    async function loadOrCreateInitialData() {
+      if (!filePath) {
+        return sceneToInitialData(createEmptyScene());
+      }
+
+      const readRes = await fetch(`/api/file?path=${encodeURIComponent(filePath)}`);
+      if (readRes.ok) {
+        const data = await readRes.json();
+        const parsed = data.content ? JSON.parse(data.content) : createEmptyScene();
+        lastSavedJson = data.content || JSON.stringify(parsed);
+        return sceneToInitialData(parsed);
+      }
+
+      if (readRes.status === 404) {
+        const emptyScene = createEmptyScene();
+        const emptyJson = JSON.stringify(emptyScene);
+
+        const createRes = await fetch('/api/file', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: filePath, content: emptyJson }),
+        });
+
+        // 409 can happen in race conditions when another client creates it first.
+        if (createRes.ok || createRes.status === 409) {
+          lastSavedJson = emptyJson;
+          return sceneToInitialData(emptyScene);
+        }
+
+        const createError = await createRes.json().catch(() => ({}));
+        throw new Error(createError.error || 'Failed to create Excalidraw file');
+      }
+
+      const readError = await readRes.json().catch(() => ({}));
+      throw new Error(readError.error || 'Failed to load Excalidraw file');
+    }
+
+    // ── postMessage bridge ──────────────────────────────────────────
+    function postToParent(type, payload = {}) {
+      window.parent.postMessage({ source: 'excalidraw-editor', type, ...payload }, parentOrigin);
+    }
+
+    window.addEventListener('message', (event) => {
+      if (event.origin !== parentOrigin) return;
+      const msg = event.data;
+      if (!msg || msg.source !== 'collabmd-host') return;
+
+      if (msg.type === 'set-theme') {
+        currentTheme = msg.theme || 'dark';
+        if (excalidrawAPI) {
+          excalidrawAPI.updateScene({ appState: { theme: currentTheme } });
+        }
+      }
+
+      if (msg.type === 'set-scene') {
+        if (excalidrawAPI && msg.elements) {
+          excalidrawAPI.updateScene({
+            elements: msg.elements,
+            appState: msg.appState || {},
+          });
+        }
+      }
+    });
+
+    // ── Save logic ──────────────────────────────────────────────────
+    function scheduleSave(elements, appState, files) {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        const sceneData = {
+          type: 'excalidraw',
+          version: 2,
+          source: 'collabmd',
+          elements: elements.filter((el) => !el.isDeleted),
+          appState: {
+            gridSize: appState.gridSize ?? null,
+            viewBackgroundColor: appState.viewBackgroundColor ?? '#ffffff',
+          },
+          files: files || {},
+        };
+
+        const json = JSON.stringify(sceneData);
+        if (json === lastSavedJson) return;
+        lastSavedJson = json;
+
+        postToParent('save', { filePath, content: json });
+      }, SAVE_DEBOUNCE_MS);
+    }
+
+    // ── Load + Render ───────────────────────────────────────────────
+    async function init() {
+      const loadingEl = document.getElementById('loadingState');
+
+      try {
+        const { React, createRoot, ExcalidrawLib } = await loadRuntimeModules();
+        const initialData = await loadOrCreateInitialData();
+
+        // Remove loading state
+        loadingEl.remove();
+
+        // Render Excalidraw
+        const App = () => {
+          return React.createElement(
+            'div',
+            { style: { width: '100%', height: '100vh' } },
+            React.createElement(ExcalidrawLib.Excalidraw, {
+              excalidrawAPI: (api) => {
+                excalidrawAPI = api;
+                postToParent('ready');
+              },
+              initialData,
+              theme: currentTheme,
+              onChange: (elements, appState, files) => {
+                scheduleSave(elements, appState, files);
+              },
+              UIOptions: {
+                canvasActions: {
+                  export: false,
+                  loadScene: false,
+                  saveToActiveFile: false,
+                  toggleTheme: false,
+                },
+              },
+            }),
+          );
+        };
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(React.createElement(App));
+      } catch (err) {
+        console.error('[excalidraw] Failed to initialize:', err);
+        loadingEl.className = 'loading-state error';
+        loadingEl.textContent = `Failed to load Excalidraw: ${err.message}`;
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

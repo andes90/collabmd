@@ -5,6 +5,7 @@ import { EditorSession } from '../infrastructure/editor-session.js';
 import { LobbyPresence } from '../infrastructure/lobby-presence.js';
 import { getFileFromHash, navigateToFile } from '../infrastructure/runtime-config.js';
 import { BacklinksPanel } from '../presentation/backlinks-panel.js';
+import { ExcalidrawEmbedController } from '../presentation/excalidraw-embed-controller.js';
 import { FileExplorerController } from '../presentation/file-explorer-controller.js';
 import { LayoutController } from '../presentation/layout-controller.js';
 import { OutlineController } from '../presentation/outline-controller.js';
@@ -81,6 +82,7 @@ export class CollabMdApp {
         requestAnimationFrame(() => {
           this.scrollSyncController.invalidatePreviewBlocks();
           this.scrollSyncController.syncPreviewToEditor();
+          this.excalidrawEmbed.processEmbeds(this.elements.previewContent);
         });
       },
       onWikiLinkClick: (target) => this.handleWikiLinkClick(target),
@@ -102,6 +104,10 @@ export class CollabMdApp {
     this.backlinksPanel = new BacklinksPanel({
       panelElement: this.elements.backlinksPanel,
       onFileSelect: (filePath) => this.handleFileSelection(filePath, { closeSidebarOnMobile: true }),
+    });
+    this.excalidrawEmbed = new ExcalidrawEmbedController({
+      getTheme: () => this.themeController.getTheme(),
+      toastController: this.toastController,
     });
     this._backlinkRefreshTimer = null;
   }
@@ -423,6 +429,7 @@ export class CollabMdApp {
     this.previewRenderer.applyTheme(theme);
     this.previewRenderer.queueRender();
     this.session?.applyTheme(theme);
+    this.excalidrawEmbed.updateTheme(theme);
   }
 
   // Connection

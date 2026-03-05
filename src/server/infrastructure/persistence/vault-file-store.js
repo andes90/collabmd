@@ -2,10 +2,20 @@ import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'fs/promis
 import { basename, dirname, extname, join, normalize, relative, resolve } from 'path';
 
 const MARKDOWN_EXTENSIONS = new Set(['.md', '.markdown', '.mdx']);
+const EXCALIDRAW_EXTENSION = '.excalidraw';
+const VAULT_FILE_EXTENSIONS = new Set([...MARKDOWN_EXTENSIONS, EXCALIDRAW_EXTENSION]);
 const IGNORED_DIRECTORIES = new Set(['.git', '.obsidian', '.trash', 'node_modules', '.DS_Store']);
 
 function isMarkdownFile(filePath) {
   return MARKDOWN_EXTENSIONS.has(extname(filePath).toLowerCase());
+}
+
+function isExcalidrawFile(filePath) {
+  return extname(filePath).toLowerCase() === EXCALIDRAW_EXTENSION;
+}
+
+function isVaultFile(filePath) {
+  return VAULT_FILE_EXTENSIONS.has(extname(filePath).toLowerCase());
 }
 
 function isIgnored(name) {
@@ -65,11 +75,11 @@ export class VaultFileStore {
             children,
           });
         }
-      } else if (isMarkdownFile(entry.name)) {
+      } else if (isVaultFile(entry.name)) {
         entries.push({
           name: entry.name,
           path: relativePath,
-          type: 'file',
+          type: isExcalidrawFile(entry.name) ? 'excalidraw' : 'file',
         });
       }
     }
@@ -92,6 +102,37 @@ export class VaultFileStore {
     }
   }
 
+  async readExcalidrawFile(filePath) {
+    const absolute = sanitizePath(this.vaultDir, filePath);
+    if (!absolute || !isExcalidrawFile(absolute)) {
+      return null;
+    }
+
+    try {
+      const content = await readFile(absolute, 'utf-8');
+      return content;
+    } catch (error) {
+      if (error.code === 'ENOENT') return null;
+      throw error;
+    }
+  }
+
+  async writeExcalidrawFile(filePath, content) {
+    const absolute = sanitizePath(this.vaultDir, filePath);
+    if (!absolute || !isExcalidrawFile(absolute)) {
+      return { ok: false, error: 'Invalid file path — must end in .excalidraw' };
+    }
+
+    try {
+      const dir = dirname(absolute);
+      await mkdir(dir, { recursive: true });
+      await writeFile(absolute, content, 'utf-8');
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  }
+
   async writeMarkdownFile(filePath, content) {
     const absolute = sanitizePath(this.vaultDir, filePath);
     if (!absolute || !isMarkdownFile(absolute)) {
@@ -110,8 +151,8 @@ export class VaultFileStore {
 
   async createFile(filePath, content = '') {
     const absolute = sanitizePath(this.vaultDir, filePath);
-    if (!absolute || !isMarkdownFile(absolute)) {
-      return { ok: false, error: 'Invalid file path — must end in .md' };
+    if (!absolute || !isVaultFile(absolute)) {
+      return { ok: false, error: 'Invalid file path — must end in .md or .excalidraw' };
     }
 
     try {
@@ -129,8 +170,8 @@ export class VaultFileStore {
 
   async deleteFile(filePath) {
     const absolute = sanitizePath(this.vaultDir, filePath);
-    if (!absolute || !isMarkdownFile(absolute)) {
-      return { ok: false, error: 'Invalid file path — must end in .md' };
+    if (!absolute || !isVaultFile(absolute)) {
+      return { ok: false, error: 'Invalid file path — must end in .md or .excalidraw' };
     }
 
     try {
@@ -149,12 +190,12 @@ export class VaultFileStore {
       return { ok: false, error: 'Invalid file path' };
     }
 
-    if (!isMarkdownFile(absoluteOld)) {
-      return { ok: false, error: 'Old path must end in .md' };
+    if (!isVaultFile(absoluteOld)) {
+      return { ok: false, error: 'Old path must be a vault file (.md or .excalidraw)' };
     }
 
-    if (!isMarkdownFile(absoluteNew)) {
-      return { ok: false, error: 'New path must end in .md' };
+    if (!isVaultFile(absoluteNew)) {
+      return { ok: false, error: 'New path must be a vault file (.md or .excalidraw)' };
     }
 
     try {
@@ -201,7 +242,7 @@ export class VaultFileStore {
 
       if (entry.isDirectory()) {
         count += await this.countFilesInDir(fullPath);
-      } else if (isMarkdownFile(entry.name)) {
+      } else if (isVaultFile(entry.name)) {
         count += 1;
       }
     }

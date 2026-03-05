@@ -9,6 +9,10 @@ const CONTENT_TYPES = {
   '.svg': 'image/svg+xml',
 };
 
+function isExcalidrawPath(filePath) {
+  return typeof filePath === 'string' && filePath.toLowerCase().endsWith('.excalidraw');
+}
+
 const SECURITY_HEADERS = {
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'X-Content-Type-Options': 'nosniff',
@@ -225,7 +229,7 @@ export function createRequestHandler(config, vaultFileStore, backlinkIndex, room
       return;
     }
 
-    // GET /api/file?path=... — read file
+    // GET /api/file?path=... — read file (markdown or excalidraw)
     if (requestUrl.pathname === '/api/file' && req.method === 'GET') {
       const filePath = requestUrl.searchParams.get('path');
       if (!filePath) {
@@ -234,7 +238,9 @@ export function createRequestHandler(config, vaultFileStore, backlinkIndex, room
       }
 
       try {
-        const content = await vaultFileStore.readMarkdownFile(filePath);
+        const content = isExcalidrawPath(filePath)
+          ? await vaultFileStore.readExcalidrawFile(filePath)
+          : await vaultFileStore.readMarkdownFile(filePath);
         if (content === null) {
           jsonResponse(res, 404, { error: 'File not found' });
           return;
@@ -247,7 +253,7 @@ export function createRequestHandler(config, vaultFileStore, backlinkIndex, room
       return;
     }
 
-    // PUT /api/file — write/update file
+    // PUT /api/file — write/update file (markdown or excalidraw)
     if (requestUrl.pathname === '/api/file' && req.method === 'PUT') {
       try {
         const body = await parseJsonBody(req);
@@ -255,7 +261,9 @@ export function createRequestHandler(config, vaultFileStore, backlinkIndex, room
           jsonResponse(res, 400, { error: 'Missing path or content' });
           return;
         }
-        const result = await vaultFileStore.writeMarkdownFile(body.path, body.content);
+        const result = isExcalidrawPath(body.path)
+          ? await vaultFileStore.writeExcalidrawFile(body.path, body.content)
+          : await vaultFileStore.writeMarkdownFile(body.path, body.content);
         if (!result.ok) {
           jsonResponse(res, 400, { error: result.error });
           return;
