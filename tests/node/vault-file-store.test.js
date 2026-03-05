@@ -71,6 +71,21 @@ test('VaultFileStore creates and deletes files', async (t) => {
   assert.equal(deleted, null);
 });
 
+test('VaultFileStore rejects non-markdown delete and rename source paths', async (t) => {
+  const { store, cleanup, vaultDir } = await createVaultStore();
+  t.after(cleanup);
+
+  await writeFile(join(vaultDir, 'secret.txt'), 'plain text', 'utf-8');
+
+  const deleteResult = await store.deleteFile('secret.txt');
+  assert.equal(deleteResult.ok, false);
+  assert.match(deleteResult.error, /must end in \.md/i);
+
+  const renameResult = await store.renameFile('secret.txt', 'secret.md');
+  assert.equal(renameResult.ok, false);
+  assert.match(renameResult.error, /Old path must end in \.md/i);
+});
+
 test('VaultFileStore rejects path traversal', async (t) => {
   const { store, cleanup } = await createVaultStore();
   t.after(cleanup);

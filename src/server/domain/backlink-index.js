@@ -10,6 +10,8 @@
  * incrementally whenever a file is persisted, created, deleted, or renamed.
  */
 
+import { resolveWikiTargetPath } from '../../domain/wiki-link-resolver.js';
+
 const WIKI_LINK_RE = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
 
 /**
@@ -249,10 +251,7 @@ export class BacklinkIndex {
    * Same logic as the client's resolveWikiTarget.
    */
   _resolveTarget(target) {
-    const normalized = target.endsWith('.md') ? target : `${target}.md`;
-    return this._fileList.find((f) => (
-      f === normalized || f.endsWith(`/${normalized}`) || f.replace(/\.md$/i, '') === target
-    )) ?? null;
+    return resolveWikiTargetPath(target, this._fileList);
   }
 }
 

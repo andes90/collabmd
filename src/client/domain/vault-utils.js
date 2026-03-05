@@ -1,3 +1,5 @@
+import { resolveWikiTargetPath } from '../../domain/wiki-link-resolver.js';
+
 /**
  * Shared utilities for vault file operations and HTML escaping.
  */
@@ -10,9 +12,12 @@
  * @returns {string} HTML-safe string
  */
 export function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 /**
@@ -28,10 +33,7 @@ export function escapeHtml(text) {
  * @returns {string | undefined} matched file path, or undefined if unresolved
  */
 export function resolveWikiTarget(target, files) {
-  const normalized = target.endsWith('.md') ? target : `${target}.md`;
-  return files.find((f) => (
-    f === normalized || f.endsWith(`/${normalized}`) || f.replace(/\.md$/i, '') === target
-  ));
+  return resolveWikiTargetPath(target, files) ?? undefined;
 }
 
 /**

@@ -1,13 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { request } from 'node:http';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 import { startTestServer } from './helpers/test-server.js';
 
-function httpRequest(url, { method = 'GET' } = {}) {
+function httpRequest(url, { method = 'GET', headers = {}, body } = {}) {
   return new Promise((resolve, reject) => {
     const req = request(url, {
       agent: false,
+      headers,
       method,
     }, (res) => {
       const chunks = [];
@@ -24,6 +27,9 @@ function httpRequest(url, { method = 'GET' } = {}) {
     });
 
     req.on('error', reject);
+    if (body) {
+      req.write(body);
+    }
     req.end();
   });
 }
@@ -57,4 +63,90 @@ test('HTTP server rejects unsupported methods and missing files', async (t) => {
 
   const missingResponse = await httpRequest(`${app.baseUrl}/missing-file.txt`);
   assert.equal(missingResponse.statusCode, 404);
+});
+
+test('HTTP server rejects cross-origin write requests', async (t) => {
+  const app = await startTestServer();
+  t.after(() => app.close());
+
+  const response = await httpRequest(`${app.baseUrl}/api/file`, {
+    method: 'POST',
+    headers: {
+      Origin: 'https://evil.example',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      content: '# should-not-write',
+      path: 'blocked.md',
+    }),
+  });
+
+  assert.equal(response.statusCode, 403);
+  assert.match(response.body, /Cross-origin write requests are not allowed/);
+
+  const fileResponse = await httpRequest(`${app.baseUrl}/api/file?path=${encodeURIComponent('blocked.md')}`);
+  assert.equal(fileResponse.statusCode, 404);
+});
+
+test('HTTP server returns 400 for invalid JSON payloads', async (t) => {
+  const app = await startTestServer();
+  t.after(() => app.close());
+
+  const response = await httpRequest(`${app.baseUrl}/api/file`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: '{bad json',
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.match(response.body, /Invalid JSON payload/);
+});
+
+test('HTTP server returns 413 for oversized request payloads', async (t) => {
+  const app = await startTestServer();
+  t.after(() => app.close());
+
+  const hugeBody = JSON.stringify({
+    content: 'a'.repeat(8_400_000),
+    path: 'big.md',
+  });
+
+  const response = await httpRequest(`${app.baseUrl}/api/file`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: hugeBody,
+  });
+
+  assert.equal(response.statusCode, 413);
+  assert.match(response.body, /Request body too large/);
+});
+
+test('HTTP server enforces markdown-only /api/file mutations', async (t) => {
+  const app = await startTestServer();
+  t.after(() => app.close());
+
+  await writeFile(join(app.vaultDir, 'secret.txt'), 'not markdown', 'utf-8');
+
+  const deleteResponse = await httpRequest(`${app.baseUrl}/api/file?path=${encodeURIComponent('secret.txt')}`, {
+    method: 'DELETE',
+  });
+  assert.equal(deleteResponse.statusCode, 400);
+  assert.match(deleteResponse.body, /must end in \.md/i);
+
+  const renameResponse = await httpRequest(`${app.baseUrl}/api/file`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      oldPath: 'secret.txt',
+      newPath: 'secret.md',
+    }),
+  });
+  assert.equal(renameResponse.statusCode, 400);
+  assert.match(renameResponse.body, /Old path must end in \.md/i);
 });

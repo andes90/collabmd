@@ -7,7 +7,9 @@ const require = createRequire(import.meta.url);
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const publicDir = resolve(rootDir, 'public');
 const clientSourceDir = resolve(rootDir, 'src/client');
+const sharedDomainSourceDir = resolve(rootDir, 'src/domain');
 const clientOutputDir = resolve(publicDir, 'assets/js');
+const sharedDomainOutputDir = resolve(publicDir, 'assets/domain');
 
 async function copyHighlightThemeFiles() {
   const themeDir = resolve(publicDir, 'assets/vendor/highlight');
@@ -34,7 +36,10 @@ async function copyMermaidBundle() {
 }
 
 await rm(clientOutputDir, { force: true, recursive: true });
+await rm(sharedDomainOutputDir, { force: true, recursive: true });
 await mkdir(clientOutputDir, { recursive: true });
+await mkdir(sharedDomainOutputDir, { recursive: true });
 await cp(clientSourceDir, clientOutputDir, { recursive: true });
+await cp(sharedDomainSourceDir, sharedDomainOutputDir, { recursive: true });
 await copyHighlightThemeFiles();
 await copyMermaidBundle();

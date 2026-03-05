@@ -14,6 +14,8 @@ const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'SAMEORIGIN',
 };
+const REQUEST_BODY_LIMIT_BYTES = 8_388_608;
+const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 function buildRuntimeConfig({ nodeEnv, publicWsBaseUrl, wsBasePath }) {
   return `window.__COLLABMD_CONFIG__ = ${JSON.stringify({
@@ -57,24 +59,98 @@ function resolvePublicFile(publicDir, pathname) {
   return absolutePath;
 }
 
-async function readRequestBody(req, maxBytes = 8_388_608) {
+function createRequestError(statusCode, message) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+function isSameOriginWriteRequest(req, requestUrl) {
+  const origin = req.headers.origin;
+  if (!origin) {
+    return true;
+  }
+
+  try {
+    const originUrl = new URL(origin);
+    return originUrl.host === requestUrl.host;
+  } catch {
+    return false;
+  }
+}
+
+function applyCorsHeaders(res, origin) {
+  if (!origin) {
+    return;
+  }
+
+  setHeaders(res, {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    Vary: 'Origin',
+  });
+}
+
+async function readRequestBody(req, maxBytes = REQUEST_BODY_LIMIT_BYTES) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let size = 0;
+    let done = false;
 
-    req.on('data', (chunk) => {
+    const finish = (callback, value) => {
+      if (done) {
+        return;
+      }
+
+      done = true;
+      req.off('data', onData);
+      req.off('end', onEnd);
+      req.off('error', onError);
+      callback(value);
+    };
+
+    const onData = (chunk) => {
       size += chunk.length;
       if (size > maxBytes) {
-        reject(new Error('Request body too large'));
-        req.destroy();
+        req.resume();
+        finish(reject, createRequestError(413, 'Request body too large'));
         return;
       }
       chunks.push(chunk);
-    });
+    };
 
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
-    req.on('error', reject);
+    const onEnd = () => {
+      finish(resolve, Buffer.concat(chunks).toString('utf-8'));
+    };
+
+    const onError = (error) => {
+      finish(reject, error);
+    };
+
+    req.on('data', onData);
+    req.on('end', onEnd);
+    req.on('error', onError);
   });
+}
+
+async function parseJsonBody(req) {
+  const rawBody = await readRequestBody(req);
+
+  try {
+    return JSON.parse(rawBody);
+  } catch {
+    throw createRequestError(400, 'Invalid JSON payload');
+  }
+}
+
+function handleRequestError(res, error) {
+  if (!Number.isInteger(error?.statusCode)) {
+    return false;
+  }
+
+  jsonResponse(res, error.statusCode, { error: error.message });
+  return true;
 }
 
 function jsonResponse(res, statusCode, data) {
@@ -91,17 +167,29 @@ export function createRequestHandler(config, vaultFileStore, backlinkIndex, room
 
   return async function handleRequest(req, res) {
     const requestUrl = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+    const isSameOriginWrite = isSameOriginWriteRequest(req, requestUrl);
 
-    setHeaders(res, {
-      ...SECURITY_HEADERS,
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    });
+    setHeaders(res, SECURITY_HEADERS);
 
     if (req.method === 'OPTIONS') {
+      const requestedMethod = String(req.headers['access-control-request-method'] || '').toUpperCase();
+      const preflightTargetsWrite = WRITE_METHODS.has(requestedMethod);
+      if (preflightTargetsWrite && !isSameOriginWrite) {
+        jsonResponse(res, 403, { error: 'Cross-origin write requests are not allowed' });
+        return;
+      }
+
+      if (isSameOriginWrite) {
+        applyCorsHeaders(res, req.headers.origin);
+      }
+
       res.writeHead(204);
       res.end();
+      return;
+    }
+
+    if (WRITE_METHODS.has(req.method) && !isSameOriginWrite) {
+      jsonResponse(res, 403, { error: 'Cross-origin write requests are not allowed' });
       return;
     }
 
@@ -162,7 +250,7 @@ export function createRequestHandler(config, vaultFileStore, backlinkIndex, room
     // PUT /api/file — write/update file
     if (requestUrl.pathname === '/api/file' && req.method === 'PUT') {
       try {
-        const body = JSON.parse(await readRequestBody(req));
+        const body = await parseJsonBody(req);
         if (!body.path || typeof body.content !== 'string') {
           jsonResponse(res, 400, { error: 'Missing path or content' });
           return;
@@ -174,6 +262,9 @@ export function createRequestHandler(config, vaultFileStore, backlinkIndex, room
         }
         jsonResponse(res, 200, { ok: true });
       } catch (error) {
+        if (handleRequestError(res, error)) {
+          return;
+        }
         console.error('[api] Failed to write file:', error.message);
         jsonResponse(res, 500, { error: 'Failed to write file' });
       }
@@ -183,7 +274,7 @@ export function createRequestHandler(config, vaultFileStore, backlinkIndex, room
     // POST /api/file — create new file
     if (requestUrl.pathname === '/api/file' && req.method === 'POST') {
       try {
-        const body = JSON.parse(await readRequestBody(req));
+        const body = await parseJsonBody(req);
         if (!body.path) {
           jsonResponse(res, 400, { error: 'Missing path' });
           return;
@@ -196,6 +287,9 @@ export function createRequestHandler(config, vaultFileStore, backlinkIndex, room
         backlinkIndex?.onFileCreated(body.path, body.content || '');
         jsonResponse(res, 201, { ok: true, path: body.path });
       } catch (error) {
+        if (handleRequestError(res, error)) {
+          return;
+        }
         console.error('[api] Failed to create file:', error.message);
         jsonResponse(res, 500, { error: 'Failed to create file' });
       }
@@ -232,7 +326,7 @@ export function createRequestHandler(config, vaultFileStore, backlinkIndex, room
     // PATCH /api/file — rename/move file
     if (requestUrl.pathname === '/api/file' && req.method === 'PATCH') {
       try {
-        const body = JSON.parse(await readRequestBody(req));
+        const body = await parseJsonBody(req);
         if (!body.oldPath || !body.newPath) {
           jsonResponse(res, 400, { error: 'Missing oldPath or newPath' });
           return;
@@ -246,6 +340,9 @@ export function createRequestHandler(config, vaultFileStore, backlinkIndex, room
         backlinkIndex?.onFileRenamed(body.oldPath, body.newPath);
         jsonResponse(res, 200, { ok: true, path: body.newPath });
       } catch (error) {
+        if (handleRequestError(res, error)) {
+          return;
+        }
         console.error('[api] Failed to rename file:', error.message);
         jsonResponse(res, 500, { error: 'Failed to rename file' });
       }
@@ -255,7 +352,7 @@ export function createRequestHandler(config, vaultFileStore, backlinkIndex, room
     // POST /api/directory — create directory
     if (requestUrl.pathname === '/api/directory' && req.method === 'POST') {
       try {
-        const body = JSON.parse(await readRequestBody(req));
+        const body = await parseJsonBody(req);
         if (!body.path) {
           jsonResponse(res, 400, { error: 'Missing path' });
           return;
@@ -267,6 +364,9 @@ export function createRequestHandler(config, vaultFileStore, backlinkIndex, room
         }
         jsonResponse(res, 201, { ok: true });
       } catch (error) {
+        if (handleRequestError(res, error)) {
+          return;
+        }
         console.error('[api] Failed to create directory:', error.message);
         jsonResponse(res, 500, { error: 'Failed to create directory' });
       }

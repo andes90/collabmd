@@ -129,8 +129,8 @@ export class VaultFileStore {
 
   async deleteFile(filePath) {
     const absolute = sanitizePath(this.vaultDir, filePath);
-    if (!absolute) {
-      return { ok: false, error: 'Invalid file path' };
+    if (!absolute || !isMarkdownFile(absolute)) {
+      return { ok: false, error: 'Invalid file path — must end in .md' };
     }
 
     try {
@@ -147,6 +147,10 @@ export class VaultFileStore {
 
     if (!absoluteOld || !absoluteNew) {
       return { ok: false, error: 'Invalid file path' };
+    }
+
+    if (!isMarkdownFile(absoluteOld)) {
+      return { ok: false, error: 'Old path must end in .md' };
     }
 
     if (!isMarkdownFile(absoluteNew)) {
