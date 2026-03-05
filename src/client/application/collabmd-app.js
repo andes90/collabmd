@@ -107,6 +107,7 @@ export class CollabMdApp {
     });
     this.excalidrawEmbed = new ExcalidrawEmbedController({
       getTheme: () => this.themeController.getTheme(),
+      getLocalUser: () => this.lobby.getLocalUser(),
       toastController: this.toastController,
     });
     this._backlinkRefreshTimer = null;

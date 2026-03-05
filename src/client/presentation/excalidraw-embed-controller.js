@@ -13,8 +13,9 @@ const MAX_HEIGHT = 800;
 const RESIZE_HANDLE_SIZE = 8;
 
 export class ExcalidrawEmbedController {
-  constructor({ getTheme, toastController }) {
+  constructor({ getTheme, getLocalUser, toastController }) {
     this.getTheme = getTheme;
+    this.getLocalUser = getLocalUser;
     this.toastController = toastController;
     this.activeEmbeds = new Map(); // filePath → { iframe, container }
     this.maximizedEmbed = null; // { wrapper, exit }
@@ -127,6 +128,19 @@ export class ExcalidrawEmbedController {
     const iframeUrl = new URL('/excalidraw-editor.html', window.location.origin);
     iframeUrl.searchParams.set('file', filePath);
     iframeUrl.searchParams.set('theme', theme);
+    const localUser = this.getLocalUser?.();
+    if (localUser?.name) {
+      iframeUrl.searchParams.set('userName', localUser.name);
+    }
+    if (localUser?.color) {
+      iframeUrl.searchParams.set('userColor', localUser.color);
+    }
+    if (localUser?.colorLight) {
+      iframeUrl.searchParams.set('userColorLight', localUser.colorLight);
+    }
+    if (localUser?.peerId) {
+      iframeUrl.searchParams.set('userPeerId', localUser.peerId);
+    }
     const serverOverride = new URLSearchParams(window.location.search).get('server');
     if (serverOverride) {
       iframeUrl.searchParams.set('server', serverOverride);

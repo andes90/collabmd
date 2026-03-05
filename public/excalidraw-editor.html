@@ -54,6 +54,11 @@
 
     const ROOM_TEXT_KEY = 'codemirror';
     const SAVE_DEBOUNCE_MS = 300;
+    const USER_COLOR_PALETTE = [
+      '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4',
+      '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6', '#f59e0b',
+      '#6366f1', '#10b981', '#f43f5e', '#0ea5e9', '#a855f7',
+    ];
     const RUNTIME_PROVIDER = {
       react: 'react',
       reactDomClient: 'react-dom/client',
@@ -70,14 +75,72 @@
     let ydoc = null;
     let ytext = null;
     let provider = null;
+    let awareness = null;
+    let localAwarenessUser = null;
 
     let collabReady = false;
     let suppressOnChange = false;
     let lastSceneJson = '';
     let pendingRemoteSceneJson = '';
+    let pendingCollaborators = null;
+    let pointerAwarenessFrame = 0;
+    let pendingPointerPayload = null;
+    let lastSelectedIdsSignature = '';
 
     function trimTrailingSlash(value) {
       return value.endsWith('/') ? value.slice(0, -1) : value;
+    }
+
+    function normalizeUserName(value) {
+      const normalized = String(value || '').trim().replace(/\s+/g, ' ');
+      return normalized ? normalized.slice(0, 24) : null;
+    }
+
+    function hashString(value) {
+      let hash = 0;
+      for (let i = 0; i < value.length; i += 1) {
+        hash = ((hash << 5) - hash) + value.charCodeAt(i);
+        hash |= 0;
+      }
+      return Math.abs(hash);
+    }
+
+    function generatePeerId() {
+      const bytes = new Uint8Array(8);
+      globalThis.crypto?.getRandomValues?.(bytes);
+      return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    function pickFallbackColor(seed) {
+      return USER_COLOR_PALETTE[hashString(seed) % USER_COLOR_PALETTE.length];
+    }
+
+    function ensureColorLight(color, colorLight) {
+      if (colorLight && /^#[0-9a-fA-F]{8}$/.test(colorLight)) {
+        return colorLight;
+      }
+
+      if (/^#[0-9a-fA-F]{6}$/.test(color)) {
+        return `${color}33`;
+      }
+
+      return '#0ea5e933';
+    }
+
+    function resolveLocalAwarenessUser() {
+      const name = normalizeUserName(params.get('userName'))
+        || normalizeUserName(localStorage.getItem('collabmd-user-name'))
+        || 'User';
+      const peerId = params.get('userPeerId') || generatePeerId();
+      const color = params.get('userColor') || pickFallbackColor(`${name}-${peerId}`);
+      const colorLight = ensureColorLight(color, params.get('userColorLight'));
+
+      return {
+        color,
+        colorLight,
+        name,
+        peerId,
+      };
     }
 
     function getRuntimeConfig() {
@@ -168,6 +231,109 @@
         },
         files: files || {},
       });
+    }
+
+    function buildCollaboratorsMap() {
+      const collaborators = new Map();
+      if (!awareness) {
+        return collaborators;
+      }
+
+      awareness.getStates().forEach((state, clientId) => {
+        const user = state?.user;
+        if (!user) {
+          return;
+        }
+
+        const pointer = state.pointer && Number.isFinite(state.pointer.x) && Number.isFinite(state.pointer.y)
+          ? {
+            x: state.pointer.x,
+            y: state.pointer.y,
+            tool: state.pointer.tool === 'laser' ? 'laser' : 'pointer',
+          }
+          : undefined;
+
+        collaborators.set(String(clientId), {
+          button: state.pointerButton === 'down' ? 'down' : 'up',
+          color: {
+            background: ensureColorLight(user.color || '#0ea5e9', user.colorLight),
+            stroke: user.color || '#0ea5e9',
+          },
+          id: user.peerId || String(clientId),
+          isCurrentUser: clientId === awareness.clientID,
+          pointer,
+          selectedElementIds: state.selectedElementIds || undefined,
+          socketId: String(clientId),
+          username: user.name || 'User',
+        });
+      });
+
+      return collaborators;
+    }
+
+    function applyCollaborators(collaborators) {
+      if (!excalidrawAPI) {
+        pendingCollaborators = collaborators;
+        return;
+      }
+
+      excalidrawAPI.updateScene({ collaborators });
+    }
+
+    function updateCollaboratorsFromAwareness() {
+      if (!collabReady) {
+        return;
+      }
+
+      applyCollaborators(buildCollaboratorsMap());
+    }
+
+    function flushPointerAwarenessPayload() {
+      pointerAwarenessFrame = 0;
+
+      if (!awareness || !pendingPointerPayload) {
+        return;
+      }
+
+      awareness.setLocalStateField('pointer', pendingPointerPayload.pointer);
+      awareness.setLocalStateField('pointerButton', pendingPointerPayload.button);
+      pendingPointerPayload = null;
+    }
+
+    function scheduleLocalPointerAwareness(payload) {
+      if (!awareness || !payload?.pointer) {
+        return;
+      }
+
+      pendingPointerPayload = {
+        button: payload.button === 'down' ? 'down' : 'up',
+        pointer: {
+          x: payload.pointer.x,
+          y: payload.pointer.y,
+          tool: payload.pointer.tool === 'laser' ? 'laser' : 'pointer',
+        },
+      };
+
+      if (pointerAwarenessFrame) {
+        return;
+      }
+
+      pointerAwarenessFrame = requestAnimationFrame(flushPointerAwarenessPayload);
+    }
+
+    function syncLocalSelectionAwareness(appState) {
+      if (!awareness) {
+        return;
+      }
+
+      const selected = appState?.selectedElementIds || {};
+      const signature = Object.keys(selected).sort().join(',');
+      if (signature === lastSelectedIdsSignature) {
+        return;
+      }
+
+      lastSelectedIdsSignature = signature;
+      awareness.setLocalStateField('selectedElementIds', selected);
     }
 
     async function loadRuntimeModules() {
@@ -310,6 +476,13 @@
         maxBackoffTime: 5000,
       });
 
+      awareness = provider.awareness;
+      localAwarenessUser = resolveLocalAwarenessUser();
+      awareness.setLocalStateField('user', localAwarenessUser);
+      awareness.setLocalStateField('pointerButton', 'up');
+      awareness.setLocalStateField('selectedElementIds', {});
+      awareness.on('change', updateCollaboratorsFromAwareness);
+
       await waitForSync(provider);
 
       let initialJson = ytext.toString();
@@ -333,6 +506,7 @@
       lastSceneJson = JSON.stringify(parseSceneJson(initialJson));
       ytext.observe(onRoomTextUpdate);
       collabReady = true;
+      updateCollaboratorsFromAwareness();
 
       return parseSceneJson(lastSceneJson);
     }
@@ -345,9 +519,23 @@
       clearTimeout(saveTimer);
       collabReady = false;
 
+      if (pointerAwarenessFrame) {
+        cancelAnimationFrame(pointerAwarenessFrame);
+      }
+      pointerAwarenessFrame = 0;
+      pendingPointerPayload = null;
+      pendingCollaborators = null;
+      lastSelectedIdsSignature = '';
+
       if (ytext) {
         ytext.unobserve(onRoomTextUpdate);
       }
+
+      if (awareness) {
+        awareness.off('change', updateCollaboratorsFromAwareness);
+        awareness.setLocalState(null);
+      }
+      awareness = null;
 
       provider?.disconnect();
       provider?.destroy();
@@ -356,6 +544,7 @@
       ydoc?.destroy();
       ydoc = null;
       ytext = null;
+      localAwarenessUser = null;
     }
 
     window.addEventListener('beforeunload', () => {
@@ -438,11 +627,22 @@
                 });
               }
 
+              if (pendingCollaborators) {
+                excalidrawAPI.updateScene({ collaborators: pendingCollaborators });
+                pendingCollaborators = null;
+              }
+              updateCollaboratorsFromAwareness();
+
               postToParent('ready');
             },
             initialData,
+            isCollaborating: true,
             onChange: (elements, appState, files) => {
               scheduleSyncToRoom(elements, appState, files);
+              syncLocalSelectionAwareness(appState);
+            },
+            onPointerUpdate: (payload) => {
+              scheduleLocalPointerAwareness(payload);
             },
             theme: currentTheme,
             UIOptions: {
