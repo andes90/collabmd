@@ -1,7 +1,14 @@
 import { autocompletion, closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
-import { bracketMatching, defaultHighlightStyle, foldGutter, foldKeymap, indentOnInput, syntaxHighlighting } from '@codemirror/language';
+import {
+  bracketMatching,
+  defaultHighlightStyle,
+  foldGutter,
+  foldKeymap,
+  indentOnInput,
+  syntaxHighlighting,
+} from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
 import { highlightSelectionMatches, searchKeymap } from '@codemirror/search';
 import { Compartment, EditorState } from '@codemirror/state';
@@ -21,9 +28,12 @@ import { WebsocketProvider } from 'y-websocket';
 import { yCollab } from 'y-codemirror.next';
 import * as Y from 'yjs';
 
+import { plantUmlLanguage, plantUmlLanguageDescription } from '../domain/plantuml-language.js';
 import { createRandomUser, normalizeUserName } from '../domain/room.js';
 import { wikiLinkCompletions } from '../domain/wiki-link-completions.js';
 import { resolveWsBaseUrl } from './runtime-config.js';
+
+const markdownCodeLanguages = [...languages, plantUmlLanguageDescription];
 
 function createEditorTheme(theme) {
   const activeLineBackground = theme === 'dark'
@@ -94,11 +104,14 @@ function createEditorTheme(theme) {
 }
 
 function createLanguageExtension(filePath) {
-  if (typeof filePath === 'string' && filePath.toLowerCase().endsWith('.puml')) {
-    return [];
+  if (
+    typeof filePath === 'string'
+    && (filePath.toLowerCase().endsWith('.puml') || filePath.toLowerCase().endsWith('.plantuml'))
+  ) {
+    return plantUmlLanguage;
   }
 
-  return markdown({ base: markdownLanguage, codeLanguages: languages });
+  return markdown({ base: markdownLanguage, codeLanguages: markdownCodeLanguages });
 }
 
 export class EditorSession {
