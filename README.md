@@ -78,6 +78,7 @@ collabmd [directory] [options]
 |-----------------|----------------------------------------|--------------|
 | `-p, --port`    | Port to listen on                      | `1234`       |
 | `--host`        | Host to bind to                        | `127.0.0.1`  |
+| `--local-plantuml` | Start the bundled local docker-compose PlantUML service | off |
 | `--no-tunnel`   | Don't start Cloudflare Tunnel          | tunnel on    |
 | `-v, --version` | Show version                           |              |
 | `-h, --help`    | Show help                              |              |
@@ -93,6 +94,9 @@ collabmd ~/my-vault
 
 # Use a custom port, no tunnel
 collabmd --port 3000 --no-tunnel
+
+# Use the local docker-compose PlantUML service
+collabmd --local-plantuml
 
 # Serve an Obsidian vault
 collabmd ~/Documents/Obsidian/MyVault
@@ -120,11 +124,14 @@ Useful commands:
 npm run build          # Build client bundle
 npm run check          # Syntax check all entry points
 npm run start          # Build + start server
+npm run start:local-plantuml  # Build + start server with local docker-compose PlantUML
 npm run start:prod     # Start server (expects previous build)
 npm run test           # Run unit + e2e tests
 npm run test:unit      # Fast Node-based unit tests
 npm run test:e2e       # Playwright browser tests
 npm run tunnel         # Start only the Cloudflare tunnel
+npm run plantuml:up    # Start only the local docker-compose PlantUML service
+npm run plantuml:down  # Stop only the local docker-compose PlantUML service
 ```
 
 ## Testing
@@ -182,6 +189,41 @@ docker build -t collabmd .
 docker run -p 1234:1234 -v /path/to/vault:/data collabmd
 ```
 
+### Local docker-compose with a private PlantUML server
+
+The included `docker-compose.yml` starts CollabMD together with a local `plantuml/plantuml-server:jetty` container and points `PLANTUML_SERVER_URL` at the private service automatically.
+
+```bash
+mkdir -p data/vault
+docker compose up --build
+```
+
+Open `http://localhost:1234`.
+
+The PlantUML container is also published on loopback by default at `http://127.0.0.1:18080`, so the host-based CLI can reuse it with:
+
+```bash
+npm run start:local-plantuml
+```
+
+To use an existing vault on your machine instead of `./data/vault`:
+
+```bash
+HOST_VAULT_DIR=/absolute/path/to/vault docker compose up --build
+```
+
+To change the host port:
+
+```bash
+COLLABMD_HOST_PORT=3000 docker compose up --build
+```
+
+To change the local PlantUML host port used by both `docker compose` and `--local-plantuml`:
+
+```bash
+PLANTUML_HOST_PORT=18081 npm run start:local-plantuml
+```
+
 Recommended Coolify setup:
 
 1. Use the included `Dockerfile`.
@@ -228,6 +270,8 @@ cp .env.example .env
 - `.obsidian`, `.git`, `.trash`, and `node_modules` directories are ignored.
 - Only `.md`, `.markdown`, and `.mdx` files are indexed.
 - PlantUML preview rendering is server-side and uses `PLANTUML_SERVER_URL`; point it at a self-hosted renderer if you do not want to use the public PlantUML service.
+- `docker compose up --build` uses the included local PlantUML service and avoids the public renderer by default.
+- `collabmd --local-plantuml` and `npm run start:local-plantuml` will start the local PlantUML compose service first, then run CollabMD against `http://127.0.0.1:${PLANTUML_HOST_PORT:-18080}`.
 
 ## License
 

@@ -10,6 +10,7 @@ const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: {
     help: { type: 'boolean', short: 'h', default: false },
+    'local-plantuml': { type: 'boolean', default: false },
     port: { type: 'string', short: 'p', default: '1234' },
     host: { type: 'string', default: '127.0.0.1' },
     'no-tunnel': { type: 'boolean', default: false },
@@ -39,6 +40,7 @@ if (values.help) {
   Options:
     -p, --port <port>    Port to listen on (default: 1234)
     --host <host>        Host to bind to (default: 127.0.0.1)
+    --local-plantuml     Start the bundled docker-compose PlantUML service and use it
     --no-tunnel          Don't start Cloudflare Tunnel
     -v, --version        Show version
     -h, --help           Show this help
@@ -47,6 +49,7 @@ if (values.help) {
     collabmd                        Serve current directory
     collabmd ~/my-vault             Serve a specific vault
     collabmd --port 3000            Use a custom port
+    collabmd --local-plantuml       Use the local docker-compose PlantUML server
     collabmd --no-tunnel            Local only, no tunnel
 `);
   process.exit(0);
@@ -56,6 +59,7 @@ const vaultPath = resolve(positionals[0] || '.');
 const port = parseInt(values.port, 10) || 1234;
 const host = values.host || '127.0.0.1';
 const enableTunnel = !values['no-tunnel'];
+const useLocalPlantUml = values['local-plantuml'];
 
 try {
   const stats = await stat(vaultPath);
@@ -75,6 +79,27 @@ try {
 process.env.COLLABMD_VAULT_DIR = vaultPath;
 process.env.PORT = String(port);
 process.env.HOST = host;
+
+if (useLocalPlantUml) {
+  const {
+    getLocalPlantUmlServerUrl,
+    startLocalPlantUmlComposeService,
+  } = await import('../scripts/local-plantuml-compose.mjs');
+
+  try {
+    const localPlantUmlUrl = getLocalPlantUmlServerUrl();
+    console.log(`  PlantUML: starting local docker-compose service at ${localPlantUmlUrl}...`);
+    await startLocalPlantUmlComposeService();
+    process.env.PLANTUML_SERVER_URL = localPlantUmlUrl;
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      console.error('Error: Docker is not available. Install Docker Desktop or Docker Engine first.');
+    } else {
+      console.error(`Error: Failed to start local PlantUML service: ${error.message}`);
+    }
+    process.exit(1);
+  }
+}
 
 const { createAppServer } = await import('../src/server/create-app-server.js');
 const { loadConfig } = await import('../src/server/config/env.js');
@@ -129,6 +154,7 @@ try {
   console.log('');
   console.log(`  Vault:  ${vaultPath} (${fileCount} markdown files)`);
   console.log(`  Local:  http://${info.host}:${info.port}`);
+  console.log(`  PlantUML: ${config.plantumlServerUrl}`);
 
   if (enableTunnel) {
     console.log('  Tunnel: starting...');

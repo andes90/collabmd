@@ -8,8 +8,11 @@
   },
   "scripts": {
     "build": "node scripts/build-client.mjs",
-    "check": "npm run build && node --check bin/collabmd.js && node --check src/server/index.js && node --check src/server/create-app-server.js && node --check scripts/build-client.mjs && node --check scripts/cloudflare-tunnel.mjs",
+    "check": "npm run build && node --check bin/collabmd.js && node --check src/server/index.js && node --check src/server/create-app-server.js && node --check scripts/build-client.mjs && node --check scripts/cloudflare-tunnel.mjs && node --check scripts/local-plantuml-compose.mjs",
+    "plantuml:up": "node scripts/local-plantuml-compose.mjs up",
+    "plantuml:down": "node scripts/local-plantuml-compose.mjs down",
     "start": "npm run build && node bin/collabmd.js",
+    "start:local-plantuml": "npm run build && node bin/collabmd.js --local-plantuml",
     "start:prod": "node bin/collabmd.js",
     "test": "npm run test:unit && npm run test:e2e",
     "test:e2e": "playwright test",

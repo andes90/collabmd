@@ -1,0 +1,24 @@
+services:
+  collabmd:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - plantuml
+    environment:
+      HOST: 0.0.0.0
+      PORT: 1234
+      PLANTUML_SERVER_URL: http://plantuml:8080
+    ports:
+      - "${COLLABMD_HOST_PORT:-1234}:1234"
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: ${HOST_VAULT_DIR:-./data/vault}
+        target: /data
+
+  plantuml:
+    image: plantuml/plantuml-server:jetty
+    ports:
+      - "127.0.0.1:${PLANTUML_HOST_PORT:-18080}:8080"
+    restart: unless-stopped
