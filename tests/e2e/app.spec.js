@@ -67,6 +67,28 @@ async function getHeavyPreviewCounts(page) {
   }));
 }
 
+async function getPlantUmlZoomMetrics(page) {
+  return page.evaluate(() => {
+    const frame = document.querySelector('#previewContent .plantuml-frame');
+    const svg = frame?.querySelector('svg');
+    const label = document.querySelector('#previewContent .plantuml-zoom-label');
+    if (!frame || !svg || !label) {
+      return null;
+    }
+
+    const styles = window.getComputedStyle(frame);
+    const paddingX = Number.parseFloat(styles.paddingLeft || '0') + Number.parseFloat(styles.paddingRight || '0');
+    const viewportWidth = Math.max(frame.clientWidth - paddingX, 0);
+    const baseWidth = svg.viewBox?.baseVal?.width || Number.parseFloat(svg.getAttribute('width') || '') || 0;
+    const expectedZoom = Math.max(0.1, Math.min(1, viewportWidth / baseWidth));
+
+    return {
+      currentLabel: label.textContent || '',
+      expectedLabel: `${Math.round(expectedZoom * 100)}%`,
+    };
+  });
+}
+
 async function getVisibleEditorLineNumbers(page) {
   return page.evaluate(() => (
     Array.from(document.querySelectorAll('.cm-lineNumbers .cm-gutterElement'))
@@ -944,6 +966,62 @@ test('opens .puml files with side-by-side PlantUML preview', async ({ page }) =>
   await expect(page.locator('#previewContent .plantuml-zoom-label')).toHaveText('110%');
   await expect(page.locator('#outlineToggle')).toHaveClass(/hidden/);
   await expect(page.locator('#backlinksPanel')).toHaveClass(/hidden/);
+});
+
+test('refits standalone PlantUML diagrams on maximize, resize, and restore', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await page.route('**/api/plantuml/render', async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({
+        ok: true,
+        svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2400 400"><text x="40" y="220">resizable-puml</text></svg>',
+      }),
+      contentType: 'application/json',
+      status: 200,
+    });
+  });
+
+  await openFile(page, 'architecture.puml');
+
+  await expect(page.locator('#previewContent .plantuml-frame svg')).toBeVisible();
+
+  await expect.poll(async () => {
+    const metrics = await getPlantUmlZoomMetrics(page);
+    return metrics ? metrics.currentLabel === metrics.expectedLabel : false;
+  }).toBeTruthy();
+
+  await page.locator('#previewContent .plantuml-tool-btn[aria-label="Zoom in"]').click();
+  await page.locator('#previewContent .plantuml-tool-btn[aria-label="Zoom in"]').click();
+  const zoomedInlineLabel = await page.locator('#previewContent .plantuml-zoom-label').textContent();
+
+  await page.locator('#previewContent .plantuml-tool-btn[aria-label="Maximize diagram"]').click();
+  await expect(page.locator('#previewContent .plantuml-tool-btn[aria-label="Restore diagram size"]')).toBeVisible();
+  await expect.poll(async () => {
+    const metrics = await getPlantUmlZoomMetrics(page);
+    return metrics ? metrics.currentLabel === metrics.expectedLabel : false;
+  }).toBeTruthy();
+  const maximizedFitLabel = await page.locator('#previewContent .plantuml-zoom-label').textContent();
+  expect(maximizedFitLabel).not.toBe(zoomedInlineLabel);
+
+  await page.setViewportSize({ width: 900, height: 900 });
+  await expect.poll(async () => {
+    const metrics = await getPlantUmlZoomMetrics(page);
+    return metrics ? metrics.currentLabel === metrics.expectedLabel : false;
+  }).toBeTruthy();
+  const resizedMaximizedLabel = await page.locator('#previewContent .plantuml-zoom-label').textContent();
+  expect(resizedMaximizedLabel).not.toBe(maximizedFitLabel);
+
+  await page.locator('#previewContent .plantuml-tool-btn[aria-label="Zoom in"]').click();
+  const zoomedMaximizedLabel = await page.locator('#previewContent .plantuml-zoom-label').textContent();
+
+  await page.locator('#previewContent .plantuml-tool-btn[aria-label="Restore diagram size"]').click();
+  await expect(page.locator('#previewContent .plantuml-tool-btn[aria-label="Maximize diagram"]')).toBeVisible();
+  await expect.poll(async () => {
+    const metrics = await getPlantUmlZoomMetrics(page);
+    return metrics ? metrics.currentLabel === metrics.expectedLabel : false;
+  }).toBeTruthy();
+  const restoredLabel = await page.locator('#previewContent .plantuml-zoom-label').textContent();
+  expect(restoredLabel).not.toBe(zoomedMaximizedLabel);
 });
 
 test.describe('mobile sidebar', () => {

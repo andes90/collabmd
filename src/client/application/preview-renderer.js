@@ -252,6 +252,9 @@ export class PreviewRenderer {
     this.preservedPlantUmlShells = new Map();
     this.plantUmlSvgCache = new Map();
     this.plantUmlInflightRequests = new Map();
+    this.plantUmlShellRefits = new WeakMap();
+    this.activeMaximizedPlantUmlShell = null;
+    this.plantUmlResizeFrameId = null;
 
     this.handlePreviewClick = (event) => {
       const mermaidButton = event.target.closest('.mermaid-placeholder-btn');
@@ -307,7 +310,12 @@ export class PreviewRenderer {
       this.resetWorker('Preview worker failed', { disable: true });
     };
 
+    this.handleWindowResize = () => {
+      this.scheduleActivePlantUmlRefit();
+    };
+
     this.previewElement?.addEventListener('click', this.handlePreviewClick);
+    window.addEventListener('resize', this.handleWindowResize);
     this.setPhase('ready');
   }
 
@@ -337,6 +345,7 @@ export class PreviewRenderer {
     this.cancelPlantUmlHydration();
     this.preservedMermaidShells.clear();
     this.preservedPlantUmlShells.clear();
+    this.clearActivePlantUmlShell();
     this.pendingRenderVersion += 1;
     this.activeRenderVersion = this.pendingRenderVersion;
     this.readyRenderVersion = 0;
@@ -444,8 +453,14 @@ export class PreviewRenderer {
     this.cancelPlantUmlHydration();
     this.preservedMermaidShells.clear();
     this.preservedPlantUmlShells.clear();
+    this.clearActivePlantUmlShell();
+    if (this.plantUmlResizeFrameId) {
+      cancelAnimationFrame(this.plantUmlResizeFrameId);
+      this.plantUmlResizeFrameId = null;
+    }
     this.resetWorker('Preview renderer destroyed');
     this.previewElement?.removeEventListener('click', this.handlePreviewClick);
+    window.removeEventListener('resize', this.handleWindowResize);
   }
 
   setPhase(phase) {
@@ -487,6 +502,38 @@ export class PreviewRenderer {
     this.plantUmlIdleId = null;
     this.pendingPlantUmlShells = [];
     this.plantUmlHydrationInProgress = false;
+  }
+
+  clearActivePlantUmlShell() {
+    this.activeMaximizedPlantUmlShell = null;
+  }
+
+  syncActivePlantUmlShell() {
+    if (
+      this.activeMaximizedPlantUmlShell?.isConnected
+      && this.activeMaximizedPlantUmlShell.classList.contains('is-maximized')
+    ) {
+      return this.activeMaximizedPlantUmlShell;
+    }
+
+    this.clearActivePlantUmlShell();
+    return null;
+  }
+
+  scheduleActivePlantUmlRefit() {
+    if (this.plantUmlResizeFrameId) {
+      cancelAnimationFrame(this.plantUmlResizeFrameId);
+    }
+
+    this.plantUmlResizeFrameId = requestAnimationFrame(() => {
+      this.plantUmlResizeFrameId = null;
+      const activeShell = this.syncActivePlantUmlShell();
+      if (!activeShell) {
+        return;
+      }
+
+      this.plantUmlShellRefits.get(activeShell)?.();
+    });
   }
 
   setHydrationPaused(paused) {
@@ -721,6 +768,7 @@ export class PreviewRenderer {
     if (restoredMaximizedShell) {
       document.body.classList.add('plantuml-maximized-open');
     }
+    this.syncActivePlantUmlShell();
   }
 
   syncPreservedMermaidShell(preservedShell, nextShell) {
@@ -1187,6 +1235,11 @@ export class PreviewRenderer {
       this.plantUmlInflightRequests.delete(source);
     }
 
+    this.plantUmlShellRefits.delete(shell);
+    if (this.activeMaximizedPlantUmlShell === shell) {
+      this.clearActivePlantUmlShell();
+    }
+
     shell.removeAttribute('data-plantuml-hydrated');
     shell.removeAttribute('data-plantuml-instance-id');
     shell.removeAttribute('data-plantuml-queued');
@@ -1323,11 +1376,46 @@ export class PreviewRenderer {
       animateZoomTo(currentZoom + delta);
     };
 
+    const resetZoomToFit = ({ animate = false } = {}) => {
+      defaultZoom = calculateDefaultZoom();
+
+      if (animate && Math.abs(defaultZoom - currentZoom) > 0.001) {
+        animateZoomTo(defaultZoom);
+        return;
+      }
+
+      if (zoomAnimationFrameId) {
+        cancelAnimationFrame(zoomAnimationFrameId);
+        zoomAnimationFrameId = null;
+      }
+
+      applyZoom(defaultZoom);
+      frame.scrollLeft = 0;
+      frame.scrollTop = 0;
+    };
+
+    let resetZoomFrameId = null;
+    const scheduleResetZoomToFit = () => {
+      if (resetZoomFrameId) {
+        cancelAnimationFrame(resetZoomFrameId);
+      }
+
+      resetZoomFrameId = requestAnimationFrame(() => {
+        resetZoomFrameId = null;
+        if (!shell.isConnected) {
+          return;
+        }
+
+        resetZoomToFit();
+      });
+    };
+
+    this.plantUmlShellRefits.set(shell, scheduleResetZoomToFit);
+
     decreaseButton.addEventListener('click', () => zoomBy(-PLANTUML_ZOOM.step));
     increaseButton.addEventListener('click', () => zoomBy(PLANTUML_ZOOM.step));
     resetButton.addEventListener('click', () => {
-      defaultZoom = calculateDefaultZoom();
-      animateZoomTo(defaultZoom);
+      resetZoomToFit({ animate: true });
     });
 
     const syncMaximizeButtonState = () => {
@@ -1341,6 +1429,7 @@ export class PreviewRenderer {
         const activeContainer = this.previewElement.querySelector('.plantuml-shell.is-maximized');
         if (activeContainer && activeContainer !== shell) {
           activeContainer.classList.remove('is-maximized');
+          this.plantUmlShellRefits.get(activeContainer)?.();
           const activeButton = activeContainer.querySelector('.plantuml-maximize-btn');
           if (activeButton) {
             activeButton.textContent = 'Max';
@@ -1349,18 +1438,22 @@ export class PreviewRenderer {
         }
 
         shell.classList.add('is-maximized');
+        this.activeMaximizedPlantUmlShell = shell;
         document.body.classList.add('plantuml-maximized-open');
         syncMaximizeButtonState();
-        requestAnimationFrame(() => applyZoom(currentZoom));
+        scheduleResetZoomToFit();
         return;
       }
 
       shell.classList.remove('is-maximized');
+      if (this.activeMaximizedPlantUmlShell === shell) {
+        this.clearActivePlantUmlShell();
+      }
       if (!this.previewElement.querySelector('.plantuml-shell.is-maximized')) {
         document.body.classList.remove('plantuml-maximized-open');
       }
       syncMaximizeButtonState();
-      requestAnimationFrame(() => applyZoom(currentZoom));
+      scheduleResetZoomToFit();
     };
 
     reloadButton.addEventListener('click', () => {
