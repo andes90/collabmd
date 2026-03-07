@@ -310,6 +310,17 @@
     </form>
   </dialog>
 
+  <div class="tab-lock-overlay hidden" id="tabLockOverlay" role="dialog" aria-modal="true" aria-labelledby="tabLockTitle">
+    <div class="tab-lock-card">
+      <span class="tab-lock-kicker">Single active tab</span>
+      <h2 class="tab-lock-title" id="tabLockTitle">This vault is active in another tab</h2>
+      <p class="tab-lock-copy" id="tabLockCopy">To avoid duplicate presence and chat, only one tab can stay connected at a time. Use the other tab, or take over the session here.</p>
+      <div class="tab-lock-actions">
+        <button type="button" class="btn btn-primary btn-lg" id="tabLockTakeoverBtn">Take over here</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast notifications -->
   <div class="toast-container" id="toastContainer"></div>
 

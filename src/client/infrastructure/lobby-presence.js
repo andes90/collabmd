@@ -46,10 +46,18 @@ export class LobbyPresence {
     this.currentFile = null;
     this._connected = false;
     this._didInitialSync = false;
+    this.handleAwarenessChange = () => {
+      this._emitChange();
+    };
+    this.handleChatMessagesChange = () => {
+      this._emitChatChange();
+    };
   }
 
   connect() {
     if (this.provider) return;
+
+    this._didInitialSync = false;
 
     this.provider = new WebsocketProvider(
       this.wsBaseUrl,
@@ -62,13 +70,9 @@ export class LobbyPresence {
     this.awareness.setLocalStateField('user', this.localUser);
     this.awareness.setLocalStateField('currentFile', this.currentFile);
 
-    this.awareness.on('change', () => {
-      this._emitChange();
-    });
+    this.awareness.on('change', this.handleAwarenessChange);
 
-    this.chatMessages.observe(() => {
-      this._emitChatChange();
-    });
+    this.chatMessages.observe(this.handleChatMessagesChange);
 
     this.provider.on('status', ({ status }) => {
       this._connected = status === 'connected';
@@ -165,11 +169,19 @@ export class LobbyPresence {
     return users;
   }
 
-  destroy() {
+  disconnect() {
+    this.awareness?.off('change', this.handleAwarenessChange);
+    this.chatMessages?.unobserve(this.handleChatMessagesChange);
     this.provider?.disconnect();
     this.provider?.destroy();
     this.provider = null;
     this.awareness = null;
+    this._connected = false;
+    this._didInitialSync = false;
+  }
+
+  destroy() {
+    this.disconnect();
     this.ydoc?.destroy();
     this.ydoc = null;
   }

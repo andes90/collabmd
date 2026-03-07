@@ -968,6 +968,54 @@
   gap: var(--space-2);
 }
 
+.tab-lock-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
+  background:
+    radial-gradient(circle at top, oklch(from var(--color-primary) l c h / 0.16), transparent 38%),
+    oklch(from var(--color-bg) l c h / 0.82);
+  backdrop-filter: blur(10px);
+}
+
+.tab-lock-card {
+  width: min(520px, 100%);
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  border: 1px solid oklch(from var(--color-primary) l c h / 0.25);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(180deg, var(--color-surface), var(--color-surface-2));
+  box-shadow: var(--shadow-lg);
+}
+
+.tab-lock-kicker {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+}
+
+.tab-lock-title {
+  font-size: var(--text-lg);
+  line-height: 1.2;
+}
+
+.tab-lock-copy {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+
+.tab-lock-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
 
 /* ===== EDITOR LAYOUT ===== */
 

@@ -198,6 +198,28 @@ test('prompts first-time visitors for a display name', async ({ browser }) => {
   await page.close();
 });
 
+test('allows explicit session takeover between tabs in the same browser context', async ({ browser }) => {
+  const context = await browser.newContext();
+  const pageA = await context.newPage();
+  const pageB = await context.newPage();
+
+  await openFile(pageA, 'README.md');
+  await seedStoredUserName(pageB);
+  await pageB.goto('/#file=README.md');
+
+  await expect(pageB.locator('#tabLockOverlay')).toBeVisible();
+  await expect(pageB.locator('#tabLockTitle')).toHaveText('This vault is active in another tab');
+
+  await pageB.locator('#tabLockTakeoverBtn').click();
+
+  await expect(pageB.locator('#tabLockOverlay')).toBeHidden();
+  await expect(pageB.locator('.cm-editor')).toBeVisible();
+  await expect(pageA.locator('#tabLockOverlay')).toBeVisible();
+  await expect(pageA.locator('#tabLockTitle')).toHaveText('This tab is no longer active');
+
+  await context.close();
+});
+
 test('sidebar shows vault file tree', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('#fileTree')).toBeVisible();

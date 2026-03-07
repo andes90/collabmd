@@ -4,6 +4,7 @@ import { resolveWikiTarget } from '../domain/vault-utils.js';
 import { EditorSession } from '../infrastructure/editor-session.js';
 import { LOBBY_CHAT_MESSAGE_MAX_LENGTH, LobbyPresence } from '../infrastructure/lobby-presence.js';
 import { getFileFromHash, navigateToFile } from '../infrastructure/runtime-config.js';
+import { TabActivityLock } from '../infrastructure/tab-activity-lock.js';
 import { BacklinksPanel } from '../presentation/backlinks-panel.js';
 import { CommentsPanel } from '../presentation/comments-panel.js';
 import { ExcalidrawEmbedController } from '../presentation/excalidraw-embed-controller.js';
@@ -58,6 +59,10 @@ export class CollabMdApp {
       emptyState: document.getElementById('emptyState'),
       backlinksPanel: document.getElementById('backlinksPanel'),
       outlineToggle: document.getElementById('outlineToggle'),
+      tabLockCopy: document.getElementById('tabLockCopy'),
+      tabLockOverlay: document.getElementById('tabLockOverlay'),
+      tabLockTakeoverButton: document.getElementById('tabLockTakeoverBtn'),
+      tabLockTitle: document.getElementById('tabLockTitle'),
     };
 
     this.session = null;
@@ -84,6 +89,7 @@ export class CollabMdApp {
       minute: '2-digit',
     });
     this.commentThreads = [];
+    this.isTabActive = false;
 
     this.lobby = new LobbyPresence({
       preferredUserName: this.getStoredUserName(),
@@ -172,6 +178,11 @@ export class CollabMdApp {
     this._pendingPreviewLayoutSync = false;
     this._previewLayoutResizeObserver = null;
     this._previewLayoutSyncTimer = null;
+    this.tabActivityLock = new TabActivityLock({
+      onActivated: ({ takeover }) => this.handleTabActivated({ takeover }),
+      onBlocked: () => this.handleTabBlocked({ reason: 'active-elsewhere' }),
+      onStolen: () => this.handleTabBlocked({ reason: 'taken-over' }),
+    });
 
     if (this.chatNotificationPermission !== 'granted') {
       this.chatNotificationsEnabled = false;
@@ -281,9 +292,8 @@ export class CollabMdApp {
     this.elements.chatInput?.setAttribute('maxlength', String(LOBBY_CHAT_MESSAGE_MAX_LENGTH));
     this.bindEvents();
     this.restoreSidebarState();
-
-    // Connect to the global presence lobby
-    this.lobby.connect();
+    this.tabActivityLock.initialize();
+    this.tabActivityLock.tryActivate();
 
     window.addEventListener('hashchange', () => this.handleHashChange());
     window.addEventListener('resize', this.createResizeHandler());
@@ -292,7 +302,6 @@ export class CollabMdApp {
       this.handleHashChange();
     });
 
-    this.promptForDisplayNameIfNeeded();
   }
 
   bindEvents() {
@@ -324,6 +333,10 @@ export class CollabMdApp {
     this.elements.displayNameForm?.addEventListener('submit', (event) => {
       event.preventDefault();
       this.handleDisplayNameSubmit();
+    });
+
+    this.elements.tabLockTakeoverButton?.addEventListener('click', () => {
+      this.handleTabTakeover();
     });
 
     this.elements.toggleWrapButton?.addEventListener('click', () => {
@@ -457,6 +470,10 @@ export class CollabMdApp {
   }
 
   async handleHashChange() {
+    if (!this.isTabActive) {
+      return;
+    }
+
     const filePath = getFileFromHash();
 
     if (!filePath) {
@@ -503,6 +520,10 @@ export class CollabMdApp {
   }
 
   async openFile(filePath) {
+    if (!this.isTabActive) {
+      return;
+    }
+
     const loadToken = this.sessionLoadToken + 1;
     this.sessionLoadToken = loadToken;
     const isExcalidraw = this.isExcalidrawFile(filePath);
@@ -907,6 +928,10 @@ export class CollabMdApp {
   }
 
   handleChatSubmit() {
+    if (!this.isTabActive) {
+      return;
+    }
+
     const input = this.elements.chatInput;
     if (!input) {
       return;
@@ -1388,6 +1413,10 @@ export class CollabMdApp {
   // Display name dialog
 
   openDisplayNameDialog({ mode = 'edit' } = {}) {
+    if (!this.isTabActive) {
+      return;
+    }
+
     const dialog = this.elements.displayNameDialog;
     const input = this.elements.displayNameInput;
     const title = this.elements.displayNameTitle;
@@ -1425,7 +1454,7 @@ export class CollabMdApp {
   }
 
   promptForDisplayNameIfNeeded() {
-    if (this._hasPromptedForDisplayName || this.getStoredUserName()) {
+    if (!this.isTabActive || this._hasPromptedForDisplayName || this.getStoredUserName()) {
       return;
     }
 
@@ -1513,6 +1542,78 @@ export class CollabMdApp {
 
   storeLineWrapping(enabled) {
     try { localStorage.setItem(this.lineWrappingStorageKey, String(enabled)); } catch { /* ignore */ }
+  }
+
+  handleTabTakeover() {
+    this.tabActivityLock.tryActivate({ takeover: true });
+  }
+
+  handleTabActivated({ takeover = false } = {}) {
+    const wasInactive = !this.isTabActive;
+    this.isTabActive = true;
+    this.hideTabLockOverlay();
+
+    if (!this.lobby.provider) {
+      this.lobby.connect();
+    }
+
+    if (wasInactive) {
+      void this.handleHashChange();
+      this.promptForDisplayNameIfNeeded();
+    }
+
+    if (takeover) {
+      this.toastController.show('This tab is now active');
+    }
+  }
+
+  handleTabBlocked({ reason } = {}) {
+    const wasActive = this.isTabActive;
+    this.isTabActive = false;
+    if (this.elements.displayNameDialog?.open) {
+      this.elements.displayNameDialog.close();
+    }
+    this.lobby.disconnect();
+    this.globalUsers = [];
+    this.chatMessages = [];
+    this.chatMessageIds.clear();
+    this.chatUnreadCount = 0;
+    this.chatInitialSyncComplete = false;
+    this.followedUserClientId = null;
+    this.followedCursorSignature = '';
+    this.connectionState = { status: 'disconnected', unreachable: false };
+    this.showEmptyState();
+    this.renderChat();
+    this.showTabLockOverlay({ reason });
+
+    if (wasActive && reason === 'taken-over') {
+      this.toastController.show('Another tab took over this session');
+    }
+  }
+
+  showTabLockOverlay({ reason } = {}) {
+    const overlay = this.elements.tabLockOverlay;
+    const title = this.elements.tabLockTitle;
+    const copy = this.elements.tabLockCopy;
+    if (!overlay) return;
+
+    if (title) {
+      title.textContent = reason === 'taken-over'
+        ? 'This tab is no longer active'
+        : 'This vault is active in another tab';
+    }
+
+    if (copy) {
+      copy.textContent = reason === 'taken-over'
+        ? 'Another tab took over the live session. This tab is now disconnected until you explicitly take over here again.'
+        : 'To avoid duplicate presence and chat, only one tab can stay connected at a time. Use the other tab, or take over the session here.';
+    }
+
+    overlay.classList.remove('hidden');
+  }
+
+  hideTabLockOverlay() {
+    this.elements.tabLockOverlay?.classList.add('hidden');
   }
 
   syncWrapToggle(state) {
