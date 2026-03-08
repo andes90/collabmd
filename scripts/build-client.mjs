@@ -1,14 +1,16 @@
-import { mkdir, rm, copyFile } from 'fs/promises';
+import { mkdir, rm, copyFile, readFile, writeFile } from 'fs/promises';
 import { dirname, resolve } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { createRequire } from 'module';
-import { build } from 'esbuild';
+import { build, transform } from 'esbuild';
 
 const require = createRequire(import.meta.url);
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const publicDir = resolve(rootDir, 'public');
 const clientSourceDir = resolve(rootDir, 'src/client');
+const clientStyleSourceDir = resolve(clientSourceDir, 'styles');
 const clientOutputDir = resolve(publicDir, 'assets/js');
+const clientStyleOutputDir = resolve(publicDir, 'assets/css');
 const obsoleteOutputDirs = [
   resolve(publicDir, 'assets/domain'),
   resolve(publicDir, 'assets/vendor/modules'),
@@ -16,6 +18,7 @@ const obsoleteOutputDirs = [
 const clientAppEntrySource = resolve(clientSourceDir, 'main.js');
 const previewWorkerSource = resolve(clientSourceDir, 'application/preview-render-worker.js');
 const previewWorkerOutput = resolve(clientOutputDir, 'application/preview-render-worker.js');
+const styleAssetFiles = ['base.css', 'style.css'];
 const browserResolveAliases = new Map([
   ['lib0/webcrypto', resolve(rootDir, 'node_modules/lib0/webcrypto.js')],
 ]);
@@ -107,10 +110,27 @@ async function bundleClientApp() {
   });
 }
 
+async function bundleStyles() {
+  await mkdir(clientStyleOutputDir, { recursive: true });
+
+  await Promise.all(styleAssetFiles.map(async (fileName) => {
+    const source = await readFile(resolve(clientStyleSourceDir, fileName), 'utf8');
+    const result = await transform(source, {
+      loader: 'css',
+      minify: true,
+      target: ['chrome120', 'firefox120', 'safari17'],
+    });
+
+    await writeFile(resolve(clientStyleOutputDir, fileName), result.code, 'utf8');
+  }));
+}
+
 await rm(clientOutputDir, { force: true, recursive: true });
 await Promise.all(obsoleteOutputDirs.map((directory) => rm(directory, { force: true, recursive: true })));
 await mkdir(clientOutputDir, { recursive: true });
+await mkdir(clientStyleOutputDir, { recursive: true });
 await copyHighlightThemeFiles();
 await copyMermaidBundle();
+await bundleStyles();
 await bundleClientApp();
 await bundlePreviewWorker();

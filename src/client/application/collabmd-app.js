@@ -10,7 +10,6 @@ import { ExcalidrawEmbedController } from '../presentation/excalidraw-embed-cont
 import { FileExplorerController } from '../presentation/file-explorer-controller.js';
 import { LayoutController } from '../presentation/layout-controller.js';
 import { OutlineController } from '../presentation/outline-controller.js';
-import { QuickSwitcherController } from '../presentation/quick-switcher-controller.js';
 import { ScrollSyncController } from '../presentation/scroll-sync-controller.js';
 import { ThemeController } from '../presentation/theme-controller.js';
 import { ToastController } from '../presentation/toast-controller.js';
@@ -88,6 +87,7 @@ export class CollabMdApp {
       minute: '2-digit',
     });
     this.editorSessionModulePromise = null;
+    this.quickSwitcherModulePromise = null;
     this.commentThreads = [];
     this.isTabActive = false;
     this.fileExplorerReady = false;
@@ -100,10 +100,7 @@ export class CollabMdApp {
     });
 
     this.toastController = new ToastController(this.elements.toastContainer);
-    this.quickSwitcher = new QuickSwitcherController({
-      getFileList: () => this.fileExplorer.flatFiles,
-      onFileSelect: (filePath) => this.handleFileSelection(filePath, { closeSidebarOnMobile: true }),
-    });
+    this.quickSwitcher = null;
     this.fileExplorer = new FileExplorerController({
       onFileSelect: (filePath) => this.handleFileSelection(filePath, { closeSidebarOnMobile: true }),
       onFileDelete: () => navigateToFile(null),
@@ -391,7 +388,7 @@ export class CollabMdApp {
 
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
-        this.quickSwitcher.toggle();
+        void this.toggleQuickSwitcher();
       }
     });
   }
@@ -532,6 +529,32 @@ export class CollabMdApp {
     }
 
     return this.editorSessionModulePromise;
+  }
+
+  async ensureQuickSwitcher() {
+    if (this.quickSwitcher) {
+      return this.quickSwitcher;
+    }
+
+    if (!this.quickSwitcherModulePromise) {
+      this.quickSwitcherModulePromise = import('../presentation/quick-switcher-controller.js')
+        .then((module) => module.QuickSwitcherController);
+    }
+
+    const QuickSwitcherController = await this.quickSwitcherModulePromise;
+    if (!this.quickSwitcher) {
+      this.quickSwitcher = new QuickSwitcherController({
+        getFileList: () => this.fileExplorer.flatFiles,
+        onFileSelect: (filePath) => this.handleFileSelection(filePath, { closeSidebarOnMobile: true }),
+      });
+    }
+
+    return this.quickSwitcher;
+  }
+
+  async toggleQuickSwitcher() {
+    const quickSwitcher = await this.ensureQuickSwitcher();
+    quickSwitcher.toggle();
   }
 
   async openFile(filePath) {

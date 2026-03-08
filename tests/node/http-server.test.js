@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import { request } from 'node:http';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { gunzipSync } from 'node:zlib';
 
 import { startTestServer } from './helpers/test-server.js';
 
@@ -19,8 +20,10 @@ function httpRequest(url, { method = 'GET', headers = {}, body } = {}) {
         chunks.push(chunk);
       });
       res.on('end', () => {
+        const bodyBuffer = Buffer.concat(chunks);
         resolve({
-          body: Buffer.concat(chunks).toString('utf-8'),
+          body: bodyBuffer.toString('utf-8'),
+          bodyBuffer,
           headers: res.headers,
           statusCode: res.statusCode,
         });
@@ -86,6 +89,15 @@ test('HTTP server serves health, runtime config, and static assets', async (t) =
   const assetHeadResponse = await httpRequest(`${app.baseUrl}/assets/css/style.css`, { method: 'HEAD' });
   assert.equal(assetHeadResponse.statusCode, 200);
   assert.equal(assetHeadResponse.headers['cache-control'], 'public, max-age=3600, stale-while-revalidate=86400');
+
+  const compressedAssetResponse = await httpRequest(`${app.baseUrl}/assets/css/style.css`, {
+    headers: {
+      'Accept-Encoding': 'gzip',
+    },
+  });
+  assert.equal(compressedAssetResponse.statusCode, 200);
+  assert.equal(compressedAssetResponse.headers['content-encoding'], 'gzip');
+  assert.match(gunzipSync(compressedAssetResponse.bodyBuffer).toString('utf8'), /--color-bg/);
 });
 
 test('HTTP server proxies esm.sh modules through a same-origin path', async (t) => {

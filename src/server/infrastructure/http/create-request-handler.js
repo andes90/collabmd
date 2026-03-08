@@ -1,5 +1,6 @@
 import { readFile } from 'fs/promises';
 import { extname, normalize, resolve } from 'path';
+import { brotliCompressSync, constants as zlibConstants, gzipSync } from 'node:zlib';
 
 const CONTENT_TYPES = {
   '.css': 'text/css; charset=utf-8',
@@ -11,6 +12,8 @@ const CONTENT_TYPES = {
 const ESM_PROXY_PREFIX = '/_esm/';
 const ESM_UPSTREAM_ORIGIN = 'https://esm.sh';
 const ESM_TEXT_CONTENT_TYPE_PATTERN = /\b(?:javascript|ecmascript|css|json|text\/plain|text\/css)\b/i;
+const COMPRESSIBLE_CONTENT_TYPE_PATTERN = /^(?:text\/|application\/(?:javascript|json|xml)|image\/svg\+xml)/i;
+const MIN_COMPRESSIBLE_BYTES = 1024;
 
 function isExcalidrawPath(filePath) {
   return typeof filePath === 'string' && filePath.toLowerCase().endsWith('.excalidraw');
@@ -74,6 +77,23 @@ function setHeaders(res, headers) {
   }
 }
 
+function appendVaryHeader(res, token) {
+  const normalizedToken = String(token || '').trim();
+  if (!normalizedToken) {
+    return;
+  }
+
+  const existingHeader = String(res.getHeader('Vary') || '');
+  const varyTokens = new Set(
+    existingHeader
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+  varyTokens.add(normalizedToken);
+  res.setHeader('Vary', Array.from(varyTokens).join(', '));
+}
+
 function createStaticFileReader({ cacheEnabled = true } = {}) {
   const cache = new Map();
 
@@ -131,12 +151,93 @@ function applyCorsHeaders(res, origin) {
     return;
   }
 
+  appendVaryHeader(res, 'Origin');
   setHeaders(res, {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
-    Vary: 'Origin',
   });
+}
+
+function resolveCompressionEncoding(acceptEncodingHeader) {
+  const value = String(acceptEncodingHeader || '').toLowerCase();
+  if (value.includes('br')) {
+    return 'br';
+  }
+
+  if (value.includes('gzip')) {
+    return 'gzip';
+  }
+
+  return null;
+}
+
+function maybeCompressBody(req, body, contentType) {
+  if (body === undefined || body === null) {
+    return { body: null, compressed: false, encoding: null };
+  }
+
+  const bodyBuffer = Buffer.isBuffer(body)
+    ? body
+    : Buffer.from(String(body), 'utf8');
+
+  if (
+    bodyBuffer.byteLength < MIN_COMPRESSIBLE_BYTES
+    || !COMPRESSIBLE_CONTENT_TYPE_PATTERN.test(String(contentType || ''))
+  ) {
+    return { body: bodyBuffer, compressed: false, encoding: null };
+  }
+
+  const encoding = resolveCompressionEncoding(req.headers['accept-encoding']);
+  if (!encoding) {
+    return { body: bodyBuffer, compressed: false, encoding: null };
+  }
+
+  const compressedBody = encoding === 'br'
+    ? brotliCompressSync(bodyBuffer, {
+      params: {
+        [zlibConstants.BROTLI_PARAM_QUALITY]: 5,
+      },
+    })
+    : gzipSync(bodyBuffer, { level: 6 });
+
+  if (compressedBody.byteLength >= bodyBuffer.byteLength) {
+    return { body: bodyBuffer, compressed: false, encoding: null };
+  }
+
+  return { body: compressedBody, compressed: true, encoding };
+}
+
+function sendResponse(req, res, {
+  body = null,
+  headers = {},
+  statusCode = 200,
+} = {}) {
+  const contentType = headers['Content-Type'] || headers['content-type'] || '';
+  const prepared = maybeCompressBody(req, body, contentType);
+
+  if (body !== null) {
+    appendVaryHeader(res, 'Accept-Encoding');
+  }
+
+  const responseHeaders = { ...headers };
+
+  if (prepared.compressed && prepared.encoding) {
+    responseHeaders['Content-Encoding'] = prepared.encoding;
+  }
+
+  if (prepared.body) {
+    responseHeaders['Content-Length'] = String(prepared.body.byteLength);
+  }
+
+  res.writeHead(statusCode, responseHeaders);
+
+  if (req.method === 'HEAD' || statusCode === 204 || statusCode === 304) {
+    res.end();
+    return;
+  }
+
+  res.end(prepared.body ?? undefined);
 }
 
 async function readRequestBody(req, maxBytes = REQUEST_BODY_LIMIT_BYTES) {
@@ -196,17 +297,31 @@ function handleRequestError(res, error) {
     return false;
   }
 
-  jsonResponse(res, error.statusCode, { error: error.message });
-  return true;
+  return error.statusCode;
 }
 
-function jsonResponse(res, statusCode, data) {
+function jsonResponse(req, res, statusCode, data) {
   const body = JSON.stringify(data);
-  res.writeHead(statusCode, {
-    'Content-Type': 'application/json; charset=utf-8',
-    'Cache-Control': 'no-store',
+  sendResponse(req, res, {
+    body,
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+    },
+    statusCode,
   });
-  res.end(body);
+}
+
+function textResponse(req, res, statusCode, body, headers = {}) {
+  sendResponse(req, res, {
+    body,
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      ...headers,
+    },
+    statusCode,
+  });
+  return true;
 }
 
 function rewriteEsmText(body) {
@@ -324,7 +439,7 @@ export function createRequestHandler(
       const requestedMethod = String(req.headers['access-control-request-method'] || '').toUpperCase();
       const preflightTargetsWrite = WRITE_METHODS.has(requestedMethod);
       if (preflightTargetsWrite && !isSameOriginWrite) {
-        jsonResponse(res, 403, { error: 'Cross-origin write requests are not allowed' });
+        jsonResponse(req, res, 403, { error: 'Cross-origin write requests are not allowed' });
         return;
       }
 
@@ -338,57 +453,51 @@ export function createRequestHandler(
     }
 
     if (WRITE_METHODS.has(req.method) && !isSameOriginWrite) {
-      jsonResponse(res, 403, { error: 'Cross-origin write requests are not allowed' });
+      jsonResponse(req, res, 403, { error: 'Cross-origin write requests are not allowed' });
       return;
     }
 
     // Health check
     if (requestUrl.pathname === '/health') {
-      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-      res.end('ok');
+      textResponse(req, res, 200, 'ok');
       return;
     }
 
     // Runtime config
     if (requestUrl.pathname === '/app-config.js') {
       const body = buildRuntimeConfig(config);
-      res.writeHead(200, {
-        'Cache-Control': 'no-store',
-        'Content-Type': 'text/javascript; charset=utf-8',
+      sendResponse(req, res, {
+        body,
+        headers: {
+          'Cache-Control': 'no-store',
+          'Content-Type': 'text/javascript; charset=utf-8',
+        },
+        statusCode: 200,
       });
-      res.end(req.method === 'HEAD' ? undefined : body);
       return;
     }
 
     if (isEsmProxyPath(requestUrl.pathname)) {
       if (req.method !== 'GET' && req.method !== 'HEAD') {
-        res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
-        res.end('Method Not Allowed');
+        textResponse(req, res, 405, 'Method Not Allowed');
         return;
       }
 
       try {
         const upstreamUrl = resolveEsmUpstreamUrl(requestUrl);
         const asset = await fetchEsmAsset(upstreamUrl);
-        res.writeHead(200, {
-          'Cache-Control': asset.cacheControl,
-          'Content-Type': asset.contentType,
+        sendResponse(req, res, {
+          body: asset.body,
+          headers: {
+            'Cache-Control': asset.cacheControl,
+            'Content-Type': asset.contentType,
+          },
+          statusCode: 200,
         });
-
-        if (req.method === 'HEAD') {
-          res.end();
-          return;
-        }
-
-        res.end(asset.body);
       } catch (error) {
         const statusCode = Number.isInteger(error?.statusCode) ? error.statusCode : 502;
         console.error(`[http] Failed to proxy "${requestUrl.pathname}":`, error.message);
-        res.writeHead(statusCode, {
-          'Cache-Control': 'no-store',
-          'Content-Type': 'text/plain; charset=utf-8',
-        });
-        res.end('Bad Gateway');
+        textResponse(req, res, statusCode, 'Bad Gateway', { 'Cache-Control': 'no-store' });
       }
       return;
     }
@@ -399,10 +508,10 @@ export function createRequestHandler(
     if (requestUrl.pathname === '/api/files' && req.method === 'GET') {
       try {
         const tree = await vaultFileStore.tree();
-        jsonResponse(res, 200, { tree });
+        jsonResponse(req, res, 200, { tree });
       } catch (error) {
         console.error('[api] Failed to read file tree:', error.message);
-        jsonResponse(res, 500, { error: 'Failed to read file tree' });
+        jsonResponse(req, res, 500, { error: 'Failed to read file tree' });
       }
       return;
     }
@@ -411,7 +520,7 @@ export function createRequestHandler(
     if (requestUrl.pathname === '/api/file' && req.method === 'GET') {
       const filePath = requestUrl.searchParams.get('path');
       if (!filePath) {
-        jsonResponse(res, 400, { error: 'Missing path parameter' });
+        jsonResponse(req, res, 400, { error: 'Missing path parameter' });
         return;
       }
 
@@ -420,15 +529,15 @@ export function createRequestHandler(
           ? await vaultFileStore.readExcalidrawFile(filePath)
           : isPlantUmlPath(filePath)
             ? await vaultFileStore.readPlantUmlFile(filePath)
-          : await vaultFileStore.readMarkdownFile(filePath);
+            : await vaultFileStore.readMarkdownFile(filePath);
         if (content === null) {
-          jsonResponse(res, 404, { error: 'File not found' });
+          jsonResponse(req, res, 404, { error: 'File not found' });
           return;
         }
-        jsonResponse(res, 200, { path: filePath, content });
+        jsonResponse(req, res, 200, { path: filePath, content });
       } catch (error) {
         console.error('[api] Failed to read file:', error.message);
-        jsonResponse(res, 500, { error: 'Failed to read file' });
+        jsonResponse(req, res, 500, { error: 'Failed to read file' });
       }
       return;
     }
@@ -438,25 +547,27 @@ export function createRequestHandler(
       try {
         const body = await parseJsonBody(req);
         if (!body.path || typeof body.content !== 'string') {
-          jsonResponse(res, 400, { error: 'Missing path or content' });
+          jsonResponse(req, res, 400, { error: 'Missing path or content' });
           return;
         }
         const result = isExcalidrawPath(body.path)
           ? await vaultFileStore.writeExcalidrawFile(body.path, body.content)
           : isPlantUmlPath(body.path)
             ? await vaultFileStore.writePlantUmlFile(body.path, body.content)
-          : await vaultFileStore.writeMarkdownFile(body.path, body.content);
+            : await vaultFileStore.writeMarkdownFile(body.path, body.content);
         if (!result.ok) {
-          jsonResponse(res, 400, { error: result.error });
+          jsonResponse(req, res, 400, { error: result.error });
           return;
         }
-        jsonResponse(res, 200, { ok: true });
+        jsonResponse(req, res, 200, { ok: true });
       } catch (error) {
-        if (handleRequestError(res, error)) {
+        const handledStatusCode = handleRequestError(res, error);
+        if (handledStatusCode) {
+          jsonResponse(req, res, handledStatusCode, { error: error.message });
           return;
         }
         console.error('[api] Failed to write file:', error.message);
-        jsonResponse(res, 500, { error: 'Failed to write file' });
+        jsonResponse(req, res, 500, { error: 'Failed to write file' });
       }
       return;
     }
@@ -466,25 +577,27 @@ export function createRequestHandler(
       try {
         const body = await parseJsonBody(req);
         if (typeof body.source !== 'string') {
-          jsonResponse(res, 400, { error: 'Missing PlantUML source' });
+          jsonResponse(req, res, 400, { error: 'Missing PlantUML source' });
           return;
         }
 
         if (!plantUmlRenderer) {
-          jsonResponse(res, 503, { error: 'PlantUML renderer is not configured' });
+          jsonResponse(req, res, 503, { error: 'PlantUML renderer is not configured' });
           return;
         }
 
         const svg = await plantUmlRenderer.renderSvg(body.source);
-        jsonResponse(res, 200, { ok: true, svg });
+        jsonResponse(req, res, 200, { ok: true, svg });
       } catch (error) {
-        if (handleRequestError(res, error)) {
+        const handledStatusCode = handleRequestError(res, error);
+        if (handledStatusCode) {
+          jsonResponse(req, res, handledStatusCode, { error: error.message });
           return;
         }
 
         const statusCode = Number.isInteger(error?.statusCode) ? error.statusCode : 502;
         console.error('[api] Failed to render PlantUML:', error.message);
-        jsonResponse(res, statusCode, {
+        jsonResponse(req, res, statusCode, {
           error: error instanceof Error ? error.message : 'Failed to render PlantUML',
         });
       }
@@ -496,22 +609,24 @@ export function createRequestHandler(
       try {
         const body = await parseJsonBody(req);
         if (!body.path) {
-          jsonResponse(res, 400, { error: 'Missing path' });
+          jsonResponse(req, res, 400, { error: 'Missing path' });
           return;
         }
         const result = await vaultFileStore.createFile(body.path, body.content || '');
         if (!result.ok) {
-          jsonResponse(res, 409, { error: result.error });
+          jsonResponse(req, res, 409, { error: result.error });
           return;
         }
         backlinkIndex?.onFileCreated(body.path, body.content || '');
-        jsonResponse(res, 201, { ok: true, path: body.path });
+        jsonResponse(req, res, 201, { ok: true, path: body.path });
       } catch (error) {
-        if (handleRequestError(res, error)) {
+        const handledStatusCode = handleRequestError(res, error);
+        if (handledStatusCode) {
+          jsonResponse(req, res, handledStatusCode, { error: error.message });
           return;
         }
         console.error('[api] Failed to create file:', error.message);
-        jsonResponse(res, 500, { error: 'Failed to create file' });
+        jsonResponse(req, res, 500, { error: 'Failed to create file' });
       }
       return;
     }
@@ -520,7 +635,7 @@ export function createRequestHandler(
     if (requestUrl.pathname === '/api/file' && req.method === 'DELETE') {
       const filePath = requestUrl.searchParams.get('path');
       if (!filePath) {
-        jsonResponse(res, 400, { error: 'Missing path parameter' });
+        jsonResponse(req, res, 400, { error: 'Missing path parameter' });
         return;
       }
 
@@ -530,15 +645,15 @@ export function createRequestHandler(
         const result = await vaultFileStore.deleteFile(filePath);
         if (!result.ok) {
           activeRoom?.unmarkDeleted?.();
-          jsonResponse(res, 400, { error: result.error });
+          jsonResponse(req, res, 400, { error: result.error });
           return;
         }
         backlinkIndex?.onFileDeleted(filePath);
-        jsonResponse(res, 200, { ok: true });
+        jsonResponse(req, res, 200, { ok: true });
       } catch (error) {
         activeRoom?.unmarkDeleted?.();
         console.error('[api] Failed to delete file:', error.message);
-        jsonResponse(res, 500, { error: 'Failed to delete file' });
+        jsonResponse(req, res, 500, { error: 'Failed to delete file' });
       }
       return;
     }
@@ -548,23 +663,25 @@ export function createRequestHandler(
       try {
         const body = await parseJsonBody(req);
         if (!body.oldPath || !body.newPath) {
-          jsonResponse(res, 400, { error: 'Missing oldPath or newPath' });
+          jsonResponse(req, res, 400, { error: 'Missing oldPath or newPath' });
           return;
         }
         const result = await vaultFileStore.renameFile(body.oldPath, body.newPath);
         if (!result.ok) {
-          jsonResponse(res, 400, { error: result.error });
+          jsonResponse(req, res, 400, { error: result.error });
           return;
         }
         roomRegistry?.rename(body.oldPath, body.newPath);
         backlinkIndex?.onFileRenamed(body.oldPath, body.newPath);
-        jsonResponse(res, 200, { ok: true, path: body.newPath });
+        jsonResponse(req, res, 200, { ok: true, path: body.newPath });
       } catch (error) {
-        if (handleRequestError(res, error)) {
+        const handledStatusCode = handleRequestError(res, error);
+        if (handledStatusCode) {
+          jsonResponse(req, res, handledStatusCode, { error: error.message });
           return;
         }
         console.error('[api] Failed to rename file:', error.message);
-        jsonResponse(res, 500, { error: 'Failed to rename file' });
+        jsonResponse(req, res, 500, { error: 'Failed to rename file' });
       }
       return;
     }
@@ -574,21 +691,23 @@ export function createRequestHandler(
       try {
         const body = await parseJsonBody(req);
         if (!body.path) {
-          jsonResponse(res, 400, { error: 'Missing path' });
+          jsonResponse(req, res, 400, { error: 'Missing path' });
           return;
         }
         const result = await vaultFileStore.createDirectory(body.path);
         if (!result.ok) {
-          jsonResponse(res, 400, { error: result.error });
+          jsonResponse(req, res, 400, { error: result.error });
           return;
         }
-        jsonResponse(res, 201, { ok: true });
+        jsonResponse(req, res, 201, { ok: true });
       } catch (error) {
-        if (handleRequestError(res, error)) {
+        const handledStatusCode = handleRequestError(res, error);
+        if (handledStatusCode) {
+          jsonResponse(req, res, handledStatusCode, { error: error.message });
           return;
         }
         console.error('[api] Failed to create directory:', error.message);
-        jsonResponse(res, 500, { error: 'Failed to create directory' });
+        jsonResponse(req, res, 500, { error: 'Failed to create directory' });
       }
       return;
     }
@@ -597,7 +716,7 @@ export function createRequestHandler(
     if (requestUrl.pathname === '/api/backlinks' && req.method === 'GET') {
       const filePath = requestUrl.searchParams.get('file');
       if (!filePath) {
-        jsonResponse(res, 400, { error: 'Missing file parameter' });
+        jsonResponse(req, res, 400, { error: 'Missing file parameter' });
         return;
       }
 
@@ -605,10 +724,10 @@ export function createRequestHandler(
         const backlinks = backlinkIndex
           ? await backlinkIndex.getBacklinks(filePath)
           : [];
-        jsonResponse(res, 200, { file: filePath, backlinks });
+        jsonResponse(req, res, 200, { file: filePath, backlinks });
       } catch (error) {
         console.error('[api] Failed to get backlinks:', error.message);
-        jsonResponse(res, 500, { error: 'Failed to get backlinks' });
+        jsonResponse(req, res, 500, { error: 'Failed to get backlinks' });
       }
       return;
     }
@@ -616,8 +735,7 @@ export function createRequestHandler(
     // === Static file serving ===
 
     if (req.method !== 'GET' && req.method !== 'HEAD') {
-      res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
-      res.end('Method Not Allowed');
+      textResponse(req, res, 405, 'Method Not Allowed');
       return;
     }
 
@@ -627,8 +745,7 @@ export function createRequestHandler(
     }
 
     if (!filePath) {
-      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-      res.end('Not Found');
+      textResponse(req, res, 404, 'Not Found');
       return;
     }
 
@@ -636,27 +753,22 @@ export function createRequestHandler(
       const file = await readStaticFile(filePath);
       const extension = extname(filePath);
 
-      res.writeHead(200, {
-        'Cache-Control': getStaticCacheControl(requestUrl.pathname, extension),
-        'Content-Type': CONTENT_TYPES[extension] || 'application/octet-stream',
+      sendResponse(req, res, {
+        body: file,
+        headers: {
+          'Cache-Control': getStaticCacheControl(requestUrl.pathname, extension),
+          'Content-Type': CONTENT_TYPES[extension] || 'application/octet-stream',
+        },
+        statusCode: 200,
       });
-
-      if (req.method === 'HEAD') {
-        res.end();
-        return;
-      }
-
-      res.end(file);
     } catch (error) {
       if (error?.code === 'ENOENT') {
-        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-        res.end('Not Found');
+        textResponse(req, res, 404, 'Not Found');
         return;
       }
 
       console.error(`[http] Failed to serve "${requestUrl.pathname}":`, error.message);
-      res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
-      res.end('Internal Server Error');
+      textResponse(req, res, 500, 'Internal Server Error');
     }
   };
 }

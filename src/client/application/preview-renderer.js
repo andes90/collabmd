@@ -343,6 +343,12 @@ export class PreviewRenderer {
     return this.renderHost;
   }
 
+  getReservedPreviewHeight() {
+    const currentRenderHeight = this.renderHost?.getBoundingClientRect?.().height ?? 0;
+    const containerHeight = this.previewContainer?.clientHeight ?? 0;
+    return Math.max(Math.round(currentRenderHeight), Math.round(containerHeight), 320);
+  }
+
   beginDocumentLoad() {
     this.cancelScheduledRender();
     this.cancelMermaidHydration();
@@ -356,11 +362,17 @@ export class PreviewRenderer {
     this.currentStats = null;
     this.isLargeDocument = false;
     this.resetWorker('Document changed');
-    this.ensureRenderHost()?.replaceChildren();
+    const renderHost = this.ensureRenderHost();
+    const reservedHeight = this.getReservedPreviewHeight();
+    if (renderHost) {
+      renderHost.replaceChildren();
+      renderHost.style.minHeight = `${reservedHeight}px`;
+    }
     const shell = document.createElement('div');
     shell.className = 'preview-shell';
+    shell.style.minHeight = `${reservedHeight}px`;
     shell.textContent = 'Rendering preview…';
-    this.ensureRenderHost()?.append(shell);
+    renderHost?.append(shell);
     this.setPhase('shell');
   }
 
@@ -1275,6 +1287,10 @@ export class PreviewRenderer {
   }
 
   notifyReady() {
+    if (this.renderHost) {
+      this.renderHost.style.minHeight = '';
+    }
+
     this.setPhase('ready');
 
     if (this.readyRenderVersion === this.activeRenderVersion) {

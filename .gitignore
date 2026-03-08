@@ -22,6 +22,7 @@ dist/
 data/
 playwright-report/
 public/assets/js/
+public/assets/css/
 public/assets/domain/
 public/assets/vendor/
 test-results/
