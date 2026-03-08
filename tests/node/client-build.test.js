@@ -22,7 +22,18 @@ test('client build emits the preview worker and main bundle references the emitt
 
 test('excalidraw build does not emit the disabled mermaid-to-excalidraw payload', async () => {
   const excalidrawBundlePath = resolve(rootDir, 'public/assets/js/excalidraw-editor.js');
-  const excalidrawBundle = await readFile(excalidrawBundlePath, 'utf8');
+  const excalidrawLoader = await readFile(excalidrawBundlePath, 'utf8');
+  const hashedBundleMatch = excalidrawLoader.match(/import "\.\/(excalidraw-editor-[^"]+\.js)"/);
+  const hashedCssMatch = (await readFile(resolve(rootDir, 'public/assets/js/excalidraw-editor.css'), 'utf8'))
+    .match(/@import url\("\.\/(excalidraw-editor-[^"]+\.css)"\)/);
+
+  assert.ok(hashedBundleMatch, 'expected excalidraw loader to import hashed entry bundle');
+  assert.ok(hashedCssMatch, 'expected excalidraw css loader to import hashed css asset');
+
+  const excalidrawBundle = await readFile(
+    resolve(rootDir, 'public/assets/js', hashedBundleMatch[1]),
+    'utf8',
+  );
   const importedSpecifiers = [
     ...excalidrawBundle.matchAll(/from"([^"]+)"/g),
     ...excalidrawBundle.matchAll(/import\("([^"]+)"\)/g),

@@ -22,6 +22,8 @@ const excalidrawEditorEntrySource = resolve(clientSourceDir, 'excalidraw-editor.
 const excalidrawMermaidStubSource = resolve(clientSourceDir, 'excalidraw-mermaid-stub.js');
 const previewWorkerSource = resolve(clientSourceDir, 'application/preview-render-worker.js');
 const previewWorkerOutput = resolve(clientOutputDir, 'application/preview-render-worker.js');
+const excalidrawLoaderOutput = resolve(clientOutputDir, 'excalidraw-editor.js');
+const excalidrawCssLoaderOutput = resolve(clientOutputDir, 'excalidraw-editor.css');
 const styleAssetFiles = ['base.css', 'style.css'];
 const buildWorkingDir = await mkdtemp(join(tmpdir(), 'collabmd-build-'));
 
@@ -59,7 +61,7 @@ async function bundlePreviewWorker() {
   });
 }
 
-async function bundleClientApp() {
+async function bundleMainApp() {
   await mkdir(clientOutputDir, { recursive: true });
   await build({
     absWorkingDir: buildWorkingDir,
@@ -69,11 +71,7 @@ async function bundleClientApp() {
     conditions: ['production'],
     entryNames: '[name]',
     entryPoints: {
-      'excalidraw-editor': excalidrawEditorEntrySource,
       main: clientAppEntrySource,
-    },
-    alias: {
-      '@excalidraw/mermaid-to-excalidraw': excalidrawMermaidStubSource,
     },
     define: {
       'process.env.NODE_ENV': '"production"',
@@ -90,6 +88,71 @@ async function bundleClientApp() {
     splitting: true,
     target: ['es2022'],
   });
+}
+
+async function bundleExcalidrawApp() {
+  await mkdir(clientOutputDir, { recursive: true });
+  const result = await build({
+    absWorkingDir: buildWorkingDir,
+    alias: {
+      '@excalidraw/mermaid-to-excalidraw': excalidrawMermaidStubSource,
+    },
+    assetNames: 'assets/[name]-[hash]',
+    bundle: true,
+    chunkNames: 'chunks/[name]-[hash]',
+    conditions: ['production'],
+    define: {
+      'process.env.NODE_ENV': '"production"',
+    },
+    entryNames: '[name]-[hash]',
+    entryPoints: {
+      'excalidraw-editor': excalidrawEditorEntrySource,
+    },
+    format: 'esm',
+    loader: {
+      '.ttf': 'file',
+      '.woff': 'file',
+      '.woff2': 'file',
+    },
+    metafile: true,
+    minify: true,
+    outdir: clientOutputDir,
+    platform: 'browser',
+    splitting: true,
+    target: ['es2022'],
+    write: true,
+  });
+
+  const outputs = result.metafile?.outputs ?? {};
+  const hashedJsPath = Object.keys(outputs).find((outputPath) => (
+    /(^|\/)excalidraw-editor-[A-Z0-9]+\.(?:js)$/iu.test(outputPath)
+  )) ?? null;
+  const hashedCssPath = (
+    (hashedJsPath ? outputs[hashedJsPath]?.cssBundle : null)
+    ?? Object.keys(outputs).find((outputPath) => (
+      /(^|\/)excalidraw-editor-[A-Z0-9]+\.(?:css)$/iu.test(outputPath)
+    ))
+    ?? null
+  );
+
+  if (!hashedJsPath || !hashedCssPath) {
+    throw new Error('Failed to locate emitted Excalidraw entry assets');
+  }
+
+  const hashedJsFile = hashedJsPath.replace(/\\/g, '/').split('/').pop();
+  const hashedCssFile = hashedCssPath.replace(/\\/g, '/').split('/').pop();
+
+  await writeFile(
+    excalidrawLoaderOutput,
+    `import "./${hashedJsFile}";\n`,
+    'utf8',
+  );
+
+  await writeFile(
+    excalidrawCssLoaderOutput,
+    `@import url("./${hashedCssFile}");\n`,
+    'utf8',
+  );
 }
 
 async function bundleStyles() {
@@ -114,7 +177,8 @@ try {
   await mkdir(clientStyleOutputDir, { recursive: true });
   await copyHighlightThemeFiles();
   await bundleStyles();
-  await bundleClientApp();
+  await bundleMainApp();
+  await bundleExcalidrawApp();
   await bundlePreviewWorker();
 } finally {
   await rm(buildWorkingDir, { force: true, recursive: true });
