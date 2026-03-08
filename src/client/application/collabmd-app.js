@@ -1,7 +1,6 @@
 import { PreviewRenderer } from './preview-renderer.js';
 import { USER_NAME_MAX_LENGTH, normalizeUserName } from '../domain/room.js';
 import { resolveWikiTarget } from '../domain/vault-utils.js';
-import { EditorSession } from '../infrastructure/editor-session.js';
 import { LOBBY_CHAT_MESSAGE_MAX_LENGTH, LobbyPresence } from '../infrastructure/lobby-presence.js';
 import { getFileFromHash, navigateToFile } from '../infrastructure/runtime-config.js';
 import { TabActivityLock } from '../infrastructure/tab-activity-lock.js';
@@ -88,6 +87,7 @@ export class CollabMdApp {
       hour: 'numeric',
       minute: '2-digit',
     });
+    this.editorSessionModulePromise = null;
     this.commentThreads = [];
     this.isTabActive = false;
     this.fileExplorerReady = false;
@@ -525,6 +525,15 @@ export class CollabMdApp {
     }
   }
 
+  loadEditorSessionClass() {
+    if (!this.editorSessionModulePromise) {
+      this.editorSessionModulePromise = import('../infrastructure/editor-session.js')
+        .then((module) => module.EditorSession);
+    }
+
+    return this.editorSessionModulePromise;
+  }
+
   async openFile(filePath) {
     if (!this.isTabActive) {
       return;
@@ -570,6 +579,7 @@ export class CollabMdApp {
     this.previewRenderer.beginDocumentLoad();
     this.renderPresence();
 
+    const EditorSession = await this.loadEditorSessionClass();
     const session = new EditorSession({
       editorContainer: this.elements.editorContainer,
       lineWrappingEnabled: this.getStoredLineWrapping(),

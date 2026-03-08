@@ -28,6 +28,38 @@ const SECURITY_HEADERS = {
 const REQUEST_BODY_LIMIT_BYTES = 8_388_608;
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
+function isVersionedAssetPath(pathname = '') {
+  return /-[A-Z0-9]{8,}\.(?:css|js)$/iu.test(pathname);
+}
+
+function getStaticCacheControl(pathname = '', extension = '') {
+  if (pathname === '/' || pathname.endsWith('.html')) {
+    return 'no-store';
+  }
+
+  if (pathname === '/app-config.js') {
+    return 'no-store';
+  }
+
+  if (pathname.startsWith('/assets/')) {
+    if (
+      pathname.startsWith('/assets/vendor/modules/chunks/')
+      || pathname.startsWith('/assets/js/chunks/')
+      || isVersionedAssetPath(pathname)
+    ) {
+      return 'public, max-age=31536000, immutable';
+    }
+
+    if (extension === '.css' || extension === '.js') {
+      return 'public, max-age=3600, stale-while-revalidate=86400';
+    }
+
+    return 'public, max-age=300, stale-while-revalidate=3600';
+  }
+
+  return 'public, max-age=300';
+}
+
 function buildRuntimeConfig({ nodeEnv, publicWsBaseUrl, wsBasePath }) {
   return `window.__COLLABMD_CONFIG__ = ${JSON.stringify({
     environment: nodeEnv,
@@ -605,7 +637,7 @@ export function createRequestHandler(
       const extension = extname(filePath);
 
       res.writeHead(200, {
-        'Cache-Control': 'no-store',
+        'Cache-Control': getStaticCacheControl(requestUrl.pathname, extension),
         'Content-Type': CONTENT_TYPES[extension] || 'application/octet-stream',
       });
 

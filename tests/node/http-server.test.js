@@ -76,14 +76,16 @@ test('HTTP server serves health, runtime config, and static assets', async (t) =
   const runtimeConfigResponse = await httpRequest(`${app.baseUrl}/app-config.js`);
   assert.equal(runtimeConfigResponse.statusCode, 200);
   assert.match(runtimeConfigResponse.body, /window\.__COLLABMD_CONFIG__/);
+  assert.equal(runtimeConfigResponse.headers['cache-control'], 'no-store');
 
   const indexResponse = await httpRequest(`${app.baseUrl}/`);
   assert.equal(indexResponse.statusCode, 200);
   assert.match(indexResponse.body, /CollabMD/);
+  assert.equal(indexResponse.headers['cache-control'], 'no-store');
 
   const assetHeadResponse = await httpRequest(`${app.baseUrl}/assets/css/style.css`, { method: 'HEAD' });
   assert.equal(assetHeadResponse.statusCode, 200);
-  assert.equal(assetHeadResponse.headers['cache-control'], 'no-store');
+  assert.equal(assetHeadResponse.headers['cache-control'], 'public, max-age=3600, stale-while-revalidate=86400');
 });
 
 test('HTTP server proxies esm.sh modules through a same-origin path', async (t) => {

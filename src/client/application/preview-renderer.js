@@ -17,6 +17,7 @@ const PLANTUML_ZOOM = {
 };
 const IDLE_RENDER_TIMEOUT_MS = 500;
 const MERMAID_BATCH_SIZE = 2;
+const MERMAID_SCRIPT_PATH = '/assets/vendor/mermaid/mermaid.min.js';
 const PLANTUML_BATCH_SIZE = 2;
 
 function requestIdleRender(callback, timeout) {
@@ -232,7 +233,9 @@ export class PreviewRenderer {
     this.activeRenderVersion = 0;
     this.readyRenderVersion = 0;
     this.currentStats = null;
+    this.currentTheme = document.documentElement?.dataset.theme === 'light' ? 'light' : 'dark';
     this.isLargeDocument = false;
+    this.mermaidLoader = null;
     this.worker = null;
     this.workerDisabled = false;
     this.workerJob = null;
@@ -362,6 +365,7 @@ export class PreviewRenderer {
   }
 
   applyTheme(theme) {
+    this.currentTheme = theme;
     const mermaid = window.mermaid;
     const highlightTheme = document.getElementById('hljs-theme');
     if (highlightTheme) {
@@ -373,10 +377,15 @@ export class PreviewRenderer {
       return;
     }
 
+    this.configureMermaid(mermaid);
+    this.resetHydratedMermaids();
+  }
+
+  configureMermaid(mermaid) {
     mermaid.initialize({
       startOnLoad: false,
-      theme: theme === 'dark' ? 'dark' : 'default',
-      themeVariables: theme === 'dark' ? {
+      theme: this.currentTheme === 'dark' ? 'dark' : 'default',
+      themeVariables: this.currentTheme === 'dark' ? {
         background: '#161822',
         clusterBkg: '#1a1c28',
         edgeLabelBackground: '#161822',
@@ -391,8 +400,67 @@ export class PreviewRenderer {
         titleColor: '#e2e2ea',
       } : {},
     });
+  }
 
-    this.resetHydratedMermaids();
+  ensureMermaid() {
+    if (window.mermaid) {
+      this.configureMermaid(window.mermaid);
+      return Promise.resolve(window.mermaid);
+    }
+
+    if (this.mermaidLoader) {
+      return this.mermaidLoader;
+    }
+
+    this.mermaidLoader = new Promise((resolve, reject) => {
+      const onReady = () => {
+        const mermaid = window.mermaid;
+        if (!mermaid) {
+          this.mermaidLoader = null;
+          reject(new Error('Mermaid runtime failed to initialize'));
+          return;
+        }
+
+        const readyScript = document.querySelector('script[data-collabmd-mermaid="true"]');
+        readyScript?.setAttribute('data-collabmd-mermaid-state', 'ready');
+        this.configureMermaid(mermaid);
+        resolve(mermaid);
+      };
+
+      const onError = () => {
+        this.mermaidLoader = null;
+        const failedScript = document.querySelector('script[data-collabmd-mermaid="true"]');
+        failedScript?.setAttribute('data-collabmd-mermaid-state', 'error');
+        reject(new Error('Failed to load Mermaid runtime'));
+      };
+
+      const existingScript = document.querySelector('script[data-collabmd-mermaid="true"]');
+      if (existingScript) {
+        if (existingScript.getAttribute('data-collabmd-mermaid-state') === 'ready') {
+          onReady();
+          return;
+        }
+
+        if (existingScript.getAttribute('data-collabmd-mermaid-state') === 'error') {
+          existingScript.remove();
+        } else {
+          existingScript.addEventListener('load', onReady, { once: true });
+          existingScript.addEventListener('error', onError, { once: true });
+          return;
+        }
+      }
+
+      const script = document.createElement('script');
+      script.src = MERMAID_SCRIPT_PATH;
+      script.async = true;
+      script.dataset.collabmdMermaid = 'true';
+      script.dataset.collabmdMermaidState = 'loading';
+      script.addEventListener('load', onReady, { once: true });
+      script.addEventListener('error', onError, { once: true });
+      document.head.appendChild(script);
+    });
+
+    return this.mermaidLoader;
   }
 
   queueRender() {
@@ -620,7 +688,6 @@ export class PreviewRenderer {
   }
 
   commitBaseRender({ html, stats }, renderVersion) {
-    const mermaid = window.mermaid;
     this.activeRenderVersion = renderVersion;
     this.readyRenderVersion = 0;
     this.currentStats = stats;
@@ -649,9 +716,7 @@ export class PreviewRenderer {
       renderVersion,
     });
 
-    const mermaidShellCount = mermaid
-      ? this.setupMermaidHydration(renderVersion)
-      : 0;
+    const mermaidShellCount = this.setupMermaidHydration(renderVersion);
     const plantUmlShellCount = this.setupPlantUmlHydration(renderVersion);
 
     if (mermaidShellCount === 0 && plantUmlShellCount === 0) {
@@ -923,8 +988,21 @@ export class PreviewRenderer {
     this.mermaidHydrationInProgress = true;
     this.setPhase('hydrating');
 
+    let mermaid = null;
+    try {
+      mermaid = await this.ensureMermaid();
+    } catch (error) {
+      console.warn('[preview] Mermaid runtime failed to load:', error);
+      shells.forEach((shell) => {
+        shell.removeAttribute('data-mermaid-queued');
+      });
+      this.mermaidHydrationInProgress = false;
+      this.updateHydrationPhase();
+      return;
+    }
+
     for (const shell of shells) {
-      await this.hydrateMermaidShell(shell);
+      await this.hydrateMermaidShell(shell, mermaid);
     }
 
     this.mermaidHydrationInProgress = false;
@@ -936,8 +1014,7 @@ export class PreviewRenderer {
     this.updateHydrationPhase();
   }
 
-  async hydrateMermaidShell(shell) {
-    const mermaid = window.mermaid;
+  async hydrateMermaidShell(shell, mermaid) {
     if (!mermaid || !shell?.isConnected || shell.dataset.mermaidHydrated === 'true') {
       return;
     }
