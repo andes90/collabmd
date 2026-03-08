@@ -3,6 +3,7 @@ import { WorkspaceSessionController } from './workspace-session-controller.js';
 import {
   isDiagramFilePath,
   isExcalidrawFilePath,
+  isMarkdownFilePath,
   isMermaidFilePath,
   isPlantUmlFilePath,
   stripVaultFileExtension,
@@ -48,6 +49,7 @@ export class CollabMdApp {
       displayNameTitle: document.getElementById('displayNameTitle'),
       editNameButton: document.getElementById('editNameBtn'),
       editorContainer: document.getElementById('editorContainer'),
+      markdownToolbar: document.getElementById('markdownToolbar'),
       editorPage: document.getElementById('editor-page'),
       lineInfo: document.getElementById('lineInfo'),
       previewContent: document.getElementById('previewContent'),
@@ -244,9 +246,11 @@ export class CollabMdApp {
 
   syncFileChrome(filePath) {
     const isExcalidraw = this.isExcalidrawFile(filePath);
+    const isMarkdown = isMarkdownFilePath(filePath);
     const isMermaid = this.isMermaidFile(filePath);
     const isPlantUml = this.isPlantUmlFile(filePath);
     const isDiagramFile = isDiagramFilePath(filePath);
+    this.elements.markdownToolbar?.classList.toggle('hidden', !isMarkdown);
     this.elements.outlineToggle?.classList.toggle('hidden', isDiagramFile);
     this.elements.commentsToggle?.classList.toggle('hidden', isDiagramFile);
     this.elements.commentSelectionButton?.classList.toggle('hidden', isDiagramFile);
@@ -357,6 +361,18 @@ export class CollabMdApp {
 
     this.elements.displayNameCancel?.addEventListener('click', () => {
       this.elements.displayNameDialog?.close();
+    });
+
+    this.elements.markdownToolbar?.addEventListener('click', (event) => {
+      const button = event.target instanceof Element
+        ? event.target.closest('[data-markdown-action]')
+        : null;
+      const action = button?.getAttribute('data-markdown-action');
+      if (!action) {
+        return;
+      }
+
+      this.applyMarkdownToolbarAction(action);
     });
 
     this.elements.displayNameForm?.addEventListener('submit', (event) => {
@@ -721,6 +737,17 @@ export class CollabMdApp {
     }
 
     this.commentsPanel.openComposerForRange(range);
+  }
+
+  applyMarkdownToolbarAction(action) {
+    if (!this.session || !isMarkdownFilePath(this.currentFilePath)) {
+      return;
+    }
+
+    const applied = this.session.applyMarkdownToolbarAction(action);
+    if (!applied) {
+      this.toastController.show('Formatting action is unavailable');
+    }
   }
 
   navigateToCommentLine(lineNumber) {

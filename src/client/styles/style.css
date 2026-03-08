@@ -1134,6 +1134,52 @@
 }
 
 /* Editor container (CodeMirror) */
+.markdown-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-divider);
+  flex-shrink: 0;
+}
+
+.markdown-toolbar-btn {
+  min-width: 36px;
+  min-height: 28px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.markdown-toolbar-btn svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+.markdown-toolbar-separator {
+  width: 1px;
+  height: 18px;
+  background: var(--color-divider);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+
+.markdown-toolbar-btn:hover {
+  color: var(--color-text);
+  background: var(--color-surface-offset);
+}
+
+.markdown-toolbar-btn:focus-visible {
+  outline: 2px solid oklch(from var(--color-primary) l c h / 0.35);
+  outline-offset: 1px;
+}
+
 .editor-container {
   flex: 1;
   overflow: hidden;
@@ -2332,6 +2378,12 @@ body.plantuml-maximized-open::before {
 
   .preview-content {
     padding: var(--space-4);
+  }
+
+  .markdown-toolbar {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: thin;
   }
 
   .comment-anchor-btn {

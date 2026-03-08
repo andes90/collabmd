@@ -11,7 +11,7 @@ import {
 } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
 import { highlightSelectionMatches, searchKeymap } from '@codemirror/search';
-import { Compartment, EditorState } from '@codemirror/state';
+import { Compartment, EditorSelection, EditorState } from '@codemirror/state';
 import { oneDark } from '@codemirror/theme-one-dark';
 import {
   EditorView,
@@ -29,6 +29,7 @@ import { yCollab } from 'y-codemirror.next';
 import * as Y from 'yjs';
 
 import { plantUmlLanguage, plantUmlLanguageDescription } from '../domain/plantuml-language.js';
+import { createMarkdownToolbarEdit } from '../domain/markdown-formatting.js';
 import { createRandomUser, normalizeUserName } from '../domain/room.js';
 import { wikiLinkCompletions } from '../domain/wiki-link-completions.js';
 import {
@@ -542,6 +543,45 @@ export class EditorSession {
 
   requestMeasure() {
     this.editorView?.requestMeasure();
+  }
+
+  applyMarkdownToolbarAction(action) {
+    if (!this.editorView) {
+      return false;
+    }
+
+    const { state } = this.editorView;
+    const documentText = state.doc.toString();
+    let hasChanges = false;
+
+    const transactionSpec = state.changeByRange((range) => {
+      const edit = createMarkdownToolbarEdit(documentText, range, action);
+      if (!edit) {
+        return { range };
+      }
+
+      hasChanges = true;
+      return {
+        changes: {
+          from: edit.from,
+          insert: edit.insert,
+          to: edit.to,
+        },
+        range: EditorSelection.range(edit.anchor, edit.head),
+      };
+    });
+
+    if (!hasChanges) {
+      return false;
+    }
+
+    this.editorView.dispatch(state.update(transactionSpec, {
+      scrollIntoView: true,
+      userEvent: 'input',
+    }));
+    this.editorView.focus();
+
+    return true;
   }
 
   destroy() {

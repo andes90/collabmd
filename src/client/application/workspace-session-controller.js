@@ -1,4 +1,5 @@
 import {
+  isMarkdownFilePath,
   supportsBacklinksForFilePath,
   supportsCommentsForFilePath,
 } from '../../domain/file-kind.js';
@@ -27,6 +28,7 @@ export class WorkspaceSessionController {
     app.elements.outlineToggle?.classList.remove('hidden');
     app.elements.commentsToggle?.classList.add('hidden');
     app.elements.commentSelectionButton?.classList.add('hidden');
+    app.elements.markdownToolbar?.classList.add('hidden');
     app.currentFilePath = null;
     app.lobby.setCurrentFile(null);
     app.fileExplorer.setActiveFile(null);
@@ -88,6 +90,7 @@ export class WorkspaceSessionController {
 
     app.elements.emptyState?.classList.add('hidden');
     app.elements.editorPage?.classList.remove('hidden');
+    app.elements.markdownToolbar?.classList.toggle('hidden', !isMarkdownFilePath(filePath));
 
     const displayName = app.getDisplayName(filePath);
     if (app.elements.activeFileName) {

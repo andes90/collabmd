@@ -181,6 +181,115 @@
                 </button>
               </div>
             </div>
+            <div id="markdownToolbar" class="markdown-toolbar hidden" role="toolbar" aria-label="Markdown formatting">
+              <button type="button" class="btn btn-ghost markdown-toolbar-btn" data-markdown-action="heading" aria-label="Toggle heading" title="Toggle heading">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M4 6v12"/>
+                  <path d="M14 6v12"/>
+                  <path d="M4 12h10"/>
+                  <path d="M18 18h3"/>
+                  <path d="M19.5 6v12"/>
+                </svg>
+              </button>
+              <button type="button" class="btn btn-ghost markdown-toolbar-btn" data-markdown-action="bold" aria-label="Bold" title="Bold">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M7 5h6a4 4 0 0 1 0 8H7z"/>
+                  <path d="M7 13h7a4 4 0 0 1 0 8H7z"/>
+                </svg>
+              </button>
+              <button type="button" class="btn btn-ghost markdown-toolbar-btn" data-markdown-action="italic" aria-label="Italic" title="Italic">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M14 4h6"/>
+                  <path d="M4 20h6"/>
+                  <path d="M14 4 10 20"/>
+                </svg>
+              </button>
+              <button type="button" class="btn btn-ghost markdown-toolbar-btn" data-markdown-action="strikethrough" aria-label="Strikethrough" title="Strikethrough">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M6 6.5c1.4-1.2 3.2-1.9 5.4-1.9 3.1 0 5.6 1.4 5.6 3.9 0 2.1-1.7 3-4.3 3.5l-2.4.5c-2.7.5-4.3 1.6-4.3 3.6 0 2.7 2.7 4.2 6 4.2 2.1 0 4.2-.6 5.7-1.8"/>
+                  <path d="M3 12h18"/>
+                </svg>
+              </button>
+              <button type="button" class="btn btn-ghost markdown-toolbar-btn" data-markdown-action="link" aria-label="Insert link" title="Insert link">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l2.92-2.92a5 5 0 0 0-7.07-7.07L11.5 5.4"/>
+                  <path d="M14 11a5 5 0 0 0-7.54-.54L3.54 13.38a5 5 0 1 0 7.07 7.07L12.5 18.6"/>
+                </svg>
+              </button>
+              <button type="button" class="btn btn-ghost markdown-toolbar-btn" data-markdown-action="image" aria-label="Insert image" title="Insert image">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="5" width="18" height="14" rx="2"/>
+                  <circle cx="9" cy="10" r="1.5"/>
+                  <path d="m21 16-5.5-5.5L7 19"/>
+                </svg>
+              </button>
+              <span class="markdown-toolbar-separator" aria-hidden="true"></span>
+              <button type="button" class="btn btn-ghost markdown-toolbar-btn" data-markdown-action="quote" aria-label="Toggle quote" title="Toggle quote">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M8 17H5a2 2 0 0 1-2-2v-3a6 6 0 0 1 6-6"/>
+                  <path d="M19 17h-3a2 2 0 0 1-2-2v-3a6 6 0 0 1 6-6"/>
+                </svg>
+              </button>
+              <button type="button" class="btn btn-ghost markdown-toolbar-btn" data-markdown-action="bullet-list" aria-label="Toggle bullet list" title="Toggle bullet list">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                  <circle cx="5" cy="7" r="1.25" fill="currentColor" stroke="none"/>
+                  <circle cx="5" cy="12" r="1.25" fill="currentColor" stroke="none"/>
+                  <circle cx="5" cy="17" r="1.25" fill="currentColor" stroke="none"/>
+                  <path d="M9 7h10"/>
+                  <path d="M9 12h10"/>
+                  <path d="M9 17h10"/>
+                </svg>
+              </button>
+              <button type="button" class="btn btn-ghost markdown-toolbar-btn" data-markdown-action="numbered-list" aria-label="Toggle numbered list" title="Toggle numbered list">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M10 7h10"/>
+                  <path d="M10 12h10"/>
+                  <path d="M10 17h10"/>
+                  <path d="M4 6h2v4"/>
+                  <path d="M4 14c0-1 2-2 2-3s-.45-1-1-1-1 .45-1 1"/>
+                  <path d="M4 17h2"/>
+                </svg>
+              </button>
+              <button type="button" class="btn btn-ghost markdown-toolbar-btn" data-markdown-action="task-list" aria-label="Toggle task list" title="Toggle task list">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3.5" y="4.5" width="4" height="4" rx="1"/>
+                  <rect x="3.5" y="10.5" width="4" height="4" rx="1"/>
+                  <path d="M10 6.5h10"/>
+                  <path d="M10 12.5h10"/>
+                  <path d="m4.5 19 1.5 1.5L9.5 17"/>
+                  <path d="M10 18.5h10"/>
+                </svg>
+              </button>
+              <button type="button" class="btn btn-ghost markdown-toolbar-btn" data-markdown-action="table" aria-label="Insert table" title="Insert table">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="5" width="18" height="14" rx="1"/>
+                  <path d="M3 10h18"/>
+                  <path d="M9 5v14"/>
+                  <path d="M15 5v14"/>
+                </svg>
+              </button>
+              <span class="markdown-toolbar-separator" aria-hidden="true"></span>
+              <button type="button" class="btn btn-ghost markdown-toolbar-btn" data-markdown-action="code" aria-label="Inline code" title="Inline code">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="m8 9-4 3 4 3"/>
+                  <path d="m16 9 4 3-4 3"/>
+                  <path d="m13 6-2 12"/>
+                </svg>
+              </button>
+              <button type="button" class="btn btn-ghost markdown-toolbar-btn" data-markdown-action="code-block" aria-label="Code block" title="Code block">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="m9 18-6-6 6-6"/>
+                  <path d="m15 6 6 6-6 6"/>
+                </svg>
+              </button>
+              <button type="button" class="btn btn-ghost markdown-toolbar-btn" data-markdown-action="horizontal-rule" aria-label="Insert horizontal rule" title="Insert horizontal rule">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M4 12h16"/>
+                  <path d="M9 8h6"/>
+                  <path d="M9 16h6"/>
+                </svg>
+              </button>
+            </div>
             <div id="editorContainer" class="editor-container">
               <div class="editor-loading" id="editorLoading">
                 <div class="loading-spinner"></div>
