@@ -112,6 +112,13 @@ function easeOutCubic(progress) {
 }
 
 function createMermaidPlaceholderCard(key) {
+  return createMermaidPlaceholderCardWithMessage(key, {
+    label: 'Mermaid diagram',
+    message: 'Loads when visible',
+  });
+}
+
+function createMermaidPlaceholderCardWithMessage(key, { label = 'Mermaid diagram', message = 'Loads when visible' } = {}) {
   const card = document.createElement('div');
   card.className = 'mermaid-placeholder-card';
 
@@ -119,10 +126,10 @@ function createMermaidPlaceholderCard(key) {
   copy.className = 'mermaid-placeholder-copy';
 
   const title = document.createElement('strong');
-  title.textContent = 'Mermaid diagram';
+  title.textContent = label;
 
   const subtitle = document.createElement('span');
-  subtitle.textContent = 'Loads when visible';
+  subtitle.textContent = message;
 
   const button = document.createElement('button');
   button.type = 'button';
@@ -190,6 +197,18 @@ function sanitizeSvgMarkup(svgMarkup) {
   return svg.outerHTML;
 }
 
+function shouldPreserveHydratedDiagram({ nextSource = '', nextTarget = '', preservedSource = '', preservedTarget = '' } = {}) {
+  if (nextSource) {
+    return nextSource === preservedSource;
+  }
+
+  if (nextTarget) {
+    return nextTarget === preservedTarget;
+  }
+
+  return false;
+}
+
 function isNearViewport(element, root, marginPx) {
   if (!element || !root) {
     return false;
@@ -254,6 +273,7 @@ export class PreviewRenderer {
     this.plantUmlInstanceCounter = 0;
     this.preservedMermaidShells = new Map();
     this.preservedPlantUmlShells = new Map();
+    this.mermaidFileInflightRequests = new Map();
     this.plantUmlSvgCache = new Map();
     this.plantUmlFileInflightRequests = new Map();
     this.plantUmlInflightRequests = new Map();
@@ -753,7 +773,8 @@ export class PreviewRenderer {
     Array.from(this.previewElement.querySelectorAll('.mermaid-shell[data-mermaid-hydrated="true"][data-mermaid-key]')).forEach((shell) => {
       const key = shell.dataset.mermaidKey;
       const source = shell.querySelector('.mermaid-source')?.textContent ?? '';
-      if (!key || !source) {
+      const target = shell.dataset.mermaidTarget ?? '';
+      if (!key || (!source && !target)) {
         return;
       }
 
@@ -765,6 +786,7 @@ export class PreviewRenderer {
         key,
         shell,
         source,
+        target,
       });
     });
   }
@@ -778,7 +800,8 @@ export class PreviewRenderer {
     Array.from(this.previewElement.querySelectorAll('.plantuml-shell[data-plantuml-hydrated="true"][data-plantuml-key]')).forEach((shell) => {
       const key = shell.dataset.plantumlKey;
       const source = shell.querySelector('.plantuml-source')?.textContent ?? '';
-      if (!key || !source) {
+      const target = shell.dataset.plantumlTarget ?? '';
+      if (!key || (!source && !target)) {
         return;
       }
 
@@ -790,6 +813,7 @@ export class PreviewRenderer {
         key,
         shell,
         source,
+        target,
       });
     });
   }
@@ -809,7 +833,13 @@ export class PreviewRenderer {
       }
 
       const nextSource = nextShell.querySelector('.mermaid-source')?.textContent ?? '';
-      if (nextSource !== preservedEntry.source) {
+      const nextTarget = nextShell.dataset.mermaidTarget ?? '';
+      if (!shouldPreserveHydratedDiagram({
+        nextSource,
+        nextTarget,
+        preservedSource: preservedEntry.source,
+        preservedTarget: preservedEntry.target,
+      })) {
         return;
       }
 
@@ -840,7 +870,13 @@ export class PreviewRenderer {
       }
 
       const nextSource = nextShell.querySelector('.plantuml-source')?.textContent ?? '';
-      if (nextSource !== preservedEntry.source) {
+      const nextTarget = nextShell.dataset.plantumlTarget ?? '';
+      if (!shouldPreserveHydratedDiagram({
+        nextSource,
+        nextTarget,
+        preservedSource: preservedEntry.source,
+        preservedTarget: preservedEntry.target,
+      })) {
         return;
       }
 
@@ -861,6 +897,8 @@ export class PreviewRenderer {
     syncAttribute(preservedShell, nextShell, 'data-source-line');
     syncAttribute(preservedShell, nextShell, 'data-source-line-end');
     syncAttribute(preservedShell, nextShell, 'data-mermaid-key');
+    syncAttribute(preservedShell, nextShell, 'data-mermaid-target');
+    syncAttribute(preservedShell, nextShell, 'data-mermaid-label');
     syncAttribute(preservedShell, nextShell, 'data-mermaid-source-hash');
 
     preservedShell.classList.add('mermaid-shell');
@@ -876,7 +914,10 @@ export class PreviewRenderer {
     }
 
     if (preservedSourceNode && nextSourceNode) {
-      preservedSourceNode.textContent = nextSourceNode.textContent ?? '';
+      const nextSource = nextSourceNode.textContent ?? '';
+      if (nextSource || !nextShell.dataset.mermaidTarget) {
+        preservedSourceNode.textContent = nextSource;
+      }
       preservedSourceNode.hidden = true;
     }
   }
@@ -902,7 +943,10 @@ export class PreviewRenderer {
     }
 
     if (preservedSourceNode && nextSourceNode) {
-      preservedSourceNode.textContent = nextSourceNode.textContent ?? '';
+      const nextSource = nextSourceNode.textContent ?? '';
+      if (nextSource || !nextShell.dataset.plantumlTarget) {
+        preservedSourceNode.textContent = nextSource;
+      }
       preservedSourceNode.hidden = true;
     }
   }
@@ -1039,30 +1083,45 @@ export class PreviewRenderer {
       return;
     }
 
-    const sourceNode = shell.querySelector('.mermaid-source');
-    const source = sourceNode?.textContent ?? '';
-    if (!source.trim()) {
-      return;
+    let sourceNode = shell.querySelector('.mermaid-source');
+    if (!sourceNode) {
+      sourceNode = document.createElement('span');
+      sourceNode.className = 'mermaid-source';
+      sourceNode.hidden = true;
+      shell.appendChild(sourceNode);
     }
 
-    const placeholder = shell.querySelector('.mermaid-placeholder-card');
-    placeholder?.remove();
-
-    const diagram = document.createElement('div');
-    diagram.className = 'mermaid mermaid-render-node';
-    diagram.id = shell.dataset.mermaidKey || `mermaid-${Date.now()}`;
-    const sourceLine = shell.getAttribute('data-source-line');
-    const sourceLineEnd = shell.getAttribute('data-source-line-end');
-    if (sourceLine) {
-      diagram.setAttribute('data-source-line', sourceLine);
-    }
-    if (sourceLineEnd) {
-      diagram.setAttribute('data-source-line-end', sourceLineEnd);
-    }
-    diagram.textContent = source;
-    shell.appendChild(diagram);
-
+    let source = sourceNode.textContent ?? '';
     try {
+      if (!source.trim() && shell.dataset.mermaidTarget) {
+        source = await this.fetchMermaidSource(shell.dataset.mermaidTarget);
+        if (!shell.isConnected) {
+          return;
+        }
+        sourceNode.textContent = source;
+      }
+
+      if (!source.trim()) {
+        throw new Error(shell.dataset.mermaidTarget ? 'Mermaid file is empty' : 'Mermaid source is empty');
+      }
+
+      const placeholder = shell.querySelector('.mermaid-placeholder-card');
+      placeholder?.remove();
+
+      const diagram = document.createElement('div');
+      diagram.className = 'mermaid mermaid-render-node';
+      diagram.id = shell.dataset.mermaidKey || `mermaid-${Date.now()}`;
+      const sourceLine = shell.getAttribute('data-source-line');
+      const sourceLineEnd = shell.getAttribute('data-source-line-end');
+      if (sourceLine) {
+        diagram.setAttribute('data-source-line', sourceLine);
+      }
+      if (sourceLineEnd) {
+        diagram.setAttribute('data-source-line-end', sourceLineEnd);
+      }
+      diagram.textContent = source;
+      shell.appendChild(diagram);
+
       await mermaid.run({ nodes: [diagram] });
       if (!diagram.isConnected || shell !== diagram.parentElement) {
         return;
@@ -1073,9 +1132,14 @@ export class PreviewRenderer {
       shell.dataset.mermaidInstanceId = String(++this.mermaidInstanceCounter);
     } catch (error) {
       console.warn('[preview] Mermaid render failed:', error);
-      diagram.remove();
+      shell.querySelector(':scope > .mermaid-toolbar')?.remove();
+      shell.querySelector(':scope > .mermaid-frame')?.remove();
+      shell.querySelector(':scope > .mermaid-render-node')?.remove();
       if (!shell.querySelector('.mermaid-placeholder-card')) {
-        sourceNode?.after(createMermaidPlaceholderCard(shell.dataset.mermaidKey || 'mermaid'));
+        sourceNode?.after(createMermaidPlaceholderCardWithMessage(shell.dataset.mermaidKey || 'mermaid', {
+          label: shell.dataset.mermaidLabel || 'Mermaid diagram',
+          message: error instanceof Error ? error.message : 'Render failed',
+        }));
       }
     }
   }
@@ -1375,6 +1439,37 @@ export class PreviewRenderer {
       });
 
     this.plantUmlFileInflightRequests.set(target, request);
+    return request;
+  }
+
+  async fetchMermaidSource(filePath) {
+    const target = String(filePath ?? '').trim();
+    if (!target) {
+      throw new Error('Missing Mermaid file path');
+    }
+
+    if (this.mermaidFileInflightRequests.has(target)) {
+      return this.mermaidFileInflightRequests.get(target);
+    }
+
+    const request = fetch(`/api/file?path=${encodeURIComponent(target)}`, {
+      headers: {
+        Accept: 'application/json',
+      },
+    })
+      .then(async (response) => {
+        const data = await response.json().catch(() => null);
+        if (!response.ok || typeof data?.content !== 'string') {
+          throw new Error(data?.error || `Failed to load ${target}`);
+        }
+
+        return data.content;
+      })
+      .finally(() => {
+        this.mermaidFileInflightRequests.delete(target);
+      });
+
+    this.mermaidFileInflightRequests.set(target, request);
     return request;
   }
 

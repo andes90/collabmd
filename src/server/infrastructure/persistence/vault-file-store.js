@@ -2,8 +2,9 @@ import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'fs/promis
 import { basename, dirname, extname, join, normalize, relative, resolve } from 'path';
 const MARKDOWN_EXTENSIONS = new Set(['.md', '.markdown', '.mdx']);
 const EXCALIDRAW_EXTENSION = '.excalidraw';
+const MERMAID_EXTENSIONS = new Set(['.mmd', '.mermaid']);
 const PLANTUML_EXTENSIONS = new Set(['.puml', '.plantuml']);
-const VAULT_FILE_EXTENSIONS = new Set([...MARKDOWN_EXTENSIONS, EXCALIDRAW_EXTENSION, ...PLANTUML_EXTENSIONS]);
+const VAULT_FILE_EXTENSIONS = new Set([...MARKDOWN_EXTENSIONS, EXCALIDRAW_EXTENSION, ...MERMAID_EXTENSIONS, ...PLANTUML_EXTENSIONS]);
 const IGNORED_DIRECTORIES = new Set(['.git', '.obsidian', '.trash', 'node_modules', '.DS_Store']);
 const COMMENT_STORAGE_ROOT = '.collabmd/comments';
 const YJS_SNAPSHOT_STORAGE_ROOT = '.collabmd/yjs';
@@ -14,6 +15,10 @@ function isMarkdownFile(filePath) {
 
 function isExcalidrawFile(filePath) {
   return extname(filePath).toLowerCase() === EXCALIDRAW_EXTENSION;
+}
+
+function isMermaidFile(filePath) {
+  return MERMAID_EXTENSIONS.has(extname(filePath).toLowerCase());
 }
 
 function isPlantUmlFile(filePath) {
@@ -105,6 +110,8 @@ export class VaultFileStore {
           path: relativePath,
           type: isExcalidrawFile(entry.name)
             ? 'excalidraw'
+            : isMermaidFile(entry.name)
+              ? 'mermaid'
             : isPlantUmlFile(entry.name)
               ? 'plantuml'
               : 'file',
@@ -249,6 +256,44 @@ export class VaultFileStore {
     }
   }
 
+  async readMermaidFile(filePath) {
+    const absolute = sanitizePath(this.vaultDir, filePath);
+    if (!absolute || !isMermaidFile(absolute)) {
+      return null;
+    }
+
+    try {
+      const content = await readFile(absolute, 'utf-8');
+      return content;
+    } catch (error) {
+      if (error.code === 'ENOENT') return null;
+      throw error;
+    }
+  }
+
+  async writeMermaidFile(
+    filePath,
+    content,
+    { invalidateCollaborationSnapshot = true } = {},
+  ) {
+    const absolute = sanitizePath(this.vaultDir, filePath);
+    if (!absolute || !isMermaidFile(absolute)) {
+      return { ok: false, error: 'Invalid file path — must end in .mmd or .mermaid' };
+    }
+
+    try {
+      const dir = dirname(absolute);
+      await mkdir(dir, { recursive: true });
+      await writeFile(absolute, content, 'utf-8');
+      if (invalidateCollaborationSnapshot) {
+        await this.deleteCollaborationSnapshot(filePath);
+      }
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  }
+
   async writePlantUmlFile(
     filePath,
     content,
@@ -328,7 +373,7 @@ export class VaultFileStore {
   async createFile(filePath, content = '') {
     const absolute = sanitizePath(this.vaultDir, filePath);
     if (!absolute || !isVaultFile(absolute)) {
-      return { ok: false, error: 'Invalid file path — must end in .md, .excalidraw, .puml, or .plantuml' };
+      return { ok: false, error: 'Invalid file path — must end in .md, .excalidraw, .mmd, .mermaid, .puml, or .plantuml' };
     }
 
     try {
@@ -348,7 +393,7 @@ export class VaultFileStore {
   async deleteFile(filePath) {
     const absolute = sanitizePath(this.vaultDir, filePath);
     if (!absolute || !isVaultFile(absolute)) {
-      return { ok: false, error: 'Invalid file path — must end in .md, .excalidraw, .puml, or .plantuml' };
+      return { ok: false, error: 'Invalid file path — must end in .md, .excalidraw, .mmd, .mermaid, .puml, or .plantuml' };
     }
 
     try {
@@ -376,11 +421,11 @@ export class VaultFileStore {
     }
 
     if (!isVaultFile(absoluteOld)) {
-      return { ok: false, error: 'Old path must be a vault file (.md, .excalidraw, .puml, or .plantuml)' };
+      return { ok: false, error: 'Old path must be a vault file (.md, .excalidraw, .mmd, .mermaid, .puml, or .plantuml)' };
     }
 
     if (!isVaultFile(absoluteNew)) {
-      return { ok: false, error: 'New path must be a vault file (.md, .excalidraw, .puml, or .plantuml)' };
+      return { ok: false, error: 'New path must be a vault file (.md, .excalidraw, .mmd, .mermaid, .puml, or .plantuml)' };
     }
 
     try {

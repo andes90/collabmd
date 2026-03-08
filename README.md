@@ -26,7 +26,7 @@ Prefer video? [Open the WebM demo](./docs/assets/collabmd-demo.webm).
 - **Realtime collaboration** — multiple people can edit the same file at the same time via Yjs
 - **Markdown with context** — live preview, wiki-links, backlinks, outline, quick switcher, and scroll sync
 - **Review built in** — inline comments, collaborator presence, follow mode, and team chat
-- **Diagram-friendly** — Mermaid, PlantUML, standalone `.puml` / `.plantuml`, and `.excalidraw` support
+- **Diagram-friendly** — Mermaid fences and standalone `.mmd` / `.mermaid` files, PlantUML `.puml` / `.plantuml`, and `.excalidraw` support
 - **Easy sharing** — Cloudflare Tunnel starts by default so collaborators can join over the internet
 
 ## Quick Start
@@ -72,13 +72,13 @@ collabmd
 
 CollabMD starts a local server, scans for markdown files, and opens a browser-based editor with:
 
-- **File explorer sidebar** — browse, create, rename, and delete `.md`, `.puml`, `.plantuml`, and `.excalidraw` files plus folders
+- **File explorer sidebar** — browse, create, rename, and delete `.md`, `.mmd`, `.mermaid`, `.puml`, `.plantuml`, and `.excalidraw` files plus folders
 - **Live preview** — rendered as you type, with syntax-highlighted code blocks plus Mermaid and PlantUML diagrams
 - **`[[wiki-links]]` + backlinks** — jump between notes and inspect linked mentions
 - **Comments + room chat** — review content in context without leaving the document
 - **Presence + follow mode** — see who is online and follow another collaborator's active cursor
 - **Quick switcher + outline** — move around large vaults and long documents faster
-- **Standalone diagram files** — open `.puml` or `.plantuml` files in side-by-side editor + preview, or `.excalidraw` files in direct preview mode
+- **Standalone diagram files** — open `.mmd` / `.mermaid` or `.puml` / `.plantuml` files in side-by-side editor + preview, or `.excalidraw` files in direct preview mode
 
 Your filesystem is the source of truth. CollabMD reads files from disk, uses Yjs for the realtime collaboration layer, and writes plain text back to disk when the last editor disconnects.
 

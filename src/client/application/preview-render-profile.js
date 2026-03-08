@@ -9,13 +9,14 @@ function countMatches(source, pattern) {
 
 export function analyzeMarkdownComplexity(markdownText = '') {
   const source = String(markdownText);
+  const mermaidEmbeds = countMatches(source, /!\[\[[^\]]+\.(?:mmd|mermaid)(?:\|[^\]]+)?\]\]/gi);
   const plantUmlFences = countMatches(source, /(^|\n)```(?:plantuml|puml)\b/gi);
   const plantUmlEmbeds = countMatches(source, /!\[\[[^\]]+\.(?:puml|plantuml)(?:\|[^\]]+)?\]\]/gi);
 
   return {
     chars: source.length,
     excalidrawEmbeds: countMatches(source, /!\[\[[^\]]+\.excalidraw(?:\|[^\]]+)?\]\]/gi),
-    mermaidBlocks: countMatches(source, /(^|\n)```mermaid\b/gi),
+    mermaidBlocks: countMatches(source, /(^|\n)```mermaid\b/gi) + mermaidEmbeds,
     plantumlBlocks: plantUmlFences + plantUmlEmbeds,
   };
 }
@@ -34,7 +35,8 @@ export function isLargeDocumentStats(stats) {
 
 export function getRenderProfile(markdownText = '') {
   const source = String(markdownText);
-  const hasMermaid = /(^|\n)```mermaid\b/i.test(source);
+  const hasMermaid = /(^|\n)```mermaid\b/i.test(source)
+    || /!\[\[[^\]]+\.(?:mmd|mermaid)(?:\|[^\]]+)?\]\]/i.test(source);
   const hasExcalidrawEmbed = /!\[\[[^\]]+\.excalidraw(?:\|[^\]]+)?\]\]/i.test(source);
   const hasPlantUml = /(^|\n)```(?:plantuml|puml)\b/i.test(source)
     || /!\[\[[^\]]+\.(?:puml|plantuml)(?:\|[^\]]+)?\]\]/i.test(source);

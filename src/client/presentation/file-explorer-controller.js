@@ -1,7 +1,8 @@
 import { escapeHtml } from '../domain/vault-utils.js';
 
 const MARKDOWN_EXTENSION_PATTERN = /\.(?:md|markdown|mdx)$/i;
-const DISPLAY_NAME_EXTENSION_PATTERN = /\.(?:md|markdown|mdx|excalidraw|puml|plantuml)$/i;
+const DISPLAY_NAME_EXTENSION_PATTERN = /\.(?:md|markdown|mdx|excalidraw|puml|plantuml|mmd|mermaid)$/i;
+const MERMAID_EXTENSION_PATTERN = /\.(?:mmd|mermaid)$/i;
 const PLANTUML_EXTENSION_PATTERN = /\.(?:puml|plantuml)$/i;
 
 function stripVaultExtension(name) {
@@ -51,6 +52,7 @@ export class FileExplorerController {
     this.treeContainer = document.getElementById('fileTree');
     this.newFileButton = document.getElementById('newFileBtn');
     this.newDrawingButton = document.getElementById('newDrawingBtn');
+    this.newMermaidButton = document.getElementById('newMermaidBtn');
     this.newPlantumlButton = document.getElementById('newPlantumlBtn');
     this.newFolderButton = document.getElementById('newFolderBtn');
     this.refreshButton = document.getElementById('refreshFilesBtn');
@@ -78,6 +80,7 @@ export class FileExplorerController {
   initialize() {
     this.newFileButton?.addEventListener('click', () => this.handleNewFile());
     this.newDrawingButton?.addEventListener('click', () => this.handleNewDrawing());
+    this.newMermaidButton?.addEventListener('click', () => this.handleNewMermaid());
     this.newPlantumlButton?.addEventListener('click', () => this.handleNewPlantUml());
     this.newFolderButton?.addEventListener('click', () => this.handleNewFolder());
     this.refreshButton?.addEventListener('click', () => this.refresh());
@@ -109,7 +112,7 @@ export class FileExplorerController {
   flattenTree(nodes) {
     const files = [];
     for (const node of nodes) {
-      if (node.type === 'file' || node.type === 'excalidraw' || node.type === 'plantuml') {
+      if (node.type === 'file' || node.type === 'excalidraw' || node.type === 'mermaid' || node.type === 'plantuml') {
         files.push(node.path);
       } else if (node.type === 'directory' && node.children) {
         files.push(...this.flattenTree(node.children, node.path));
@@ -184,6 +187,10 @@ export class FileExplorerController {
       return 'excalidraw';
     }
 
+    if (MERMAID_EXTENSION_PATTERN.test(normalized)) {
+      return 'mermaid';
+    }
+
     if (PLANTUML_EXTENSION_PATTERN.test(normalized)) {
       return 'plantuml';
     }
@@ -197,6 +204,14 @@ export class FileExplorerController {
 
     if (lower.endsWith('.excalidraw')) {
       return '.excalidraw';
+    }
+
+    if (lower.endsWith('.mermaid')) {
+      return '.mermaid';
+    }
+
+    if (lower.endsWith('.mmd')) {
+      return '.mmd';
     }
 
     if (lower.endsWith('.plantuml')) {
@@ -308,9 +323,13 @@ export class FileExplorerController {
     const button = document.createElement('button');
     button.className = 'file-tree-item file-tree-file';
     const isExcalidraw = fileType === 'excalidraw';
+    const isMermaid = fileType === 'mermaid';
     const isPlantUml = fileType === 'plantuml';
     if (isExcalidraw) {
       button.classList.add('is-excalidraw');
+    }
+    if (isMermaid) {
+      button.classList.add('is-mermaid');
     }
     if (isPlantUml) {
       button.classList.add('is-plantuml');
@@ -325,6 +344,8 @@ export class FileExplorerController {
 
     const iconSvg = isExcalidraw
       ? '<svg class="file-tree-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>'
+      : isMermaid
+        ? '<svg class="file-tree-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7.5c0-1.38 1.12-2.5 2.5-2.5 1.04 0 1.93.64 2.3 1.56A2.5 2.5 0 0 1 14 8.5v1"/><path d="M19 16.5c0 1.38-1.12 2.5-2.5 2.5-1.04 0-1.93-.64-2.3-1.56A2.5 2.5 0 0 1 10 15.5v-1"/><path d="M8 10.5h8"/><path d="M8 13.5h8"/><path d="M10 8.5v7"/><path d="M14 8.5v7"/></svg>'
       : isPlantUml
         ? '<svg class="file-tree-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="7" height="6" rx="1"/><rect x="14" y="4" width="7" height="6" rx="1"/><rect x="8.5" y="14" width="7" height="6" rx="1"/><path d="M10 7h4"/><path d="M17.5 10v2.5"/><path d="M6.5 10v2.5"/><path d="M6.5 12.5h11"/></svg>'
       : '<svg class="file-tree-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
@@ -364,6 +385,10 @@ export class FileExplorerController {
       {
         label: 'New Excalidraw drawing',
         onSelect: () => this.handleNewDrawing({ parentDir }),
+      },
+      {
+        label: 'New Mermaid diagram',
+        onSelect: () => this.handleNewMermaid({ parentDir }),
       },
       {
         label: 'New PlantUML diagram',
@@ -867,6 +892,47 @@ export class FileExplorerController {
 
         return this.createVaultFile(filePath, emptyScene, {
           errorMessage: 'Failed to create drawing',
+          openAfterCreate: true,
+        });
+      },
+    });
+  }
+
+  handleNewMermaid({ parentDir = '' } = {}) {
+    const context = this.getCreateContext(parentDir);
+
+    this.openActionDialog({
+      title: 'Create Mermaid diagram',
+      copy: context.normalizedParentDir
+        ? 'Create a new `.mmd` or `.mermaid` file inside the selected folder.'
+        : 'Create a new `.mmd` or `.mermaid` file with starter diagram content.',
+      label: `Diagram ${context.inputLabelSuffix}`,
+      hint: `${context.hintPrefix} ".mmd" is added automatically unless you enter ".mermaid".`,
+      note: context.note,
+      placeholder: context.normalizedParentDir ? 'flow' : 'diagrams/flow',
+      submitLabel: 'Create diagram',
+      emptyMessage: 'Diagram path is required',
+      onSubmit: (value) => {
+        const normalizedPath = normalizePathInput(value);
+        if (!normalizedPath) {
+          this.showToast('Diagram path is required');
+          return false;
+        }
+
+        const composedPath = composeChildPath(context.normalizedParentDir, normalizedPath);
+        const filePath = MERMAID_EXTENSION_PATTERN.test(composedPath)
+          ? composedPath
+          : `${composedPath}.mmd`;
+        const starter = [
+          'flowchart TD',
+          '  A[Start] --> B{Decide}',
+          '  B -->|Yes| C[Ship it]',
+          '  B -->|No| D[Revise]',
+          '',
+        ].join('\n');
+
+        return this.createVaultFile(filePath, starter, {
+          errorMessage: 'Failed to create Mermaid diagram',
           openAfterCreate: true,
         });
       },

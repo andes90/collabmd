@@ -87,6 +87,22 @@ test('compilePreviewDocument emits stable PlantUML embed shell keys', () => {
   assert.equal(stats.plantumlBlocks, 2);
 });
 
+test('compilePreviewDocument emits stable Mermaid embed shell keys', () => {
+  const markdown = [
+    '![[sample-mermaid.mmd]]',
+    '',
+    '![[sample-mermaid.mmd|Flow]]',
+  ].join('\n');
+
+  const { html, stats } = compilePreviewDocument({ markdownText: markdown });
+
+  assert.match(html, /data-mermaid-key="sample-mermaid\.mmd#0"/);
+  assert.match(html, /data-mermaid-key="sample-mermaid\.mmd#1"/);
+  assert.match(html, /data-mermaid-target="sample-mermaid\.mmd"/);
+  assert.match(html, /<strong>Flow<\/strong>/);
+  assert.equal(stats.mermaidBlocks, 2);
+});
+
 test('compilePreviewDocument emits stable .plantuml embed shell keys', () => {
   const markdown = [
     '![[architecture.plantuml]]',
@@ -109,6 +125,9 @@ test('large-document classification triggers on any configured threshold', () =>
 
   const largeByMermaid = analyzeMarkdownComplexity('```mermaid\ngraph TD\nA-->B\n```\n'.repeat(20));
   assert.equal(isLargeDocumentStats(largeByMermaid), true);
+
+  const largeByMermaidEmbed = analyzeMarkdownComplexity('![[diagram.mmd]]\n'.repeat(20));
+  assert.equal(isLargeDocumentStats(largeByMermaidEmbed), true);
 
   const largeByExcalidraw = analyzeMarkdownComplexity('![[diagram.excalidraw]]\n'.repeat(8));
   assert.equal(isLargeDocumentStats(largeByExcalidraw), true);

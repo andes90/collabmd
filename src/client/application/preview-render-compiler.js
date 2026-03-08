@@ -22,6 +22,10 @@ function createMermaidPlaceholder({ key, sourceAttributes, sourceHash, sourceTex
   return `<div class="mermaid-shell"${sourceAttributes} data-mermaid-key="${escapeHtml(key)}" data-mermaid-source-hash="${escapeHtml(sourceHash)}"><div class="mermaid-placeholder-card"><div class="mermaid-placeholder-copy"><strong>Mermaid diagram</strong><span>Loads when visible</span></div><button type="button" class="mermaid-placeholder-btn" data-mermaid-key="${escapeHtml(key)}">Render</button></div><pre class="mermaid-source" hidden>${escapeHtml(sourceText)}</pre></div>`;
 }
 
+function createMermaidEmbedShell({ embedKey, label, target }) {
+  return `<span class="mermaid-shell" data-mermaid-key="${escapeHtml(embedKey)}" data-mermaid-target="${escapeHtml(target)}" data-mermaid-label="${escapeHtml(label)}"><span class="mermaid-placeholder-card"><span class="mermaid-placeholder-copy"><strong>${escapeHtml(label)}</strong><span>Loads when visible</span></span><button type="button" class="mermaid-placeholder-btn" data-mermaid-key="${escapeHtml(embedKey)}">Render</button></span><span class="mermaid-source" hidden></span></span>`;
+}
+
 function createPlantUmlPlaceholder({ key, sourceAttributes, sourceHash, sourceText }) {
   return `<div class="plantuml-shell"${sourceAttributes} data-plantuml-key="${escapeHtml(key)}" data-plantuml-source-hash="${escapeHtml(sourceHash)}"><div class="plantuml-placeholder-card"><div class="plantuml-placeholder-copy"><strong>PlantUML diagram</strong><span>Renders server-side when visible</span></div><button type="button" class="plantuml-placeholder-btn" data-plantuml-key="${escapeHtml(key)}">Render</button></div><pre class="plantuml-source" hidden>${escapeHtml(sourceText)}</pre></div>`;
 }
@@ -37,9 +41,10 @@ function createExcalidrawPlaceholder({ embedKey, label, target }) {
 function renderInlineWikiText(content, {
   excalidrawEmbedCounts,
   fileList,
+  mermaidEmbedCounts,
   plantUmlEmbedCounts,
 }) {
-  const regex = /!\[\[([^\]|]+\.(?:excalidraw|puml|plantuml))(?:\|([^\]]+))?\]\]|\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/gi;
+  const regex = /!\[\[([^\]|]+\.(?:excalidraw|mmd|mermaid|puml|plantuml))(?:\|([^\]]+))?\]\]|\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/gi;
   let lastIndex = 0;
   let html = '';
   let match;
@@ -59,6 +64,14 @@ function renderInlineWikiText(content, {
         html += createExcalidrawPlaceholder({
           embedKey: `${target}#${occurrenceIndex}`,
           label: label.replace(/\.excalidraw$/i, ''),
+          target,
+        });
+      } else if (/\.(?:mmd|mermaid)$/i.test(target)) {
+        const occurrenceIndex = mermaidEmbedCounts.get(target) ?? 0;
+        mermaidEmbedCounts.set(target, occurrenceIndex + 1);
+        html += createMermaidEmbedShell({
+          embedKey: `${target}#${occurrenceIndex}`,
+          label: label.replace(/\.(?:mmd|mermaid)$/i, ''),
           target,
         });
       } else {
@@ -130,6 +143,7 @@ function createMarkdownRenderer(fileList = []) {
 
   const excalidrawEmbedCounts = new Map();
   const mermaidCounts = new Map();
+  const mermaidEmbedCounts = new Map();
   const plantUmlCounts = new Map();
   const plantUmlEmbedCounts = new Map();
 
@@ -200,6 +214,7 @@ function createMarkdownRenderer(fileList = []) {
       return `<input type="checkbox" checked disabled> ${renderInlineWikiText(content.slice(4), {
         excalidrawEmbedCounts,
         fileList,
+        mermaidEmbedCounts,
         plantUmlEmbedCounts,
       })}`;
     }
@@ -208,6 +223,7 @@ function createMarkdownRenderer(fileList = []) {
       return `<input type="checkbox" disabled> ${renderInlineWikiText(content.slice(4), {
         excalidrawEmbedCounts,
         fileList,
+        mermaidEmbedCounts,
         plantUmlEmbedCounts,
       })}`;
     }
@@ -215,6 +231,7 @@ function createMarkdownRenderer(fileList = []) {
     return renderInlineWikiText(content, {
       excalidrawEmbedCounts,
       fileList,
+      mermaidEmbedCounts,
       plantUmlEmbedCounts,
     });
   };

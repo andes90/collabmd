@@ -11,6 +11,10 @@ function isExcalidrawRoom(name) {
   return typeof name === 'string' && name.toLowerCase().endsWith('.excalidraw');
 }
 
+function isMermaidRoom(name) {
+  return typeof name === 'string' && /\.(?:mmd|mermaid)$/i.test(name);
+}
+
 function isPlantUmlRoom(name) {
   return typeof name === 'string' && /\.(?:puml|plantuml)$/i.test(name);
 }
@@ -219,7 +223,7 @@ export class CollaborationRoom {
     await this.writePersistedSnapshot(Y.encodeStateAsUpdate(this.doc));
 
     // Keep the backlink index in sync with every save
-    if (this.backlinkIndex && !isExcalidrawRoom(this.name) && !isPlantUmlRoom(this.name)) {
+    if (this.backlinkIndex && !isExcalidrawRoom(this.name) && !isMermaidRoom(this.name) && !isPlantUmlRoom(this.name)) {
       this.backlinkIndex.updateFile(this.name, content);
     }
   }
@@ -231,6 +235,10 @@ export class CollaborationRoom {
 
     if (isExcalidrawRoom(this.name) && typeof this.vaultFileStore.readExcalidrawFile === 'function') {
       return this.vaultFileStore.readExcalidrawFile(this.name);
+    }
+
+    if (isMermaidRoom(this.name) && typeof this.vaultFileStore.readMermaidFile === 'function') {
+      return this.vaultFileStore.readMermaidFile(this.name);
     }
 
     if (isPlantUmlRoom(this.name) && typeof this.vaultFileStore.readPlantUmlFile === 'function') {
@@ -255,6 +263,13 @@ export class CollaborationRoom {
 
     if (isExcalidrawRoom(this.name) && typeof this.vaultFileStore.writeExcalidrawFile === 'function') {
       await this.vaultFileStore.writeExcalidrawFile(this.name, content, {
+        invalidateCollaborationSnapshot: false,
+      });
+      return;
+    }
+
+    if (isMermaidRoom(this.name) && typeof this.vaultFileStore.writeMermaidFile === 'function') {
+      await this.vaultFileStore.writeMermaidFile(this.name, content, {
         invalidateCollaborationSnapshot: false,
       });
       return;

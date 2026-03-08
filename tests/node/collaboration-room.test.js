@@ -409,6 +409,56 @@ test('CollaborationRoom hydrates and persists PlantUML rooms via PlantUML file A
   assert.equal(backlinkUpdates, 0);
 });
 
+test('CollaborationRoom hydrates and persists Mermaid rooms via Mermaid file APIs', async () => {
+  const initialDiagram = 'flowchart TD\n  A --> B\n';
+  let readMermaidCount = 0;
+  const writes = [];
+
+  const room = new CollaborationRoom({
+    maxBufferedAmountBytes: 1024,
+    name: 'diagram.mmd',
+    onEmpty: () => {},
+    backlinkIndex: {
+      updateFile() {
+        throw new Error('backlink index should not be updated for Mermaid files');
+      },
+    },
+    vaultFileStore: {
+      async readMermaidFile(path) {
+        readMermaidCount += 1;
+        assert.equal(path, 'diagram.mmd');
+        return initialDiagram;
+      },
+      async readMarkdownFile() {
+        throw new Error('readMarkdownFile should not be called for .mmd rooms');
+      },
+      async writeMermaidFile(path, content) {
+        writes.push({ content, path });
+        return { ok: true };
+      },
+      async writeMarkdownFile() {
+        throw new Error('writeMarkdownFile should not be called for .mmd rooms');
+      },
+    },
+  });
+
+  await room.hydrate();
+  assert.equal(readMermaidCount, 1);
+  assert.equal(room.doc.getText('codemirror').toString(), initialDiagram);
+
+  room.doc.transact(() => {
+    const text = room.doc.getText('codemirror');
+    text.delete(0, text.length);
+    text.insert(0, `${initialDiagram}  B --> C\n`);
+  }, 'test');
+
+  await room.persist();
+
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].path, 'diagram.mmd');
+  assert.equal(writes[0].content, `${initialDiagram}  B --> C\n`);
+});
+
 test('CollaborationRoom hydrates and persists .plantuml rooms via PlantUML file APIs', async () => {
   const initialDiagram = '@startuml\nAlice -> Bob: Hello\n@enduml\n';
   let readPlantUmlCount = 0;

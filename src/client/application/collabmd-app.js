@@ -192,21 +192,29 @@ export class CollabMdApp {
     return typeof filePath === 'string' && filePath.toLowerCase().endsWith('.excalidraw');
   }
 
+  isMermaidFile(filePath) {
+    return typeof filePath === 'string' && /\.(?:mmd|mermaid)$/i.test(filePath);
+  }
+
   isPlantUmlFile(filePath) {
     return typeof filePath === 'string' && /\.(?:puml|plantuml)$/i.test(filePath);
   }
 
-  createPlantUmlPreviewDocument(source = '') {
+  createDiagramPreviewDocument(language, source = '') {
     const text = String(source ?? '');
     const longestFence = Math.max(...(text.match(/`+/g)?.map((fence) => fence.length) ?? [0]));
     const fence = '`'.repeat(Math.max(3, longestFence + 1));
-    return `${fence}plantuml\n${text}\n${fence}`;
+    return `${fence}${language}\n${text}\n${fence}`;
   }
 
   getPreviewSource() {
     const source = this.session?.getText() ?? '';
+    if (this.isMermaidFile(this.currentFilePath)) {
+      return this.createDiagramPreviewDocument('mermaid', source);
+    }
+
     if (this.isPlantUmlFile(this.currentFilePath)) {
-      return this.createPlantUmlPreviewDocument(source);
+      return this.createDiagramPreviewDocument('plantuml', source);
     }
 
     return source;
@@ -216,20 +224,24 @@ export class CollabMdApp {
     return String(filePath ?? '')
       .split('/')
       .pop()
-      .replace(/\.(?:md|markdown|mdx|excalidraw|puml|plantuml)$/i, '');
+      .replace(/\.(?:md|markdown|mdx|excalidraw|puml|plantuml|mmd|mermaid)$/i, '');
   }
 
   resetPreviewMode() {
     this.elements.previewContent?.classList.remove('is-excalidraw-file-preview');
+    this.elements.previewContent?.classList.remove('is-mermaid-file-preview');
     this.elements.previewContent?.classList.remove('is-plantuml-file-preview');
   }
 
   syncFileChrome(filePath) {
     const isExcalidraw = this.isExcalidrawFile(filePath);
+    const isMermaid = this.isMermaidFile(filePath);
     const isPlantUml = this.isPlantUmlFile(filePath);
-    this.elements.outlineToggle?.classList.toggle('hidden', isExcalidraw || isPlantUml);
-    this.elements.commentsToggle?.classList.toggle('hidden', isExcalidraw || isPlantUml);
-    this.elements.commentSelectionButton?.classList.toggle('hidden', isExcalidraw || isPlantUml);
+    const isDiagramFile = isExcalidraw || isMermaid || isPlantUml;
+    this.elements.outlineToggle?.classList.toggle('hidden', isDiagramFile);
+    this.elements.commentsToggle?.classList.toggle('hidden', isDiagramFile);
+    this.elements.commentSelectionButton?.classList.toggle('hidden', isDiagramFile);
+    this.elements.previewContent?.classList.toggle('is-mermaid-file-preview', isMermaid);
     this.elements.previewContent?.classList.toggle('is-plantuml-file-preview', isPlantUml);
 
     if (isExcalidraw) {
@@ -239,7 +251,7 @@ export class CollabMdApp {
       return;
     }
 
-    if (isPlantUml) {
+    if (isMermaid || isPlantUml) {
       this.outlineController.close();
       this.backlinksPanel.clear();
     }
@@ -580,8 +592,9 @@ export class CollabMdApp {
     const loadToken = this.sessionLoadToken + 1;
     this.sessionLoadToken = loadToken;
     const isExcalidraw = this.isExcalidrawFile(filePath);
+    const isMermaid = this.isMermaidFile(filePath);
     const isPlantUml = this.isPlantUmlFile(filePath);
-    const supportsComments = !isExcalidraw && !isPlantUml;
+    const supportsComments = !isExcalidraw && !isMermaid && !isPlantUml;
 
     this.cleanupSession();
     this.layoutController.reset();
@@ -626,7 +639,7 @@ export class CollabMdApp {
         if (this.commentThreads.length > 0) {
           this.updateCommentThreads(this.session?.getCommentThreads() ?? []);
         }
-        if (!isPlantUml) {
+        if (!isMermaid && !isPlantUml) {
           this.scheduleBacklinkRefresh();
         }
       },
@@ -652,7 +665,7 @@ export class CollabMdApp {
       }
       this.syncWrapToggle();
       this.updateCommentThreads(session.getCommentThreads());
-      if (isExcalidraw || isPlantUml) {
+      if (isExcalidraw || isMermaid || isPlantUml) {
         this.backlinksPanel.clear();
       } else {
         this.backlinksPanel.load(filePath);
@@ -834,7 +847,7 @@ export class CollabMdApp {
   }
 
   supportsComments(filePath = this.currentFilePath) {
-    return Boolean(filePath) && !this.isExcalidrawFile(filePath) && !this.isPlantUmlFile(filePath);
+    return Boolean(filePath) && !this.isExcalidrawFile(filePath) && !this.isMermaidFile(filePath) && !this.isPlantUmlFile(filePath);
   }
 
   startCommentFromEditorSelection() {
@@ -1462,7 +1475,7 @@ export class CollabMdApp {
     // If the followed user switched to a different file, follow them there
     if (user.currentFile && user.currentFile !== this.currentFilePath) {
       navigateToFile(user.currentFile);
-      this.toastController.show(`${user.name} switched to ${user.currentFile.replace(/\.md$/i, '').split('/').pop()}`);
+      this.toastController.show(`${user.name} switched to ${this.getDisplayName(user.currentFile)}`);
       return;
     }
 
@@ -1735,6 +1748,7 @@ export class CollabMdApp {
       if (
         this.currentFilePath
         && !this.isExcalidrawFile(this.currentFilePath)
+        && !this.isMermaidFile(this.currentFilePath)
         && !this.isPlantUmlFile(this.currentFilePath)
       ) {
         this.backlinksPanel.load(this.currentFilePath);

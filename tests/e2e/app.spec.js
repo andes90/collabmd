@@ -1212,6 +1212,63 @@ test('preserves Mermaid instances across unrelated preview rerenders', async ({ 
   ), { timeout: 60000 }).toBe(firstInstanceId);
 });
 
+test('preserves embedded Mermaid file instances across unrelated preview rerenders', async ({ page }) => {
+  test.slow();
+
+  await openFile(page, 'README.md');
+  await replaceEditorContent(page, [
+    '# Mermaid Embed Preserve',
+    '',
+    'Intro copy before the diagram.',
+    '',
+    '![[sample-mermaid.mmd]]',
+    '',
+    'Closing copy after the diagram.',
+  ].join('\n'));
+
+  await expect.poll(async () => (
+    page.evaluate(() => (
+      document.querySelector('#previewContent .mermaid-shell[data-mermaid-target="sample-mermaid.mmd"]')?.getAttribute('data-mermaid-key') || ''
+    ))
+  ), { timeout: 60000 }).toBeTruthy();
+
+  const mermaidKey = await page.evaluate(() => (
+    document.querySelector('#previewContent .mermaid-shell[data-mermaid-target="sample-mermaid.mmd"]')?.getAttribute('data-mermaid-key') || ''
+  ));
+  expect(mermaidKey).toBeTruthy();
+
+  await page.evaluate((key) => {
+    const shell = document.querySelector(`#previewContent .mermaid-shell[data-mermaid-key="${key}"]`);
+    shell?.querySelector('.mermaid-placeholder-btn')?.click();
+  }, mermaidKey);
+
+  await expect.poll(async () => (
+    page.evaluate((key) => (
+      document.querySelector(`#previewContent .mermaid-shell[data-mermaid-key="${key}"]`)?.getAttribute('data-mermaid-instance-id') || ''
+    ), mermaidKey)
+  ), { timeout: 60000 }).toMatch(/^\d+$/);
+
+  const firstInstanceId = await page.evaluate((key) => (
+    document.querySelector(`#previewContent .mermaid-shell[data-mermaid-key="${key}"]`)?.getAttribute('data-mermaid-instance-id') || ''
+  ), mermaidKey);
+
+  await replaceEditorContent(page, [
+    '# Mermaid Embed Preserve',
+    '',
+    'Updated intro copy without touching the diagram.',
+    '',
+    '![[sample-mermaid.mmd]]',
+    '',
+    'Updated closing copy after the diagram.',
+  ].join('\n'));
+
+  await expect.poll(async () => (
+    page.evaluate((key) => (
+      document.querySelector(`#previewContent .mermaid-shell[data-mermaid-key="${key}"]`)?.getAttribute('data-mermaid-instance-id') || ''
+    ), mermaidKey)
+  ), { timeout: 60000 }).toBe(firstInstanceId);
+});
+
 test('preserves PlantUML instances across unrelated preview rerenders', async ({ page }) => {
   test.slow();
 
@@ -1489,6 +1546,32 @@ test('refits standalone PlantUML diagrams on maximize, resize, and restore', asy
   }).toBeTruthy();
   const restoredLabel = await page.locator('#previewContent .plantuml-zoom-label').textContent();
   expect(restoredLabel).not.toBe(zoomedMaximizedLabel);
+});
+
+test('opens .mmd files with side-by-side Mermaid preview', async ({ page }) => {
+  await openFile(page, 'sample-mermaid.mmd');
+
+  await expect(page.locator('#editorLayout')).toHaveAttribute('data-view', 'split');
+  await expect(page.locator('#previewContent .mermaid-frame svg')).toBeVisible();
+  await expect(page.locator('#previewContent .mermaid-frame')).toContainText('Start');
+  await expect(page.locator('#previewContent .mermaid-zoom-label')).toHaveText('100%');
+  await page.locator('#previewContent .mermaid-zoom-btn[aria-label="Zoom in"]').click();
+  await expect(page.locator('#previewContent .mermaid-zoom-label')).toHaveText('110%');
+  await expect(page.locator('#outlineToggle')).toHaveClass(/hidden/);
+  await expect(page.locator('#backlinksPanel')).toHaveClass(/hidden/);
+});
+
+test('renders embedded Mermaid files from markdown docs', async ({ page }) => {
+  await openFile(page, 'README.md');
+  await replaceEditorContent(page, [
+    '# Mermaid Embed',
+    '',
+    '![[sample-mermaid.mmd|Embedded flow]]',
+  ].join('\n'));
+
+  await expect(page.locator('#previewContent .mermaid-frame svg')).toBeVisible();
+  await expect(page.locator('#previewContent .mermaid-frame')).toContainText('Start');
+  await expect(page.locator('#previewContent .mermaid-shell[data-mermaid-target="sample-mermaid.mmd"]')).toHaveCount(1);
 });
 
 test.describe('mobile sidebar', () => {

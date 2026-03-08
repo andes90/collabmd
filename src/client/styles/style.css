@@ -1222,6 +1222,16 @@
   max-width: none;
 }
 
+.preview-content.is-mermaid-file-preview {
+  width: 100%;
+  min-height: 100%;
+  max-width: none;
+}
+
+.preview-content.is-mermaid-file-preview [data-preview-render-host="true"] {
+  min-height: 100%;
+}
+
 .preview-content.is-plantuml-file-preview [data-preview-render-host="true"] {
   min-height: 100%;
 }
@@ -1230,6 +1240,11 @@
   display: flex;
   flex: 1;
   min-width: 0;
+  min-height: 100%;
+}
+
+.preview-content.is-mermaid-file-preview .mermaid-shell {
+  margin: 0;
   min-height: 100%;
 }
 
@@ -2164,6 +2179,9 @@ body.plantuml-maximized-open::before {
 .editor-layout[data-view="preview"] .preview-content.is-excalidraw-file-preview {
   max-width: none;
 }
+.editor-layout[data-view="preview"] .preview-content.is-mermaid-file-preview {
+  max-width: none;
+}
 .editor-layout[data-view="preview"] .preview-content.is-plantuml-file-preview {
   max-width: none;
 }
@@ -2172,6 +2190,10 @@ body.plantuml-maximized-open::before {
 }
 
 .editor-layout[data-view="preview"] .preview-content p:has(> .excalidraw-embed-placeholder:only-child) {
+  max-width: none;
+}
+
+.editor-layout[data-view="preview"] .preview-content p:has(> .mermaid-shell:only-child) {
   max-width: none;
 }
 
@@ -2827,4 +2849,8 @@ body.excalidraw-maximized-open .resizer {
 
 .file-tree-file.is-excalidraw .file-tree-icon {
   color: var(--color-primary);
+}
+
+.file-tree-file.is-mermaid .file-tree-icon {
+  color: oklch(from var(--color-primary) calc(l * 0.96) calc(c * 0.86) 215);
 }

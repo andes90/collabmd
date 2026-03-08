@@ -19,6 +19,10 @@ function isExcalidrawPath(filePath) {
   return typeof filePath === 'string' && filePath.toLowerCase().endsWith('.excalidraw');
 }
 
+function isMermaidPath(filePath) {
+  return typeof filePath === 'string' && /\.(?:mmd|mermaid)$/i.test(filePath);
+}
+
 function isPlantUmlPath(filePath) {
   return typeof filePath === 'string' && /\.(?:puml|plantuml)$/i.test(filePath);
 }
@@ -516,7 +520,7 @@ export function createRequestHandler(
       return;
     }
 
-    // GET /api/file?path=... — read file (markdown, PlantUML, or excalidraw)
+    // GET /api/file?path=... — read file (markdown, Mermaid, PlantUML, or excalidraw)
     if (requestUrl.pathname === '/api/file' && req.method === 'GET') {
       const filePath = requestUrl.searchParams.get('path');
       if (!filePath) {
@@ -527,6 +531,8 @@ export function createRequestHandler(
       try {
         const content = isExcalidrawPath(filePath)
           ? await vaultFileStore.readExcalidrawFile(filePath)
+          : isMermaidPath(filePath)
+            ? await vaultFileStore.readMermaidFile(filePath)
           : isPlantUmlPath(filePath)
             ? await vaultFileStore.readPlantUmlFile(filePath)
             : await vaultFileStore.readMarkdownFile(filePath);
@@ -542,7 +548,7 @@ export function createRequestHandler(
       return;
     }
 
-    // PUT /api/file — write/update file (markdown, PlantUML, or excalidraw)
+    // PUT /api/file — write/update file (markdown, Mermaid, PlantUML, or excalidraw)
     if (requestUrl.pathname === '/api/file' && req.method === 'PUT') {
       try {
         const body = await parseJsonBody(req);
@@ -552,6 +558,8 @@ export function createRequestHandler(
         }
         const result = isExcalidrawPath(body.path)
           ? await vaultFileStore.writeExcalidrawFile(body.path, body.content)
+          : isMermaidPath(body.path)
+            ? await vaultFileStore.writeMermaidFile(body.path, body.content)
           : isPlantUmlPath(body.path)
             ? await vaultFileStore.writePlantUmlFile(body.path, body.content)
             : await vaultFileStore.writeMarkdownFile(body.path, body.content);
