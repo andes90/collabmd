@@ -58,10 +58,11 @@ Open `http://localhost:1234`, or share the tunnel URL that CollabMD prints on st
 
 ## Safety
 
-- CollabMD does not include authentication or authorization.
-- Anyone with the URL can edit the vault.
+- Authentication defaults to `none`, so anyone with the URL can edit the vault unless you enable an auth strategy.
+- `--auth password` protects `/api/*` and `/ws/*` with a host password and a signed session cookie.
+- If you omit auth, treat the URL as write access to the vault.
 - Cloudflare Tunnel starts by default unless you pass `--no-tunnel`.
-- Use it only on trusted networks or behind your own access layer.
+- `oidc` is reserved for a future implementation and is not usable yet.
 
 ## How it works
 
@@ -100,6 +101,8 @@ collabmd [directory] [options]
 |--------|-------------|---------|
 | `-p, --port` | Port to listen on | `1234` |
 | `--host` | Host to bind to | `127.0.0.1` |
+| `--auth` | Auth strategy: `none`, `password`, `oidc` | `none` |
+| `--auth-password` | Password for `--auth password` | generated per run |
 | `--local-plantuml` | Start the bundled local docker-compose PlantUML service | off |
 | `--no-tunnel` | Don't start Cloudflare Tunnel | tunnel on |
 | `-v, --version` | Show version | |
@@ -117,6 +120,12 @@ collabmd ~/my-vault
 # Use a custom port, no tunnel
 collabmd --port 3000 --no-tunnel
 
+# Require a generated password for collaborators
+collabmd --auth password
+
+# Require an explicit password
+collabmd --auth password --auth-password "shared-secret"
+
 # Use the local docker-compose PlantUML service
 collabmd --local-plantuml
 
@@ -127,6 +136,8 @@ collabmd ~/Documents/Obsidian/MyVault
 ## Cloudflare Tunnel
 
 By default, the CLI starts a [Cloudflare Quick Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) so your vault is accessible from the internet. Since the editor uses same-origin WebSocket routing (`/ws/:file`), the tunnel works for both HTTP and collaboration traffic.
+
+If you are exposing the app through the tunnel, `collabmd --auth password` is the intended first-line protection. When you do not pass `--auth-password`, CollabMD generates a new password for that host run and prints it in the terminal. Restarting the app rotates that password and the signed session secret.
 
 Install `cloudflared`:
 
@@ -279,10 +290,11 @@ src/
   client/
     application/           app orchestration, preview rendering, wiki-links
     domain/                room/user generators
-    infrastructure/        runtime config, collaborative editor session
+    infrastructure/        runtime config, auth bootstrap, collaborative editor session
     presentation/          file explorer, comments, backlinks, quick switcher, outline, scroll sync, theme, layout
   domain/                  shared comment and wiki-link helpers
   server/
+    auth/                  strategy selection and cookie-backed auth sessions
     config/                environment loading
     domain/                collaboration room model, registry, backlink index, PlantUML renderer
     infrastructure/        HTTP request handler, vault file store, WebSocket gateway
@@ -305,6 +317,10 @@ scripts/
 |----------|-------------|---------|
 | `HOST` | Bind host | `127.0.0.1` (dev), `0.0.0.0` (prod) |
 | `PORT` | HTTP + WebSocket port | `1234` |
+| `AUTH_STRATEGY` | Auth strategy: `none`, `password`, `oidc` | `none` |
+| `AUTH_PASSWORD` | Shared password for `AUTH_STRATEGY=password` | generated per run |
+| `AUTH_SESSION_COOKIE_NAME` | Session cookie name | `collabmd_auth` |
+| `AUTH_SESSION_SECRET` | Cookie signing secret | generated per run |
 | `PLANTUML_SERVER_URL` | Upstream PlantUML server base URL used for server-side SVG rendering | `https://www.plantuml.com/plantuml` |
 | `COLLABMD_VAULT_DIR` | Vault directory path | current directory |
 | `WS_BASE_PATH` | WebSocket base path | `/ws` |

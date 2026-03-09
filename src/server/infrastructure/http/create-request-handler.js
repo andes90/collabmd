@@ -12,13 +12,14 @@ import {
 
 export function createRequestHandler(
   config,
+  authService,
   vaultFileStore,
   backlinkIndex,
   roomRegistry = null,
   plantUmlRenderer = null,
 ) {
   const handleEsmProxy = createEsmProxyHandler();
-  const handleStaticRequest = createStaticHandler(config);
+  const handleStaticRequest = createStaticHandler(config, authService);
   const handleVaultApi = createVaultApiHandler({
     backlinkIndex,
     plantUmlRenderer,
@@ -54,7 +55,15 @@ export function createRequestHandler(
       return;
     }
 
+    if (await authService.handleAuthApiRequest(req, res, requestUrl)) {
+      return;
+    }
+
     if (await handleEsmProxy(req, res, requestUrl)) {
+      return;
+    }
+
+    if (requestUrl.pathname.startsWith('/api/') && !authService.requireApiAuthentication(req, res)) {
       return;
     }
 

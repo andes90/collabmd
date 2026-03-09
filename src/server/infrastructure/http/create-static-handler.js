@@ -43,8 +43,14 @@ function getStaticCacheControl(pathname = '', extension = '') {
   return 'public, max-age=300';
 }
 
-function buildRuntimeConfig({ nodeEnv, publicWsBaseUrl, wsBasePath }) {
+function buildRuntimeConfig({
+  auth,
+  nodeEnv,
+  publicWsBaseUrl,
+  wsBasePath,
+}) {
   return `window.__COLLABMD_CONFIG__ = ${JSON.stringify({
+    auth,
     environment: nodeEnv,
     publicWsBaseUrl,
     wsBasePath,
@@ -83,7 +89,7 @@ function resolvePublicFile(publicDir, pathname) {
   return absolutePath;
 }
 
-export function createStaticHandler(config) {
+export function createStaticHandler(config, authService = null) {
   const readStaticFile = createStaticFileReader({
     cacheEnabled: config.nodeEnv === 'production',
   });
@@ -95,7 +101,15 @@ export function createStaticHandler(config) {
     }
 
     if (requestUrl.pathname === '/app-config.js') {
-      const body = buildRuntimeConfig(config);
+      const body = buildRuntimeConfig({
+        ...config,
+        auth: authService?.getClientConfig?.() ?? {
+          enabled: false,
+          implemented: true,
+          requiresLogin: false,
+          strategy: 'none',
+        },
+      });
       sendResponse(req, res, {
         body,
         headers: {

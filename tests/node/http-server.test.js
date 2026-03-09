@@ -38,6 +38,13 @@ function httpRequest(url, { method = 'GET', headers = {}, body } = {}) {
   });
 }
 
+function extractCookieHeader(setCookieHeader) {
+  const rawValue = Array.isArray(setCookieHeader)
+    ? setCookieHeader[0]
+    : setCookieHeader;
+  return String(rawValue || '').split(';')[0];
+}
+
 async function startPlantUmlStub() {
   const requests = [];
   const server = createServer((req, res) => {
@@ -79,6 +86,7 @@ test('HTTP server serves health, runtime config, and static assets', async (t) =
   const runtimeConfigResponse = await httpRequest(`${app.baseUrl}/app-config.js`);
   assert.equal(runtimeConfigResponse.statusCode, 200);
   assert.match(runtimeConfigResponse.body, /window\.__COLLABMD_CONFIG__/);
+  assert.match(runtimeConfigResponse.body, /"strategy":"none"/);
   assert.equal(runtimeConfigResponse.headers['cache-control'], 'no-store');
 
   const indexResponse = await httpRequest(`${app.baseUrl}/`);
@@ -98,6 +106,56 @@ test('HTTP server serves health, runtime config, and static assets', async (t) =
   assert.equal(compressedAssetResponse.statusCode, 200);
   assert.equal(compressedAssetResponse.headers['content-encoding'], 'gzip');
   assert.match(gunzipSync(compressedAssetResponse.bodyBuffer).toString('utf8'), /--color-bg/);
+});
+
+test('HTTP server supports password auth without blocking static assets', async (t) => {
+  const app = await startTestServer({
+    auth: {
+      password: 'test-password-123',
+      strategy: 'password',
+    },
+  });
+  t.after(() => app.close());
+
+  const runtimeConfigResponse = await httpRequest(`${app.baseUrl}/app-config.js`);
+  assert.equal(runtimeConfigResponse.statusCode, 200);
+  assert.match(runtimeConfigResponse.body, /"strategy":"password"/);
+
+  const assetResponse = await httpRequest(`${app.baseUrl}/assets/css/style.css`);
+  assert.equal(assetResponse.statusCode, 200);
+
+  const unauthenticatedApiResponse = await httpRequest(`${app.baseUrl}/api/files`);
+  assert.equal(unauthenticatedApiResponse.statusCode, 401);
+  assert.match(unauthenticatedApiResponse.body, /Authentication required/);
+
+  const badLoginResponse = await httpRequest(`${app.baseUrl}/api/auth/session`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ password: 'wrong-password' }),
+  });
+  assert.equal(badLoginResponse.statusCode, 401);
+
+  const loginResponse = await httpRequest(`${app.baseUrl}/api/auth/session`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ password: 'test-password-123' }),
+  });
+  assert.equal(loginResponse.statusCode, 200);
+
+  const cookieHeader = extractCookieHeader(loginResponse.headers['set-cookie']);
+  assert.match(cookieHeader, /^collabmd_auth=/);
+
+  const authenticatedApiResponse = await httpRequest(`${app.baseUrl}/api/files`, {
+    headers: {
+      Cookie: cookieHeader,
+    },
+  });
+  assert.equal(authenticatedApiResponse.statusCode, 200);
+  assert.match(authenticatedApiResponse.body, /test\.md/);
 });
 
 test('HTTP server proxies esm.sh modules through a same-origin path', async (t) => {

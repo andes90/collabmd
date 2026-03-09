@@ -1,6 +1,7 @@
 import { createServer } from 'http';
 
 import { loadConfig } from './config/env.js';
+import { createAuthService } from './auth/create-auth-service.js';
 import { BacklinkIndex } from './domain/backlink-index.js';
 import { CollaborationDocumentStore } from './domain/collaboration/collaboration-document-store.js';
 import { CollaborationRoom } from './domain/collaboration/collaboration-room.js';
@@ -32,6 +33,7 @@ function closeHttpServer(httpServer) {
 }
 
 export function createAppServer(config = loadConfig()) {
+  const authService = createAuthService(config);
   const vaultFileStore = new VaultFileStore({ vaultDir: config.vaultDir });
   const backlinkIndex = new BacklinkIndex({ vaultFileStore });
   const plantUmlRenderer = new PlantUmlRenderer({
@@ -52,6 +54,7 @@ export function createAppServer(config = loadConfig()) {
   });
   const requestHandler = createRequestHandler(
     config,
+    authService,
     vaultFileStore,
     backlinkIndex,
     roomRegistry,
@@ -70,6 +73,7 @@ export function createAppServer(config = loadConfig()) {
   httpServer.keepAliveTimeout = config.httpKeepAliveTimeoutMs;
   httpServer.requestTimeout = config.httpRequestTimeoutMs;
   const collaborationGateway = attachCollaborationGateway({
+    authService,
     heartbeatIntervalMs: config.wsHeartbeatIntervalMs,
     maxPayload: config.wsMaxPayloadBytes,
     httpServer,
@@ -119,6 +123,7 @@ export function createAppServer(config = loadConfig()) {
     httpServer,
     listen,
     roomRegistry,
+    authService,
     vaultFileStore,
     get vaultFileCount() { return vaultFileCount; },
   };

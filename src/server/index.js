@@ -47,6 +47,13 @@ server.listen().then(({ host, port, wsPath }) => {
   console.log(`  ws route: ${wsPath}`);
   console.log(`  vault: ${server.config.vaultDir}`);
   console.log(`  files: ${server.vaultFileCount} vault files`);
+  if (server.config.auth.strategy === 'password') {
+    console.log(`  auth: password (${server.config.auth.password})`);
+  } else if (server.config.auth.strategy === 'oidc') {
+    console.log('  auth: oidc (not implemented yet)');
+  } else {
+    console.log('  auth: none');
+  }
   console.log('');
 }).catch((error) => {
   console.error('[server] Failed to start:', error.message);

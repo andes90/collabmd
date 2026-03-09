@@ -1,12 +1,16 @@
 import { CollabMdApp } from './application/collabmd-app.js';
+import { ensureClientAuthenticated } from './infrastructure/auth-client.js';
 
-function start() {
+async function start() {
+  await ensureClientAuthenticated();
   const app = new CollabMdApp();
   app.initialize();
 }
 
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', start, { once: true });
+  document.addEventListener('DOMContentLoaded', () => {
+    void start();
+  }, { once: true });
 } else {
-  start();
+  void start();
 }

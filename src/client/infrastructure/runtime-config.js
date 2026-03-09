@@ -4,6 +4,14 @@ function trimTrailingSlash(value) {
 
 export function getRuntimeConfig() {
   return {
+    auth: {
+      enabled: false,
+      implemented: true,
+      requiresLogin: false,
+      sessionEndpoint: '/api/auth/session',
+      statusEndpoint: '/api/auth/status',
+      strategy: 'none',
+    },
     environment: 'development',
     publicWsBaseUrl: '',
     wsBasePath: '/ws',

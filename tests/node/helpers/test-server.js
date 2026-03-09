@@ -29,14 +29,22 @@ export async function startTestServer(overrides = {}) {
   // Seed a default test file
   await writeFile(join(vaultDir, 'test.md'), '# Test\n\nHello from test vault.\n', 'utf-8');
 
+  const baseConfig = loadConfig({
+    auth: overrides.auth,
+    vaultDir,
+  });
   const config = {
-    ...loadConfig(),
+    ...baseConfig,
     host: '127.0.0.1',
     nodeEnv: 'test',
     vaultDir,
     port: 0,
     wsRoomIdleGraceMs: 0,
     ...overrides,
+    auth: {
+      ...baseConfig.auth,
+      ...(overrides.auth ?? {}),
+    },
   };
   const server = createAppServer(config);
   const { port } = await server.listen();

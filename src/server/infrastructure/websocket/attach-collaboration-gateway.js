@@ -1,7 +1,19 @@
 import { WebSocketServer } from 'ws';
 
-function rejectUpgrade(socket, statusCode, statusMessage) {
-  socket.write(`HTTP/1.1 ${statusCode} ${statusMessage}\r\n\r\n`);
+function rejectUpgrade(socket, statusCode, statusMessage, {
+  body = '',
+  headers = {},
+} = {}) {
+  const headerLines = Object.entries(headers)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join('\r\n');
+  const responseBody = String(body ?? '');
+  const contentLengthHeader = responseBody
+    ? `Content-Length: ${Buffer.byteLength(responseBody, 'utf8')}\r\n`
+    : '';
+  socket.write(
+    `HTTP/1.1 ${statusCode} ${statusMessage}\r\n${headerLines}${headerLines ? '\r\n' : ''}${contentLengthHeader}\r\n${responseBody}`,
+  );
   socket.destroy();
 }
 
@@ -11,6 +23,7 @@ function extractRoomName(pathname, wsBasePath) {
 }
 
 export function attachCollaborationGateway({
+  authService,
   heartbeatIntervalMs,
   httpServer,
   maxPayload,
@@ -128,6 +141,12 @@ export function attachCollaborationGateway({
 
     if (!matchesRealtimeRoute || requestUrl.pathname === wsBasePath) {
       rejectUpgrade(socket, 404, 'Not Found');
+      return;
+    }
+
+    const authResult = authService.authorizeWebSocketRequest(req, requestUrl);
+    if (!authResult.ok) {
+      rejectUpgrade(socket, authResult.statusCode, authResult.statusMessage, authResult);
       return;
     }
 

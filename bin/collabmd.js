@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url';
 const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: {
+    auth: { type: 'string' },
+    'auth-password': { type: 'string' },
     help: { type: 'boolean', short: 'h', default: false },
     'local-plantuml': { type: 'boolean', default: false },
     port: { type: 'string', short: 'p', default: '1234' },
@@ -40,6 +42,8 @@ if (values.help) {
   Options:
     -p, --port <port>    Port to listen on (default: 1234)
     --host <host>        Host to bind to (default: HOST env var, otherwise 127.0.0.1)
+    --auth <strategy>    Auth strategy: none, password, oidc (default: none)
+    --auth-password <pw> Password for --auth password (default: generated per run)
     --local-plantuml     Start the bundled docker-compose PlantUML service and use it
     --no-tunnel          Don't start Cloudflare Tunnel
     -v, --version        Show version
@@ -49,6 +53,7 @@ if (values.help) {
     collabmd                        Serve current directory
     collabmd ~/my-vault             Serve a specific vault
     collabmd --port 3000            Use a custom port
+    collabmd --auth password        Require a generated password to join
     collabmd --local-plantuml       Use the local docker-compose PlantUML server
     collabmd --no-tunnel            Local only, no tunnel
 `);
@@ -80,6 +85,14 @@ process.env.COLLABMD_VAULT_DIR = vaultPath;
 process.env.PORT = String(port);
 process.env.HOST = host;
 
+if (values.auth) {
+  process.env.AUTH_STRATEGY = values.auth;
+}
+
+if (values['auth-password']) {
+  process.env.AUTH_PASSWORD = values['auth-password'];
+}
+
 if (useLocalPlantUml) {
   const {
     getLocalPlantUmlServerUrl,
@@ -105,6 +118,10 @@ const { createAppServer } = await import('../src/server/create-app-server.js');
 const { loadConfig } = await import('../src/server/config/env.js');
 
 const config = loadConfig({ vaultDir: vaultPath });
+if (config.auth.strategy === 'password') {
+  process.env.AUTH_PASSWORD = config.auth.password;
+  process.env.AUTH_STRATEGY = 'password';
+}
 const server = createAppServer(config);
 
 let shutdownPromise = null;
@@ -155,6 +172,17 @@ try {
   console.log(`  Vault:  ${vaultPath} (${fileCount} markdown files)`);
   console.log(`  Local:  http://${info.host}:${info.port}`);
   console.log(`  PlantUML: ${config.plantumlServerUrl}`);
+  if (config.auth.strategy === 'password') {
+    console.log(`  Auth:   password`);
+    console.log(`  Secret: ${config.auth.password}`);
+    if (config.auth.passwordWasGenerated) {
+      console.log('          Generated for this host run only');
+    }
+  } else if (config.auth.strategy === 'oidc') {
+    console.log('  Auth:   oidc (not implemented yet)');
+  } else {
+    console.log('  Auth:   none');
+  }
 
   if (enableTunnel) {
     console.log('  Tunnel: starting...');

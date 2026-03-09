@@ -25,6 +25,15 @@ function waitForOpen(socket) {
   });
 }
 
+function waitForUnexpectedResponse(socket) {
+  return new Promise((resolve, reject) => {
+    socket.once('unexpected-response', (_request, response) => {
+      resolve(response);
+    });
+    socket.once('error', reject);
+  });
+}
+
 function waitForClose(socket) {
   if (socket.readyState === WebSocket.CLOSED) {
     return Promise.resolve({ code: 1005, reason: '' });
@@ -174,6 +183,20 @@ async function fileExists(filePath) {
   }
 }
 
+async function loginForCookie(app, password) {
+  const response = await fetch(`${app.baseUrl}/api/auth/session`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ password }),
+  });
+
+  assert.equal(response.status, 200);
+  const cookieHeader = response.headers.get('set-cookie') || '';
+  return cookieHeader.split(';')[0];
+}
+
 test('WebSocket collaboration broadcasts awareness and persists vault file', async (t) => {
   const app = await startTestServer();
   t.after(() => app.close());
@@ -240,6 +263,36 @@ test('WebSocket collaboration broadcasts awareness and persists vault file', asy
   });
 
   assert.ok(diskContent.includes('# Persisted from test'));
+});
+
+test('WebSocket collaboration rejects unauthorized clients when password auth is enabled', async (t) => {
+  const app = await startTestServer({
+    auth: {
+      password: 'ws-secret-password',
+      strategy: 'password',
+    },
+  });
+  t.after(() => app.close());
+
+  const unauthorizedSocket = new WebSocket(app.wsUrl('test.md'));
+  const unauthorizedResponse = await waitForUnexpectedResponse(unauthorizedSocket);
+  assert.equal(unauthorizedResponse.statusCode, 401);
+  unauthorizedSocket.terminate();
+
+  const cookieHeader = await loginForCookie(app, 'ws-secret-password');
+  const authorizedSocket = new WebSocket(app.wsUrl('test.md'), {
+    headers: {
+      Cookie: cookieHeader,
+    },
+  });
+  t.after(async () => {
+    authorizedSocket.close();
+    await Promise.allSettled([waitForClose(authorizedSocket)]);
+  });
+
+  await waitForOpen(authorizedSocket);
+  const firstMessage = await waitForMessage(authorizedSocket, () => true);
+  assert.equal(getMessageType(firstMessage), MSG_SYNC);
 });
 
 test('WebSocket server rejects oversized payloads', async (t) => {

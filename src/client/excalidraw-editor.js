@@ -5,6 +5,8 @@ import '@excalidraw/excalidraw/index.css';
 import { Doc } from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 
+import { ensureClientAuthenticated } from './infrastructure/auth-client.js';
+
 const params = new URLSearchParams(window.location.search);
 const filePath = params.get('file');
 const isTestMode = params.get('test') === '1';
@@ -674,6 +676,7 @@ async function init() {
   const loadingElement = document.getElementById('loadingState');
 
   try {
+    await ensureClientAuthenticated();
     const initialScene = await connectRealtimeRoom();
     const initialData = sceneToInitialData(initialScene);
 
