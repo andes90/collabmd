@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag to publish to the Homebrew tap (for example v0.1.0)
+        description: Release tag to publish to the Homebrew tap (for example vX.Y.Z)
         required: true
         type: string
 

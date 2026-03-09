@@ -20,7 +20,7 @@ This repository contains the files needed to publish CollabMD through a dedicate
 
 1. Bump the version in `package.json`.
 2. Commit and push the version change.
-3. Create and push a matching git tag, for example `v0.1.0`.
+3. Create and push a matching git tag, for example `vX.Y.Z`.
 4. Publish a GitHub release for that tag.
 5. The workflow downloads `https://github.com/andes90/collabmd/archive/refs/tags/<tag>.tar.gz`, computes the checksum, regenerates the formula, and commits the result into `andes90/homebrew-tap`.
 
@@ -37,7 +37,7 @@ To render the formula locally once you already know the tarball checksum:
 
 ```bash
 node scripts/render-homebrew-formula.mjs \
-  --version 0.1.0 \
+  --version "$(node -p "require('./package.json').version")" \
   --sha256 <sha256> \
   --owner andes90 \
   --repo collabmd \

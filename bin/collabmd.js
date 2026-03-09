@@ -6,6 +6,9 @@ import { stat } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
+const packagePath = resolve(fileURLToPath(import.meta.url), '../../package.json');
+const { default: packageJson } = await import(packagePath, { with: { type: 'json' } });
+
 const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: {
@@ -23,9 +26,7 @@ const { values, positionals } = parseArgs({
 });
 
 if (values.version) {
-  const packagePath = resolve(fileURLToPath(import.meta.url), '../../package.json');
-  const { default: pkg } = await import(packagePath, { with: { type: 'json' } });
-  console.log(`collabmd v${pkg.version}`);
+  console.log(`collabmd v${packageJson.version}`);
   process.exit(0);
 }
 
@@ -163,10 +164,14 @@ try {
   const info = await server.listen();
   const vaultName = basename(vaultPath);
   const fileCount = server.vaultFileCount ?? 0;
+  const bannerTitle = `CollabMD v${packageJson.version}`;
+  const bannerLine = bannerTitle
+    .padStart(Math.floor((38 + bannerTitle.length) / 2))
+    .padEnd(38);
 
   console.log('');
   console.log('  ╔══════════════════════════════════════╗');
-  console.log('  ║           CollabMD v0.1.0            ║');
+  console.log(`  ║${bannerLine}║`);
   console.log('  ╚══════════════════════════════════════╝');
   console.log('');
   console.log(`  Vault:  ${vaultPath} (${fileCount} markdown files)`);
