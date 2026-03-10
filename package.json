@@ -3,6 +3,13 @@
   "version": "0.1.3",
   "type": "module",
   "description": "Collaborative markdown vault — like Obsidian, but online. Serve any directory of markdown files for realtime collaborative editing.",
+  "files": [
+    "README.md",
+    "bin/",
+    "public/",
+    "server.js",
+    "src/"
+  ],
   "bin": {
     "collabmd": "./bin/collabmd.js"
   },
