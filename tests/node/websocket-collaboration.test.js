@@ -6,213 +6,25 @@ import { join } from 'node:path';
 import WebSocket from 'ws';
 import * as Y from 'yjs';
 import * as awarenessProtocol from 'y-protocols/awareness';
-import * as syncProtocol from 'y-protocols/sync';
-import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
 import { WebsocketProvider } from 'y-websocket';
 
 import { MSG_AWARENESS, MSG_SYNC } from '../../src/server/domain/collaboration/protocol.js';
 import { startTestServer, waitForCondition } from './helpers/test-server.js';
-
-function waitForOpen(socket) {
-  if (socket.readyState === WebSocket.OPEN) {
-    return Promise.resolve();
-  }
-
-  return new Promise((resolve, reject) => {
-    socket.once('open', resolve);
-    socket.once('error', reject);
-  });
-}
-
-function waitForUnexpectedResponse(socket) {
-  return new Promise((resolve, reject) => {
-    socket.once('unexpected-response', (_request, response) => {
-      resolve(response);
-    });
-    socket.once('error', reject);
-  });
-}
-
-function waitForClose(socket) {
-  if (socket.readyState === WebSocket.CLOSED) {
-    return Promise.resolve({ code: 1005, reason: '' });
-  }
-
-  return new Promise((resolve) => {
-    socket.once('close', (code, reason) => {
-      resolve({
-        code,
-        reason: reason.toString(),
-      });
-    });
-  });
-}
-
-function waitForMessage(socket, predicate, timeoutMs = 5000) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      socket.off('message', handleMessage);
-      reject(new Error(`Timed out after ${timeoutMs}ms waiting for websocket message`));
-    }, timeoutMs);
-
-    function handleMessage(payload) {
-      const data = payload instanceof Buffer ? new Uint8Array(payload) : new Uint8Array(payload);
-      if (!predicate(data)) {
-        return;
-      }
-
-      clearTimeout(timer);
-      socket.off('message', handleMessage);
-      resolve(data);
-    }
-
-    socket.on('message', handleMessage);
-  });
-}
-
-function collectMessages(socket, predicate, {
-  idleMs = 50,
-  timeoutMs = 1000,
-} = {}) {
-  return new Promise((resolve, reject) => {
-    const matches = [];
-    let idleTimer = null;
-    const timeoutTimer = setTimeout(() => {
-      cleanup();
-      reject(new Error(`Timed out after ${timeoutMs}ms while collecting websocket messages`));
-    }, timeoutMs);
-
-    function cleanup() {
-      clearTimeout(timeoutTimer);
-      clearTimeout(idleTimer);
-      socket.off('message', handleMessage);
-    }
-
-    function finish() {
-      cleanup();
-      resolve(matches);
-    }
-
-    function scheduleFinish() {
-      clearTimeout(idleTimer);
-      idleTimer = setTimeout(finish, idleMs);
-    }
-
-    function handleMessage(payload) {
-      const data = payload instanceof Buffer ? new Uint8Array(payload) : new Uint8Array(payload);
-      if (!predicate(data)) {
-        return;
-      }
-
-      matches.push(data);
-      scheduleFinish();
-    }
-
-    socket.on('message', handleMessage);
-    scheduleFinish();
-  });
-}
-
-function getMessageType(data) {
-  const decoder = decoding.createDecoder(data);
-  return decoding.readVarUint(decoder);
-}
-
-function encodeAwarenessMessage(update) {
-  const encoder = encoding.createEncoder();
-  encoding.writeVarUint(encoder, MSG_AWARENESS);
-  encoding.writeVarUint8Array(encoder, update);
-  return Buffer.from(encoding.toUint8Array(encoder));
-}
-
-function encodeSyncUpdateMessage(update) {
-  const encoder = encoding.createEncoder();
-  encoding.writeVarUint(encoder, MSG_SYNC);
-  syncProtocol.writeUpdate(encoder, update);
-  return Buffer.from(encoding.toUint8Array(encoder));
-}
-
-function encodeSyncStep1Message(doc) {
-  const encoder = encoding.createEncoder();
-  encoding.writeVarUint(encoder, MSG_SYNC);
-  syncProtocol.writeSyncStep1(encoder, doc);
-  return Buffer.from(encoding.toUint8Array(encoder));
-}
-
-async function syncClientDocWithRoom(socket, doc) {
-  let handledSyncMessage = false;
-  await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      socket.off('message', handleMessage);
-      reject(new Error('Timed out while syncing client doc with room'));
-    }, 5000);
-
-    function finish() {
-      clearTimeout(timer);
-      socket.off('message', handleMessage);
-      resolve();
-    }
-
-    function handleMessage(payload) {
-      const data = payload instanceof Buffer ? new Uint8Array(payload) : new Uint8Array(payload);
-      if (getMessageType(data) !== MSG_SYNC) {
-        return;
-      }
-
-      handledSyncMessage = true;
-      const reply = applySyncMessageToDoc(data, doc, socket);
-      if (reply) {
-        socket.send(reply);
-      }
-
-      setTimeout(finish, 50);
-    }
-
-    socket.on('message', handleMessage);
-    socket.send(encodeSyncStep1Message(doc));
-  });
-
-  assert.equal(handledSyncMessage, true);
-}
-
-function applySyncMessageToDoc(message, doc, origin = 'test') {
-  const decoder = decoding.createDecoder(message);
-  const messageType = decoding.readVarUint(decoder);
-  assert.equal(messageType, MSG_SYNC);
-
-  const encoder = encoding.createEncoder();
-  encoding.writeVarUint(encoder, MSG_SYNC);
-  syncProtocol.readSyncMessage(decoder, encoder, doc, origin);
-
-  const reply = encoding.toUint8Array(encoder);
-  return reply.length > 1 ? Buffer.from(reply) : null;
-}
-
-function waitForProviderSync(provider, timeoutMs = 5000) {
-  if (provider.synced) {
-    return Promise.resolve();
-  }
-
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      provider.off('sync', handleSync);
-      reject(new Error(`Timed out after ${timeoutMs}ms waiting for provider sync`));
-    }, timeoutMs);
-
-    const handleSync = (isSynced) => {
-      if (!isSynced) {
-        return;
-      }
-
-      clearTimeout(timer);
-      provider.off('sync', handleSync);
-      resolve();
-    };
-
-    provider.on('sync', handleSync);
-  });
-}
+import {
+  applySyncMessageToDoc,
+  collectMessages,
+  encodeAwarenessMessage,
+  encodeSyncStep1Message,
+  encodeSyncUpdateMessage,
+  getMessageType,
+  syncClientDocWithRoom,
+  waitForClose,
+  waitForMessage,
+  waitForOpen,
+  waitForProviderSync,
+  waitForUnexpectedResponse,
+} from './helpers/collaboration-protocol.js';
 
 async function fileExists(filePath) {
   try {
@@ -261,7 +73,12 @@ test('WebSocket collaboration broadcasts awareness and persists vault file', asy
   ]);
 
   // Client 1 sends awareness state
-  const awareness = new awarenessProtocol.Awareness(new Y.Doc());
+  const awarenessDoc = new Y.Doc();
+  const awareness = new awarenessProtocol.Awareness(awarenessDoc);
+  t.after(() => {
+    awareness.destroy();
+    awarenessDoc.destroy();
+  });
   awareness.setLocalStateField('user', {
     color: '#0ea5e9',
     colorLight: '#0ea5e933',
@@ -275,7 +92,12 @@ test('WebSocket collaboration broadcasts awareness and persists vault file', asy
   const awarenessMessage = await waitForMessage(ws2, (data) => getMessageType(data) === MSG_AWARENESS);
   const awarenessDecoder = decoding.createDecoder(awarenessMessage);
   decoding.readVarUint(awarenessDecoder);
-  const remoteAwareness = new awarenessProtocol.Awareness(new Y.Doc());
+  const remoteAwarenessDoc = new Y.Doc();
+  const remoteAwareness = new awarenessProtocol.Awareness(remoteAwarenessDoc);
+  t.after(() => {
+    remoteAwareness.destroy();
+    remoteAwarenessDoc.destroy();
+  });
   awarenessProtocol.applyAwarenessUpdate(
     remoteAwareness,
     decoding.readVarUint8Array(awarenessDecoder),
@@ -397,6 +219,9 @@ test('WebSocket collaboration preserves Yjs history across short reconnect gaps'
     const content = await readFile(join(app.vaultDir, filePath), 'utf-8');
     return content.includes('Reconnect-safe edit.') ? content : null;
   }, { timeoutMs: 5_000 });
+
+  providerB.destroy();
+  sharedDoc.destroy();
 
   assert.equal(diskContent, '# Test\n\nHello from test vault.\n\nReconnect-safe edit.\n');
 });

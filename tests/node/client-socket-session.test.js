@@ -2,16 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 
-import * as encoding from 'lib0/encoding';
-
-import { MSG_SYNC } from '../../src/server/domain/collaboration/protocol.js';
 import { ClientSocketSession } from '../../src/server/infrastructure/websocket/client-socket-session.js';
-
-function createSyncMessage() {
-  const encoder = encoding.createEncoder();
-  encoding.writeVarUint(encoder, MSG_SYNC);
-  return Buffer.from(encoding.toUint8Array(encoder));
-}
+import { createSyncMessage } from './helpers/collaboration-protocol.js';
 
 function createSocket() {
   const socket = new EventEmitter();
