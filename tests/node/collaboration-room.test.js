@@ -60,6 +60,34 @@ test('CollaborationRoom hydrates once for concurrent joins', async () => {
   assert.equal(room.doc.getText('codemirror').toString(), '# persisted');
 });
 
+test('CollaborationRoom retries hydration after a transient read failure', async () => {
+  let readCount = 0;
+  const room = new CollaborationRoom({
+    maxBufferedAmountBytes: 1024,
+    name: 'retry-hydration-room',
+    onEmpty: () => {},
+    vaultFileStore: {
+      async readMarkdownFile() {
+        readCount += 1;
+        if (readCount === 1) {
+          throw new Error('temporary read failure');
+        }
+
+        return '# recovered';
+      },
+      async writeMarkdownFile() {},
+    },
+  });
+
+  await assert.rejects(room.hydrate(), /temporary read failure/);
+  assert.equal(room.hydrated, false);
+
+  await room.hydrate();
+
+  assert.equal(readCount, 2);
+  assert.equal(room.doc.getText('codemirror').toString(), '# recovered');
+});
+
 test('CollaborationRoom closes slow clients when buffered writes exceed the limit', async () => {
   const room = new CollaborationRoom({
     maxBufferedAmountBytes: 4,

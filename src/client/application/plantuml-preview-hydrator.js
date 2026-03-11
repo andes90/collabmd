@@ -1,32 +1,37 @@
 import { clamp } from '../domain/vault-utils.js';
 import { resolveApiUrl } from '../domain/runtime-paths.js';
+import { DiagramPreviewHydrator } from './diagram-preview-hydrator.js';
 import {
-  cancelIdleRender,
   createPlantUmlPlaceholderCard,
   easeOutCubic,
   getFrameViewportSize,
   getSvgSize,
-  IDLE_RENDER_TIMEOUT_MS,
-  isNearViewport,
   PLANTUML_BATCH_SIZE,
   PLANTUML_ZOOM,
-  requestIdleRender,
   sanitizeSvgMarkup,
-  shouldPreserveHydratedDiagram,
-  syncAttribute,
 } from './preview-diagram-utils.js';
 
-export class PlantUmlPreviewHydrator {
+export class PlantUmlPreviewHydrator extends DiagramPreviewHydrator {
   constructor(renderer) {
+    super(renderer, {
+      batchSize: PLANTUML_BATCH_SIZE,
+      datasetKeys: {
+        hydrated: 'plantumlHydrated',
+        instanceId: 'plantumlInstanceId',
+        key: 'plantumlKey',
+        label: 'plantumlLabel',
+        queued: 'plantumlQueued',
+        sourceHash: 'plantumlSourceHash',
+        sourceLine: 'sourceLine',
+        sourceLineEnd: 'sourceLineEnd',
+        target: 'plantumlTarget',
+      },
+      filePathLabel: 'PlantUML',
+      shellClassName: 'plantuml-shell',
+      sourceClassName: 'plantuml-source',
+    });
     this.renderer = renderer;
-    this.observer = null;
-    this.idleId = null;
-    this.pendingShells = [];
-    this.hydrationInProgress = false;
-    this.instanceCounter = 0;
-    this.preservedShells = new Map();
     this.svgCache = new Map();
-    this.fileInflightRequests = new Map();
     this.svgInflightRequests = new Map();
     this.shellRefits = new WeakMap();
     this.activeMaximizedShell = null;
@@ -44,31 +49,6 @@ export class PlantUmlPreviewHydrator {
     }
     this.maximizedRoot?.remove();
     this.maximizedRoot = null;
-  }
-
-  cancelHydration() {
-    if (this.observer) {
-      this.observer.disconnect();
-      this.observer = null;
-    }
-
-    cancelIdleRender(this.idleId);
-    this.idleId = null;
-    this.pendingShells = [];
-    this.hydrationInProgress = false;
-  }
-
-  cancelPendingIdleWork() {
-    cancelIdleRender(this.idleId);
-    this.idleId = null;
-  }
-
-  clearPreservedShells() {
-    this.preservedShells.clear();
-  }
-
-  hasPendingWork() {
-    return this.hydrationInProgress || this.pendingShells.length > 0;
   }
 
   clearActiveShell() {
@@ -106,100 +86,11 @@ export class PlantUmlPreviewHydrator {
     });
   }
 
-  preserveHydratedShellsForCommit() {
-    this.preservedShells.clear();
-    const previewElement = this.renderer.previewElement;
-    if (!previewElement) {
-      return;
-    }
-
-    Array.from(previewElement.querySelectorAll('.plantuml-shell[data-plantuml-hydrated="true"][data-plantuml-key]')).forEach((shell) => {
-      const key = shell.dataset.plantumlKey;
-      const source = shell.querySelector('.plantuml-source')?.textContent ?? '';
-      const target = shell.dataset.plantumlTarget ?? '';
-      if (!key || (!source && !target)) {
-        return;
-      }
-
-      if (shell.isConnected) {
-        shell.remove();
-      }
-
-      this.preservedShells.set(key, {
-        key,
-        shell,
-        source,
-        target,
-      });
-    });
-  }
-
-  reconcileHydratedShells() {
-    const previewElement = this.renderer.previewElement;
-    if (!previewElement || this.preservedShells.size === 0) {
-      this.preservedShells.clear();
-      return;
-    }
-
-    let restoredMaximizedShell = false;
-    Array.from(previewElement.querySelectorAll('.plantuml-shell[data-plantuml-key]')).forEach((nextShell) => {
-      const key = nextShell.dataset.plantumlKey;
-      const preservedEntry = key ? this.preservedShells.get(key) : null;
-      if (!preservedEntry) {
-        return;
-      }
-
-      const nextSource = nextShell.querySelector('.plantuml-source')?.textContent ?? '';
-      const nextTarget = nextShell.dataset.plantumlTarget ?? '';
-      if (!shouldPreserveHydratedDiagram({
-        nextSource,
-        nextTarget,
-        preservedSource: preservedEntry.source,
-        preservedTarget: preservedEntry.target,
-      })) {
-        return;
-      }
-
-      this.syncPreservedShell(preservedEntry.shell, nextShell);
-      nextShell.replaceWith(preservedEntry.shell);
-      restoredMaximizedShell = restoredMaximizedShell || preservedEntry.shell.classList.contains('is-maximized');
-      this.preservedShells.delete(key);
-    });
-
-    this.preservedShells.clear();
+  handleReconcile({ restoredMaximizedShell }) {
     if (restoredMaximizedShell) {
       document.body.classList.add('plantuml-maximized-open');
     }
     this.syncActiveShell();
-  }
-
-  syncPreservedShell(preservedShell, nextShell) {
-    syncAttribute(preservedShell, nextShell, 'data-source-line');
-    syncAttribute(preservedShell, nextShell, 'data-source-line-end');
-    syncAttribute(preservedShell, nextShell, 'data-plantuml-key');
-    syncAttribute(preservedShell, nextShell, 'data-plantuml-target');
-    syncAttribute(preservedShell, nextShell, 'data-plantuml-label');
-    syncAttribute(preservedShell, nextShell, 'data-plantuml-source-hash');
-
-    preservedShell.classList.add('plantuml-shell');
-    preservedShell.dataset.plantumlHydrated = 'true';
-    preservedShell.removeAttribute('data-plantuml-queued');
-
-    const nextSourceNode = nextShell.querySelector('.plantuml-source');
-    let preservedSourceNode = preservedShell.querySelector('.plantuml-source');
-
-    if (!preservedSourceNode && nextSourceNode) {
-      preservedSourceNode = nextSourceNode.cloneNode(true);
-      preservedShell.prepend(preservedSourceNode);
-    }
-
-    if (preservedSourceNode && nextSourceNode) {
-      const nextSource = nextSourceNode.textContent ?? '';
-      if (nextSource || !nextShell.dataset.plantumlTarget) {
-        preservedSourceNode.textContent = nextSource;
-      }
-      preservedSourceNode.hidden = true;
-    }
   }
 
   ensureMaximizedRoot() {
@@ -254,126 +145,8 @@ export class PlantUmlPreviewHydrator {
     }
   }
 
-  setupHydration(renderVersion) {
-    const previewElement = this.renderer.previewElement;
-    const previewContainer = this.renderer.previewContainer;
-    const shells = Array.from(previewElement.querySelectorAll('.plantuml-shell'));
-    if (shells.length === 0) {
-      return 0;
-    }
-
-    this.observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) {
-          return;
-        }
-
-        this.enqueueShell(entry.target);
-      });
-    }, {
-      root: previewContainer,
-      rootMargin: this.renderer.isLargeDocument ? '180px 0px' : '420px 0px',
-    });
-
-    shells.forEach((shell) => this.observer.observe(shell));
-
-    requestAnimationFrame(() => {
-      if (renderVersion !== this.renderer.activeRenderVersion) {
-        return;
-      }
-
-      this.hydrateVisibleShells();
-      this.renderer.updateHydrationPhase();
-    });
-
-    return shells.length;
-  }
-
-  hydrateVisibleShells() {
-    const previewElement = this.renderer.previewElement;
-    const previewContainer = this.renderer.previewContainer;
-    if (this.renderer.hydrationPaused || !previewElement || !previewContainer) {
-      return;
-    }
-
-    const margin = this.renderer.isLargeDocument ? 180 : 420;
-    Array.from(previewElement.querySelectorAll('.plantuml-shell')).forEach((shell) => {
-      if (isNearViewport(shell, previewContainer, margin)) {
-        this.enqueueShell(shell, { prioritize: true });
-      }
-    });
-  }
-
-  enqueueShell(shell, { prioritize = false } = {}) {
-    if (!shell?.isConnected || shell.dataset.plantumlHydrated === 'true' || shell.dataset.plantumlQueued === 'true') {
-      return;
-    }
-
-    shell.dataset.plantumlQueued = 'true';
-    if (prioritize) {
-      this.pendingShells.unshift(shell);
-    } else {
-      this.pendingShells.push(shell);
-    }
-
-    if (this.renderer.hydrationPaused) {
-      return;
-    }
-
-    this.renderer.updateHydrationPhase();
-    this.scheduleHydration();
-  }
-
-  scheduleHydration() {
-    if (this.renderer.hydrationPaused || this.hydrationInProgress || this.idleId !== null) {
-      return;
-    }
-
-    this.idleId = requestIdleRender(() => {
-      this.idleId = null;
-      void this.flushHydrationQueue();
-    }, IDLE_RENDER_TIMEOUT_MS);
-  }
-
-  async flushHydrationQueue() {
-    if (this.renderer.hydrationPaused || this.hydrationInProgress) {
-      return;
-    }
-
-    const shells = [];
-    while (this.pendingShells.length > 0 && shells.length < PLANTUML_BATCH_SIZE) {
-      const nextShell = this.pendingShells.shift();
-      if (!nextShell?.isConnected || nextShell.dataset.plantumlHydrated === 'true') {
-        continue;
-      }
-
-      nextShell.removeAttribute('data-plantuml-queued');
-      shells.push(nextShell);
-    }
-
-    if (shells.length === 0) {
-      this.renderer.updateHydrationPhase();
-      return;
-    }
-
-    this.hydrationInProgress = true;
-    this.renderer.setPhase('hydrating');
-
-    for (const shell of shells) {
-      await this.hydrateShell(shell);
-    }
-
-    this.hydrationInProgress = false;
-
-    if (this.pendingShells.length > 0) {
-      this.scheduleHydration();
-    }
-
-    this.renderer.updateHydrationPhase();
-  }
-
   async hydrateShell(shell) {
-    if (!shell?.isConnected || shell.dataset.plantumlHydrated === 'true') {
+    if (!shell?.isConnected || this.isShellHydrated(shell)) {
       return;
     }
 
@@ -408,8 +181,7 @@ export class PlantUmlPreviewHydrator {
       }
 
       this.enhanceDiagram(shell, svgMarkup);
-      shell.dataset.plantumlHydrated = 'true';
-      shell.dataset.plantumlInstanceId = String(++this.instanceCounter);
+      this.markShellHydrated(shell);
     } catch (error) {
       console.warn('[preview] PlantUML render failed:', error);
       shell.querySelector(':scope > .plantuml-toolbar')?.remove();
@@ -455,37 +227,6 @@ export class PlantUmlPreviewHydrator {
       });
 
     this.svgInflightRequests.set(cacheKey, request);
-    return request;
-  }
-
-  async fetchSource(filePath) {
-    const target = String(filePath ?? '').trim();
-    if (!target) {
-      throw new Error('Missing PlantUML file path');
-    }
-
-    if (this.fileInflightRequests.has(target)) {
-      return this.fileInflightRequests.get(target);
-    }
-
-    const request = fetch(resolveApiUrl(`/file?path=${encodeURIComponent(target)}`), {
-      headers: {
-        Accept: 'application/json',
-      },
-    })
-      .then(async (response) => {
-        const data = await response.json().catch(() => null);
-        if (!response.ok || typeof data?.content !== 'string') {
-          throw new Error(data?.error || `Failed to load ${target}`);
-        }
-
-        return data.content;
-      })
-      .finally(() => {
-        this.fileInflightRequests.delete(target);
-      });
-
-    this.fileInflightRequests.set(target, request);
     return request;
   }
 

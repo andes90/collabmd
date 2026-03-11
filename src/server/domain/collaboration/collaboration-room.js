@@ -124,39 +124,40 @@ export class CollaborationRoom {
 
     if (!this.hydratePromise) {
       this.hydratePromise = (async () => {
-        try {
-          if (this.documentStore?.hasPersistence()) {
-            const snapshot = await this.documentStore.readSnapshot();
-            if (snapshot) {
-              Y.applyUpdate(this.doc, snapshot, 'hydrate');
-              return;
-            }
-
-            const [content, commentThreads] = await Promise.all([
-              this.documentStore.readContent(),
-              this.documentStore.readCommentThreads(),
-            ]);
-            if (content !== null || commentThreads.length > 0) {
-              const ytext = this.doc.getText('codemirror');
-              const comments = this.doc.getArray('comments');
-              this.doc.transact(() => {
-                if (content !== null) {
-                  ytext.insert(0, content);
-                }
-                populateCommentThreads(comments, commentThreads);
-              }, 'hydrate');
-
-              void this.documentStore.writeSnapshot(Y.encodeStateAsUpdate(this.doc)).catch((error) => {
-                console.error(`[room:${this.name}] Failed to prime collaboration snapshot: ${error.message}`);
-              });
-            }
+        if (this.documentStore?.hasPersistence()) {
+          const snapshot = await this.documentStore.readSnapshot();
+          if (snapshot) {
+            Y.applyUpdate(this.doc, snapshot, 'hydrate');
+            this.hydrated = true;
+            return;
           }
-        } catch (error) {
-          console.error(`[room:${this.name}] Failed to hydrate from disk: ${error.message}`);
-        } finally {
-          this.hydrated = true;
+
+          const [content, commentThreads] = await Promise.all([
+            this.documentStore.readContent(),
+            this.documentStore.readCommentThreads(),
+          ]);
+          if (content !== null || commentThreads.length > 0) {
+            const ytext = this.doc.getText('codemirror');
+            const comments = this.doc.getArray('comments');
+            this.doc.transact(() => {
+              if (content !== null) {
+                ytext.insert(0, content);
+              }
+              populateCommentThreads(comments, commentThreads);
+            }, 'hydrate');
+
+            void this.documentStore.writeSnapshot(Y.encodeStateAsUpdate(this.doc)).catch((error) => {
+              console.error(`[room:${this.name}] Failed to prime collaboration snapshot: ${error.message}`);
+            });
+          }
         }
-      })();
+
+        this.hydrated = true;
+      })().catch((error) => {
+        this.hydratePromise = null;
+        console.error(`[room:${this.name}] Failed to hydrate from disk: ${error.message}`);
+        throw error;
+      });
     }
 
     await this.hydratePromise;
@@ -277,10 +278,17 @@ export class CollaborationRoom {
   markDeleted() {
     this.deleted = true;
     this.persistence.cancelAll();
+    if (this.clients.size === 0) {
+      this.finalizeIfIdle();
+    }
   }
 
   unmarkDeleted() {
     this.deleted = false;
+  }
+
+  isDeleted() {
+    return this.deleted;
   }
 
   getInitialSyncMessage() {

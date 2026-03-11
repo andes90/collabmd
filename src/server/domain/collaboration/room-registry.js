@@ -9,11 +9,14 @@ export class RoomRegistry {
   }
 
   getOrCreate(name) {
-    if (!this.rooms.has(name)) {
+    const existingRoom = this.rooms.get(name);
+    if (!existingRoom || existingRoom.isDeleted?.()) {
       const room = this.createRoom({
         name,
         onEmpty: (roomName) => {
-          this.rooms.delete(roomName);
+          if (this.rooms.get(roomName) === room) {
+            this.rooms.delete(roomName);
+          }
         },
       });
 
@@ -41,6 +44,10 @@ export class RoomRegistry {
     room.rename?.(newName);
     this.rooms.set(newName, room);
     return true;
+  }
+
+  delete(name) {
+    return this.rooms.delete(name);
   }
 
   async reset() {

@@ -101,6 +101,7 @@ export function createVaultApiCommandHandler({
           return true;
         }
 
+        roomRegistry?.delete?.(filePath);
         backlinkIndex?.onFileDeleted(filePath);
         jsonResponse(req, res, 200, { ok: true });
       } catch (error) {

@@ -1,34 +1,38 @@
 import { clamp } from '../domain/vault-utils.js';
-import { resolveApiUrl } from '../domain/runtime-paths.js';
+import { DiagramPreviewHydrator } from './diagram-preview-hydrator.js';
 import {
-  cancelIdleRender,
   createMermaidPlaceholderCard,
   createMermaidPlaceholderCardWithMessage,
   easeOutCubic,
   getFrameViewportSize,
-  IDLE_RENDER_TIMEOUT_MS,
-  isNearViewport,
   MERMAID_BATCH_SIZE,
   MERMAID_ZOOM,
   normalizeMermaidSvg,
-  requestIdleRender,
-  shouldPreserveHydratedDiagram,
-  syncAttribute,
 } from './preview-diagram-utils.js';
 
-export class MermaidPreviewHydrator {
+export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
   constructor(renderer) {
+    super(renderer, {
+      batchSize: MERMAID_BATCH_SIZE,
+      datasetKeys: {
+        hydrated: 'mermaidHydrated',
+        instanceId: 'mermaidInstanceId',
+        key: 'mermaidKey',
+        label: 'mermaidLabel',
+        queued: 'mermaidQueued',
+        sourceHash: 'mermaidSourceHash',
+        sourceLine: 'sourceLine',
+        sourceLineEnd: 'sourceLineEnd',
+        target: 'mermaidTarget',
+      },
+      filePathLabel: 'Mermaid',
+      shellClassName: 'mermaid-shell',
+      sourceClassName: 'mermaid-source',
+    });
     this.renderer = renderer;
     this.currentTheme = document.documentElement?.dataset.theme === 'light' ? 'light' : 'dark';
     this.loader = null;
     this.runtime = null;
-    this.observer = null;
-    this.idleId = null;
-    this.pendingShells = [];
-    this.hydrationInProgress = false;
-    this.instanceCounter = 0;
-    this.preservedShells = new Map();
-    this.fileInflightRequests = new Map();
   }
 
   applyTheme(theme) {
@@ -93,264 +97,22 @@ export class MermaidPreviewHydrator {
     return this.loader;
   }
 
-  destroy() {
-    this.cancelHydration();
-    this.preservedShells.clear();
-  }
-
-  cancelHydration() {
-    if (this.observer) {
-      this.observer.disconnect();
-      this.observer = null;
-    }
-
-    cancelIdleRender(this.idleId);
-    this.idleId = null;
-    this.pendingShells = [];
-    this.hydrationInProgress = false;
-  }
-
-  cancelPendingIdleWork() {
-    cancelIdleRender(this.idleId);
-    this.idleId = null;
-  }
-
-  clearPreservedShells() {
-    this.preservedShells.clear();
-  }
-
-  hasPendingWork() {
-    return this.hydrationInProgress || this.pendingShells.length > 0;
-  }
-
-  preserveHydratedShellsForCommit() {
-    this.preservedShells.clear();
-    const previewElement = this.renderer.previewElement;
-    if (!previewElement) {
-      return;
-    }
-
-    Array.from(previewElement.querySelectorAll('.mermaid-shell[data-mermaid-hydrated="true"][data-mermaid-key]')).forEach((shell) => {
-      const key = shell.dataset.mermaidKey;
-      const source = shell.querySelector('.mermaid-source')?.textContent ?? '';
-      const target = shell.dataset.mermaidTarget ?? '';
-      if (!key || (!source && !target)) {
-        return;
-      }
-
-      if (shell.isConnected) {
-        shell.remove();
-      }
-
-      this.preservedShells.set(key, {
-        key,
-        shell,
-        source,
-        target,
-      });
-    });
-  }
-
-  reconcileHydratedShells() {
-    const previewElement = this.renderer.previewElement;
-    if (!previewElement || this.preservedShells.size === 0) {
-      this.preservedShells.clear();
-      return;
-    }
-
-    let restoredMaximizedShell = false;
-    Array.from(previewElement.querySelectorAll('.mermaid-shell[data-mermaid-key]')).forEach((nextShell) => {
-      const key = nextShell.dataset.mermaidKey;
-      const preservedEntry = key ? this.preservedShells.get(key) : null;
-      if (!preservedEntry) {
-        return;
-      }
-
-      const nextSource = nextShell.querySelector('.mermaid-source')?.textContent ?? '';
-      const nextTarget = nextShell.dataset.mermaidTarget ?? '';
-      if (!shouldPreserveHydratedDiagram({
-        nextSource,
-        nextTarget,
-        preservedSource: preservedEntry.source,
-        preservedTarget: preservedEntry.target,
-      })) {
-        return;
-      }
-
-      this.syncPreservedShell(preservedEntry.shell, nextShell);
-      nextShell.replaceWith(preservedEntry.shell);
-      restoredMaximizedShell = restoredMaximizedShell || preservedEntry.shell.classList.contains('is-maximized');
-      this.preservedShells.delete(key);
-    });
-
-    this.preservedShells.clear();
+  handleReconcile({ restoredMaximizedShell }) {
     if (restoredMaximizedShell) {
       document.body.classList.add('mermaid-maximized-open');
     }
   }
 
-  syncPreservedShell(preservedShell, nextShell) {
-    syncAttribute(preservedShell, nextShell, 'data-source-line');
-    syncAttribute(preservedShell, nextShell, 'data-source-line-end');
-    syncAttribute(preservedShell, nextShell, 'data-mermaid-key');
-    syncAttribute(preservedShell, nextShell, 'data-mermaid-target');
-    syncAttribute(preservedShell, nextShell, 'data-mermaid-label');
-    syncAttribute(preservedShell, nextShell, 'data-mermaid-source-hash');
-
-    preservedShell.classList.add('mermaid-shell');
-    preservedShell.dataset.mermaidHydrated = 'true';
-    preservedShell.removeAttribute('data-mermaid-queued');
-
-    const nextSourceNode = nextShell.querySelector('.mermaid-source');
-    let preservedSourceNode = preservedShell.querySelector('.mermaid-source');
-
-    if (!preservedSourceNode && nextSourceNode) {
-      preservedSourceNode = nextSourceNode.cloneNode(true);
-      preservedShell.prepend(preservedSourceNode);
-    }
-
-    if (preservedSourceNode && nextSourceNode) {
-      const nextSource = nextSourceNode.textContent ?? '';
-      if (nextSource || !nextShell.dataset.mermaidTarget) {
-        preservedSourceNode.textContent = nextSource;
-      }
-      preservedSourceNode.hidden = true;
-    }
+  async prepareHydrationBatch() {
+    return this.ensureMermaid();
   }
 
-  setupHydration(renderVersion) {
-    const previewElement = this.renderer.previewElement;
-    const previewContainer = this.renderer.previewContainer;
-    const shells = Array.from(previewElement.querySelectorAll('.mermaid-shell'));
-    if (shells.length === 0) {
-      return 0;
-    }
-
-    this.observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) {
-          return;
-        }
-
-        this.enqueueShell(entry.target);
-      });
-    }, {
-      root: previewContainer,
-      rootMargin: this.renderer.isLargeDocument ? '180px 0px' : '420px 0px',
-    });
-
-    shells.forEach((shell) => this.observer.observe(shell));
-
-    requestAnimationFrame(() => {
-      if (renderVersion !== this.renderer.activeRenderVersion) {
-        return;
-      }
-
-      this.hydrateVisibleShells();
-      this.renderer.updateHydrationPhase();
-    });
-
-    return shells.length;
-  }
-
-  hydrateVisibleShells() {
-    const previewElement = this.renderer.previewElement;
-    const previewContainer = this.renderer.previewContainer;
-    if (this.renderer.hydrationPaused || !previewElement || !previewContainer) {
-      return;
-    }
-
-    const margin = this.renderer.isLargeDocument ? 180 : 420;
-    Array.from(previewElement.querySelectorAll('.mermaid-shell')).forEach((shell) => {
-      if (isNearViewport(shell, previewContainer, margin)) {
-        this.enqueueShell(shell, { prioritize: true });
-      }
-    });
-  }
-
-  enqueueShell(shell, { prioritize = false } = {}) {
-    if (!shell?.isConnected || shell.dataset.mermaidHydrated === 'true' || shell.dataset.mermaidQueued === 'true') {
-      return;
-    }
-
-    shell.dataset.mermaidQueued = 'true';
-    if (prioritize) {
-      this.pendingShells.unshift(shell);
-    } else {
-      this.pendingShells.push(shell);
-    }
-
-    if (this.renderer.hydrationPaused) {
-      return;
-    }
-
-    this.renderer.updateHydrationPhase();
-    this.scheduleHydration();
-  }
-
-  scheduleHydration() {
-    if (this.renderer.hydrationPaused || this.hydrationInProgress || this.idleId !== null) {
-      return;
-    }
-
-    this.idleId = requestIdleRender(() => {
-      this.idleId = null;
-      void this.flushHydrationQueue();
-    }, IDLE_RENDER_TIMEOUT_MS);
-  }
-
-  async flushHydrationQueue() {
-    if (this.renderer.hydrationPaused || this.hydrationInProgress) {
-      return;
-    }
-
-    const shells = [];
-    while (this.pendingShells.length > 0 && shells.length < MERMAID_BATCH_SIZE) {
-      const nextShell = this.pendingShells.shift();
-      if (!nextShell?.isConnected || nextShell.dataset.mermaidHydrated === 'true') {
-        continue;
-      }
-
-      nextShell.removeAttribute('data-mermaid-queued');
-      shells.push(nextShell);
-    }
-
-    if (shells.length === 0) {
-      this.renderer.updateHydrationPhase();
-      return;
-    }
-
-    this.hydrationInProgress = true;
-    this.renderer.setPhase('hydrating');
-
-    let mermaid = null;
-    try {
-      mermaid = await this.ensureMermaid();
-    } catch (error) {
-      console.warn('[preview] Mermaid runtime failed to load:', error);
-      shells.forEach((shell) => {
-        shell.removeAttribute('data-mermaid-queued');
-      });
-      this.hydrationInProgress = false;
-      this.renderer.updateHydrationPhase();
-      return;
-    }
-
-    for (const shell of shells) {
-      await this.hydrateShell(shell, mermaid);
-    }
-
-    this.hydrationInProgress = false;
-
-    if (this.pendingShells.length > 0) {
-      this.scheduleHydration();
-    }
-
-    this.renderer.updateHydrationPhase();
+  handlePrepareHydrationBatchError(_shells, error) {
+    console.warn('[preview] Mermaid runtime failed to load:', error);
   }
 
   async hydrateShell(shell, mermaid) {
-    if (!mermaid || !shell?.isConnected || shell.dataset.mermaidHydrated === 'true') {
+    if (!mermaid || !shell?.isConnected || this.isShellHydrated(shell)) {
       return;
     }
 
@@ -398,8 +160,7 @@ export class MermaidPreviewHydrator {
       }
 
       this.enhanceDiagram(shell, diagram);
-      shell.dataset.mermaidHydrated = 'true';
-      shell.dataset.mermaidInstanceId = String(++this.instanceCounter);
+      this.markShellHydrated(shell);
     } catch (error) {
       console.warn('[preview] Mermaid render failed:', error);
       shell.querySelector(':scope > .mermaid-toolbar')?.remove();
@@ -435,37 +196,6 @@ export class MermaidPreviewHydrator {
       }
       this.enqueueShell(shell, { prioritize: true });
     });
-  }
-
-  async fetchSource(filePath) {
-    const target = String(filePath ?? '').trim();
-    if (!target) {
-      throw new Error('Missing Mermaid file path');
-    }
-
-    if (this.fileInflightRequests.has(target)) {
-      return this.fileInflightRequests.get(target);
-    }
-
-    const request = fetch(resolveApiUrl(`/file?path=${encodeURIComponent(target)}`), {
-      headers: {
-        Accept: 'application/json',
-      },
-    })
-      .then(async (response) => {
-        const data = await response.json().catch(() => null);
-        if (!response.ok || typeof data?.content !== 'string') {
-          throw new Error(data?.error || `Failed to load ${target}`);
-        }
-
-        return data.content;
-      })
-      .finally(() => {
-        this.fileInflightRequests.delete(target);
-      });
-
-    this.fileInflightRequests.set(target, request);
-    return request;
   }
 
   enhanceDiagram(shell, renderedDiagram) {

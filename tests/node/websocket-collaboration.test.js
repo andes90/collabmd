@@ -310,6 +310,47 @@ test('Deleting an active room does not recreate file on disconnect', async (t) =
   assert.equal(await fileExists(join(app.vaultDir, 'test.md')), false);
 });
 
+test('Recreating a deleted file does not reuse the stale deleted room state', async (t) => {
+  const app = await startTestServer();
+  t.after(() => app.close());
+
+  const filePath = 'test.md';
+  const ws1 = new WebSocket(app.wsUrl(filePath));
+  let ws2 = null;
+  t.after(async () => {
+    ws1.close();
+    ws2?.close();
+    await Promise.allSettled([waitForClose(ws1), ws2 ? waitForClose(ws2) : Promise.resolve()]);
+  });
+
+  await waitForOpen(ws1);
+  const originalDoc = new Y.Doc();
+  await syncClientDocWithRoom(ws1, originalDoc);
+  assert.match(originalDoc.getText('codemirror').toString(), /Hello from test vault/);
+
+  const deleteResponse = await fetch(`${app.baseUrl}/api/file?path=${encodeURIComponent(filePath)}`, {
+    method: 'DELETE',
+  });
+  assert.equal(deleteResponse.status, 200);
+
+  const recreateResponse = await fetch(`${app.baseUrl}/api/file`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      content: '# Recreated\n\nFresh file.\n',
+      path: filePath,
+    }),
+  });
+  assert.equal(recreateResponse.status, 201);
+
+  ws2 = new WebSocket(app.wsUrl(filePath));
+  await waitForOpen(ws2);
+  const recreatedDoc = new Y.Doc();
+  await syncClientDocWithRoom(ws2, recreatedDoc);
+
+  assert.equal(recreatedDoc.getText('codemirror').toString(), '# Recreated\n\nFresh file.\n');
+});
+
 test('WebSocket collaboration persists excalidraw room content to .excalidraw files', async (t) => {
   const app = await startTestServer();
   t.after(() => app.close());
