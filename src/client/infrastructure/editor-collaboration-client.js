@@ -31,6 +31,23 @@ export class EditorCollaborationClient {
     this.resolveInitialSync = null;
   }
 
+  normalizeViewport(viewport) {
+    if (!viewport || typeof viewport !== 'object') {
+      return null;
+    }
+
+    const topLine = Number(viewport.topLine);
+    const viewportRatio = Number(viewport.viewportRatio);
+    if (!Number.isFinite(topLine) || topLine < 1) {
+      return null;
+    }
+
+    return {
+      topLine: Math.max(1, Math.round(topLine)),
+      viewportRatio: Number.isFinite(viewportRatio) ? Math.min(Math.max(viewportRatio, 0), 1) : 0.35,
+    };
+  }
+
   async initialize(filePath) {
     this.wsBaseUrl = resolveWsBaseUrl();
     this.ydoc = new Y.Doc();
@@ -145,6 +162,25 @@ export class EditorCollaborationClient {
     return resolveCursor(awarenessState?.cursor);
   }
 
+  getUserViewport(clientId) {
+    if (!this.awareness) {
+      return null;
+    }
+
+    const awarenessState = this.awareness.getStates().get(clientId);
+    return this.normalizeViewport(awarenessState?.viewport);
+  }
+
+  setLocalViewport(viewport) {
+    if (!this.awareness) {
+      return null;
+    }
+
+    const nextViewport = this.normalizeViewport(viewport);
+    this.awareness.setLocalStateField('viewport', nextViewport);
+    return nextViewport;
+  }
+
   collectUsers(resolveCursor = () => null) {
     if (!this.awareness) {
       return [];
@@ -163,6 +199,7 @@ export class EditorCollaborationClient {
         clientId,
         hasCursor: Boolean(cursor),
         isLocal: clientId === this.awareness.clientID,
+        viewport: this.normalizeViewport(state.viewport),
       });
     });
 

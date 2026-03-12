@@ -100,6 +100,28 @@ export class ExcalidrawEmbedController {
     this.maximizedRoot = null;
   }
 
+  async setFollowedUser(filePath, peerId = null) {
+    if (!filePath) {
+      return false;
+    }
+
+    const entry = this._findEntryByFilePath(filePath);
+    if (!entry) {
+      return false;
+    }
+
+    if (!entry.wrapper) {
+      await this._hydrateEntry(entry);
+    }
+
+    this._postMessageToEntry(entry, {
+      source: 'collabmd-host',
+      type: 'follow-user',
+      peerId: peerId || null,
+    });
+    return true;
+  }
+
   detachForCommit() {
     this._disconnectPlaceholderObserver();
     cancelIdleRender(this.hydrationIdleId);
@@ -454,6 +476,20 @@ export class ExcalidrawEmbedController {
 
     for (const entry of this.embedEntries.values()) {
       if (entry.iframe?.contentWindow === contentWindow) {
+        return entry;
+      }
+    }
+
+    return null;
+  }
+
+  _findEntryByFilePath(filePath) {
+    if (!filePath) {
+      return null;
+    }
+
+    for (const entry of this.embedEntries.values()) {
+      if (entry.filePath === filePath) {
         return entry;
       }
     }

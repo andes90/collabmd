@@ -120,6 +120,7 @@ export class EditorViewAdapter {
     lineWrappingEnabled = true,
     onDocChanged = null,
     onSelectionChanged = null,
+    onViewportChanged = null,
   }) {
     this.editorContainer = editorContainer;
     this.getFileList = getFileList ?? (() => []);
@@ -128,10 +129,22 @@ export class EditorViewAdapter {
     this.lineWrappingEnabled = lineWrappingEnabled;
     this.onDocChanged = onDocChanged;
     this.onSelectionChanged = onSelectionChanged;
+    this.onViewportChanged = onViewportChanged;
     this.editorView = null;
     this.themeCompartment = new Compartment();
     this.syntaxThemeCompartment = new Compartment();
     this.lineWrappingCompartment = new Compartment();
+    this.viewportFrame = 0;
+    this.handleScroll = () => {
+      if (this.viewportFrame) {
+        return;
+      }
+
+      this.viewportFrame = requestAnimationFrame(() => {
+        this.viewportFrame = 0;
+        this.emitViewportChange();
+      });
+    };
   }
 
   initialize({ awareness, filePath, undoManager, ytext }) {
@@ -197,11 +210,18 @@ export class EditorViewAdapter {
       }),
     });
 
+    this.editorView.scrollDOM.addEventListener('scroll', this.handleScroll, { passive: true });
     this.updateCursorInfo(this.editorView.state);
     this.onSelectionChanged?.(this.editorView.state);
+    this.emitViewportChange();
   }
 
   destroy() {
+    if (this.viewportFrame) {
+      cancelAnimationFrame(this.viewportFrame);
+      this.viewportFrame = 0;
+    }
+    this.editorView?.scrollDOM?.removeEventListener('scroll', this.handleScroll);
     this.editorView?.destroy();
     this.editorView = null;
 
@@ -261,6 +281,13 @@ export class EditorViewAdapter {
 
   requestMeasure() {
     this.editorView?.requestMeasure();
+  }
+
+  getViewportState(viewportRatio = 0.35) {
+    return {
+      topLine: this.getTopVisibleLineNumber(viewportRatio),
+      viewportRatio,
+    };
   }
 
   getTopVisibleLineNumber(viewportRatio = 0) {
@@ -426,5 +453,9 @@ export class EditorViewAdapter {
     const line = state.doc.lineAt(position);
     const column = position - line.from + 1;
     this.lineInfoElement.textContent = `Ln ${line.number}, Col ${column}`;
+  }
+
+  emitViewportChange() {
+    this.onViewportChanged?.(this.getViewportState());
   }
 }

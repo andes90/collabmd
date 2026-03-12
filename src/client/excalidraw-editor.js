@@ -4,6 +4,7 @@ import { CaptureUpdateAction, Excalidraw } from '@excalidraw/excalidraw';
 import '@excalidraw/excalidraw/index.css';
 
 import {
+  findCollaboratorByPeerId,
   mergeAwarenessUserPatch,
   resolveLocalAwarenessUser,
 } from './domain/excalidraw-collaboration.js';
@@ -35,6 +36,13 @@ let suppressOnChange = false;
 let pendingRemoteSceneJson = '';
 let pendingCollaborators = null;
 let pendingSuppressionReleases = 0;
+let activeCollaborators = new Map();
+let followedSocketId = null;
+let pendingHostFollowPeerId = null;
+let suppressViewportBroadcast = false;
+let pendingViewportSuppressionReleases = 0;
+let lastAppliedFollowViewportSignature = '';
+let apiCleanupCallbacks = [];
 const roomClient = new ExcalidrawRoomClient({
   filePath,
   onCollaboratorsChange: (collaborators) => {
@@ -172,15 +180,24 @@ if (isTestMode) {
 }
 
 function applyCollaborators(collaborators) {
+  activeCollaborators = collaborators instanceof Map ? collaborators : new Map();
+
   if (!excalidrawAPI) {
-    pendingCollaborators = collaborators;
+    pendingCollaborators = activeCollaborators;
     return;
   }
 
   excalidrawAPI.updateScene({
-    collaborators,
+    collaborators: activeCollaborators,
     captureUpdate: CaptureUpdateAction.NEVER,
   });
+
+  if (pendingHostFollowPeerId) {
+    applyHostFollowRequest(pendingHostFollowPeerId);
+    return;
+  }
+
+  applyFollowedViewport(activeCollaborators);
 }
 
 function applySceneFromJson(rawJson) {
@@ -210,6 +227,18 @@ function releaseOnChangeSuppressionAfterPaint({ trackedSharedSnapshot = false } 
       }
       if (pendingSuppressionReleases === 0) {
         suppressOnChange = false;
+      }
+    });
+  });
+}
+
+function releaseViewportBroadcastSuppressionAfterPaint() {
+  pendingViewportSuppressionReleases += 1;
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      pendingViewportSuppressionReleases = Math.max(0, pendingViewportSuppressionReleases - 1);
+      if (pendingViewportSuppressionReleases === 0) {
+        suppressViewportBroadcast = false;
       }
     });
   });
@@ -247,9 +276,106 @@ function postToParent(type, payload = {}) {
   window.parent.postMessage({ source: 'excalidraw-editor', type, ...payload }, parentOrigin);
 }
 
+function syncLocalViewportToRoom() {
+  if (!collabReady || !excalidrawAPI || suppressViewportBroadcast) {
+    return;
+  }
+
+  const appState = excalidrawAPI.getAppState();
+  roomClient.scheduleLocalViewportAwareness({
+    scrollX: appState.scrollX,
+    scrollY: appState.scrollY,
+    zoom: appState.zoom?.value,
+  });
+}
+
+function setFollowedSocket(nextSocketId, { force = false } = {}) {
+  const normalizedSocketId = nextSocketId ? String(nextSocketId) : null;
+  const didChange = followedSocketId !== normalizedSocketId;
+  followedSocketId = normalizedSocketId;
+  if (didChange) {
+    lastAppliedFollowViewportSignature = '';
+  }
+
+  if (followedSocketId) {
+    applyFollowedViewport(activeCollaborators, { force: force || didChange });
+  }
+}
+
+function applyFollowedViewport(collaborators = activeCollaborators, { force = false } = {}) {
+  if (!excalidrawAPI || !followedSocketId) {
+    return;
+  }
+
+  const collaborator = collaborators?.get?.(String(followedSocketId));
+  const viewport = collaborator?.viewport;
+  if (!viewport) {
+    return;
+  }
+
+  const nextSignature = `${followedSocketId}:${viewport.scrollX}:${viewport.scrollY}:${viewport.zoom}`;
+  if (!force && nextSignature === lastAppliedFollowViewportSignature) {
+    return;
+  }
+
+  lastAppliedFollowViewportSignature = nextSignature;
+  suppressViewportBroadcast = true;
+  excalidrawAPI.updateScene({
+    appState: {
+      scrollX: viewport.scrollX,
+      scrollY: viewport.scrollY,
+      zoom: { value: viewport.zoom },
+    },
+    captureUpdate: CaptureUpdateAction.NEVER,
+  });
+  releaseViewportBroadcastSuppressionAfterPaint();
+}
+
+function applyHostFollowRequest(peerId) {
+  pendingHostFollowPeerId = peerId || null;
+  if (!excalidrawAPI) {
+    return;
+  }
+
+  if (!peerId) {
+    excalidrawAPI.updateScene({
+      appState: { userToFollow: null },
+      captureUpdate: CaptureUpdateAction.NEVER,
+    });
+    setFollowedSocket(null, { force: true });
+    pendingHostFollowPeerId = null;
+    return;
+  }
+
+  const collaborator = findCollaboratorByPeerId(activeCollaborators, peerId);
+  if (!collaborator?.socketId) {
+    return;
+  }
+
+  excalidrawAPI.updateScene({
+    appState: {
+      userToFollow: {
+        socketId: collaborator.socketId,
+        username: collaborator.username || '',
+      },
+    },
+    captureUpdate: CaptureUpdateAction.NEVER,
+  });
+  setFollowedSocket(collaborator.socketId, { force: true });
+  pendingHostFollowPeerId = null;
+}
+
 function disconnectRealtimeRoom() {
   collabReady = false;
   pendingCollaborators = null;
+  activeCollaborators = new Map();
+  followedSocketId = null;
+  pendingHostFollowPeerId = null;
+  suppressViewportBroadcast = false;
+  pendingViewportSuppressionReleases = 0;
+  lastAppliedFollowViewportSignature = '';
+  apiCleanupCallbacks.forEach((cleanup) => cleanup());
+  apiCleanupCallbacks = [];
   roomClient.disconnect();
 }
 
@@ -315,6 +441,11 @@ window.addEventListener('message', (event) => {
 
   if (message.type === 'set-user') {
     applyLocalUserPatch(message.user);
+    return;
+  }
+
+  if (message.type === 'follow-user') {
+    applyHostFollowRequest(message.peerId || null);
   }
 });
 
@@ -339,6 +470,8 @@ async function init() {
 
     const excalidrawProps = {
       excalidrawAPI: (api) => {
+        apiCleanupCallbacks.forEach((cleanup) => cleanup());
+        apiCleanupCallbacks = [];
         excalidrawAPI = api;
 
         const sceneJson = pendingRemoteSceneJson || roomClient.getLastSceneJson();
@@ -352,8 +485,24 @@ async function init() {
           });
           pendingCollaborators = null;
         }
+        apiCleanupCallbacks.push(excalidrawAPI.onScrollChange(() => {
+          syncLocalViewportToRoom();
+          applyFollowedViewport();
+        }));
+        apiCleanupCallbacks.push(excalidrawAPI.onUserFollow((payload) => {
+          if (payload.action === 'FOLLOW') {
+            setFollowedSocket(payload.userToFollow?.socketId, { force: true });
+            return;
+          }
+
+          setFollowedSocket(null, { force: true });
+        }));
         collabReady = true;
+        syncLocalViewportToRoom();
         onRoomTextUpdate();
+        if (pendingHostFollowPeerId) {
+          applyHostFollowRequest(pendingHostFollowPeerId);
+        }
 
         postToParent('ready');
       },

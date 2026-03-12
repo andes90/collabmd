@@ -79,6 +79,25 @@ export function mergeAwarenessUserPatch({
   };
 }
 
+export function normalizeCollaboratorViewport(viewport) {
+  if (!viewport || typeof viewport !== 'object') {
+    return undefined;
+  }
+
+  const scrollX = Number(viewport.scrollX);
+  const scrollY = Number(viewport.scrollY);
+  const zoom = Number(viewport.zoom);
+  if (!Number.isFinite(scrollX) || !Number.isFinite(scrollY) || !Number.isFinite(zoom) || zoom <= 0) {
+    return undefined;
+  }
+
+  return {
+    scrollX,
+    scrollY,
+    zoom,
+  };
+}
+
 export function buildCollaboratorsMap(awareness) {
   const collaborators = new Map();
   if (!awareness) {
@@ -98,6 +117,7 @@ export function buildCollaboratorsMap(awareness) {
         tool: state.pointer.tool === 'laser' ? 'laser' : 'pointer',
       }
       : undefined;
+    const viewport = normalizeCollaboratorViewport(state.viewport);
 
     collaborators.set(String(clientId), {
       button: state.pointerButton === 'down' ? 'down' : 'up',
@@ -108,6 +128,7 @@ export function buildCollaboratorsMap(awareness) {
       id: user.peerId || String(clientId),
       isCurrentUser: clientId === awareness.clientID,
       pointer,
+      viewport,
       selectedElementIds: state.selectedElementIds || undefined,
       socketId: String(clientId),
       username: user.name || 'User',
@@ -115,4 +136,18 @@ export function buildCollaboratorsMap(awareness) {
   });
 
   return collaborators;
+}
+
+export function findCollaboratorByPeerId(collaborators, peerId) {
+  if (!(collaborators instanceof Map) || !peerId) {
+    return null;
+  }
+
+  for (const collaborator of collaborators.values()) {
+    if (collaborator?.id === peerId) {
+      return collaborator;
+    }
+  }
+
+  return null;
 }

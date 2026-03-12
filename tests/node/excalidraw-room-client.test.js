@@ -301,10 +301,13 @@ test('ExcalidrawRoomClient updates awareness fields for local user, pointer, and
   client.setLocalUser({ name: 'Updated Name' });
   client.syncLocalSelectionAwareness({ selectedElementIds: { shapeA: true } });
   client.scheduleLocalPointerAwareness({ button: 'down', pointer: { tool: 'laser', x: 10, y: 20 } });
+  client.scheduleLocalViewportAwareness({ scrollX: 12, scrollY: 34, zoom: 1.5 });
   rafCallbacks[0]();
+  rafCallbacks[1]();
 
   assert.equal(provider.awareness.localState.user.name, 'Updated Name');
   assert.deepEqual(provider.awareness.localState.selectedElementIds, { shapeA: true });
   assert.deepEqual(provider.awareness.localState.pointer, { tool: 'laser', x: 10, y: 20 });
   assert.equal(provider.awareness.localState.pointerButton, 'down');
+  assert.deepEqual(provider.awareness.localState.viewport, { scrollX: 12, scrollY: 34, zoom: 1.5 });
 });

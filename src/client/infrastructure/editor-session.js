@@ -41,6 +41,9 @@ export class EditorSession {
       onDocChanged: () => {
         this.emitContentChange();
       },
+      onViewportChanged: (viewport) => {
+        this.collaborationClient.setLocalViewport(viewport);
+      },
     });
     this.commentThreadStore = new CommentThreadStore({
       getDoc: () => this.collaborationClient.ydoc,
@@ -160,8 +163,21 @@ export class EditorSession {
     );
   }
 
+  getUserViewport(clientId) {
+    return this.collaborationClient.getUserViewport(clientId);
+  }
+
   scrollToPosition(position, alignment = 'center') {
     return this.viewAdapter.scrollToPosition(position, alignment);
+  }
+
+  scrollToUserViewport(clientId) {
+    const viewport = this.getUserViewport(clientId);
+    if (!viewport) {
+      return false;
+    }
+
+    return this.scrollToLine(viewport.topLine, viewport.viewportRatio);
   }
 
   scrollToUserCursor(clientId, alignment = 'center') {

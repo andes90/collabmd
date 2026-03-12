@@ -139,6 +139,9 @@ export const presenceFeature = {
   stopFollowingUser(showToast = true) {
     if (!this.followedUserClientId) return;
     const name = this.globalUsers.find((u) => u.clientId === this.followedUserClientId)?.name ?? 'collaborator';
+    if (this.currentFilePath && this.isExcalidrawFile?.(this.currentFilePath)) {
+      void this.excalidrawEmbed?.setFollowedUser(this.currentFilePath, null);
+    }
     this.followedUserClientId = null;
     this.followedCursorSignature = '';
     this.renderAvatars();
@@ -163,24 +166,48 @@ export const presenceFeature = {
   },
 
   followUserCursor(user, { force = false } = {}) {
+    if (this.currentFilePath && this.isExcalidrawFile?.(this.currentFilePath)) {
+      this.followExcalidrawUser(user, { force });
+      return;
+    }
+
     const fileClientId = this.resolveFileClientId(user.peerId);
+    const liveViewport = fileClientId != null ? this.session?.getUserViewport(fileClientId) : null;
     const liveCursor = fileClientId != null ? this.session?.getUserCursor(fileClientId) : null;
     const cursorHead = liveCursor?.cursorHead ?? null;
     const cursorLine = liveCursor?.cursorLine ?? null;
     const cursorAnchor = liveCursor?.cursorAnchor ?? null;
+    const viewportTopLine = liveViewport?.topLine ?? null;
+    const viewportRatio = liveViewport?.viewportRatio ?? 0.35;
 
-    if (!user || cursorHead == null || cursorLine == null) {
+    if (!user || (viewportTopLine == null && (cursorHead == null || cursorLine == null))) {
       this.followedCursorSignature = '';
       return;
     }
 
-    const nextSig = `${user.clientId}:${cursorAnchor}:${cursorHead}`;
+    const nextSig = `${user.clientId}:${viewportTopLine ?? 'no-viewport'}:${cursorAnchor ?? 'no-anchor'}:${cursorHead ?? 'no-head'}`;
     if (!force && nextSig === this.followedCursorSignature) return;
 
-    const didScroll = (fileClientId != null && this.session?.scrollToUserCursor(fileClientId, 'center'))
-      || this.session?.scrollToPosition(cursorHead, 'center')
-      || this.session?.scrollToLine(cursorLine);
+    const didScroll = (fileClientId != null && this.session?.scrollToUserViewport(fileClientId))
+      || (fileClientId != null && this.session?.scrollToUserCursor(fileClientId, 'center'))
+      || (cursorHead != null && this.session?.scrollToPosition(cursorHead, 'center'))
+      || (cursorLine != null && this.session?.scrollToLine(cursorLine, viewportRatio));
     if (didScroll) this.followedCursorSignature = nextSig;
+  },
+
+  followExcalidrawUser(user, { force = false } = {}) {
+    if (!user?.peerId || !this.currentFilePath) {
+      this.followedCursorSignature = '';
+      return;
+    }
+
+    const nextSig = `excalidraw:${this.currentFilePath}:${user.peerId}`;
+    if (!force && nextSig === this.followedCursorSignature) {
+      return;
+    }
+
+    this.followedCursorSignature = nextSig;
+    void this.excalidrawEmbed?.setFollowedUser(this.currentFilePath, user.peerId);
   },
 
   resolveFileClientId(peerId) {

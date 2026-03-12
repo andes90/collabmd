@@ -78,6 +78,9 @@ export class ExcalidrawRoomClient {
     this.pendingSceneSyncPayload = null;
     this.pointerAwarenessFrame = 0;
     this.pendingPointerPayload = null;
+    this.viewportAwarenessFrame = 0;
+    this.pendingViewportPayload = null;
+    this.lastViewportSignature = '';
     this.lastSelectedIdsSignature = '';
     this.canWriteToRoom = false;
     this.waitingForAuthoritativeSync = false;
@@ -403,6 +406,25 @@ export class ExcalidrawRoomClient {
     this.pendingPointerPayload = null;
   }
 
+  normalizeViewportAwareness(viewport) {
+    if (!viewport || typeof viewport !== 'object') {
+      return null;
+    }
+
+    const scrollX = Number(viewport.scrollX);
+    const scrollY = Number(viewport.scrollY);
+    const zoom = Number(viewport.zoom);
+    if (!Number.isFinite(scrollX) || !Number.isFinite(scrollY) || !Number.isFinite(zoom) || zoom <= 0) {
+      return null;
+    }
+
+    return {
+      scrollX,
+      scrollY,
+      zoom,
+    };
+  }
+
   scheduleLocalPointerAwareness(payload) {
     if (!this.awareness || !payload?.pointer) {
       return;
@@ -422,6 +444,42 @@ export class ExcalidrawRoomClient {
     }
 
     this.pointerAwarenessFrame = this.requestAnimationFrameFn(() => this.flushPointerAwarenessPayload());
+  }
+
+  flushViewportAwarenessPayload() {
+    this.viewportAwarenessFrame = 0;
+
+    if (!this.awareness || !this.pendingViewportPayload) {
+      return;
+    }
+
+    this.awareness.setLocalStateField('viewport', this.pendingViewportPayload);
+    this.pendingViewportPayload = null;
+  }
+
+  scheduleLocalViewportAwareness(viewport) {
+    if (!this.awareness) {
+      return;
+    }
+
+    const normalizedViewport = this.normalizeViewportAwareness(viewport);
+    if (!normalizedViewport) {
+      return;
+    }
+
+    const signature = `${normalizedViewport.scrollX}:${normalizedViewport.scrollY}:${normalizedViewport.zoom}`;
+    if (signature === this.lastViewportSignature) {
+      return;
+    }
+
+    this.lastViewportSignature = signature;
+    this.pendingViewportPayload = normalizedViewport;
+
+    if (this.viewportAwarenessFrame) {
+      return;
+    }
+
+    this.viewportAwarenessFrame = this.requestAnimationFrameFn(() => this.flushViewportAwarenessPayload());
   }
 
   syncLocalSelectionAwareness(appState) {
@@ -631,6 +689,12 @@ export class ExcalidrawRoomClient {
     }
     this.pointerAwarenessFrame = 0;
     this.pendingPointerPayload = null;
+    if (this.viewportAwarenessFrame) {
+      this.cancelAnimationFrameFn(this.viewportAwarenessFrame);
+    }
+    this.viewportAwarenessFrame = 0;
+    this.pendingViewportPayload = null;
+    this.lastViewportSignature = '';
     this.lastSelectedIdsSignature = '';
 
     if (this.ytext) {
