@@ -23,6 +23,10 @@ export const commentsFeature = {
     this.commentUi.setThreads(threads);
   },
 
+  handleCommentEditorContentChange() {
+    this.commentUi.handleEditorContentChange();
+  },
+
   refreshCommentUiLayout() {
     this.commentUi.refreshLayout();
   },

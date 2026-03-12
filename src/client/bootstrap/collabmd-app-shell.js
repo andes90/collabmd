@@ -235,6 +235,7 @@ export class CollabMdAppShell {
       },
       onConnectionChange: (state) => this.handleConnectionChange(state),
       onContentChange: ({ isMermaid, isPlantUml }) => {
+        this.handleCommentEditorContentChange();
         this.previewRenderer.queueRender();
         if (!isMermaid && !isPlantUml) {
           this.scheduleBacklinkRefresh();

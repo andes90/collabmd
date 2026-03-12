@@ -1,14 +1,17 @@
 import {
   createComment,
   createLongMarkdownDocument,
+  dragEditorSelection,
   expect,
   openChat,
   openFile,
   replaceEditorContent,
+  setEditorSelection,
   seedStoredUserName,
   sendChatMessage,
   stubPlantUmlRender,
   test,
+  waitForCommentSelectionChip,
   waitForExcalidrawFrameHarness,
   waitForExcalidrawTestHarness,
 } from './helpers/app-fixture.js';
@@ -315,6 +318,79 @@ test('renders comment controls for text files', async ({ page }) => {
 
   await expect(page.locator('#commentSelectionBtn')).toBeVisible();
   await expect(page.locator('#commentsToggle')).toBeVisible();
+  await expect(page.locator('.comment-selection-chip')).toBeHidden();
+});
+
+test('reveals a stable inline chip only after selection commit', async ({ page }) => {
+  await openFile(page, 'README.md');
+
+  await setEditorSelection(page, 'Welcome to the test vault');
+  const chip = await waitForCommentSelectionChip(page);
+  const firstBox = await chip.boundingBox();
+
+  await setEditorSelection(page, 'Welcome to the test vault. This is the top-level readme.');
+  const updatedChip = await waitForCommentSelectionChip(page);
+  const secondBox = await updatedChip.boundingBox();
+
+  expect(firstBox?.x).toBeTruthy();
+  expect(secondBox?.x).toBeTruthy();
+  expect(Math.abs((firstBox?.x ?? 0) - (secondBox?.x ?? 0))).toBeLessThanOrEqual(1);
+
+  await setEditorSelection(page, 'Welcome to the test vault', { collapse: true });
+  await expect(page.locator('.comment-selection-chip')).toBeHidden();
+});
+
+test('focuses the comment textbox when opening the composer', async ({ page }) => {
+  await openFile(page, 'README.md');
+
+  await setEditorSelection(page, 'Welcome to the test vault');
+  await (await waitForCommentSelectionChip(page)).click();
+  await expect(page.locator('.comment-card')).toBeVisible();
+  await expect(page.locator('.comment-card-input')).toBeFocused();
+  await page.keyboard.type('inline');
+  await expect(page.locator('.comment-card-input')).toHaveValue('inline');
+  await expect(page.locator('.cm-content')).not.toContainText('inline');
+  await page.locator('.comment-card').getByRole('button', { name: 'Cancel' }).click();
+
+  await setEditorSelection(page, 'Welcome to the test vault. This is the top-level readme.', { collapse: true });
+  await page.locator('#commentSelectionBtn').click();
+  await expect(page.locator('.comment-card')).toBeVisible();
+  await expect(page.locator('.comment-card-input')).toBeFocused();
+  await page.keyboard.type('toolbar');
+  await expect(page.locator('.comment-card-input')).toHaveValue('toolbar');
+  await expect(page.locator('.cm-content')).not.toContainText('toolbar');
+});
+
+test('typing immediately after opening a multiline comment goes into the composer', async ({ page }) => {
+  await openFile(page, 'README.md');
+  await replaceEditorContent(page, createLongMarkdownDocument(20));
+
+  await setEditorSelection(page, 'Line 1 for follow testing.\nLine 2 for follow testing.\nLine 3 for follow testing.');
+  await (await waitForCommentSelectionChip(page)).click();
+  await page.keyboard.type('multiline');
+
+  await expect(page.locator('.comment-card')).toBeVisible();
+  await expect(page.locator('.comment-card-input')).toHaveValue('multiline');
+  await expect(page.locator('.cm-content')).not.toContainText('multiline');
+});
+
+test('keeps the inline chip hidden during pointer drag and hides it when scrolled out of view', async ({ page }) => {
+  await openFile(page, 'README.md');
+
+  await dragEditorSelection(page, 'Welcome to the test vault');
+  await expect(page.locator('.comment-selection-chip')).toBeHidden();
+
+  await page.mouse.up();
+  await waitForCommentSelectionChip(page);
+
+  await replaceEditorContent(page, createLongMarkdownDocument(180));
+  await setEditorSelection(page, 'Line 1 for follow testing.');
+  await waitForCommentSelectionChip(page);
+
+  await page.locator('.cm-scroller').evaluate((element) => {
+    element.scrollTo({ top: element.scrollHeight });
+  });
+  await expect(page.locator('.comment-selection-chip')).toBeHidden();
 });
 
 test('creates and syncs a line comment across collaborators', async ({ browser }) => {
@@ -349,6 +425,7 @@ test('creates a selected-text comment and surfaces it in the preview bubble card
   await createComment(page, {
     body: 'This phrase should stay visible in preview.',
     targetText: 'Welcome to the test vault',
+    useInlineChip: true,
   });
 
   await expect(page.locator('#previewContent .comment-preview-highlight')).toHaveCount(1);

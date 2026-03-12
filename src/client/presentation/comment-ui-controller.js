@@ -5,6 +5,9 @@ import {
 
 const COMMENT_CARD_OFFSET = 14;
 const COMMENT_CARD_WIDTH = 360;
+const COMMENT_SELECTION_REVEAL_DELAY_MS = 150;
+const COMMENT_SELECTION_CHIP_GAP = 12;
+const COMMENT_CONTROL_SLOT_HEIGHT = 36;
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
@@ -15,6 +18,33 @@ function sortThreads(threads = []) {
     (left.anchor?.startLine ?? 0) - (right.anchor?.startLine ?? 0)
       || left.createdAt - right.createdAt
   ));
+}
+
+function getAnchorKind(anchor) {
+  return anchor?.anchorKind || anchor?.kind || 'line';
+}
+
+function isTextSelectionAnchor(anchor) {
+  return getAnchorKind(anchor) === 'text'
+    && Number.isFinite(anchor?.startIndex)
+    && Number.isFinite(anchor?.endIndex)
+    && anchor.endIndex > anchor.startIndex;
+}
+
+function areAnchorsEqual(left, right) {
+  if (left === right) {
+    return true;
+  }
+  if (!left || !right) {
+    return false;
+  }
+
+  return getAnchorKind(left) === getAnchorKind(right)
+    && (left.startIndex ?? null) === (right.startIndex ?? null)
+    && (left.endIndex ?? null) === (right.endIndex ?? null)
+    && (left.startLine ?? null) === (right.startLine ?? null)
+    && (left.endLine ?? null) === (right.endLine ?? null)
+    && (left.anchorQuote ?? left.quote ?? '') === (right.anchorQuote ?? right.quote ?? '');
 }
 
 function formatAnchorLabel(anchor) {
@@ -194,12 +224,17 @@ export class CommentUiController {
     this.drawerOpen = false;
     this.threads = [];
     this.selectionAnchor = null;
+    this.pendingSelectionAnchor = null;
+    this.committedSelectionAnchor = null;
+    this.selectionRevealTimer = 0;
+    this.pointerSelecting = false;
     this.session = null;
     this.activeCard = null;
     this.editorLayer = null;
     this.previewLayer = null;
     this.previewHighlightLayer = null;
     this.cardRoot = null;
+    this.pendingCardFocusElement = null;
     this.layoutFrame = 0;
     this.timeFormatter = new Intl.DateTimeFormat(undefined, {
       day: 'numeric',
@@ -210,6 +245,57 @@ export class CommentUiController {
     this.handleEditorScroll = () => this.scheduleLayoutRefresh();
     this.handlePreviewScroll = () => this.scheduleLayoutRefresh();
     this.handleWindowResize = () => this.scheduleLayoutRefresh();
+    this.handleEditorPointerDown = (event) => {
+      if (event.button !== 0 || !this.supported || !this.session) {
+        return;
+      }
+      if (!event.target?.closest?.('.cm-editor') || event.target?.closest?.('.comment-editor-layer')) {
+        return;
+      }
+
+      this.pointerSelecting = true;
+      this.clearSelectionRevealTimer();
+      if (this.committedSelectionAnchor) {
+        this.committedSelectionAnchor = null;
+        this.scheduleLayoutRefresh();
+      }
+    };
+    this.handleDocumentPointerUp = () => {
+      if (!this.pointerSelecting) {
+        return;
+      }
+
+      requestAnimationFrame(() => {
+        const anchor = this.supported ? (this.session?.getCurrentSelectionCommentAnchor?.() ?? null) : null;
+        this.pointerSelecting = false;
+        this.selectionAnchor = anchor;
+        this.renderToolbar();
+        this.pendingSelectionAnchor = isTextSelectionAnchor(anchor) ? anchor : null;
+        this.clearSelectionRevealTimer();
+        this.committedSelectionAnchor = (
+          isTextSelectionAnchor(anchor) && this.activeCard?.mode !== 'create'
+        ) ? anchor : null;
+        this.scheduleLayoutRefresh();
+      });
+    };
+    this.handleEditorFocusOut = (event) => {
+      const nextTarget = event.relatedTarget;
+      if (
+        nextTarget instanceof Node
+        && (
+          this.editorContainer?.contains(nextTarget)
+          || this.cardRoot?.contains(nextTarget)
+          || this.commentSelectionButton?.contains(nextTarget)
+        )
+      ) {
+        return;
+      }
+
+      this.clearSelectionRevealTimer();
+      this.pendingSelectionAnchor = null;
+      this.committedSelectionAnchor = null;
+      this.scheduleLayoutRefresh();
+    };
     this.handleDocumentPointerDown = (event) => {
       if (!this.activeCard || !this.cardRoot) {
         return;
@@ -223,6 +309,12 @@ export class CommentUiController {
       if (event.key === 'Escape' && this.activeCard) {
         this.closeCard();
       }
+      if (event.key === 'Escape' && this.committedSelectionAnchor) {
+        this.clearSelectionRevealTimer();
+        this.pendingSelectionAnchor = null;
+        this.committedSelectionAnchor = null;
+        this.scheduleLayoutRefresh();
+      }
     };
 
     this.commentSelectionButton?.addEventListener('click', () => {
@@ -233,7 +325,11 @@ export class CommentUiController {
       this.render();
     });
     this.previewContainer?.addEventListener('scroll', this.handlePreviewScroll, { passive: true });
+    this.editorContainer?.addEventListener('pointerdown', this.handleEditorPointerDown);
+    this.editorContainer?.addEventListener('focusout', this.handleEditorFocusOut);
     window.addEventListener('resize', this.handleWindowResize);
+    document.addEventListener('pointerup', this.handleDocumentPointerUp);
+    document.addEventListener('pointercancel', this.handleDocumentPointerUp);
     document.addEventListener('pointerdown', this.handleDocumentPointerDown);
     document.addEventListener('keydown', this.handleDocumentKeyDown);
   }
@@ -245,18 +341,27 @@ export class CommentUiController {
     }
     this.attachSession(null);
     this.previewContainer?.removeEventListener('scroll', this.handlePreviewScroll);
+    this.editorContainer?.removeEventListener('pointerdown', this.handleEditorPointerDown);
+    this.editorContainer?.removeEventListener('focusout', this.handleEditorFocusOut);
     window.removeEventListener('resize', this.handleWindowResize);
+    document.removeEventListener('pointerup', this.handleDocumentPointerUp);
+    document.removeEventListener('pointercancel', this.handleDocumentPointerUp);
     document.removeEventListener('pointerdown', this.handleDocumentPointerDown);
     document.removeEventListener('keydown', this.handleDocumentKeyDown);
     this.cardRoot?.remove();
     this.editorLayer?.remove();
     this.previewLayer?.remove();
+    this.pendingCardFocusElement = null;
   }
 
   attachSession(session) {
     this.session?.getScrollContainer?.()?.removeEventListener('scroll', this.handleEditorScroll);
     this.session = session;
     this.selectionAnchor = session?.getCurrentSelectionCommentAnchor?.() ?? null;
+    this.pendingSelectionAnchor = null;
+    this.committedSelectionAnchor = null;
+    this.clearSelectionRevealTimer();
+    this.pointerSelecting = false;
     session?.getScrollContainer?.()?.addEventListener('scroll', this.handleEditorScroll, { passive: true });
     this.render();
   }
@@ -270,6 +375,10 @@ export class CommentUiController {
       this.drawerOpen = false;
       this.threads = [];
       this.selectionAnchor = null;
+      this.pendingSelectionAnchor = null;
+      this.committedSelectionAnchor = null;
+      this.clearSelectionRevealTimer();
+      this.pointerSelecting = false;
       this.activeCard = null;
     }
     if (!this.supported) {
@@ -277,14 +386,70 @@ export class CommentUiController {
       this.activeCard = null;
       this.threads = [];
       this.selectionAnchor = null;
+      this.pendingSelectionAnchor = null;
+      this.committedSelectionAnchor = null;
+      this.clearSelectionRevealTimer();
+      this.pointerSelecting = false;
     }
     this.render();
   }
 
   setSelectionAnchor(anchor) {
     this.selectionAnchor = this.supported ? anchor : null;
+    if (!this.supported || !this.selectionAnchor) {
+      this.pendingSelectionAnchor = null;
+      this.committedSelectionAnchor = null;
+      this.clearSelectionRevealTimer();
+      this.renderToolbar();
+      this.scheduleLayoutRefresh();
+      return;
+    }
+
+    if (!isTextSelectionAnchor(this.selectionAnchor)) {
+      this.pendingSelectionAnchor = null;
+      this.committedSelectionAnchor = null;
+      this.clearSelectionRevealTimer();
+      this.renderToolbar();
+      this.scheduleLayoutRefresh();
+      return;
+    }
+
+    this.pendingSelectionAnchor = this.selectionAnchor;
+    if (this.activeCard?.mode === 'create') {
+      this.clearSelectionRevealTimer();
+      this.renderToolbar();
+      this.scheduleLayoutRefresh();
+      return;
+    }
+
+    if (this.pointerSelecting) {
+      this.clearSelectionRevealTimer();
+      this.committedSelectionAnchor = null;
+      this.renderToolbar();
+      this.scheduleLayoutRefresh();
+      return;
+    }
+
+    if (areAnchorsEqual(this.committedSelectionAnchor, this.selectionAnchor)) {
+      this.renderToolbar();
+      this.scheduleLayoutRefresh();
+      return;
+    }
+
+    this.scheduleSelectionReveal(this.selectionAnchor);
     this.renderToolbar();
-    this.renderEditorLayer();
+    this.scheduleLayoutRefresh();
+  }
+
+  handleEditorContentChange() {
+    if (this.activeCard?.mode === 'create') {
+      return;
+    }
+
+    this.clearSelectionRevealTimer();
+    this.pendingSelectionAnchor = null;
+    this.committedSelectionAnchor = null;
+    this.scheduleLayoutRefresh();
   }
 
   setThreads(threads = []) {
@@ -318,9 +483,8 @@ export class CommentUiController {
   render() {
     this.renderToolbar();
     this.renderDrawer();
-    this.renderEditorLayer();
-    this.renderPreviewLayer();
     this.renderCard();
+    this.scheduleLayoutRefresh();
   }
 
   renderToolbar() {
@@ -363,6 +527,9 @@ export class CommentUiController {
       button.type = 'button';
       button.className = 'comments-drawer-item';
       button.classList.toggle('is-active', this.activeCard?.groupKey === group.key);
+      button.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+      });
       button.addEventListener('click', () => {
         this.openThreadGroup(group, {
           anchor: group.anchor,
@@ -425,6 +592,7 @@ export class CommentUiController {
     }
 
     const groups = this.getThreadGroups();
+    const occupiedTops = [];
     groups.forEach((group) => {
       const rect = this.session.getCommentAnchorClientRect?.(group.anchor);
       if (!rect) {
@@ -437,9 +605,13 @@ export class CommentUiController {
       button.className = 'comment-editor-badge';
       button.dataset.count = String(group.threads.length);
       button.textContent = group.threads.length > 1 ? String(group.threads.length) : '';
-      button.style.top = `${Math.max(relativeRect.top, 8)}px`;
+      const top = Math.max(relativeRect.top, 8);
+      button.style.top = `${top}px`;
       button.style.left = `${Math.max(containerRect.width - 36, 8)}px`;
       button.title = `${group.threads.length} comment${group.threads.length === 1 ? '' : 's'}`;
+      button.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+      });
       button.addEventListener('click', () => {
         this.openThreadGroup(group, {
           anchor: group.anchor,
@@ -448,27 +620,43 @@ export class CommentUiController {
         });
       });
       layer.appendChild(button);
+      occupiedTops.push(top);
     });
 
-    if (!this.selectionAnchor) {
+    if (!this.committedSelectionAnchor || this.activeCard?.mode === 'create') {
       return;
     }
 
-    const rect = this.session.getCommentAnchorClientRect?.(this.selectionAnchor);
-    const chipRect = this.session.getSelectionChipClientRect?.(this.selectionAnchor) ?? rect;
+    const rect = this.session.getCommentAnchorClientRect?.(this.committedSelectionAnchor);
+    const chipRect = this.session.getSelectionChipClientRect?.(this.committedSelectionAnchor) ?? rect;
     if (!chipRect) {
       return;
     }
 
     const relativeRect = toRelativeRect(chipRect, containerRect);
+    if (relativeRect.bottom < 0 || relativeRect.top > containerRect.height) {
+      return;
+    }
+
+    let chipTop = clamp(relativeRect.top, 8, Math.max(containerRect.height - COMMENT_CONTROL_SLOT_HEIGHT, 8));
+    while (occupiedTops.some((top) => Math.abs(top - chipTop) < (COMMENT_CONTROL_SLOT_HEIGHT - 4))) {
+      chipTop = clamp(
+        chipTop + COMMENT_CONTROL_SLOT_HEIGHT,
+        8,
+        Math.max(containerRect.height - COMMENT_CONTROL_SLOT_HEIGHT, 8),
+      );
+    }
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'comment-selection-chip';
     button.textContent = 'Comment';
-    button.style.top = `${Math.max(relativeRect.top - 6, 8)}px`;
-    button.style.left = `${clamp(relativeRect.right + 12, 56, containerRect.width - 120)}px`;
+    button.style.top = `${chipTop}px`;
+    button.style.right = `${COMMENT_SELECTION_CHIP_GAP}px`;
+    button.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+    });
     button.addEventListener('click', () => {
-      this.openComposerForSelection('editor');
+      this.openComposerForSelection('editor', button.getBoundingClientRect());
     });
     layer.appendChild(button);
   }
@@ -522,6 +710,9 @@ export class CommentUiController {
       bubble.style.left = `${clamp(target.bubbleRect.right - previewRect.left + 6, 6, this.previewElement.clientWidth - 34)}px`;
       bubble.style.top = `${Math.max(target.bubbleRect.top - previewRect.top, 6)}px`;
       bubble.title = `${group.threads.length} comment${group.threads.length === 1 ? '' : 's'}`;
+      bubble.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+      });
       bubble.addEventListener('click', () => {
         this.openThreadGroup(group, {
           anchor: group.anchor,
@@ -587,22 +778,23 @@ export class CommentUiController {
     return root;
   }
 
-  openComposerForSelection(origin = 'editor') {
+  openComposerForSelection(origin = 'editor', sourceRect = null) {
     const anchor = this.session?.getCurrentSelectionCommentAnchor?.();
     if (!anchor) {
       return;
     }
 
     this.selectionAnchor = anchor;
-    const sourceRect = origin === 'toolbar'
+    const nextOrigin = origin === 'editor' && sourceRect ? 'editor-chip' : origin;
+    const nextSourceRect = sourceRect ?? (origin === 'toolbar'
       ? this.commentSelectionButton?.getBoundingClientRect?.()
-      : this.session?.getCommentAnchorClientRect?.(anchor);
+      : this.session?.getCommentAnchorClientRect?.(anchor));
     this.activeCard = {
       anchor,
       mode: 'create',
-      origin,
+      origin: nextOrigin,
       replyThreadId: null,
-      sourceRect,
+      sourceRect: nextSourceRect,
     };
     this.render();
   }
@@ -616,12 +808,15 @@ export class CommentUiController {
       replyThreadId: null,
       sourceRect,
     };
-    this.render();
+    this.renderDrawer();
+    this.renderCard();
   }
 
   closeCard() {
     this.activeCard = null;
+    this.pendingCardFocusElement = null;
     this.renderCard();
+    this.scheduleLayoutRefresh();
   }
 
   getThreadGroups() {
@@ -654,6 +849,9 @@ export class CommentUiController {
     if (this.activeCard.origin === 'editor') {
       return this.session?.getCommentAnchorClientRect?.(this.activeCard.anchor) ?? this.activeCard.sourceRect;
     }
+    if (this.activeCard.origin === 'editor-chip') {
+      return this.activeCard.sourceRect;
+    }
     if (this.activeCard.origin === 'preview') {
       return this.resolvePreviewTarget(this.activeCard.anchor)?.bubbleRect ?? this.activeCard.sourceRect;
     }
@@ -669,8 +867,12 @@ export class CommentUiController {
     root.replaceChildren();
     root.classList.toggle('hidden', !this.activeCard);
     if (!this.activeCard) {
+      this.pendingCardFocusElement = null;
+      root.style.visibility = '';
       return;
     }
+
+    this.pendingCardFocusElement = null;
 
     const card = document.createElement('section');
     card.className = 'comment-card';
@@ -723,16 +925,23 @@ export class CommentUiController {
     }
 
     root.appendChild(card);
-    this.positionCard(card);
+    this.flushPendingCardFocus();
+    root.style.visibility = 'hidden';
+    this.scheduleLayoutRefresh();
   }
 
   repositionActiveCard() {
     const card = this.cardRoot?.firstElementChild;
     if (!card || !this.activeCard) {
+      if (this.cardRoot) {
+        this.cardRoot.style.visibility = '';
+      }
       return;
     }
 
     this.positionCard(card);
+    this.cardRoot.style.visibility = '';
+    this.flushPendingCardFocus();
   }
 
   createComposer() {
@@ -776,7 +985,7 @@ export class CommentUiController {
       this.closeCard();
     });
 
-    requestAnimationFrame(() => textarea.focus());
+    this.pendingCardFocusElement = textarea;
     return form;
   }
 
@@ -896,7 +1105,7 @@ export class CommentUiController {
 
     actions.append(cancel, submit);
     form.append(textarea, actions);
-    requestAnimationFrame(() => textarea.focus());
+    this.pendingCardFocusElement = textarea;
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -954,5 +1163,42 @@ export class CommentUiController {
     } catch {
       return '';
     }
+  }
+
+  flushPendingCardFocus() {
+    const element = this.pendingCardFocusElement;
+    if (!(element instanceof HTMLElement) || !element.isConnected) {
+      this.pendingCardFocusElement = null;
+      return;
+    }
+
+    this.pendingCardFocusElement = null;
+    element.focus({ preventScroll: true });
+  }
+
+  clearSelectionRevealTimer() {
+    if (!this.selectionRevealTimer) {
+      return;
+    }
+
+    clearTimeout(this.selectionRevealTimer);
+    this.selectionRevealTimer = 0;
+  }
+
+  scheduleSelectionReveal(anchor) {
+    this.clearSelectionRevealTimer();
+    this.selectionRevealTimer = window.setTimeout(() => {
+      this.selectionRevealTimer = 0;
+      if (
+        this.pointerSelecting
+        || this.activeCard?.mode === 'create'
+        || !areAnchorsEqual(this.pendingSelectionAnchor, anchor)
+      ) {
+        return;
+      }
+
+      this.committedSelectionAnchor = anchor;
+      this.scheduleLayoutRefresh();
+    }, COMMENT_SELECTION_REVEAL_DELAY_MS);
   }
 }

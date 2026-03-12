@@ -2850,12 +2850,14 @@ body.plantuml-maximized-open::before {
   position: absolute;
   border-radius: var(--radius-full);
   padding: 6px 10px;
+  min-width: 96px;
   background: color-mix(in srgb, var(--color-surface) 25%, var(--color-comment) 75%);
   color: var(--color-text-inverse);
   border: 1px solid oklch(from var(--color-comment) l c h / 0.22);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
+  text-align: center;
   box-shadow: var(--shadow-md);
   pointer-events: auto;
   transition: transform 140ms ease, box-shadow 140ms ease;

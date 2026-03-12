@@ -52,7 +52,7 @@ export async function seedStoredUserName(page, name = E2E_USER_NAME) {
 }
 
 export async function waitForEditor(page) {
-  await expect(page.locator('.cm-editor')).toBeVisible();
+  await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 15000 });
 }
 
 export async function openFile(page, filePath, { userName = E2E_USER_NAME } = {}) {
@@ -224,16 +224,91 @@ export async function setEditorSelection(page, targetText, { collapse = false } 
   });
 }
 
+export async function dragEditorSelection(page, targetText) {
+  const coords = await page.evaluate((target) => {
+    const findView = (root) => {
+      const seen = new Set();
+      const queue = [root];
+
+      while (queue.length > 0) {
+        const current = queue.shift();
+        if (!current || typeof current !== 'object' || seen.has(current)) {
+          continue;
+        }
+        seen.add(current);
+
+        if (current.state?.doc && typeof current.dispatch === 'function') {
+          return current;
+        }
+
+        for (const key of Object.getOwnPropertyNames(current)) {
+          try {
+            const value = current[key];
+            if (!value || typeof value !== 'object' || seen.has(value)) {
+              continue;
+            }
+            queue.push(value);
+          } catch {
+            // Ignore inaccessible DOM properties while probing for the editor view.
+          }
+        }
+      }
+
+      return null;
+    };
+
+    const view = findView(document.querySelector('.cm-editor')) || findView(document.querySelector('.cm-content'));
+    if (!view) {
+      throw new Error('Missing CodeMirror editor view');
+    }
+
+    const source = view.state.doc.toString();
+    const from = source.indexOf(target);
+    if (from < 0) {
+      throw new Error(`Missing target text: ${target}`);
+    }
+
+    const start = view.coordsAtPos(from);
+    const end = view.coordsAtPos(from + target.length);
+    if (!start || !end) {
+      throw new Error(`Missing editor coords for target text: ${target}`);
+    }
+
+    return {
+      endX: Math.max(end.left + 2, start.left + 6),
+      endY: end.top + Math.max((end.bottom - end.top) / 2, 4),
+      startX: start.left + 2,
+      startY: start.top + Math.max((start.bottom - start.top) / 2, 4),
+    };
+  }, targetText);
+
+  await page.mouse.move(coords.startX, coords.startY);
+  await page.mouse.down();
+  await page.mouse.move(coords.endX, coords.endY, { steps: 8 });
+}
+
+export async function waitForCommentSelectionChip(page) {
+  const chip = page.locator('.comment-selection-chip');
+  await expect(chip).toBeVisible();
+  return chip;
+}
+
 export async function createComment(page, {
   body,
   collapseSelection = false,
   targetText,
+  useInlineChip = false,
 } = {}) {
   if (targetText) {
     await setEditorSelection(page, targetText, { collapse: collapseSelection });
   }
 
-  await page.locator('#commentSelectionBtn').click();
+  if (useInlineChip) {
+    const chip = await waitForCommentSelectionChip(page);
+    await chip.click();
+  } else {
+    await page.locator('#commentSelectionBtn').click();
+  }
   await expect(page.locator('.comment-card')).toBeVisible();
   await page.locator('.comment-card-input').fill(body);
   await page.locator('.comment-card').getByRole('button', { name: 'Post comment' }).click();

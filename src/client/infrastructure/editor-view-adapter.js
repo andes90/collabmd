@@ -434,16 +434,18 @@ export class EditorViewAdapter {
     );
     const lineBlock = editorView.lineBlockAt(targetLine.from);
     const scrollerRect = editorView.scrollDOM.getBoundingClientRect();
+    const scrollTop = editorView.scrollDOM.scrollTop;
     const contentRect = editorView.contentDOM.getBoundingClientRect();
     const left = contentRect.left;
     const right = Math.max(contentRect.right, scrollerRect.right - 8);
+    const top = scrollerRect.top + lineBlock.top - scrollTop;
 
     return {
-      bottom: scrollerRect.top + lineBlock.top + lineBlock.height,
+      bottom: top + lineBlock.height,
       height: lineBlock.height,
       left,
       right,
-      top: scrollerRect.top + lineBlock.top,
+      top,
       width: Math.max(right - left, 0),
     };
   }
@@ -457,26 +459,20 @@ export class EditorViewAdapter {
 
     const startIndex = Math.min(Math.max(Math.round(anchor.startIndex ?? 0), 0), state.doc.length);
     const startLine = state.doc.lineAt(startIndex);
-    const lineEndIndex = Math.max(startLine.to, startIndex);
-    const anchorEndIndex = Math.min(
-      Math.max(Math.round(anchor.endIndex ?? startIndex), startIndex),
-      state.doc.length,
-    );
-    const controlIndex = anchor.endLine > anchor.startLine
-      ? lineEndIndex
-      : Math.max(anchorEndIndex - 1, startIndex);
-    const coords = editorView.coordsAtPos(Math.min(controlIndex, state.doc.length));
+    const lineBlock = editorView.lineBlockAt(startLine.from);
     const scrollerRect = editorView.scrollDOM.getBoundingClientRect();
+    const scrollTop = editorView.scrollDOM.scrollTop;
     const contentRect = editorView.contentDOM.getBoundingClientRect();
-    const lineBlock = editorView.lineBlockAt(startIndex);
+    const right = Math.max(contentRect.right, scrollerRect.right - 8);
+    const top = scrollerRect.top + lineBlock.top - scrollTop;
 
     return {
-      bottom: coords?.bottom ?? (scrollerRect.top + lineBlock.top + lineBlock.height),
-      height: coords ? (coords.bottom - coords.top) : lineBlock.height,
-      left: coords?.left ?? contentRect.left,
-      right: coords?.right ?? Math.max(contentRect.right, scrollerRect.right - 8),
-      top: coords?.top ?? (scrollerRect.top + lineBlock.top),
-      width: coords ? (coords.right - coords.left) : 0,
+      bottom: top + lineBlock.height,
+      height: lineBlock.height,
+      left: contentRect.left,
+      right,
+      top,
+      width: Math.max(right - contentRect.left, 0),
     };
   }
 
