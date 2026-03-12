@@ -15,7 +15,8 @@ When `COLLABMD_GIT_REPO_URL` is set, CollabMD uses `COLLABMD_VAULT_DIR` as a per
 
 - If the directory is missing or empty, it clones the repo there.
 - If the directory already contains the same repo and the working tree is clean, it fast-forwards the remote default branch.
-- If the directory is dirty or points at a different remote, startup fails instead of trying to reconcile it.
+- If the directory already contains the same repo but the working tree is dirty, startup reuses the checkout as-is and skips the sync.
+- If the directory points at a different remote, startup fails instead of trying to reconcile it.
 - After clone or validation, CollabMD adds `.collabmd/` to `.git/info/exclude` for that checkout so local runtime metadata is ignored without editing the repo's tracked `.gitignore`.
 
 ## 1. Generate a dedicated SSH key
@@ -123,7 +124,8 @@ Expected result:
 
 - startup reuses the checkout
 - verifies `origin`
-- fast-forwards the remote default branch when possible
+- fast-forwards the remote default branch when the checkout is clean
+- skips the sync and starts anyway when the checkout has local changes
 
 ## 7. Test pull-on-startup
 

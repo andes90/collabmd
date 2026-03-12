@@ -218,7 +218,7 @@ docker run \
 
 For a full local and Docker test walkthrough, including key generation and deploy-key setup, see [docs/private-git-deployment.md](./docs/private-git-deployment.md).
 
-When `COLLABMD_GIT_REPO_URL` is set, CollabMD clones into `COLLABMD_VAULT_DIR` on first boot, then reuses that checkout on later starts. If the checkout already exists, startup validates that `origin` matches, requires a clean tree, and only performs a fast-forward pull on the remote default branch.
+When `COLLABMD_GIT_REPO_URL` is set, CollabMD clones into `COLLABMD_VAULT_DIR` on first boot, then reuses that checkout on later starts. If the checkout already exists, startup validates that `origin` matches. Clean checkouts are fast-forwarded to the remote default branch; dirty checkouts are reused as-is and startup skips the sync.
 
 After bootstrap, CollabMD adds `.collabmd/` to the checkout's local git exclude file at `.git/info/exclude` so runtime metadata stays out of git status without modifying the repo's tracked `.gitignore`.
 
@@ -437,7 +437,7 @@ cp .env.example .env
 ## Notes
 
 - The filesystem is the source of truth; Yjs provides the collaboration layer.
-- When `COLLABMD_GIT_REPO_URL` is set, startup clones or fast-forwards the configured repo into `COLLABMD_VAULT_DIR` before the server begins accepting traffic.
+- When `COLLABMD_GIT_REPO_URL` is set, startup clones the configured repo into `COLLABMD_VAULT_DIR` on first boot and reuses an existing same-origin checkout on later starts.
 - If `COLLABMD_GIT_SSH_KNOWN_HOSTS_FILE` is not set, SSH falls back to `StrictHostKeyChecking=accept-new`.
 - CollabMD assumes it is the only writer while a file is open; there is no live `fs.watch` reconciliation.
 - `.obsidian`, `.git`, `.trash`, and `node_modules` directories are ignored.

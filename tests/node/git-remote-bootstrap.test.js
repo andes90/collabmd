@@ -174,10 +174,11 @@ test('prepareConfigForStartup fails when an existing checkout points to a differ
   );
 });
 
-test('prepareConfigForStartup fails when the existing checkout is dirty', async (t) => {
+test('prepareConfigForStartup reuses a dirty checkout without syncing it', async (t) => {
   const { remoteDir } = await createBareRemoteFixture(t);
   const tempRoot = await mkdtemp(join(tmpdir(), 'collabmd-bootstrap-dirty-'));
   const vaultDir = join(tempRoot, 'vault');
+  const peerDir = join(tempRoot, 'peer');
   const config = createBootstrapConfig(vaultDir, remoteDir);
 
   t.after(async () => {
@@ -186,12 +187,19 @@ test('prepareConfigForStartup fails when the existing checkout is dirty', async 
   });
 
   await runGit(tempRoot, ['clone', remoteDir, vaultDir]);
+  await runGit(tempRoot, ['clone', remoteDir, peerDir]);
+  await runGit(peerDir, ['config', 'user.email', 'tests@example.com']);
+  await runGit(peerDir, ['config', 'user.name', 'CollabMD Tests']);
+  await writeFile(join(peerDir, 'test.md'), '# Test\n\nHello from remote.\nRemote update.\n', 'utf8');
+  await runGit(peerDir, ['add', 'test.md']);
+  await runGit(peerDir, ['commit', '-m', 'Peer update']);
+  await runGit(peerDir, ['push']);
   await writeFile(join(vaultDir, 'test.md'), '# Test\n\nlocal dirty change\n', 'utf8');
 
-  await assert.rejects(
-    () => prepareConfigForStartup(config),
-    /uncommitted changes/,
-  );
+  await prepareConfigForStartup(config);
+
+  const content = await readFile(join(vaultDir, 'test.md'), 'utf8');
+  assert.equal(content, '# Test\n\nlocal dirty change\n');
 });
 
 test('prepareConfigForStartup cleans up temporary key files created from base64 input', async (t) => {

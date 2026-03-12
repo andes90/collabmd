@@ -121,15 +121,13 @@ async function getOriginUrl(vaultDir, options = {}) {
   })).trim();
 }
 
-async function assertCleanWorkingTree(vaultDir, options = {}) {
+async function hasCleanWorkingTree(vaultDir, options = {}) {
   const status = await execGit(['status', '--porcelain=v1', '--untracked-files=all'], {
     ...options,
     cwd: vaultDir,
   });
 
-  if (status.trim()) {
-    throw new Error(`Refusing to reuse "${vaultDir}" because the checkout has uncommitted changes.`);
-  }
+  return status.trim().length === 0;
 }
 
 async function localBranchExists(vaultDir, branchName, options = {}) {
@@ -190,7 +188,12 @@ async function updateExistingCheckout(vaultDir, repoUrl, options = {}) {
     );
   }
 
-  await assertCleanWorkingTree(vaultDir, options);
+  if (!(await hasCleanWorkingTree(vaultDir, options))) {
+    return {
+      syncSkipped: true,
+    };
+  }
+
   const defaultBranch = await resolveRemoteDefaultBranch(repoUrl, options);
 
   await execGit(['fetch', '--prune', 'origin'], {
@@ -214,6 +217,10 @@ async function updateExistingCheckout(vaultDir, repoUrl, options = {}) {
     ...options,
     cwd: vaultDir,
   });
+
+  return {
+    syncSkipped: false,
+  };
 }
 
 async function createPrivateKeyFile(config) {
@@ -373,7 +380,7 @@ export async function prepareConfigForStartup(config, options = {}) {
       }
 
       if (await isGitRepository(config.vaultDir, options)) {
-        await updateExistingCheckout(config.vaultDir, config.git.remote.repoUrl, {
+        const checkoutState = await updateExistingCheckout(config.vaultDir, config.git.remote.repoUrl, {
           ...options,
           commandEnv: config.git.commandEnv,
         });
@@ -382,6 +389,13 @@ export async function prepareConfigForStartup(config, options = {}) {
           ...options,
           commandEnv: config.git.commandEnv,
         });
+
+        if (checkoutState?.syncSkipped) {
+          console.warn(
+            `Skipping git sync for "${config.vaultDir}" because the existing checkout has uncommitted changes.`,
+          );
+        }
+
         return config;
       }
 
