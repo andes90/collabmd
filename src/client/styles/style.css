@@ -3543,6 +3543,15 @@ body.plantuml-maximized-open::before {
 /* ===== MOBILE / RESPONSIVE ===== */
 
 @media (max-width: 768px) {
+  /* Keep mobile text inputs at 16px to prevent iOS Safari focus zoom. */
+  .input,
+  .sidebar-search-input,
+  .qs-input,
+  .chat-input,
+  .editor-container .cm-editor {
+    font-size: 16px;
+  }
+
   .sidebar {
     position: fixed;
     top: 0;
