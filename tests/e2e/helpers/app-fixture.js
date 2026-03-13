@@ -388,6 +388,29 @@ export async function getPlantUmlZoomMetrics(page) {
   });
 }
 
+export async function getMermaidZoomMetrics(page) {
+  return page.evaluate(() => {
+    const activeShell = document.querySelector('#previewContent .mermaid-shell.is-maximized')
+      || document.querySelector('#previewContent .mermaid-shell');
+    const frame = activeShell?.querySelector('.mermaid-frame');
+    const svg = frame?.querySelector('svg');
+    const label = activeShell?.querySelector('.mermaid-zoom-label');
+    if (!frame || !svg || !label) {
+      return null;
+    }
+
+    const viewBox = svg.viewBox?.baseVal;
+    const baseWidth = viewBox?.width || Number.parseFloat(svg.getAttribute('width') || '') || 0;
+    const viewportWidth = Math.max(frame.clientWidth, 0);
+    const expectedZoom = Math.max(0.5, Math.min(3, viewportWidth / baseWidth));
+
+    return {
+      currentLabel: label.textContent || '',
+      expectedLabel: `${Math.round(expectedZoom * 100)}%`,
+    };
+  });
+}
+
 export async function getPreviewHorizontalOverflowMetrics(page) {
   return page.evaluate(() => {
     const container = document.getElementById('previewContainer');

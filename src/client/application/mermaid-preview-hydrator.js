@@ -33,6 +33,7 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
     this.currentTheme = document.documentElement?.dataset.theme === 'light' ? 'light' : 'dark';
     this.loader = null;
     this.runtime = null;
+    this.shellRefits = new WeakMap();
   }
 
   applyTheme(theme) {
@@ -49,6 +50,14 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
   configureMermaid(mermaid) {
     mermaid.initialize({
       startOnLoad: false,
+      flowchart: {
+        defaultRenderer: 'dagre-wrapper',
+        useMaxWidth: true,
+      },
+      class: {
+        defaultRenderer: 'dagre-wrapper',
+        useMaxWidth: true,
+      },
       theme: this.currentTheme === 'dark' ? 'dark' : 'default',
       themeVariables: this.currentTheme === 'dark' ? {
         background: '#161822',
@@ -138,6 +147,8 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
         throw new Error(shell.dataset.mermaidTarget ? 'Mermaid file is empty' : 'Mermaid source is empty');
       }
 
+      source = this.prepareSource(source);
+
       shell.querySelector('.mermaid-placeholder-card')?.remove();
 
       const diagram = document.createElement('div');
@@ -175,6 +186,52 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
     }
   }
 
+  prepareSource(source) {
+    let text = String(source ?? '');
+
+    if (!/%%\{[\s\S]*?\binit\s*:/m.test(text)) {
+      const initConfig = this.getPreviewInitConfig(text);
+      if (initConfig) {
+        text = `%%{init: ${JSON.stringify(initConfig)}}%%\n${text}`;
+      }
+    }
+
+    if (!/^\s*gantt\b/m.test(text) || /\btodayMarker\b/.test(text)) {
+      return text;
+    }
+
+    const lines = text.split('\n');
+    const ganttLineIndex = lines.findIndex((line) => /^\s*gantt\b/.test(line));
+    if (ganttLineIndex === -1) {
+      return text;
+    }
+
+    lines.splice(ganttLineIndex + 1, 0, '    todayMarker off');
+    return lines.join('\n');
+  }
+
+  getPreviewInitConfig(source) {
+    if (/^\s*stateDiagram(?:-v2)?\b/m.test(source)) {
+      return {
+        htmlLabels: false,
+      };
+    }
+
+    if (/^\s*classDiagram\b/m.test(source)) {
+      return {
+        htmlLabels: false,
+      };
+    }
+
+    if (/^\s*gantt\b/m.test(source)) {
+      return {
+        htmlLabels: false,
+      };
+    }
+
+    return null;
+  }
+
   resetHydratedShells() {
     const previewElement = this.renderer.previewElement;
     if (!previewElement) {
@@ -187,6 +244,7 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
     }
 
     hydratedShells.forEach((shell) => {
+      this.shellRefits.delete(shell);
       shell.removeAttribute('data-mermaid-hydrated');
       shell.querySelector(':scope > .mermaid-toolbar')?.remove();
       shell.querySelector(':scope > .mermaid-frame')?.remove();
@@ -226,6 +284,9 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
     let currentZoom = MERMAID_ZOOM.default;
     let defaultZoom = 1;
     let zoomAnimationFrameId = null;
+    let resetZoomFrameId = null;
+    let hasManualZoom = false;
+    let lastAutoFitViewportWidth = 0;
     let isPanning = false;
     let activePointerId = null;
     let panStartX = 0;
@@ -237,11 +298,25 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
     svg.style.margin = '0 auto';
     svg.style.maxWidth = 'none';
 
+    const calculateDefaultZoom = () => {
+      const viewport = getFrameViewportSize(frame);
+      if (!Number.isFinite(baseWidth) || baseWidth <= 0 || viewport.width <= 0) {
+        return MERMAID_ZOOM.default;
+      }
+
+      const fittedZoom = viewport.width / baseWidth;
+      if (!Number.isFinite(fittedZoom) || fittedZoom <= 0) {
+        return MERMAID_ZOOM.default;
+      }
+
+      return clamp(fittedZoom, MERMAID_ZOOM.min, MERMAID_ZOOM.max);
+    };
+
     const applyZoom = (nextZoom) => {
       currentZoom = clamp(nextZoom, MERMAID_ZOOM.min, MERMAID_ZOOM.max);
-
       svg.style.width = `${baseWidth * currentZoom}px`;
       svg.style.height = `${baseHeight * currentZoom}px`;
+
       zoomLabel.textContent = `${Math.round(currentZoom * 100)}%`;
 
       decreaseButton.disabled = currentZoom <= MERMAID_ZOOM.min;
@@ -250,6 +325,7 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
       const viewport = getFrameViewportSize(frame);
       const isPannable = (baseWidth * currentZoom) > viewport.width || (baseHeight * currentZoom) > viewport.height;
       frame.classList.toggle('is-pannable', isPannable);
+      svg.style.margin = isPannable ? '0' : '0 auto';
     };
 
     const getViewportCenter = () => ({
@@ -304,12 +380,61 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
     };
 
     const zoomBy = (delta) => {
+      hasManualZoom = true;
       animateZoomTo(currentZoom + delta);
     };
 
+    const resetZoomToFit = ({ animate = false } = {}) => {
+      defaultZoom = calculateDefaultZoom();
+      hasManualZoom = false;
+      lastAutoFitViewportWidth = getFrameViewportSize(frame).width;
+
+      if (animate && Math.abs(defaultZoom - currentZoom) > 0.001) {
+        animateZoomTo(defaultZoom);
+        return;
+      }
+
+      if (zoomAnimationFrameId) {
+        cancelAnimationFrame(zoomAnimationFrameId);
+        zoomAnimationFrameId = null;
+      }
+
+      applyZoom(defaultZoom);
+      frame.scrollLeft = 0;
+      frame.scrollTop = 0;
+    };
+
+    const scheduleResetZoomToFit = ({ force = false } = {}) => {
+      if (resetZoomFrameId) {
+        cancelAnimationFrame(resetZoomFrameId);
+      }
+
+      resetZoomFrameId = requestAnimationFrame(() => {
+        resetZoomFrameId = null;
+        if (!shell.isConnected) {
+          return;
+        }
+
+        const viewportWidth = getFrameViewportSize(frame).width;
+        const viewportChanged = Math.abs(viewportWidth - lastAutoFitViewportWidth) > 1;
+        if (!force && hasManualZoom) {
+          return;
+        }
+        if (!force && lastAutoFitViewportWidth > 0 && !viewportChanged) {
+          return;
+        }
+
+        resetZoomToFit();
+      });
+    };
+
+    this.shellRefits.set(shell, scheduleResetZoomToFit);
+
     decreaseButton.addEventListener('click', () => zoomBy(-MERMAID_ZOOM.step));
     increaseButton.addEventListener('click', () => zoomBy(MERMAID_ZOOM.step));
-    resetButton.addEventListener('click', () => animateZoomTo(defaultZoom));
+    resetButton.addEventListener('click', () => {
+      resetZoomToFit({ animate: true });
+    });
 
     const syncMaximizeButtonState = () => {
       const isMaximized = shell.classList.contains('is-maximized');
@@ -323,6 +448,7 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
         const activeContainer = previewElement.querySelector('.mermaid-shell.is-maximized');
         if (activeContainer && activeContainer !== shell) {
           activeContainer.classList.remove('is-maximized');
+          this.shellRefits.get(activeContainer)?.();
           const activeButton = activeContainer.querySelector('.mermaid-maximize-btn');
           if (activeButton) {
             activeButton.textContent = 'Max';
@@ -332,6 +458,7 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
         shell.classList.add('is-maximized');
         document.body.classList.add('mermaid-maximized-open');
         syncMaximizeButtonState();
+        scheduleResetZoomToFit({ force: true });
         return;
       }
 
@@ -340,6 +467,7 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
         document.body.classList.remove('mermaid-maximized-open');
       }
       syncMaximizeButtonState();
+      scheduleResetZoomToFit({ force: true });
     };
 
     syncMaximizeButtonState();
@@ -411,7 +539,18 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
     }
     shell.append(toolbar, frame);
 
-    applyZoom(defaultZoom);
+    scheduleResetZoomToFit({ force: true });
+  }
+
+  scheduleActiveRefit() {
+    const previewElement = this.renderer.previewElement;
+    if (!previewElement) {
+      return;
+    }
+
+    Array.from(previewElement.querySelectorAll('.mermaid-shell[data-mermaid-hydrated="true"]')).forEach((shell) => {
+      this.shellRefits.get(shell)?.();
+    });
   }
 
   createZoomButton(label, ariaLabel) {

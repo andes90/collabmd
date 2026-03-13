@@ -175,6 +175,8 @@ export class WorkspacePreviewController {
         return;
       }
 
+      this.previewRenderer.scheduleActiveMermaidRefit();
+      this.previewRenderer.scheduleActivePlantUmlRefit();
       this.excalidrawEmbed.syncLayout();
       if (isExcalidrawPreview && !hasSession) {
         return;

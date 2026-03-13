@@ -3,6 +3,7 @@ import {
   ACTIVE_MAXIMIZED_PLANTUML_SELECTOR,
   duplicateVaultFile,
   expect,
+  getMermaidZoomMetrics,
   getPlantUmlZoomMetrics,
   openFile,
   openHome,
@@ -636,12 +637,40 @@ test('opens .mmd files with side-by-side Mermaid preview', async ({ page }) => {
 
   await expect(page.locator('#editorLayout')).toHaveAttribute('data-view', 'split');
   await expect(page.locator('#previewContent .mermaid-frame svg')).toBeVisible();
+  await expect.poll(async () => {
+    const metrics = await getMermaidZoomMetrics(page);
+    return metrics ? metrics.currentLabel === metrics.expectedLabel : false;
+  }).toBeTruthy();
   await expect(page.locator('#previewContent .mermaid-frame')).toContainText('Start');
-  await expect(page.locator('#previewContent .mermaid-zoom-label')).toHaveText('100%');
+  const initialLabel = await page.locator('#previewContent .mermaid-zoom-label').textContent();
   await page.locator('#previewContent .mermaid-zoom-btn[aria-label="Zoom in"]').click();
-  await expect(page.locator('#previewContent .mermaid-zoom-label')).toHaveText('110%');
+  await expect(page.locator('#previewContent .mermaid-zoom-label')).not.toHaveText(initialLabel || '');
+  await page.locator('#previewContent .mermaid-zoom-btn[aria-label="Reset zoom"]').click();
+  await expect.poll(async () => {
+    const metrics = await getMermaidZoomMetrics(page);
+    return metrics ? metrics.currentLabel === metrics.expectedLabel : false;
+  }).toBeTruthy();
   await expect(page.locator('#outlineToggle')).toHaveClass(/hidden/);
   await expect(page.locator('#backlinksPanel')).toHaveClass(/hidden/);
+});
+
+test('preserves manual Mermaid zoom after preview layout sync runs', async ({ page }) => {
+  await openFile(page, 'sample-mermaid.mmd');
+
+  await expect(page.locator('#previewContent .mermaid-frame svg')).toBeVisible();
+  await expect.poll(async () => {
+    const metrics = await getMermaidZoomMetrics(page);
+    return metrics ? metrics.currentLabel === metrics.expectedLabel : false;
+  }).toBeTruthy();
+
+  const initialLabel = await page.locator('#previewContent .mermaid-zoom-label').textContent();
+  await page.locator('#previewContent .mermaid-zoom-btn[aria-label="Zoom in"]').click();
+  await page.locator('#previewContent .mermaid-zoom-btn[aria-label="Zoom in"]').click();
+  await page.locator('#previewContent .mermaid-zoom-btn[aria-label="Zoom in"]').click();
+  await expect(page.locator('#previewContent .mermaid-zoom-label')).not.toHaveText(initialLabel || '');
+
+  await page.waitForTimeout(1000);
+  await expect(page.locator('#previewContent .mermaid-zoom-label')).not.toHaveText(initialLabel || '');
 });
 
 test('renders embedded Mermaid files from markdown docs', async ({ page }) => {
@@ -655,4 +684,181 @@ test('renders embedded Mermaid files from markdown docs', async ({ page }) => {
   await expect(page.locator('#previewContent .mermaid-frame svg')).toBeVisible();
   await expect(page.locator('#previewContent .mermaid-frame')).toContainText('Start');
   await expect(page.locator('#previewContent .mermaid-shell[data-mermaid-target="sample-mermaid.mmd"]')).toHaveCount(1);
+});
+
+test('renders historical Mermaid gantt charts without an oversized today marker canvas', async ({ page }) => {
+  await openFile(page, 'README.md');
+  await replaceEditorContent(page, [
+    '# Mermaid Gantt',
+    '',
+    '```mermaid',
+    'gantt',
+    '    dateFormat  YYYY-MM-DD',
+    '    title       Adding GANTT diagram functionality to mermaid',
+    '    excludes    weekends',
+    '    section A section',
+    '    Completed task           :done,    des1, 2014-01-06,2014-01-08',
+    '    Active task              :active,  des2, 2014-01-09, 3d',
+    '    Future task              :         des3, after des2, 5d',
+    '    Future task2             :         des4, after des3, 5d',
+    '    section Critical tasks',
+    '    Completed task in the critical line :crit, done, 2014-01-06,24h',
+    '    Implement parser and json          :crit, done, after des1, 2d',
+    '    Create tests for parser            :crit, active, 3d',
+    '    Future task in critical line       :crit, 5d',
+    '    Create tests for renderer          :2d',
+    '    Add to mermaid                     :until isadded',
+    '    Functionality added                :milestone, isadded, 2014-01-25, 0d',
+    '```',
+  ].join('\n'));
+
+  await expect(page.locator('#previewContent .mermaid-frame svg')).toBeVisible();
+  await expect(page.locator('#previewContent .mermaid-frame')).toContainText('Completed task');
+  await expect.poll(async () => (
+    page.evaluate(() => {
+      const frame = document.querySelector('#previewContent .mermaid-frame');
+      const svg = frame?.querySelector('svg');
+      if (!(frame instanceof HTMLElement) || !(svg instanceof SVGSVGElement)) {
+        return null;
+      }
+
+      return {
+        scrollWidth: frame.scrollWidth,
+        widthAttr: Number.parseFloat(svg.getAttribute('width') || '0'),
+      };
+    })
+  )).toEqual({
+    scrollWidth: expect.any(Number),
+    widthAttr: expect.any(Number),
+  });
+  const metrics = await page.evaluate(() => {
+    const frame = document.querySelector('#previewContent .mermaid-frame');
+    const svg = frame?.querySelector('svg');
+    if (!(frame instanceof HTMLElement) || !(svg instanceof SVGSVGElement)) {
+      return null;
+    }
+
+    return {
+      scrollWidth: frame.scrollWidth,
+      widthAttr: Number.parseFloat(svg.getAttribute('width') || '0'),
+    };
+  });
+  expect(metrics?.scrollWidth ?? 0).toBeLessThan(3000);
+  expect(metrics?.widthAttr ?? 0).toBeLessThan(3000);
+});
+
+test('renders Mermaid state diagrams without oversized bounds or HTML labels', async ({ page }) => {
+  await openFile(page, 'README.md');
+  await replaceEditorContent(page, [
+    '# Mermaid State',
+    '',
+    '```mermaid',
+    'stateDiagram-v2',
+    '    [*] --> Connecting',
+    '    Connecting --> Connected: WebSocket open',
+    '    Connecting --> Unreachable: Timeout',
+    '    Connected --> Disconnected: WebSocket close',
+    '    Disconnected --> Connecting: Auto-reconnect',
+    '    Unreachable --> Connecting: Retry',
+    '',
+    '    state Connected {',
+    '        [*] --> Idle',
+    '        Idle --> Editing: Keystroke',
+    '        Editing --> Idle: 3s inactivity',
+    '        Idle --> Following: Click follow',
+    '        Following --> Idle: Unfollow',
+    '    }',
+    '```',
+  ].join('\n'));
+
+  await expect(page.locator('#previewContent .mermaid-frame svg')).toBeVisible();
+  await expect(page.locator('#previewContent .mermaid-frame')).toContainText('Connecting');
+  const metrics = await page.evaluate(() => {
+    const svg = document.querySelector('#previewContent .mermaid-frame svg');
+    if (!(svg instanceof SVGSVGElement)) {
+      return null;
+    }
+
+    return {
+      hasForeignObject: Boolean(svg.querySelector('foreignObject')),
+      widthAttr: Number.parseFloat(svg.getAttribute('width') || '0'),
+      heightAttr: Number.parseFloat(svg.getAttribute('height') || '0'),
+    };
+  });
+  expect(metrics?.hasForeignObject).toBe(false);
+  expect(metrics?.widthAttr ?? 0).toBeLessThan(2000);
+  expect(metrics?.heightAttr ?? 0).toBeLessThan(2000);
+});
+
+test('renders Mermaid class diagrams without oversized bounds or HTML labels', async ({ page }) => {
+  await openFile(page, 'README.md');
+  await replaceEditorContent(page, [
+    '# Mermaid Class',
+    '',
+    '```mermaid',
+    'classDiagram',
+    '    class User {',
+    '        +UUID id',
+    '        +String fullName',
+    '        +String phoneNumber',
+    '        +String email',
+    '        +UserStatus status',
+    '        +login()',
+    '        +updateProfile()',
+    '    }',
+    '    class Rider {',
+    '        +Decimal rating',
+    '        +requestRide()',
+    '        +cancelRide()',
+    '    }',
+    '    class Driver {',
+    '        +String licenseNumber',
+    '        +DriverAvailability availability',
+    '        +Decimal rating',
+    '        +acceptRide()',
+    '        +startTrip()',
+    '        +completeTrip()',
+    '    }',
+    '    class Vehicle {',
+    '        +UUID id',
+    '        +String plateNumber',
+    '        +String brand',
+    '        +String model',
+    '        +VehicleType type',
+    '        +Integer year',
+    '    }',
+    '    class Ride {',
+    '        +UUID id',
+    '        +RideStatus status',
+    '        +Money estimatedFare',
+    '        +Money finalFare',
+    '        +DateTime requestedAt',
+    '        +DateTime startedAt',
+    '        +DateTime completedAt',
+    '    }',
+    '    User <|-- Rider',
+    '    User <|-- Driver',
+    '    Driver --> Vehicle : uses',
+    '    Rider --> Ride : requests',
+    '    Driver --> Ride : fulfills',
+    '```',
+  ].join('\n'));
+
+  await expect(page.locator('#previewContent .mermaid-frame svg')).toBeVisible();
+  await expect(page.locator('#previewContent .mermaid-frame')).toContainText('User');
+  const metrics = await page.evaluate(() => {
+    const svg = document.querySelector('#previewContent .mermaid-frame svg');
+    if (!(svg instanceof SVGSVGElement)) {
+      return null;
+    }
+
+    return {
+      hasForeignObject: Boolean(svg.querySelector('foreignObject')),
+      widthAttr: Number.parseFloat(svg.getAttribute('width') || '0'),
+      heightAttr: Number.parseFloat(svg.getAttribute('height') || '0'),
+    };
+  });
+  expect(metrics?.hasForeignObject).toBe(false);
+  expect(metrics?.widthAttr ?? 0).toBeLessThan(2000);
+  expect(metrics?.heightAttr ?? 0).toBeLessThan(2500);
 });

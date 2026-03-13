@@ -59,6 +59,7 @@ export class PreviewRenderer {
     };
 
     this.handleWindowResize = () => {
+      this.mermaidHydrator.scheduleActiveRefit();
       this.plantUmlHydrator.scheduleActiveRefit();
     };
 
@@ -227,6 +228,10 @@ export class PreviewRenderer {
 
   clearActivePlantUmlShell() {
     this.plantUmlHydrator.clearActiveShell();
+  }
+
+  scheduleActiveMermaidRefit() {
+    this.mermaidHydrator.scheduleActiveRefit();
   }
 
   syncActivePlantUmlShell() {
