@@ -85,7 +85,7 @@ test('opens excalidraw files with a direct iframe preview', async ({ page }) => 
   await expect(iframe).toHaveAttribute('src', /file=sample-excalidraw\.excalidraw/);
   await expect(iframe).not.toHaveAttribute('src', /mode=preview/);
   await expect(page.locator('#previewContent .excalidraw-embed-label')).toHaveText('sample-excalidraw');
-  await expect(page.locator('#previewContent .excalidraw-embed-btn', { hasText: 'Edit' })).toHaveCount(0);
+  await expect(page.locator('#previewContent .excalidraw-embed-btn[aria-label="Edit in Excalidraw"]')).toHaveCount(0);
   await expect(page.locator('#previewContent .excalidraw-embed-placeholder')).toHaveCount(0);
   await expect(page.locator('#previewContent')).not.toContainText('Loading Excalidraw preview…');
   await expect(page.locator('#editorLayout')).toHaveAttribute('data-view', 'preview');
@@ -107,7 +107,7 @@ test('opens excalidraw files with a direct iframe preview', async ({ page }) => 
   expect(initialWidths).not.toBeNull();
   expect(initialWidths.embedWidth).toBeGreaterThan(initialWidths.containerWidth - 48);
 
-  await page.locator('#previewContent .excalidraw-embed-btn', { hasText: 'Max' }).click();
+  await page.locator('#previewContent .excalidraw-embed-btn[aria-label="Maximize diagram"]').click();
   await expect(page.locator(ACTIVE_MAXIMIZED_EXCALIDRAW_SELECTOR)).toHaveClass(/is-maximized/);
 
   const maximizedWidths = await page.evaluate(() => {
@@ -142,7 +142,7 @@ test('markdown excalidraw embeds use preview mode with an edit button', async ({
 
   const iframe = page.locator('#previewContent .excalidraw-embed iframe').first();
   await expect(iframe).toHaveAttribute('src', /mode=preview/);
-  await expect(page.locator('#previewContent .excalidraw-embed-btn', { hasText: 'Edit' }).first()).toBeVisible();
+  await expect(page.locator('#previewContent .excalidraw-embed-btn[aria-label="Edit in Excalidraw"]').first()).toBeVisible();
 });
 
 test('embedded excalidraw edit button navigates to the diagram file', async ({ page }) => {
@@ -150,10 +150,10 @@ test('embedded excalidraw edit button navigates to the diagram file', async ({ p
 
   await openSampleFull(page);
   await expect.poll(async () => (
-    page.locator('#previewContent .excalidraw-embed-btn', { hasText: 'Edit' }).count()
+    page.locator('#previewContent .excalidraw-embed-btn[aria-label="Edit in Excalidraw"]').count()
   ), { timeout: 60000 }).toBeGreaterThan(0);
 
-  await page.locator('#previewContent .excalidraw-embed-btn', { hasText: 'Edit' }).first().click();
+  await page.locator('#previewContent .excalidraw-embed-btn[aria-label="Edit in Excalidraw"]').first().click();
   await expect(page).toHaveURL(/#file=sample-excalidraw\.excalidraw/);
   await expect(page.locator('#editorLayout')).toHaveAttribute('data-view', 'preview');
   await expect(page.locator('#previewContent .excalidraw-embed iframe').first()).toHaveAttribute('src', /file=sample-excalidraw\.excalidraw/);
@@ -244,7 +244,7 @@ test('opening an embedded excalidraw file directly remounts it in editable mode'
   await expect(directIframe).toHaveAttribute('src', /file=sample-excalidraw\.excalidraw/);
   await expect(directIframe).not.toHaveAttribute('src', /mode=preview/);
   await expect(page.locator('#previewContent')).not.toContainText('Loading Excalidraw preview…');
-  await expect(page.locator('#previewContent .excalidraw-embed-btn', { hasText: 'Edit' })).toHaveCount(0);
+  await expect(page.locator('#previewContent .excalidraw-embed-btn[aria-label="Edit in Excalidraw"]')).toHaveCount(0);
 
   await expect.poll(async () => (
     page.locator('#previewContent .excalidraw-embed iframe').first().getAttribute('data-instance-id')
@@ -312,10 +312,10 @@ test('embedded excalidraw maximize preserves layout and modal sizing', async ({ 
     page.locator('#previewContent .excalidraw-embed iframe').count()
   ), { timeout: 60000 }).toBeGreaterThan(0);
 
-  await expect(page.locator('#previewContent .excalidraw-embed-btn', { hasText: 'Expand' })).toHaveCount(0);
+  await expect(page.locator('#previewContent .excalidraw-embed-btn[aria-label="Expand diagram"]')).toHaveCount(0);
 
-  await page.locator('#previewContent .excalidraw-embed-btn', { hasText: 'Max' }).first().click();
-  await expect(page.locator(`${ACTIVE_MAXIMIZED_EXCALIDRAW_SELECTOR} .excalidraw-embed-btn`, { hasText: 'Restore' }).first()).toBeVisible();
+  await page.locator('#previewContent .excalidraw-embed-btn[aria-label="Maximize diagram"]').first().click();
+  await expect(page.locator(`${ACTIVE_MAXIMIZED_EXCALIDRAW_SELECTOR} .excalidraw-embed-btn[aria-label="Restore diagram size"]`).first()).toBeVisible();
 
   const afterMaximize = await page.evaluate(() => {
     const embed = document.querySelector('[data-excalidraw-maximized-root="true"] .excalidraw-embed.is-maximized');
@@ -652,6 +652,29 @@ test('opens .mmd files with side-by-side Mermaid preview', async ({ page }) => {
   }).toBeTruthy();
   await expect(page.locator('#outlineToggle')).toHaveClass(/hidden/);
   await expect(page.locator('#backlinksPanel')).toHaveClass(/hidden/);
+
+  await page.locator('#previewContent .mermaid-maximize-btn[aria-label="Maximize diagram"]').click();
+  await expect(page.locator('#previewContent .mermaid-shell.is-maximized .mermaid-maximize-btn[aria-label="Restore diagram size"]')).toBeVisible();
+
+  const maximizedBounds = await page.evaluate(() => {
+    const shell = document.querySelector('#previewContent .mermaid-shell.is-maximized');
+    if (!(shell instanceof HTMLElement)) {
+      return null;
+    }
+
+    const rect = shell.getBoundingClientRect();
+    return {
+      left: rect.left,
+      position: window.getComputedStyle(shell).position,
+      right: rect.right,
+      viewportWidth: window.innerWidth,
+    };
+  });
+
+  expect(maximizedBounds).not.toBeNull();
+  expect(maximizedBounds.position).toBe('fixed');
+  expect(maximizedBounds.left).toBeGreaterThanOrEqual(0);
+  expect(maximizedBounds.right).toBeLessThanOrEqual(maximizedBounds.viewportWidth);
 });
 
 test('preserves manual Mermaid zoom after preview layout sync runs', async ({ page }) => {

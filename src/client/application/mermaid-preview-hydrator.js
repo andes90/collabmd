@@ -1,4 +1,5 @@
 import { clamp } from '../domain/vault-utils.js';
+import { setDiagramActionButtonIcon } from '../domain/diagram-action-icons.js';
 import { DiagramPreviewHydrator } from './diagram-preview-hydrator.js';
 import {
   createMermaidPlaceholderCard,
@@ -264,21 +265,22 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
     }
 
     const toolbar = document.createElement('div');
-    toolbar.className = 'mermaid-toolbar';
+    toolbar.className = 'mermaid-toolbar diagram-preview-toolbar';
 
     const decreaseButton = this.createZoomButton('−', 'Zoom out');
     const increaseButton = this.createZoomButton('+', 'Zoom in');
     const resetButton = this.createZoomButton('Reset', 'Reset zoom');
     const maximizeButton = this.createZoomButton('Max', 'Maximize diagram');
     maximizeButton.classList.add('mermaid-maximize-btn');
+    setDiagramActionButtonIcon(maximizeButton, 'maximize');
     const zoomLabel = document.createElement('span');
-    zoomLabel.className = 'mermaid-zoom-label';
+    zoomLabel.className = 'mermaid-zoom-label diagram-preview-zoom-label';
     zoomLabel.setAttribute('aria-live', 'polite');
 
     toolbar.append(decreaseButton, zoomLabel, resetButton, increaseButton, maximizeButton);
 
     const frame = document.createElement('div');
-    frame.className = 'mermaid-frame';
+    frame.className = 'mermaid-frame diagram-preview-frame';
 
     const { width: baseWidth, height: baseHeight } = normalizeMermaidSvg(svg);
     let currentZoom = MERMAID_ZOOM.default;
@@ -438,8 +440,10 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
 
     const syncMaximizeButtonState = () => {
       const isMaximized = shell.classList.contains('is-maximized');
-      maximizeButton.textContent = isMaximized ? 'Restore' : 'Max';
-      maximizeButton.setAttribute('aria-label', isMaximized ? 'Restore diagram size' : 'Maximize diagram');
+      setDiagramActionButtonIcon(maximizeButton, isMaximized ? 'restore' : 'maximize');
+      const label = isMaximized ? 'Restore diagram size' : 'Maximize diagram';
+      maximizeButton.setAttribute('aria-label', label);
+      maximizeButton.title = label;
     };
 
     const setMaximizedState = (shouldMaximize) => {
@@ -451,8 +455,9 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
           this.shellRefits.get(activeContainer)?.();
           const activeButton = activeContainer.querySelector('.mermaid-maximize-btn');
           if (activeButton) {
-            activeButton.textContent = 'Max';
+            setDiagramActionButtonIcon(activeButton, 'maximize');
             activeButton.setAttribute('aria-label', 'Maximize diagram');
+            activeButton.title = 'Maximize diagram';
           }
         }
         shell.classList.add('is-maximized');
@@ -556,8 +561,9 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
   createZoomButton(label, ariaLabel) {
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'mermaid-zoom-btn';
+    button.className = 'mermaid-zoom-btn diagram-preview-action-btn';
     button.setAttribute('aria-label', ariaLabel);
+    button.title = ariaLabel;
     button.textContent = label;
     return button;
   }

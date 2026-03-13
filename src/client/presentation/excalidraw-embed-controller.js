@@ -1,3 +1,4 @@
+import { setDiagramActionButtonIcon } from '../domain/diagram-action-icons.js';
 import { reconcileEmbedEntries } from './excalidraw-embed-reconciler.js';
 import { resolveAppUrl } from '../domain/runtime-paths.js';
 
@@ -565,12 +566,12 @@ export class ExcalidrawEmbedController {
 
   _createEmbedContainer(entry) {
     const wrapper = document.createElement('div');
-    wrapper.className = 'excalidraw-embed';
+    wrapper.className = 'excalidraw-embed diagram-preview-shell';
     wrapper.dataset.embedKey = entry.key;
     wrapper.dataset.file = entry.filePath;
 
     const header = document.createElement('div');
-    header.className = 'excalidraw-embed-header';
+    header.className = 'excalidraw-embed-header diagram-preview-toolbar';
 
     const icon = document.createElement('span');
     icon.className = 'excalidraw-embed-icon';
@@ -582,17 +583,17 @@ export class ExcalidrawEmbedController {
 
     const openBtn = document.createElement('button');
     openBtn.type = 'button';
-    openBtn.className = 'excalidraw-embed-btn';
+    openBtn.className = 'excalidraw-embed-btn diagram-preview-action-btn';
     openBtn.title = 'Edit in Excalidraw';
     openBtn.setAttribute('aria-label', 'Edit in Excalidraw');
-    openBtn.textContent = 'Edit';
+    setDiagramActionButtonIcon(openBtn, 'edit');
 
     const maxBtn = document.createElement('button');
     maxBtn.type = 'button';
-    maxBtn.className = 'excalidraw-embed-btn';
+    maxBtn.className = 'excalidraw-embed-btn diagram-preview-action-btn';
     maxBtn.title = 'Maximize diagram';
     maxBtn.setAttribute('aria-label', 'Maximize diagram');
-    maxBtn.textContent = 'Max';
+    setDiagramActionButtonIcon(maxBtn, 'maximize');
 
     header.append(icon, label);
     if (!this._isFilePreviewEntry(entry)) {
@@ -622,7 +623,7 @@ export class ExcalidrawEmbedController {
     let restoreHeight = `${DEFAULT_HEIGHT}px`;
 
     const syncMaximizeButtonState = () => {
-      maxBtn.textContent = isMaximized ? 'Restore' : 'Max';
+      setDiagramActionButtonIcon(maxBtn, isMaximized ? 'restore' : 'maximize');
       maxBtn.title = isMaximized ? 'Restore diagram size' : 'Maximize diagram';
       maxBtn.setAttribute('aria-label', isMaximized ? 'Restore diagram size' : 'Maximize diagram');
     };

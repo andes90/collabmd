@@ -1,4 +1,5 @@
 import { clamp } from '../domain/vault-utils.js';
+import { setDiagramActionButtonIcon } from '../domain/diagram-action-icons.js';
 import { resolveApiUrl } from '../domain/runtime-paths.js';
 import { DiagramPreviewHydrator } from './diagram-preview-hydrator.js';
 import {
@@ -269,18 +270,20 @@ export class PlantUmlPreviewHydrator extends DiagramPreviewHydrator {
     }
 
     const toolbar = document.createElement('div');
-    toolbar.className = 'plantuml-toolbar';
+    toolbar.className = 'plantuml-toolbar diagram-preview-toolbar';
 
     const frame = document.createElement('div');
-    frame.className = 'plantuml-frame';
+    frame.className = 'plantuml-frame diagram-preview-frame';
     const decreaseButton = this.createToolButton('−', 'Zoom out');
     const increaseButton = this.createToolButton('+', 'Zoom in');
     const resetButton = this.createToolButton('Reset', 'Reset zoom');
     const reloadButton = this.createToolButton('Reload', 'Reload diagram');
     const maximizeButton = this.createToolButton('Max', 'Maximize diagram');
     maximizeButton.classList.add('plantuml-maximize-btn');
+    setDiagramActionButtonIcon(reloadButton, 'refresh');
+    setDiagramActionButtonIcon(maximizeButton, 'maximize');
     const zoomLabel = document.createElement('span');
-    zoomLabel.className = 'plantuml-zoom-label';
+    zoomLabel.className = 'plantuml-zoom-label diagram-preview-zoom-label';
     zoomLabel.setAttribute('aria-live', 'polite');
 
     toolbar.append(decreaseButton, zoomLabel, resetButton, increaseButton, reloadButton, maximizeButton);
@@ -423,8 +426,10 @@ export class PlantUmlPreviewHydrator extends DiagramPreviewHydrator {
 
     const syncMaximizeButtonState = () => {
       const isMaximized = shell.classList.contains('is-maximized');
-      maximizeButton.textContent = isMaximized ? 'Restore' : 'Max';
-      maximizeButton.setAttribute('aria-label', isMaximized ? 'Restore diagram size' : 'Maximize diagram');
+      setDiagramActionButtonIcon(maximizeButton, isMaximized ? 'restore' : 'maximize');
+      const label = isMaximized ? 'Restore diagram size' : 'Maximize diagram';
+      maximizeButton.setAttribute('aria-label', label);
+      maximizeButton.title = label;
     };
 
     const setMaximizedState = (shouldMaximize) => {
@@ -439,8 +444,9 @@ export class PlantUmlPreviewHydrator extends DiagramPreviewHydrator {
           this.shellRefits.get(activeContainer)?.();
           const activeButton = activeContainer.querySelector('.plantuml-maximize-btn');
           if (activeButton) {
-            activeButton.textContent = 'Max';
+            setDiagramActionButtonIcon(activeButton, 'maximize');
             activeButton.setAttribute('aria-label', 'Maximize diagram');
+            activeButton.title = 'Maximize diagram';
           }
         }
 
@@ -548,8 +554,9 @@ export class PlantUmlPreviewHydrator extends DiagramPreviewHydrator {
   createToolButton(label, ariaLabel) {
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'plantuml-tool-btn';
+    button.className = 'plantuml-tool-btn diagram-preview-action-btn';
     button.setAttribute('aria-label', ariaLabel);
+    button.title = ariaLabel;
     button.textContent = label;
     return button;
   }

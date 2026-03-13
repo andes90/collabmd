@@ -2589,86 +2589,25 @@ html[data-initial-file-requested="true"] .editor-page.hidden {
 
 /* Mermaid diagrams */
 .preview-content .mermaid-shell {
-  margin: var(--space-4) 0;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-3);
   display: grid;
-  gap: var(--space-3);
+  gap: 0;
 }
 .preview-content .mermaid-placeholder-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-offset);
-}
-.preview-content .mermaid-placeholder-copy {
-  display: grid;
-  gap: 2px;
-}
-.preview-content .mermaid-placeholder-copy strong {
-  font-size: var(--text-sm);
-}
-.preview-content .mermaid-placeholder-copy span {
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-}
-.preview-content .mermaid-placeholder-btn {
-  min-width: 64px;
-  height: 30px;
-  padding: 0 var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-size: var(--text-xs);
-  font-weight: 600;
-}
-.preview-content .mermaid-placeholder-btn:hover {
-  background: var(--color-surface-2);
+  border-radius: 0;
 }
 .preview-content .mermaid-toolbar {
-  display: flex;
-  align-items: center;
   justify-content: flex-end;
-  gap: var(--space-2);
 }
 .preview-content .mermaid-zoom-btn {
   min-width: 32px;
-  height: 28px;
-  padding: 0 var(--space-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-2);
-  color: var(--color-text);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  transition: background var(--transition-interactive), color var(--transition-interactive), border-color var(--transition-interactive);
-}
-.preview-content .mermaid-zoom-btn:hover:not(:disabled) {
-  background: var(--color-surface-offset);
+  line-height: 1.5;
 }
 .preview-content .mermaid-zoom-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
-.preview-content .mermaid-zoom-label {
-  min-width: 52px;
-  text-align: center;
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
-}
 .preview-content .mermaid-frame {
-  overflow: auto;
-  padding: 0;
-  background: transparent;
-  overscroll-behavior: contain;
-  max-height: min(70vh, 720px);
+  max-width: none;
 }
 .preview-content .mermaid-frame.is-pannable {
   cursor: grab;
@@ -2694,12 +2633,10 @@ body.mermaid-maximized-open::before {
 .preview-content .mermaid-shell.is-maximized {
   position: fixed;
   inset: var(--space-4);
+  width: auto;
   z-index: 171;
   margin: 0;
   max-width: none;
-  padding: var(--space-4);
-  box-sizing: border-box;
-  background: var(--color-surface);
   box-shadow: var(--shadow-lg);
   grid-template-rows: auto minmax(0, 1fr);
 }
@@ -2711,60 +2648,17 @@ body.mermaid-maximized-open::before {
 /* PlantUML diagrams */
 .preview-content .plantuml-shell,
 .plantuml-maximized-root .plantuml-shell {
-  margin: var(--space-4) 0;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-3);
   display: grid;
-  gap: var(--space-3);
+  gap: 0;
+}
+.preview-content .plantuml-shell,
+.plantuml-maximized-root .plantuml-shell {
   min-width: 0;
   width: 100%;
-  box-sizing: border-box;
 }
 .preview-content .plantuml-placeholder-card,
 .plantuml-maximized-root .plantuml-placeholder-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-offset);
-}
-.preview-content .plantuml-placeholder-copy,
-.plantuml-maximized-root .plantuml-placeholder-copy {
-  display: grid;
-  gap: 2px;
-}
-.preview-content .plantuml-placeholder-copy strong,
-.plantuml-maximized-root .plantuml-placeholder-copy strong {
-  font-size: var(--text-sm);
-}
-.preview-content .plantuml-placeholder-copy span,
-.plantuml-maximized-root .plantuml-placeholder-copy span {
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-}
-.preview-content .plantuml-placeholder-btn,
-.preview-content .plantuml-tool-btn,
-.plantuml-maximized-root .plantuml-placeholder-btn,
-.plantuml-maximized-root .plantuml-tool-btn {
-  min-width: 64px;
-  height: 30px;
-  padding: 0 var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-size: var(--text-xs);
-  font-weight: 600;
-}
-.preview-content .plantuml-placeholder-btn:hover,
-.preview-content .plantuml-tool-btn:hover:not(:disabled),
-.plantuml-maximized-root .plantuml-placeholder-btn:hover,
-.plantuml-maximized-root .plantuml-tool-btn:hover:not(:disabled) {
-  background: var(--color-surface-2);
+  border-radius: 0;
 }
 .preview-content .plantuml-tool-btn:disabled,
 .plantuml-maximized-root .plantuml-tool-btn:disabled {
@@ -2773,31 +2667,15 @@ body.mermaid-maximized-open::before {
 }
 .preview-content .plantuml-toolbar,
 .plantuml-maximized-root .plantuml-toolbar {
-  display: flex;
-  align-items: center;
   justify-content: flex-end;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-  min-width: 0;
 }
-.preview-content .plantuml-zoom-label,
-.plantuml-maximized-root .plantuml-zoom-label {
-  min-width: 52px;
-  text-align: center;
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
+.preview-content .plantuml-tool-btn,
+.plantuml-maximized-root .plantuml-tool-btn {
+  min-width: 32px;
+  line-height: 1.5;
 }
 .preview-content .plantuml-frame,
 .plantuml-maximized-root .plantuml-frame {
-  overflow: auto;
-  padding: var(--space-2);
-  border-radius: var(--radius-md);
-  background: linear-gradient(180deg, var(--color-surface-offset), var(--color-surface));
-  border: 1px solid var(--color-border);
-  max-height: min(70vh, 720px);
-  overscroll-behavior: contain;
-  min-width: 0;
   max-width: 100%;
 }
 .preview-content .plantuml-frame.is-pannable,
@@ -2838,9 +2716,6 @@ body.plantuml-maximized-open::before {
   z-index: 171;
   margin: 0;
   max-width: none;
-  padding: var(--space-4);
-  box-sizing: border-box;
-  background: var(--color-surface);
   box-shadow: var(--shadow-lg);
   pointer-events: auto;
   grid-template-rows: auto minmax(0, 1fr);
@@ -4010,18 +3885,133 @@ body.plantuml-maximized-open::before {
 
 /* ── Excalidraw Embeds ───────────────────────────────────────────── */
 
-.excalidraw-embed,
-.excalidraw-embed-placeholder {
+.diagram-preview-shell {
   margin: var(--space-4) 0;
   border: 1px solid var(--color-border);
   border-radius: 8px;
   overflow: hidden;
   background: var(--color-surface);
-  transition: box-shadow 0.18s ease;
-  display: block;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+}
+
+.diagram-preview-placeholder-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-surface);
+}
+
+.diagram-preview-placeholder-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.diagram-preview-placeholder-copy strong {
+  font-size: var(--text-sm);
+}
+
+.diagram-preview-placeholder-copy span {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.diagram-preview-placeholder-btn {
+  flex-shrink: 0;
+  appearance: none;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.diagram-preview-placeholder-btn:hover {
+  background: var(--color-surface-offset);
+}
+
+.diagram-preview-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-raised);
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  user-select: none;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.diagram-preview-action-btn {
+  flex-shrink: 0;
+  appearance: none;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 oklch(from var(--color-text) l c h / 0.04);
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.diagram-preview-action-btn.is-icon-only {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0;
+}
+
+.diagram-preview-action-btn.is-icon-only svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+.diagram-preview-action-btn:hover:not(:disabled) {
+  background: var(--color-surface-offset);
+  border-color: oklch(from var(--color-border) calc(l + 0.08) c h);
+}
+
+.diagram-preview-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.diagram-preview-zoom-label {
+  min-width: 52px;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.diagram-preview-frame {
+  overflow: auto;
+  padding: var(--space-3);
+  background: transparent;
+  overscroll-behavior: contain;
+  max-height: min(70vh, 720px);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.excalidraw-embed,
+.excalidraw-embed-placeholder {
+  transition: box-shadow 0.18s ease;
+  display: block;
 }
 
 .excalidraw-embed-overlay-root {
@@ -4068,59 +4058,12 @@ body.excalidraw-maximized-open .resizer {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
 }
 
-.excalidraw-embed-placeholder-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  background: var(--color-surface);
-}
-
-.excalidraw-embed-placeholder-copy {
-  display: grid;
-  gap: 2px;
-}
-
-.excalidraw-embed-placeholder-copy strong {
-  font-size: var(--text-sm);
-}
-
-.excalidraw-embed-placeholder-copy span {
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-}
-
-.excalidraw-embed-placeholder-btn {
-  flex-shrink: 0;
-  appearance: none;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface-2);
-  color: var(--color-text);
-  font-size: var(--text-xs);
-  padding: 4px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.excalidraw-embed-placeholder-btn:hover {
-  background: var(--color-surface-offset);
-}
-
 .excalidraw-embed-placeholder.is-hydrated {
   visibility: hidden;
 }
 
 .excalidraw-embed-header {
-  display: flex;
-  align-items: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  background: var(--color-surface-raised);
-  border-bottom: 1px solid var(--color-border);
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  user-select: none;
 }
 
 .excalidraw-embed-icon {
@@ -4137,24 +4080,6 @@ body.excalidraw-maximized-open .resizer {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-weight: 500;
-}
-
-.excalidraw-embed-btn {
-  flex-shrink: 0;
-  appearance: none;
-  border: none;
-  background: var(--color-surface);
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-  padding: 2px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background 0.18s ease, color 0.18s ease;
-}
-
-.excalidraw-embed-btn:hover {
-  background: var(--color-surface-hover);
-  color: var(--color-text);
 }
 
 .excalidraw-embed-iframe {

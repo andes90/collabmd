@@ -399,9 +399,11 @@ export async function getMermaidZoomMetrics(page) {
       return null;
     }
 
+    const styles = window.getComputedStyle(frame);
+    const paddingX = Number.parseFloat(styles.paddingLeft || '0') + Number.parseFloat(styles.paddingRight || '0');
     const viewBox = svg.viewBox?.baseVal;
     const baseWidth = viewBox?.width || Number.parseFloat(svg.getAttribute('width') || '') || 0;
-    const viewportWidth = Math.max(frame.clientWidth, 0);
+    const viewportWidth = Math.max(frame.clientWidth - paddingX, 0);
     const expectedZoom = Math.max(0.5, Math.min(3, viewportWidth / baseWidth));
 
     return {
