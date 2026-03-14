@@ -29,6 +29,7 @@ import { OutlineController } from '../presentation/outline-controller.js';
 import { ScrollSyncController } from '../presentation/scroll-sync-controller.js';
 import { ThemeController } from '../presentation/theme-controller.js';
 import { ToastController } from '../presentation/toast-controller.js';
+import { VideoEmbedController } from '../presentation/video-embed-controller.js';
 
 const APP_SHELL_FEATURES = Object.freeze({
   chat: chatFeature,
@@ -148,18 +149,27 @@ export class CollabMdAppShell {
         this.session?.scrollToLine(sourceLine, 0);
       },
     });
+    this.videoEmbed = new VideoEmbedController({
+      previewElement: this.elements.previewContent,
+    });
     this.previewRenderer = new PreviewRenderer({
       getContent: () => this.getPreviewSource(),
       getFileList: () => this.fileExplorer.flatFiles,
       onAfterRenderCommit: (_previewElement, stats) => {
+        this.videoEmbed.reconcileEmbeds(this.elements.previewContent);
+        this.videoEmbed.syncLayout();
         this.excalidrawEmbed.reconcileEmbeds(this.elements.previewContent, { isLargeDocument: stats.isLargeDocument });
         this.excalidrawEmbed.syncLayout();
         this.scrollSyncController.setLargeDocumentMode(stats.isLargeDocument);
         this.schedulePreviewLayoutSync({ delayMs: 0 });
         this.refreshCommentUiLayout();
       },
-      onBeforeRenderCommit: () => this.excalidrawEmbed.detachForCommit(),
+      onBeforeRenderCommit: () => {
+        this.videoEmbed.detachForCommit();
+        this.excalidrawEmbed.detachForCommit();
+      },
       onRenderComplete: () => {
+        this.videoEmbed.syncLayout();
         this.excalidrawEmbed.syncLayout();
         this.schedulePreviewLayoutSync({ delayMs: 0 });
         this.refreshCommentUiLayout();
@@ -223,6 +233,7 @@ export class CollabMdAppShell {
       previewRenderer: this.previewRenderer,
       schedulePreviewLayoutSync: (options) => this.schedulePreviewLayoutSync(options),
       scrollSyncController: this.scrollSyncController,
+      videoEmbed: this.videoEmbed,
     });
     this.wikiLinkFileController = new WikiLinkFileController({
       getFileList: () => this.fileExplorer.flatFiles,
@@ -369,6 +380,7 @@ export class CollabMdAppShell {
       setSidebarTab: (value) => this.setSidebarTab(value),
       showGitDiff: (route) => this.showGitDiff(route),
       syncMainChrome: (payload) => this.syncMainChrome(payload),
+      videoEmbed: this.videoEmbed,
       workspaceCoordinator: this.workspaceCoordinator,
     });
 

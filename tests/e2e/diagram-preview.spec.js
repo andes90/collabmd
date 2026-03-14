@@ -67,6 +67,137 @@ test('renders embedded PlantUML files through the preview pipeline', async ({ pa
   await expect(page.locator('#previewContent .plantuml-frame')).toContainText('plantuml-embed');
 });
 
+test('renders YouTube markdown image syntax as a video iframe embed', async ({ page }) => {
+  await openFile(page, 'README.md');
+  await replaceEditorContent(page, [
+    '# Video Embed',
+    '',
+    '![Demo video](https://www.youtube.com/watch?v=dQw4w9WgXcQ)',
+  ].join('\n'));
+
+  const iframe = page.locator('#previewContent .video-embed-iframe').first();
+  await expect(iframe).toBeVisible();
+  await expect(iframe).toHaveAttribute('src', 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ');
+  await expect(iframe).toHaveAttribute('title', 'Demo video');
+  await expect(page.locator('#previewContent img')).toHaveCount(0);
+
+  const heights = await page.evaluate(() => {
+    const shell = document.querySelector('#previewContent .video-embed.is-youtube');
+    const frame = document.querySelector('#previewContent .video-embed-frame-youtube');
+    const embeddedIframe = document.querySelector('#previewContent .video-embed-iframe');
+    if (!(shell instanceof HTMLElement) || !(frame instanceof HTMLElement) || !(embeddedIframe instanceof HTMLElement)) {
+      return null;
+    }
+
+    return {
+      frameHeight: Math.round(frame.getBoundingClientRect().height),
+      iframeHeight: Math.round(embeddedIframe.getBoundingClientRect().height),
+      shellContentHeight: Math.round(shell.clientHeight),
+    };
+  });
+  expect(heights).not.toBeNull();
+  expect(Math.abs(heights.frameHeight - heights.shellContentHeight)).toBeLessThanOrEqual(1);
+  expect(Math.abs(heights.iframeHeight - heights.shellContentHeight)).toBeLessThanOrEqual(1);
+});
+
+test('renders direct public video files from markdown image syntax as native video', async ({ page }) => {
+  await openFile(page, 'README.md');
+  await replaceEditorContent(page, [
+    '# Direct Video',
+    '',
+    '![Product demo](https://cdn.example.com/videos/demo.webm)',
+  ].join('\n'));
+
+  const video = page.locator('#previewContent .video-embed-player').first();
+  const source = video.locator('source').first();
+  await expect(video).toBeVisible();
+  await expect(video).toHaveAttribute('controls', '');
+  await expect(video).toHaveAttribute('preload', 'metadata');
+  await expect(video).toHaveAttribute('playsinline', '');
+  await expect(source).toHaveAttribute('src', 'https://cdn.example.com/videos/demo.webm');
+  await expect(source).toHaveAttribute('type', 'video/webm');
+  await expect(page.locator('#previewContent img')).toHaveCount(0);
+});
+
+test('preserves YouTube video embed instances across unrelated preview rerenders', async ({ page }) => {
+  await openFile(page, 'README.md');
+  await replaceEditorContent(page, [
+    '# Video Preserve',
+    '',
+    '![Demo video](https://www.youtube.com/watch?v=dQw4w9WgXcQ)',
+  ].join('\n'));
+
+  await expect(page.locator('#previewContent .video-embed-iframe').first()).toBeVisible();
+
+  await page.evaluate(() => {
+    const iframe = document.querySelector('#previewContent .video-embed-iframe');
+    if (iframe) {
+      iframe.__collabmdPreserveProbe = 'alive';
+      iframe.__collabmdSrcSetCount = 0;
+      const originalSetAttribute = iframe.setAttribute.bind(iframe);
+      iframe.setAttribute = function patchedSetAttribute(name, value) {
+        if (name === 'src') {
+          this.__collabmdSrcSetCount += 1;
+        }
+        return originalSetAttribute(name, value);
+      };
+    }
+  });
+
+  const editor = page.locator('.cm-content').first();
+  await editor.click();
+  await page.keyboard.insertText(' ');
+  await page.keyboard.press('Backspace');
+
+  await expect.poll(async () => (
+    page.evaluate(() => document.querySelector('#previewContent .video-embed-iframe')?.__collabmdPreserveProbe || '')
+  ), { timeout: 60000 }).toBe('alive');
+  await expect.poll(async () => (
+    page.evaluate(() => document.querySelector('#previewContent .video-embed-iframe')?.__collabmdSrcSetCount ?? -1)
+  ), { timeout: 60000 }).toBe(0);
+});
+
+test('preserves direct video embed instances across unrelated preview rerenders', async ({ page }) => {
+  await openFile(page, 'README.md');
+  await replaceEditorContent(page, [
+    '# Direct Video Preserve',
+    '',
+    '![Product demo](https://cdn.example.com/videos/demo.webm)',
+  ].join('\n'));
+
+  await expect(page.locator('#previewContent .video-embed-player').first()).toBeVisible();
+
+  await page.evaluate(() => {
+    const video = document.querySelector('#previewContent .video-embed-player');
+    const source = video?.querySelector('source');
+    if (video) {
+      video.__collabmdPreserveProbe = 'alive';
+    }
+    if (source) {
+      source.__collabmdSrcSetCount = 0;
+      const originalSetAttribute = source.setAttribute.bind(source);
+      source.setAttribute = function patchedSetAttribute(name, value) {
+        if (name === 'src') {
+          this.__collabmdSrcSetCount += 1;
+        }
+        return originalSetAttribute(name, value);
+      };
+    }
+  });
+
+  const editor = page.locator('.cm-content').first();
+  await editor.click();
+  await page.keyboard.insertText(' ');
+  await page.keyboard.press('Backspace');
+
+  await expect.poll(async () => (
+    page.evaluate(() => document.querySelector('#previewContent .video-embed-player')?.__collabmdPreserveProbe || '')
+  ), { timeout: 60000 }).toBe('alive');
+  await expect.poll(async () => (
+    page.evaluate(() => document.querySelector('#previewContent .video-embed-player source')?.__collabmdSrcSetCount ?? -1)
+  ), { timeout: 60000 }).toBe(0);
+});
+
 test('opens excalidraw files with a direct iframe preview', async ({ page }) => {
   await openHome(page);
   await expect(page.locator('#fileTree')).toBeVisible();

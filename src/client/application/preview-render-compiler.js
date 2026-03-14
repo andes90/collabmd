@@ -4,6 +4,22 @@ import hljs from 'highlight.js';
 import { escapeHtml, resolveWikiTarget } from '../domain/vault-utils.js';
 import { analyzeMarkdownComplexity } from './preview-render-profile.js';
 
+const DIRECT_VIDEO_MIME_TYPES = Object.freeze({
+  '.mp4': 'video/mp4',
+  '.ogg': 'video/ogg',
+  '.webm': 'video/webm',
+});
+
+const YOUTUBE_HOSTS = new Set([
+  'youtube.com',
+  'www.youtube.com',
+  'm.youtube.com',
+  'youtu.be',
+  'www.youtu.be',
+  'youtube-nocookie.com',
+  'www.youtube-nocookie.com',
+]);
+
 function renderToken(renderer, tokens, index, options, env, self) {
   return renderer?.(tokens, index, options, env, self) ?? self.renderToken(tokens, index, options);
 }
@@ -60,6 +76,117 @@ function createPlantUmlEmbedShell({ embedKey, label, target }) {
 
 function createExcalidrawPlaceholder({ embedKey, label, target }) {
   return `<span class="excalidraw-embed-placeholder diagram-preview-shell" data-embed-key="${escapeHtml(embedKey)}" data-embed-target="${escapeHtml(target)}" data-embed-label="${escapeHtml(label)}"><span class="excalidraw-embed-placeholder-card diagram-preview-placeholder-card"><span class="excalidraw-embed-placeholder-copy diagram-preview-placeholder-copy"><strong>${escapeHtml(label)}</strong><span>Loads when visible</span></span><button type="button" class="excalidraw-embed-placeholder-btn diagram-preview-placeholder-btn" data-embed-key="${escapeHtml(embedKey)}">Load diagram</button></span></span>`;
+}
+
+function getDirectVideoMimeType(pathname = '') {
+  const match = pathname.toLowerCase().match(/\.(mp4|ogg|webm)$/i);
+  if (!match) {
+    return null;
+  }
+
+  return DIRECT_VIDEO_MIME_TYPES[`.${match[1].toLowerCase()}`] || null;
+}
+
+function normalizeYouTubeVideoId(candidate = '') {
+  const normalized = String(candidate || '').trim();
+  return /^[A-Za-z0-9_-]{11}$/.test(normalized) ? normalized : null;
+}
+
+function getCanonicalYouTubeEmbedUrl(url) {
+  const host = url.hostname.toLowerCase();
+  let videoId = null;
+
+  if (host === 'youtu.be' || host === 'www.youtu.be') {
+    videoId = normalizeYouTubeVideoId(url.pathname.split('/').filter(Boolean)[0] || '');
+  } else if (host.includes('youtube') || host.includes('youtube-nocookie')) {
+    if (url.pathname === '/watch') {
+      videoId = normalizeYouTubeVideoId(url.searchParams.get('v') || '');
+    } else if (url.pathname.startsWith('/embed/')) {
+      videoId = normalizeYouTubeVideoId(url.pathname.split('/').filter(Boolean)[1] || '');
+    }
+  }
+
+  if (!videoId) {
+    return null;
+  }
+
+  return `https://www.youtube-nocookie.com/embed/${videoId}`;
+}
+
+function classifyPublicVideoEmbed(source = '') {
+  let url;
+
+  try {
+    url = new URL(String(source || '').trim());
+  } catch {
+    return null;
+  }
+
+  if (url.protocol !== 'https:') {
+    return null;
+  }
+
+  const host = url.hostname.toLowerCase();
+  if (YOUTUBE_HOSTS.has(host)) {
+    const embedUrl = getCanonicalYouTubeEmbedUrl(url);
+    if (!embedUrl) {
+      return null;
+    }
+
+    return {
+      embedUrl,
+      type: 'youtube',
+    };
+  }
+
+  const mimeType = getDirectVideoMimeType(url.pathname);
+  if (!mimeType) {
+    return null;
+  }
+
+  return {
+    mimeType,
+    sourceUrl: url.toString(),
+    type: 'direct-video',
+  };
+}
+
+function createVideoEmbedPlaceholder({
+  embedKey,
+  kind,
+  label,
+  mimeType = '',
+  source,
+  url,
+}) {
+  const subtitle = kind === 'youtube' ? 'YouTube video' : 'Video file';
+  const mimeTypeAttribute = mimeType ? ` data-video-embed-mime-type="${escapeHtml(mimeType)}"` : '';
+  return `<span class="video-embed-placeholder video-embed-shell diagram-preview-shell" data-video-embed-key="${escapeHtml(embedKey)}" data-video-embed-kind="${escapeHtml(kind)}" data-video-embed-label="${escapeHtml(label)}" data-video-embed-source="${escapeHtml(source)}" data-video-embed-url="${escapeHtml(url)}"${mimeTypeAttribute}><span class="video-embed-placeholder-card diagram-preview-placeholder-card"><span class="video-embed-placeholder-copy diagram-preview-placeholder-copy"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(subtitle)}</span></span></span></span>`;
+}
+
+function renderVideoEmbed(token, videoEmbedCounts) {
+  const source = token.attrGet('src') || '';
+  const classification = classifyPublicVideoEmbed(source);
+  if (!classification) {
+    return null;
+  }
+
+  const title = normalizePreviewTypography(token.content || token.attrGet('title') || '');
+  const preserveSource = classification.type === 'youtube'
+    ? classification.embedUrl
+    : classification.sourceUrl;
+  const occurrenceIndex = videoEmbedCounts.get(preserveSource) ?? 0;
+  videoEmbedCounts.set(preserveSource, occurrenceIndex + 1);
+  const embedKey = `video-${hashString(preserveSource)}-${occurrenceIndex}`;
+
+  return createVideoEmbedPlaceholder({
+    embedKey,
+    kind: classification.type,
+    label: title || 'Embedded video',
+    mimeType: classification.mimeType,
+    source: preserveSource,
+    url: classification.type === 'youtube' ? classification.embedUrl : classification.sourceUrl,
+  });
 }
 
 function renderInlineWikiText(content, {
@@ -170,8 +297,10 @@ function createMarkdownRenderer(fileList = []) {
   const mermaidEmbedCounts = new Map();
   const plantUmlCounts = new Map();
   const plantUmlEmbedCounts = new Map();
+  const videoEmbedCounts = new Map();
 
   const fallbackFence = markdown.renderer.rules.fence;
+  const fallbackImage = markdown.renderer.rules.image;
   const fallbackLinkOpen = markdown.renderer.rules.link_open;
   const fallbackTableOpen = markdown.renderer.rules.table_open;
   const fallbackTableClose = markdown.renderer.rules.table_close;
@@ -264,6 +393,15 @@ function createMarkdownRenderer(fileList = []) {
     tokens[index].attrSet('target', '_blank');
     tokens[index].attrSet('rel', 'noopener noreferrer');
     return renderToken(fallbackLinkOpen, tokens, index, options, env, self);
+  };
+
+  markdown.renderer.rules.image = (tokens, index, options, env, self) => {
+    const renderedVideo = renderVideoEmbed(tokens[index], videoEmbedCounts);
+    if (renderedVideo) {
+      return renderedVideo;
+    }
+
+    return renderToken(fallbackImage, tokens, index, options, env, self);
   };
 
   markdown.renderer.rules.table_open = (tokens, index, options, env, self) => (

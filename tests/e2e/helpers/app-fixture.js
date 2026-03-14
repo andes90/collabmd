@@ -509,22 +509,27 @@ export async function getMermaidZoomMetrics(page) {
   });
 }
 
-export async function getPreviewHorizontalOverflowMetrics(page) {
-  return page.evaluate(() => {
+export async function getPreviewHorizontalOverflowMetrics(page, {
+  buttonSelector = '.plantuml-maximize-btn',
+  frameSelector = '.plantuml-frame',
+  shellSelector = '.plantuml-shell',
+  toolbarSelector = '.plantuml-toolbar',
+} = {}) {
+  return page.evaluate((selectors) => {
     const container = document.getElementById('previewContainer');
-    const shell = document.querySelector('#previewContent .plantuml-shell');
-    const toolbar = document.querySelector('#previewContent .plantuml-toolbar');
-    const frame = document.querySelector('#previewContent .plantuml-frame');
-    const maximizeButton = document.querySelector('#previewContent .plantuml-maximize-btn');
+    const shell = document.querySelector(`#previewContent ${selectors.shellSelector}`);
+    const toolbar = document.querySelector(`#previewContent ${selectors.toolbarSelector}`);
+    const frame = document.querySelector(`#previewContent ${selectors.frameSelector}`);
+    const button = document.querySelector(`#previewContent ${selectors.buttonSelector}`);
 
-    if (!container || !shell || !toolbar || !frame || !maximizeButton) {
+    if (!container || !shell || !toolbar || !frame || !button) {
       return null;
     }
 
     const containerRect = container.getBoundingClientRect();
     const shellRect = shell.getBoundingClientRect();
     const toolbarRect = toolbar.getBoundingClientRect();
-    const buttonRect = maximizeButton.getBoundingClientRect();
+    const buttonRect = button.getBoundingClientRect();
 
     return {
       containerClientWidth: container.clientWidth,
@@ -535,6 +540,11 @@ export async function getPreviewHorizontalOverflowMetrics(page) {
       toolbarRightOverflow: Math.max(0, Math.ceil(toolbarRect.right - containerRect.right)),
       maximizeButtonRightOverflow: Math.max(0, Math.ceil(buttonRect.right - containerRect.right)),
     };
+  }, {
+    buttonSelector,
+    frameSelector,
+    shellSelector,
+    toolbarSelector,
   });
 }
 

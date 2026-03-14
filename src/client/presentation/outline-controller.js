@@ -149,7 +149,7 @@ export class OutlineController {
       return;
     }
 
-    const focusLine = this.previewContainer.scrollTop + (this.previewContainer.clientHeight * 0.35);
+    const focusLine = this.previewContainer.scrollTop + 12;
     let activeHeading = this.headings[0];
 
     for (const heading of this.headings) {

@@ -102,7 +102,7 @@ export class PreviewRenderer {
     }
 
     Array.from(this.previewElement.children).forEach((child) => {
-      if (child === renderHost || child.dataset.excalidrawOverlayRoot === 'true') {
+      if (child === renderHost || child.dataset.excalidrawOverlayRoot === 'true' || child.dataset.videoOverlayRoot === 'true') {
         return;
       }
 

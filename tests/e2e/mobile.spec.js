@@ -99,6 +99,41 @@ test.describe('mobile PlantUML preview', () => {
   });
 });
 
+test.describe('mobile video embeds', () => {
+  test.use({
+    viewport: { width: 390, height: 844 },
+  });
+
+  test('keeps markdown video embeds inside the mobile preview pane', async ({ page }) => {
+    await openFile(page, 'README.md', { waitFor: 'preview' });
+    await expect(page.locator('#editorLayout')).toHaveAttribute('data-view', 'preview');
+
+    await page.locator('#mobileViewToggle').click();
+    await waitForEditor(page);
+    await replaceEditorContent(page, [
+      '# Mobile Video',
+      '',
+      '![Demo video](https://www.youtube.com/watch?v=dQw4w9WgXcQ)',
+    ].join('\n'));
+    await page.locator('#mobileViewToggle').click();
+    await expect(page.locator('#previewContent .video-embed-iframe')).toBeVisible();
+
+    const metrics = await getPreviewHorizontalOverflowMetrics(page, {
+      buttonSelector: '.video-embed-iframe',
+      frameSelector: '.video-embed-frame',
+      shellSelector: '.video-embed-shell',
+      toolbarSelector: '.video-embed-frame',
+    });
+    expect(metrics).not.toBeNull();
+    expect(metrics.containerScrollWidth - metrics.containerClientWidth).toBeLessThanOrEqual(1);
+    expect(metrics.shellRightOverflow).toBeLessThanOrEqual(1);
+    expect(metrics.toolbarRightOverflow).toBeLessThanOrEqual(1);
+    expect(metrics.maximizeButtonRightOverflow).toBeLessThanOrEqual(1);
+    expect(metrics.frameClientWidth).toBeGreaterThan(0);
+    expect(metrics.frameClientWidth).toBeLessThanOrEqual(metrics.containerClientWidth);
+  });
+});
+
 test.describe('mobile sidebar', () => {
   test.use({
     viewport: { width: 390, height: 844 },

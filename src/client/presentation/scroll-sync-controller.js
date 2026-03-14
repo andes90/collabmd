@@ -3,6 +3,7 @@ import { clamp } from '../domain/vault-utils.js';
 const VIEWPORT_FOCUS_RATIO = 0.35;
 const LARGE_DOCUMENT_EDITOR_IDLE_MS = 120;
 const MIN_VIEWPORT_FOCUS_OFFSET = 12;
+const TOP_SCROLL_EPSILON = 2;
 
 function getScrollableRange(element) {
   return Math.max(element.scrollHeight - element.clientHeight, 0);
@@ -14,6 +15,10 @@ function clampScrollTop(value) {
 
 function getViewportFocusOffset(element) {
   return Math.max(element.clientHeight * VIEWPORT_FOCUS_RATIO, MIN_VIEWPORT_FOCUS_OFFSET);
+}
+
+function isNearTopOfScrollRange(element) {
+  return (element?.scrollTop ?? 0) <= TOP_SCROLL_EPSILON;
 }
 
 function getElementScrollTop(container, element) {
@@ -330,6 +335,10 @@ export class ScrollSyncController {
   }
 
   getPreviewScrollTopForEditorLine() {
+    if (isNearTopOfScrollRange(this.editorScroller)) {
+      return 0;
+    }
+
     const lineNumber = this.getEditorLineNumber?.();
     if (!Number.isFinite(lineNumber)) {
       return null;

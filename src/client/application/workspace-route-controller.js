@@ -23,6 +23,7 @@ export class WorkspaceRouteController {
     setCurrentFilePath,
     showGitDiff,
     syncMainChrome,
+    videoEmbed,
     workspaceCoordinator,
     layoutController,
   }) {
@@ -49,6 +50,7 @@ export class WorkspaceRouteController {
     this.setCurrentFilePath = setCurrentFilePath;
     this.showGitDiff = showGitDiff;
     this.syncMainChrome = syncMainChrome;
+    this.videoEmbed = videoEmbed;
     this.workspaceCoordinator = workspaceCoordinator;
     this.layoutController = layoutController;
   }
@@ -96,6 +98,7 @@ export class WorkspaceRouteController {
       this.elements.previewContent.innerHTML = '';
       this.elements.previewContent.dataset.renderPhase = 'ready';
     }
+    this.videoEmbed?.reconcileEmbeds(this.elements.previewContent);
     this.resetPreviewSurface();
 
     this.renderAvatars();
@@ -125,6 +128,7 @@ export class WorkspaceRouteController {
       this.elements.previewContent.innerHTML = '';
       this.elements.previewContent.dataset.renderPhase = 'ready';
     }
+    this.videoEmbed?.reconcileEmbeds(this.elements.previewContent);
     this.resetPreviewSurface();
 
     this.elements.outlineToggle?.classList.add('hidden');
@@ -159,6 +163,7 @@ export class WorkspaceRouteController {
   resetPreviewSurface() {
     this.previewRenderer.setHydrationPaused(false);
     this.excalidrawEmbed.setHydrationPaused(false);
+    this.videoEmbed?.detachForCommit();
     this.scrollSyncController.setLargeDocumentMode(false);
     this.scrollSyncController.invalidatePreviewBlocks();
   }

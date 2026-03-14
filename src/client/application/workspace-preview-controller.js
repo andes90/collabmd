@@ -18,6 +18,7 @@ export class WorkspacePreviewController {
     previewRenderer,
     schedulePreviewLayoutSync,
     scrollSyncController,
+    videoEmbed,
   }) {
     this.backlinksPanel = backlinksPanel;
     this.elements = elements;
@@ -32,6 +33,7 @@ export class WorkspacePreviewController {
     this.previewRenderer = previewRenderer;
     this.schedulePreviewLayoutSyncCallback = schedulePreviewLayoutSync;
     this.scrollSyncController = scrollSyncController;
+    this.videoEmbed = videoEmbed;
   }
 
   createDiagramPreviewDocument(language, source = '') {
@@ -91,6 +93,7 @@ export class WorkspacePreviewController {
       return;
     }
 
+    this.videoEmbed?.detachForCommit();
     this.excalidrawEmbed.detachForCommit();
     this.resetPreviewMode();
     previewElement.classList.add('is-excalidraw-file-preview');
@@ -115,6 +118,7 @@ export class WorkspacePreviewController {
     this.outlineController.refresh();
     this.scrollSyncController.setLargeDocumentMode(false);
     this.scrollSyncController.invalidatePreviewBlocks();
+    this.videoEmbed?.reconcileEmbeds(previewElement);
     this.excalidrawEmbed.reconcileEmbeds(previewElement, { isLargeDocument: false });
     this.excalidrawEmbed.hydrateVisibleEmbeds();
     this.schedulePreviewLayoutSyncCallback({ delayMs: 0 });
@@ -177,6 +181,7 @@ export class WorkspacePreviewController {
 
       this.previewRenderer.scheduleActiveMermaidRefit();
       this.previewRenderer.scheduleActivePlantUmlRefit();
+      this.videoEmbed?.syncLayout();
       this.excalidrawEmbed.syncLayout();
       if (isExcalidrawPreview && !hasSession) {
         return;

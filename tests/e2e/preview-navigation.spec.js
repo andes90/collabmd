@@ -80,6 +80,37 @@ test('scrolls the editor to the selected heading when navigating from the outlin
   await expect(page.locator('#outlineNav .outline-item.active').first()).toHaveText('Second section');
 });
 
+test('keeps the preview pinned to the top when a file first opens at the top of the editor', async ({ page }) => {
+  await openFile(page, 'showcase.md');
+  await expect(page.locator('#previewContent h1', { hasText: 'CollabMD Workspace Tour' })).toBeVisible();
+
+  await expect.poll(async () => (
+    page.locator('#previewContainer').evaluate((element) => Math.round(element.scrollTop))
+  ), { timeout: 15000 }).toBe(0);
+
+  const previewHeadingOffset = await page.locator('#previewContent h1', { hasText: 'CollabMD Workspace Tour' }).evaluate((heading) => {
+    const container = document.getElementById('previewContainer');
+    const containerRect = container.getBoundingClientRect();
+    const headingRect = heading.getBoundingClientRect();
+    return Math.abs(headingRect.top - containerRect.top);
+  });
+
+  expect(previewHeadingOffset).toBeLessThan(80);
+});
+
+test('keeps the clicked parent heading active in the outline after navigation', async ({ page }) => {
+  await openFile(page, 'showcase.md');
+  await page.locator('#outlineToggle').click();
+  await expect(page.locator('#outlinePanel')).toBeVisible();
+
+  await page.locator('#outlineNav .outline-item', { hasText: 'Embedded Diagram Files' }).click();
+
+  await expect.poll(async () => {
+    const activeItem = page.locator('#outlineNav .outline-item.active').first();
+    return activeItem.textContent();
+  }, { timeout: 15000 }).toBe('Embedded Diagram Files');
+});
+
 test('keeps the outline open on desktop after selecting a section', async ({ page }) => {
   await openFile(page, 'README.md');
   await replaceEditorContent(page, OUTLINE_TEST_DOCUMENT);
