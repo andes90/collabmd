@@ -1,6 +1,6 @@
 {
   "name": "collabmd",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "type": "module",
   "description": "Collaborative markdown vault — like Obsidian, but online. Serve any directory of markdown files for realtime collaborative editing.",
   "files": [
