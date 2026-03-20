@@ -1,9 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { request } from 'node:http';
-import { join } from 'path';
-import { tmpdir } from 'os';
 
 import { loadConfig } from '../../src/server/config/env.js';
 import { createAuthService, AUTH_STRATEGY_PASSWORD } from '../../src/server/auth/create-auth-service.js';
@@ -32,11 +29,6 @@ function httpRequest(url, { method = 'GET', headers = {}, body } = {}) {
     if (body) req.write(body);
     req.end();
   });
-}
-
-function extractCookieHeader(setCookieHeader) {
-  const rawValue = Array.isArray(setCookieHeader) ? setCookieHeader[0] : setCookieHeader;
-  return String(rawValue || '').split(';')[0];
 }
 
 function withEnvCleared(fn) {
@@ -86,33 +78,43 @@ test('session TTL is configurable via env', () => withEnvCleared(() => {
 
 // --- Password session expiry tests ---
 
-test('expired password sessions are rejected', () => withEnvCleared(() => {
-  const config = loadConfig({
-    auth: { password: 'test-pass', strategy: 'password', sessionTtlMs: 1 },
-    vaultDir: process.cwd(),
-  });
-  const authService = createAuthService(config);
-  const request = { headers: {} };
+test('expired password sessions are rejected', async () => {
+  const saved = {};
+  const keys = ['AUTH_STRATEGY', 'AUTH_PASSWORD', 'AUTH_SESSION_TTL_MS'];
+  for (const key of keys) {
+    saved[key] = process.env[key];
+    delete process.env[key];
+  }
 
-  const session = authService.createSession(request, { password: 'test-pass' });
-  assert.equal(session.statusCode, 200);
+  try {
+    const config = loadConfig({
+      auth: { password: 'test-pass', strategy: 'password', sessionTtlMs: 1 },
+      vaultDir: process.cwd(),
+    });
+    const authService = createAuthService(config);
+    const req = { headers: {} };
 
-  const authenticatedReq = { headers: { cookie: session.setCookie } };
+    const session = authService.createSession(req, { password: 'test-pass' });
+    assert.equal(session.statusCode, 200);
 
-  // Session should be valid immediately
-  assert.equal(authService.authorizeApiRequest(authenticatedReq).ok, true);
+    const authenticatedReq = { headers: { cookie: session.setCookie } };
+    assert.equal(authService.authorizeApiRequest(authenticatedReq).ok, true);
 
-  // After TTL, session should expire (we set TTL to 1ms)
-  const check = () => new Promise((resolve) => {
-    setTimeout(() => {
-      resolve(authService.authorizeApiRequest(authenticatedReq));
-    }, 10);
-  });
-  return check().then((result) => {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    const result = authService.authorizeApiRequest(authenticatedReq);
     assert.equal(result.ok, false);
     assert.equal(result.statusCode, 401);
-  });
-}));
+  } finally {
+    for (const key of keys) {
+      if (saved[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = saved[key];
+      }
+    }
+  }
+});
 
 // --- Path traversal tests ---
 

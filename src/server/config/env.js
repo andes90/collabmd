@@ -2,7 +2,6 @@ import { resolve } from 'path';
 import { fileURLToPath } from 'url';
 
 import {
-  AUTH_STRATEGY_NONE,
   AUTH_STRATEGY_OIDC,
   AUTH_STRATEGY_PASSWORD,
   SUPPORTED_AUTH_STRATEGIES,
