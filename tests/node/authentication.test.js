@@ -4,7 +4,6 @@ import { createSign, generateKeyPairSync } from 'node:crypto';
 import { createServer } from 'node:http';
 
 import {
-  AUTH_STRATEGY_NONE,
   AUTH_STRATEGY_OIDC,
   AUTH_STRATEGY_PASSWORD,
   createAuthService,
