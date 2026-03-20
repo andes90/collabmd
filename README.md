@@ -30,8 +30,7 @@ Requirements for the fastest first run:
 ## Quick start
 
 ```bash
-# Run locally first, no Cloudflare tunnel required
-npx collabmd@latest ~/my-vault --no-tunnel
+npx collabmd@latest ~/my-vault
 ```
 
 Open `http://localhost:1234`.
@@ -89,7 +88,7 @@ Prefer video? [Open the WebM demo](https://raw.githubusercontent.com/andes90/col
 If you have Node.js installed, you can run CollabMD directly without installing it globally:
 
 ```bash
-npx collabmd@latest ~/my-vault --no-tunnel
+npx collabmd@latest ~/my-vault
 ```
 
 Open `http://localhost:1234`.
@@ -99,14 +98,14 @@ Open `http://localhost:1234`.
 ```bash
 brew tap andes90/tap
 brew install collabmd
-collabmd ~/my-vault --no-tunnel
+collabmd ~/my-vault
 ```
 
 Or in a single command:
 
 ```bash
 brew install andes90/tap/collabmd
-collabmd ~/my-vault --no-tunnel
+collabmd ~/my-vault
 ```
 
 Open `http://localhost:1234`.
@@ -119,42 +118,48 @@ cd collabmd
 npm install
 npm run build
 npm link       # optional: makes `collabmd` available globally
-collabmd ~/my-vault --no-tunnel
+collabmd ~/my-vault
 ```
 
 Open `http://localhost:1234`.
 
-For a safer first run, start local-only:
+Auth is on by default. To disable it for local-only use:
 
 ```bash
-collabmd ~/my-vault --no-tunnel
+collabmd ~/my-vault --auth none
 ```
-
-If you want to share the session over the internet, protect it first:
-
-```bash
-collabmd ~/my-vault --auth password
-```
-
-If `cloudflared` is installed, CollabMD starts a quick tunnel by default unless you pass `--no-tunnel`.
 
 ## Share with a collaborator
 
-If you want to share the workspace over the internet, start with password auth:
+Password auth is on by default, so just share the printed password. To also
+expose the session over the internet with a Cloudflare Tunnel:
 
 ```bash
-collabmd ~/my-vault --auth password
+collabmd ~/my-vault --tunnel
 ```
 
-Then share the printed URL and password with your collaborator. If `cloudflared` is installed, CollabMD will start a quick tunnel automatically unless you pass `--no-tunnel`.
+Share the printed URL and password with your collaborator.
 
-## Safety first
+## Security
 
-- Treat the URL as write access to the vault unless you enable auth
-- `--auth password` protects `/api/*` and `/ws/*` with a host password and signed session cookie
-- `--auth oidc` signs users in with Google and uses the verified Google name/email as the in-app identity and git commit author
-- If `cloudflared` is installed, CollabMD may expose the app through a Cloudflare Quick Tunnel unless you pass `--no-tunnel`
-- `--auth oidc` requires a stable `PUBLIC_BASE_URL`; Quick Tunnel URLs are not supported for OIDC
+Authentication is enabled by default. CollabMD starts with `--auth password` and generates a unique password for each run. To disable auth explicitly, pass `--auth none`.
+
+For production deployments, use `--auth oidc` with Google OIDC and restrict access with `AUTH_OIDC_ALLOWED_EMAILS` or `AUTH_OIDC_ALLOWED_DOMAINS`.
+
+**Security controls:**
+
+- **Auth required by default** - password auth with per-run generated secret. OIDC recommended for production.
+- **Session expiry** - password sessions expire after 24 hours (configurable via `AUTH_SESSION_TTL_MS`). Session secrets rotate on restart.
+- **Rate limiting** - login endpoint limited to 5 attempts per IP per 60 seconds.
+- **Path traversal protection** - vault paths resolved and verified against the vault root. Null bytes rejected. WebSocket room names validated.
+- **Content-Security-Policy** - strict CSP on all responses. `html: false` in the markdown parser. All dynamic content escaped.
+- **CSRF protection** - same-origin check on all write methods. Cross-origin writes rejected.
+- **Secure cookies** - HttpOnly, SameSite=Lax, Secure when behind TLS.
+- **Docker hardened** - non-root user, all capabilities dropped, read-only root filesystem, no-new-privileges.
+- **Git SSH** - strict host key checking when `known_hosts` is provided. Warning logged on accept-new fallback.
+- **Tunnel disabled by default** - pass `--tunnel` explicitly to start a Cloudflare Tunnel.
+
+For the full threat model and coordinated disclosure policy, see [SECURITY.md](SECURITY.md).
 
 ## Current limitations
 
@@ -166,7 +171,7 @@ Then share the printed URL and password with your collaborator. If `cloudflared`
 ## How it works
 
 ```bash
-collabmd ~/my-vault --no-tunnel
+collabmd ~/my-vault
 ```
 
 CollabMD starts a local server, scans the vault, and opens a browser-based editor with:
@@ -204,36 +209,39 @@ collabmd [directory] [options]
 |--------|-------------|---------|
 | `-p, --port` | Port to listen on | `1234` |
 | `--host` | Host to bind to | `127.0.0.1` |
-| `--auth` | Auth strategy: `none`, `password`, `oidc` | `none` |
+| `--auth` | Auth strategy: `none`, `password`, `oidc` | `password` |
 | `--auth-password` | Password for `--auth password` | generated per run |
 | `--local-plantuml` | Start the bundled local docker-compose PlantUML service | off |
-| `--no-tunnel` | Don't start Cloudflare Tunnel | tunnel on |
+| `--tunnel` | Start a Cloudflare Tunnel | off |
 | `-v, --version` | Show version | |
 | `-h, --help` | Show help | |
 
 ### Examples
 
 ```bash
-# Serve the current directory locally
-collabmd --no-tunnel
+# Serve the current directory (password auth on by default)
+collabmd
 
-# Serve a specific vault locally
-collabmd ~/my-vault --no-tunnel
+# Serve a specific vault
+collabmd ~/my-vault
 
-# Use a custom port, no tunnel
-collabmd --port 3000 --no-tunnel
+# Use a custom port
+collabmd --port 3000
 
-# Share with collaborators using a generated password
-collabmd --auth password
+# Disable auth for local-only use
+collabmd --auth none
 
 # Require an explicit password
-collabmd --auth password --auth-password "shared-secret"
+collabmd --auth-password "shared-secret"
+
+# Share over the internet with a tunnel
+collabmd --tunnel
 
 # Use Google OIDC on a stable public domain
 PUBLIC_BASE_URL=https://notes.example.com \
 AUTH_OIDC_CLIENT_ID=your-google-client-id \
 AUTH_OIDC_CLIENT_SECRET=your-google-client-secret \
-collabmd --auth oidc --no-tunnel
+collabmd --auth oidc
 
 # Use the local docker-compose PlantUML service
 collabmd --local-plantuml
@@ -246,12 +254,12 @@ collabmd ~/Documents/Obsidian/MyVault
 
 CollabMD can optionally expose the session using a [Cloudflare Quick Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/). Since the editor uses same-origin WebSocket routing (`/ws/:file`), the tunnel works for both HTTP and collaboration traffic.
 
-If you are exposing the session publicly, `collabmd --auth password` is the intended first-line protection. When you do not pass `--auth-password`, CollabMD generates a password for that host run and prints it in the terminal. Restarting the app rotates that password and the signed session secret.
+Auth is enabled by default. When you do not pass `--auth-password`, CollabMD generates a password for that run and prints it in the terminal. Restarting the app rotates that password and the signed session secret.
 
-To share safely:
+To share with a tunnel:
 
 ```bash
-collabmd ~/my-vault --auth password
+collabmd ~/my-vault --tunnel
 ```
 
 `cloudflared` is optional. Install it only if you want public tunnel access:
@@ -259,10 +267,10 @@ collabmd ~/my-vault --auth password
 - macOS: `brew install cloudflared`
 - Linux/Windows: [official installer](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)
 
-To disable the tunnel:
+The tunnel is off by default. To enable it:
 
 ```bash
-collabmd --no-tunnel
+collabmd --tunnel
 ```
 
 ### Google OIDC setup
@@ -545,10 +553,11 @@ scripts/
 |----------|-------------|---------|
 | `HOST` | Bind host | `127.0.0.1` (dev), `0.0.0.0` (prod) |
 | `PORT` | HTTP + WebSocket port | `1234` |
-| `AUTH_STRATEGY` | Auth strategy: `none`, `password`, `oidc` | `none` |
+| `AUTH_STRATEGY` | Auth strategy: `none`, `password`, `oidc` | `password` |
 | `AUTH_PASSWORD` | Shared password for `AUTH_STRATEGY=password` | generated per run |
 | `AUTH_SESSION_COOKIE_NAME` | Session cookie name | `collabmd_auth` |
 | `AUTH_SESSION_SECRET` | Cookie signing secret | generated per run |
+| `AUTH_SESSION_TTL_MS` | Password session lifetime in milliseconds | `86400000` (24h) |
 | `PUBLIC_BASE_URL` | Stable public app origin required for `AUTH_STRATEGY=oidc` | |
 | `AUTH_OIDC_CLIENT_ID` | Google OAuth client ID used for `AUTH_STRATEGY=oidc` | |
 | `AUTH_OIDC_CLIENT_SECRET` | Google OAuth client secret used for `AUTH_STRATEGY=oidc` | |
@@ -591,7 +600,7 @@ cp .env.example .env
 
 - The filesystem is the source of truth; Yjs provides the collaboration layer.
 - When `COLLABMD_GIT_REPO_URL` is set, startup clones the configured repo into `COLLABMD_VAULT_DIR` on first boot and reuses an existing same-origin checkout on later starts.
-- If `COLLABMD_GIT_SSH_KNOWN_HOSTS_FILE` is not set, SSH falls back to `StrictHostKeyChecking=accept-new`.
+- If `COLLABMD_GIT_SSH_KNOWN_HOSTS_FILE` is not set, SSH falls back to `StrictHostKeyChecking=accept-new` with a startup warning. Set a known_hosts file for production.
 - External filesystem edits are reconciled back into active rooms and the explorer. Ambiguous watcher bursts still fall back to batched workspace reconciliation.
 - `.obsidian`, `.git`, `.trash`, and `node_modules` directories are ignored.
 - Only `.md`, `.markdown`, and `.mdx` files are indexed.
