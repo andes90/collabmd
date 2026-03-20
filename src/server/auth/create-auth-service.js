@@ -229,10 +229,20 @@ function buildClientConfig(authConfig, { basePath = '' } = {}) {
 
 function createPasswordStrategy(authConfig, sessionCookieManager, clientConfig) {
   const expectedPasswordHash = hashPassword(authConfig.password);
+  const sessionTtlMs = Number(authConfig.sessionTtlMs) || 24 * 60 * 60 * 1000;
 
   function hasValidSession(req) {
     const session = sessionCookieManager.readSession(req);
-    return session?.strategy === AUTH_STRATEGY_PASSWORD;
+    if (session?.strategy !== AUTH_STRATEGY_PASSWORD) {
+      return false;
+    }
+
+    const authenticatedAt = Number(session.authenticatedAt);
+    if (Number.isFinite(authenticatedAt) && (Date.now() - authenticatedAt) > sessionTtlMs) {
+      return false;
+    }
+
+    return true;
   }
 
   return {
@@ -260,6 +270,7 @@ function createPasswordStrategy(authConfig, sessionCookieManager, clientConfig) 
         }, { kind: 'invalid_credentials' });
       }
 
+      const authenticatedAt = Date.now();
       return createResponse(200, {
         auth: clientConfig,
         authenticated: true,
@@ -268,8 +279,10 @@ function createPasswordStrategy(authConfig, sessionCookieManager, clientConfig) 
       }, {
         kind: 'session_created',
         setCookie: sessionCookieManager.createSessionCookie(req, {
-          authenticatedAt: Date.now(),
+          authenticatedAt,
           strategy: AUTH_STRATEGY_PASSWORD,
+        }, {
+          expires: new Date(authenticatedAt + sessionTtlMs),
         }),
       });
     },

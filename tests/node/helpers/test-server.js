@@ -30,8 +30,9 @@ export async function startTestServer(overrides = {}) {
   // Seed a default test file
   await writeFile(join(vaultDir, 'test.md'), '# Test\n\nHello from test vault.\n', 'utf-8');
 
+  const defaultTestAuth = { strategy: 'none' };
   const baseConfig = loadConfig({
-    auth: overrides.auth,
+    auth: overrides.auth ?? defaultTestAuth,
     vaultDir,
   });
   const config = {

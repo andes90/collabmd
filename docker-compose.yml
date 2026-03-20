@@ -6,7 +6,7 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: 1234
-      AUTH_STRATEGY: ${AUTH_STRATEGY:-none}
+      AUTH_STRATEGY: ${AUTH_STRATEGY:-password}
       AUTH_PASSWORD: ${AUTH_PASSWORD:-}
       AUTH_SESSION_COOKIE_NAME: ${AUTH_SESSION_COOKIE_NAME:-collabmd_auth}
       AUTH_SESSION_SECRET: ${AUTH_SESSION_SECRET:-}

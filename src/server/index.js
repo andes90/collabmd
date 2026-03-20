@@ -65,6 +65,7 @@ server.listen().then(({ host, port, wsPath }) => {
     console.log(`  callback: ${server.config.auth.oidc.callbackUrl}`);
   } else {
     console.log('  auth: none');
+    console.log('  WARNING: Authentication is disabled. Anyone with network access can read and modify your vault.');
   }
   console.log('');
 }).catch(async (error) => {
