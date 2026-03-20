@@ -278,6 +278,11 @@ function buildGitSshCommand({
     commandParts.push('-o', quoteShellArg(`StrictHostKeyChecking=yes`));
     commandParts.push('-o', quoteShellArg(`UserKnownHostsFile=${knownHostsFile}`));
   } else {
+    console.warn(
+      '[git] WARNING: No known_hosts file configured (COLLABMD_GIT_SSH_KNOWN_HOSTS_FILE).'
+      + ' Using StrictHostKeyChecking=accept-new, which trusts the remote host key on first'
+      + ' connection. Set a known_hosts file for production deployments.',
+    );
     commandParts.push('-o', quoteShellArg('StrictHostKeyChecking=accept-new'));
   }
 
