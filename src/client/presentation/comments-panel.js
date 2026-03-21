@@ -463,7 +463,7 @@ export class CommentsPanel {
 
     const cancelButton = document.createElement('button');
     cancelButton.type = 'button';
-    cancelButton.className = 'btn btn-secondary';
+    cancelButton.className = 'ui-button btn btn-secondary';
     cancelButton.textContent = 'Cancel';
     cancelButton.addEventListener('click', () => {
       this.replyDraftThreadId = null;
@@ -472,7 +472,7 @@ export class CommentsPanel {
 
     const submitButton = document.createElement('button');
     submitButton.type = 'submit';
-    submitButton.className = 'btn btn-primary';
+    submitButton.className = 'ui-button btn btn-primary';
     submitButton.textContent = 'Reply';
 
     actions.append(cancelButton, submitButton);

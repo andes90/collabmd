@@ -1,0 +1,92 @@
+/* ===== VIEW MODES ===== */
+
+.editor-layout[data-view="editor"] .preview-pane,
+.editor-layout[data-view="editor"] .resizer {
+  display: none;
+}
+
+.editor-layout[data-view="preview"] .editor-pane,
+.editor-layout[data-view="preview"] .resizer {
+  display: none;
+}
+
+.editor-layout[data-view="preview"] .preview-pane {
+  flex: 1;
+}
+
+.editor-layout[data-view="preview"] .preview-body {
+  --preview-content-max-width: 1080px;
+}
+
+.editor-layout[data-view="preview"] .preview-content {
+  max-width: 1080px;
+}
+
+.editor-layout[data-view="preview"] .preview-content.is-excalidraw-file-preview,
+.editor-layout[data-view="preview"] .preview-content.is-image-file-preview,
+.editor-layout[data-view="preview"] .preview-content.is-mermaid-file-preview,
+.editor-layout[data-view="preview"] .preview-content.is-plantuml-file-preview {
+  max-width: none;
+}
+
+.editor-layout[data-view="preview"] .preview-content p {
+  max-width: 84ch;
+}
+
+.editor-layout[data-view="preview"] .preview-content p:has(> .excalidraw-embed-placeholder:only-child),
+.editor-layout[data-view="preview"] .preview-content p:has(> .video-embed-placeholder:only-child),
+.editor-layout[data-view="preview"] .preview-content p:has(> .mermaid-shell:only-child),
+.editor-layout[data-view="preview"] .preview-content p:has(> .plantuml-shell:only-child) {
+  max-width: none;
+}
+
+@media (min-width: 769px) {
+  .preview-body > .comments-drawer,
+  .preview-body > .outline-panel {
+    position: absolute;
+    top: var(--preview-floating-sidebar-gap);
+    right: var(--preview-floating-sidebar-gap);
+    bottom: var(--preview-floating-sidebar-gap);
+    z-index: 20;
+    overflow: hidden;
+    border: 1px solid var(--color-divider);
+    border-radius: calc(var(--radius-lg) + 2px);
+    box-shadow: var(--shadow-lg);
+    backdrop-filter: blur(14px);
+  }
+
+  .preview-body > .comments-drawer {
+    width: var(--preview-floating-comments-width);
+    min-width: 240px;
+    border-left: 1px solid var(--color-divider);
+  }
+
+  .preview-body > .outline-panel {
+    width: var(--preview-floating-outline-width);
+    border-left: 1px solid var(--color-divider);
+  }
+
+  .preview-body > .comments-drawer.hidden,
+  .preview-body > .outline-panel.hidden {
+    display: flex !important;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(12px);
+    visibility: hidden;
+  }
+
+  .preview-body > .comments-drawer:not(.hidden),
+  .preview-body > .outline-panel:not(.hidden) {
+    opacity: 1;
+    transform: translateX(0);
+    visibility: visible;
+  }
+
+  .preview-body:has(> .outline-panel:not(.hidden)) > .comments-drawer:not(.hidden) {
+    right: calc(var(--preview-floating-sidebar-gap) * 2 + var(--preview-floating-outline-width));
+  }
+}
+
+.editor-layout[data-view="editor"] .editor-pane {
+  flex: 1;
+}

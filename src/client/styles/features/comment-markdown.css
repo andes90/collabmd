@@ -1,0 +1,127 @@
+/* ===== COMMENTS / MARKDOWN ===== */
+
+.comment-markdown {
+  color: var(--color-text);
+  font-size: var(--text-label);
+  line-height: 1.65;
+}
+
+.comment-markdown > :first-child {
+  margin-top: 0;
+}
+
+.comment-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.comment-markdown p,
+.comment-markdown ul,
+.comment-markdown ol,
+.comment-markdown blockquote,
+.comment-markdown pre,
+.comment-markdown .comment-markdown-table,
+.comment-markdown table {
+  max-width: none;
+}
+
+.comment-markdown p,
+.comment-markdown ul,
+.comment-markdown ol,
+.comment-markdown blockquote,
+.comment-markdown pre,
+.comment-markdown .comment-markdown-table {
+  margin: var(--space-2) 0;
+}
+
+.comment-markdown li + li {
+  margin-top: 4px;
+}
+
+.comment-markdown ul,
+.comment-markdown ol {
+  padding-left: var(--space-5);
+}
+
+.comment-markdown a {
+  color: var(--color-primary);
+  overflow-wrap: anywhere;
+  text-decoration: underline;
+}
+
+.comment-markdown blockquote {
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid oklch(from var(--color-comment) l c h / 0.45);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: var(--surface-comment-offset-strong);
+  color: var(--color-text-muted);
+}
+
+.comment-markdown code {
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-comment-offset-soft);
+  color: var(--color-primary);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+.comment-markdown pre {
+  max-width: 100%;
+  overflow: auto;
+  border: 1px solid var(--border-comment-muted);
+  border-radius: var(--radius-lg);
+  background: var(--surface-comment-elevated);
+}
+
+.comment-markdown pre code {
+  display: block;
+  width: max-content;
+  min-width: 100%;
+  padding: var(--space-3);
+  background: none;
+  color: var(--color-text);
+  white-space: pre;
+  font-size: var(--text-label);
+  line-height: 1.6;
+}
+
+.comment-markdown .comment-markdown-table {
+  overflow: auto;
+  border: 1px solid var(--border-comment-muted);
+  border-radius: var(--radius-md);
+}
+
+.comment-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.comment-markdown th,
+.comment-markdown td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-divider);
+  text-align: left;
+  font-size: var(--text-label);
+}
+
+.comment-markdown th {
+  background: var(--surface-comment-offset);
+}
+
+.comment-markdown-preview > :not(pre):not(blockquote):not(.comment-markdown-table) {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+}
+
+.comment-markdown-preview pre code {
+  width: 100%;
+  min-width: 0;
+  max-height: 6.6rem;
+  overflow: hidden;
+}
+
+.comment-markdown-preview .comment-markdown-table {
+  display: none;
+}

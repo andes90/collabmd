@@ -1,0 +1,160 @@
+/* ===== DIFF / LINES ===== */
+
+.diff-hunk-header,
+.diff-split-hunk {
+  padding: 4px 14px 4px 84px;
+  background: var(--diff-hunk-bg);
+  color: var(--diff-hunk-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+}
+
+.diff-line {
+  display: flex;
+  align-items: stretch;
+  min-height: 20px;
+  font-family: var(--font-mono);
+  font-size: var(--text-ui-sm);
+  line-height: 20px;
+}
+
+.diff-line-numbers {
+  display: flex;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.diff-line-num {
+  width: 40px;
+  padding: 0 8px;
+  border-right: 1px solid var(--color-divider);
+  color: var(--diff-gutter);
+  text-align: right;
+  font-size: var(--text-label);
+}
+
+.diff-line-num:first-child {
+  border-right: none;
+}
+
+.diff-line-prefix {
+  width: 20px;
+  padding-left: 8px;
+  flex-shrink: 0;
+  font-weight: 500;
+  user-select: none;
+}
+
+.diff-line-content {
+  flex: 1;
+  padding: 0 10px;
+  white-space: pre;
+  tab-size: 4;
+}
+
+.diff-line.addition {
+  background: var(--diff-add-bg);
+}
+
+.diff-line.addition .diff-line-num {
+  background: var(--diff-add-line-bg);
+  color: var(--diff-add-text);
+}
+
+.diff-line.addition .diff-line-prefix {
+  color: var(--diff-add-text);
+}
+
+.diff-line.deletion {
+  background: var(--diff-del-bg);
+}
+
+.diff-line.deletion .diff-line-num {
+  background: var(--diff-del-line-bg);
+  color: var(--diff-del-text);
+}
+
+.diff-line.deletion .diff-line-prefix {
+  color: var(--diff-del-text);
+}
+
+.diff-line.note {
+  background: var(--color-surface-offset);
+  color: var(--color-text-faint);
+}
+
+.diff-highlight-add {
+  padding: 0 1px;
+  border-radius: var(--radius-2xs);
+  background: var(--diff-add-line-bg);
+}
+
+.diff-highlight-del {
+  padding: 0 1px;
+  border-radius: var(--radius-2xs);
+  background: var(--diff-del-line-bg);
+}
+
+.diff-split {
+  display: block;
+}
+
+.diff-split-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.diff-split-pane-header {
+  display: none;
+}
+
+.diff-split-line {
+  display: flex;
+  min-height: 20px;
+  font-family: var(--font-mono);
+  font-size: var(--text-ui-sm);
+  line-height: 20px;
+}
+
+.diff-split-line:first-child {
+  border-right: 1px solid var(--color-divider);
+}
+
+.diff-split-num {
+  width: 44px;
+  padding: 0 8px;
+  border-right: 1px solid var(--color-divider);
+  color: var(--diff-gutter);
+  text-align: right;
+  font-size: var(--text-label);
+}
+
+.diff-split-content {
+  flex: 1;
+  padding: 0 10px;
+  white-space: pre;
+  tab-size: 4;
+}
+
+.diff-split-line.addition {
+  background: var(--diff-add-bg);
+}
+
+.diff-split-line.addition .diff-split-num {
+  background: var(--diff-add-line-bg);
+  color: var(--diff-add-text);
+}
+
+.diff-split-line.deletion {
+  background: var(--diff-del-bg);
+}
+
+.diff-split-line.deletion .diff-split-num {
+  background: var(--diff-del-line-bg);
+  color: var(--diff-del-text);
+}
+
+.diff-split-line.empty {
+  background: var(--color-surface-offset);
+  opacity: 0.45;
+}

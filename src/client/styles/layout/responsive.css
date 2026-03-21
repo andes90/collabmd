@@ -1,0 +1,251 @@
+/* ===== MOBILE / RESPONSIVE ===== */
+
+@media (max-width: 768px) {
+  .input,
+  .sidebar-search-input,
+  .qs-input,
+  .chat-input,
+  .editor-container .cm-editor {
+    font-size: 16px;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 100;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .sidebar.collapsed {
+    display: none;
+  }
+
+  .ui-toolbar-button-label {
+    display: none;
+  }
+
+  .toolbar-center {
+    display: none;
+  }
+
+  .mobile-view-toggle {
+    display: flex !important;
+  }
+
+  .ui-toolbar-button--name {
+    max-width: none;
+  }
+
+  .sidebar-close-btn {
+    display: inline-flex;
+  }
+
+  .ui-nav-tabs {
+    padding: 0 var(--space-1);
+  }
+
+  .ui-nav-tab {
+    padding: var(--space-2);
+  }
+
+  .editor-layout {
+    flex-direction: column;
+  }
+
+  .resizer {
+    display: none !important;
+  }
+
+  .editor-layout[data-view="split"] .preview-pane {
+    display: none;
+  }
+
+  .editor-layout[data-view="split"] .editor-pane {
+    flex: 1;
+  }
+
+  .preview-content {
+    padding: var(--space-4);
+  }
+
+  .backlinks-panel-layer {
+    display: none !important;
+  }
+
+  .diff-toolbar {
+    flex-wrap: wrap;
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .diff-toolbar-left,
+  .diff-toolbar-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .diff-toolbar-left {
+    flex-wrap: wrap;
+  }
+
+  .diff-toolbar-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .diff-toolbar-actions-group-git {
+    flex: 1;
+  }
+
+  .diff-toolbar-actions-group-git .ui-action-button {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .diff-toolbar-actions-divider {
+    display: none;
+  }
+
+  .diff-mode-btn {
+    min-width: 74px;
+  }
+
+  .diff-layout-btn {
+    min-width: 78px;
+  }
+
+  .diff-split-row {
+    grid-template-columns: 1fr;
+  }
+
+  .diff-commit-shell {
+    grid-template-columns: 1fr;
+    padding: var(--space-3);
+  }
+
+  .diff-commit-index {
+    position: static;
+    max-height: none;
+  }
+
+  .diff-commit-section-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .diff-commit-section-meta {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .diff-split-line:first-child {
+    border-right: none;
+    border-bottom: 1px solid var(--color-divider);
+  }
+
+  .markdown-toolbar {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: thin;
+  }
+
+  .outline-panel {
+    position: absolute;
+    inset: 0;
+    width: auto;
+    border-top: 1px solid var(--color-divider);
+    border-left: none;
+    background: oklch(from var(--color-surface) l c h / 0.98);
+    backdrop-filter: blur(10px);
+    box-shadow: var(--shadow-lg);
+    z-index: 6;
+  }
+
+  .outline-panel.hidden {
+    display: none !important;
+  }
+
+  #outlineToggle {
+    display: inline-flex !important;
+  }
+
+  .toolbar {
+    padding: 0 var(--space-2);
+  }
+
+  .toolbar-room-name {
+    max-width: 120px;
+    font-size: var(--text-xs);
+  }
+
+  .chat-panel {
+    position: fixed;
+    top: calc(var(--toolbar-h) + var(--space-2));
+    right: var(--space-2);
+    left: var(--space-2);
+    width: auto;
+    max-height: calc(100vh - var(--toolbar-h) - var(--space-6));
+  }
+
+  .chat-form {
+    align-items: stretch;
+  }
+
+  .chat-send-btn {
+    padding-inline: var(--space-3);
+  }
+
+  .comment-card {
+    width: min(100vw - 32px, 520px);
+    max-height: min(72vh, 680px);
+  }
+
+  .comment-thread-card-actions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+
+  .comment-reaction-picker {
+    left: 0;
+    right: auto;
+    min-width: min(240px, calc(100vw - 64px));
+  }
+
+  .excalidraw-embed.is-maximized {
+    inset: var(--space-3);
+    width: auto;
+  }
+
+  .excalidraw-embed.is-maximized .excalidraw-embed-iframe {
+    height: auto !important;
+  }
+
+  .image-lightbox-toolbar {
+    top: var(--space-3);
+    left: var(--space-3);
+    right: var(--space-3);
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .image-lightbox-controls {
+    justify-content: flex-start;
+  }
+
+  .image-lightbox-btn {
+    flex: 0 0 auto;
+  }
+
+  .image-lightbox-image {
+    max-width: calc(100vw - (var(--space-4) * 2));
+    max-height: calc(100vh - (var(--space-4) * 2));
+  }
+}
+
+@media (min-width: 769px) {
+  .mobile-view-toggle {
+    display: none !important;
+  }
+}

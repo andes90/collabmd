@@ -1,0 +1,143 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/andes90/collabmd
+  pullPolicy: IfNotPresent
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext: {}
+
+securityContext: {}
+
+service:
+  type: ClusterIP
+  port: 1234
+  targetPort: 1234
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: chart-example.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+persistence:
+  enabled: true
+  mountPath: /data
+  accessModes:
+    - ReadWriteOnce
+  size: 10Gi
+  storageClass: ""
+  existingClaim: ""
+  annotations: {}
+
+config:
+  host: 0.0.0.0
+  port: 1234
+  vaultDir: /data
+  basePath: ""
+  publicBaseUrl: ""
+  publicWsBaseUrl: ""
+  wsBasePath: /ws
+  plantumlServerUrl: https://www.plantuml.com/plantuml
+  httpKeepAliveTimeoutMs: 5000
+  httpHeadersTimeoutMs: 60000
+  httpRequestTimeoutMs: 30000
+  wsHeartbeatIntervalMs: 30000
+  wsMaxBufferedAmountBytes: 16777216
+  wsMaxPayloadBytes: 16777216
+
+auth:
+  strategy: none
+  password:
+    value: ""
+    existingSecret: ""
+    existingSecretKey: AUTH_PASSWORD
+  sessionSecret:
+    value: ""
+    existingSecret: ""
+    existingSecretKey: AUTH_SESSION_SECRET
+  oidc:
+    clientId: ""
+    clientSecret: ""
+    existingSecret: ""
+    clientIdKey: AUTH_OIDC_CLIENT_ID
+    clientSecretKey: AUTH_OIDC_CLIENT_SECRET
+    allowedEmails: ""
+    allowedDomains: ""
+
+git:
+  enabled: true
+  repoUrl: ""
+  userName: ""
+  userEmail: ""
+  ssh:
+    privateKeyBase64: ""
+    existingSecret: ""
+    existingSecretKey: COLLABMD_GIT_SSH_PRIVATE_KEY_B64
+    privateKeyFileSecret: ""
+    privateKeyFileSecretKey: id_ed25519
+    knownHostsSecret: ""
+    knownHostsSecretKey: known_hosts
+    mountPaths:
+      privateKeyFile: /etc/collabmd/git/id_ed25519
+      knownHostsFile: /etc/collabmd/git/known_hosts
+
+plantuml:
+  enabled: false
+  image:
+    repository: plantuml/plantuml-server
+    pullPolicy: IfNotPresent
+    tag: jetty
+  service:
+    port: 8080
+    annotations: {}
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+networkPolicy:
+  enabled: false
+  ingress:
+    namespaceSelector: {}
+    podSelector: {}
+    additionalFrom: []
+  egress:
+    allowDns: true
+    additionalTo: []
+
+tests:
+  enabled: true

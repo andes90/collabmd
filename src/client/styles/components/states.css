@@ -1,0 +1,289 @@
+/* ===== COMPONENTS / STATES ===== */
+
+.ui-pill-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 20px;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  font-size: var(--text-meta);
+  font-weight: 600;
+}
+
+.ui-pill-badge--count {
+  min-width: 20px;
+  padding-inline: 6px;
+}
+
+.ui-pill-badge--accent {
+  background: var(--color-primary-highlight);
+  color: var(--color-primary);
+}
+
+.ui-pill-badge--solid {
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+}
+
+.ui-pill-badge--muted {
+  background: var(--color-surface-dynamic);
+  color: var(--color-text-muted);
+}
+
+.ui-pill-badge--code {
+  background: var(--color-surface-offset-2);
+  color: var(--color-text-faint);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.ui-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border-radius: var(--radius-2xs);
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.ui-status-badge--success {
+  color: var(--color-success);
+  background: var(--surface-success-soft);
+}
+
+.ui-status-badge--warning {
+  color: var(--color-warning);
+  background: var(--surface-warning-soft);
+}
+
+.ui-status-badge--danger {
+  color: var(--color-error);
+  background: var(--surface-danger-soft);
+}
+
+.ui-status-badge--accent {
+  color: var(--color-primary);
+  background: var(--surface-accent-soft);
+}
+
+.ui-status-badge--muted {
+  color: var(--color-text-faint);
+  background: var(--color-surface-offset);
+}
+
+.ui-stat-token {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  white-space: nowrap;
+}
+
+.ui-stat-token--add {
+  color: var(--diff-add-text);
+}
+
+.ui-stat-token--del {
+  color: var(--diff-del-text);
+}
+
+.ui-chip-button {
+  --ui-chip-border: var(--color-border);
+  --ui-chip-bg: var(--color-surface);
+  --ui-chip-color: var(--color-text-muted);
+  --ui-chip-border-hover: var(--ui-chip-border);
+  --ui-chip-bg-hover: var(--color-surface-offset);
+  --ui-chip-color-hover: var(--color-text);
+  --ui-chip-border-active: var(--ui-chip-border-hover);
+  --ui-chip-bg-active: var(--ui-chip-bg-hover);
+  --ui-chip-color-active: var(--ui-chip-color-hover);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 1px solid var(--ui-chip-border);
+  border-radius: var(--radius-full);
+  background: var(--ui-chip-bg);
+  color: var(--ui-chip-color);
+  transition:
+    background var(--transition-interactive),
+    border-color var(--transition-interactive),
+    color var(--transition-interactive),
+    transform 140ms ease;
+  font-size: var(--text-meta);
+  font-weight: 600;
+}
+
+.ui-chip-button:hover {
+  color: var(--ui-chip-color-hover);
+  border-color: var(--ui-chip-border-hover);
+  background: var(--ui-chip-bg-hover);
+}
+
+.ui-chip-button.is-active,
+.ui-chip-button[aria-pressed='true'] {
+  color: var(--ui-chip-color-active);
+  border-color: var(--ui-chip-border-active);
+  background: var(--ui-chip-bg-active);
+}
+
+.ui-chip-button--comment {
+  --ui-chip-border: var(--border-comment-muted);
+  --ui-chip-bg: var(--surface-comment-offset);
+  --ui-chip-border-hover: oklch(from var(--color-comment) l c h / 0.22);
+  --ui-chip-bg-hover: var(--surface-comment-offset-active);
+  --ui-chip-border-active: oklch(from var(--color-comment) l c h / 0.28);
+  --ui-chip-bg-active: var(--surface-comment-selection);
+  --ui-chip-color-active: var(--color-comment);
+}
+
+.ui-icon-chip {
+  --ui-icon-chip-border: var(--color-border);
+  --ui-icon-chip-bg: var(--color-surface-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
+  border: 1px solid var(--ui-icon-chip-border);
+  border-radius: var(--radius-md);
+  background: var(--ui-icon-chip-bg);
+  transition:
+    background var(--transition-interactive),
+    border-color var(--transition-interactive),
+    transform 140ms ease;
+  font-size: var(--text-title-md);
+}
+
+.ui-icon-chip:hover {
+  border-color: var(--ui-icon-chip-border);
+  background: var(--ui-icon-chip-bg);
+  transform: translateY(-1px);
+}
+
+.ui-icon-chip--comment {
+  --ui-icon-chip-border: var(--border-comment-muted);
+  --ui-icon-chip-bg: var(--surface-comment-subtle-strong);
+}
+
+.ui-icon-chip--comment:hover {
+  border-color: oklch(from var(--color-comment) l c h / 0.24);
+  background: var(--surface-comment-offset-active);
+}
+
+.ui-state-marker {
+  --ui-marker-border: var(--color-border);
+  --ui-marker-bg: var(--color-surface);
+  --ui-marker-color: var(--color-text);
+  --ui-marker-shadow: var(--shadow-md);
+  --ui-marker-border-active: var(--ui-marker-border);
+  --ui-marker-bg-active: var(--ui-marker-bg);
+  --ui-marker-color-active: var(--ui-marker-color);
+  --ui-marker-border-passive: var(--ui-marker-border);
+  --ui-marker-bg-passive: var(--ui-marker-bg);
+  --ui-marker-border-hover: var(--ui-marker-border-active);
+  --ui-marker-bg-hover: var(--ui-marker-bg-active);
+  --ui-marker-color-hover: var(--ui-marker-color-active);
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 28px;
+  height: 24px;
+  padding: 0 7px;
+  border: 1px solid var(--ui-marker-border);
+  border-radius: var(--radius-full);
+  background: var(--ui-marker-bg);
+  color: var(--ui-marker-color);
+  box-shadow: var(--ui-marker-shadow);
+  pointer-events: auto;
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    opacity 140ms ease;
+  font-size: var(--text-caption);
+  font-weight: 700;
+}
+
+.ui-state-marker.is-active {
+  border-color: var(--ui-marker-border-active);
+  background: var(--ui-marker-bg-active);
+  color: var(--ui-marker-color-active);
+}
+
+.ui-state-marker.is-passive {
+  opacity: 0.48;
+  border-color: var(--ui-marker-border-passive);
+  background: var(--ui-marker-bg-passive);
+  box-shadow: none;
+}
+
+.ui-state-marker.is-hovered {
+  opacity: 1;
+  border-color: var(--ui-marker-border-hover);
+  background: var(--ui-marker-bg-hover);
+  color: var(--ui-marker-color-hover);
+}
+
+.ui-state-marker:hover {
+  transform: translateY(-1px) scale(1.04);
+  box-shadow: var(--shadow-lg);
+}
+
+.ui-state-marker--comment {
+  --ui-marker-border: oklch(from var(--color-comment) l c h / 0.24);
+  --ui-marker-bg: var(--surface-comment-offset-active);
+  --ui-marker-color: var(--color-comment);
+  --ui-marker-border-active: oklch(from var(--color-comment) l c h / 0.32);
+  --ui-marker-bg-active: var(--surface-comment-selection);
+  --ui-marker-color-active: var(--color-text-inverse);
+  --ui-marker-border-passive: oklch(from var(--color-comment) l c h / 0.16);
+  --ui-marker-bg-passive: var(--surface-comment-offset-soft);
+  --ui-marker-border-hover: oklch(from var(--color-comment) l c h / 0.28);
+  --ui-marker-bg-hover: var(--surface-comment-offset-strong);
+  --ui-marker-color-hover: var(--color-text-inverse);
+}
+
+.ui-selection-pill {
+  position: absolute;
+  min-width: 96px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-full);
+  text-align: center;
+  box-shadow: var(--shadow-md);
+  pointer-events: auto;
+  transition: transform 140ms ease, box-shadow 140ms ease;
+  font-size: var(--text-meta);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.ui-selection-pill:hover {
+  transform: translateY(-1px) scale(1.04);
+  box-shadow: var(--shadow-lg);
+}
+
+.ui-selection-pill--comment {
+  border-color: oklch(from var(--color-comment) l c h / 0.22);
+  background: var(--surface-comment-selection);
+  color: var(--color-text-inverse);
+}

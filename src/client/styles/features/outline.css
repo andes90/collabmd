@@ -1,0 +1,115 @@
+/* ===== PREVIEW SIDEBARS / OUTLINE ===== */
+
+.outline-panel {
+  display: flex;
+  flex-direction: column;
+  width: 220px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--color-divider);
+  background: var(--color-surface-offset);
+  transition: width 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.15s ease;
+}
+
+.outline-panel.hidden {
+  width: 0;
+  border-left: none;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.outline-header {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-divider);
+  flex-shrink: 0;
+}
+
+.outline-title {
+  color: var(--color-text-muted);
+  font-size: var(--text-meta);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.outline-nav {
+  flex: 1;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: var(--space-2) 0;
+}
+
+.outline-nav::-webkit-scrollbar {
+  width: 4px;
+}
+
+.outline-nav::-webkit-scrollbar-thumb {
+  background: var(--color-surface-dynamic);
+  border-radius: var(--radius-full);
+}
+
+.outline-item {
+  display: block;
+  width: 100%;
+  padding: 3px var(--space-3);
+  border: none;
+  border-left: 2px solid transparent;
+  background: none;
+  color: var(--color-text-muted);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: color var(--transition-interactive), border-color var(--transition-interactive), background var(--transition-interactive);
+  font-family: var(--font-body);
+  font-size: var(--text-label);
+  line-height: 1.5;
+}
+
+.outline-item:hover {
+  color: var(--color-text);
+  background: var(--color-surface-dynamic);
+}
+
+.outline-item.active {
+  border-left-color: var(--color-primary);
+  background: oklch(from var(--color-primary) l c h / 0.06);
+  color: var(--color-primary);
+}
+
+.outline-item[data-level='1'] {
+  padding-left: var(--space-3);
+  font-weight: 600;
+}
+
+.outline-item[data-level='2'] {
+  padding-left: calc(var(--space-3) + 12px);
+}
+
+.outline-item[data-level='3'] {
+  padding-left: calc(var(--space-3) + 24px);
+  font-size: var(--text-meta);
+}
+
+.outline-item[data-level='4'] {
+  padding-left: calc(var(--space-3) + 36px);
+  font-size: var(--text-meta);
+}
+
+.outline-item[data-level='5'] {
+  padding-left: calc(var(--space-3) + 48px);
+  font-size: var(--text-meta);
+}
+
+.outline-item[data-level='6'] {
+  padding-left: calc(var(--space-3) + 60px);
+  font-size: var(--text-meta);
+}
+
+.outline-empty {
+  padding: var(--space-4) var(--space-3);
+  color: var(--color-text-faint);
+  font-size: var(--text-label);
+  font-style: italic;
+}

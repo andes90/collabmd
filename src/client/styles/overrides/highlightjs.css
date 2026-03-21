@@ -1,0 +1,7 @@
+/* ===== OVERRIDES / HIGHLIGHTJS ===== */
+
+[data-theme="light"] .preview-content pre,
+[data-theme="light"] .preview-content pre code,
+[data-theme="light"] .hljs {
+  background: var(--color-surface) !important;
+}

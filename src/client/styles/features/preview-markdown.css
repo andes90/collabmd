@@ -1,0 +1,201 @@
+/* ===== PREVIEW / MARKDOWN ===== */
+
+.preview-content h1 {
+  margin: var(--space-8) 0 var(--space-4);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-divider);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.preview-content h1:first-child {
+  margin-top: 0;
+}
+
+.preview-content h2 {
+  margin: var(--space-6) 0 var(--space-3);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.preview-content h3 {
+  margin: var(--space-5) 0 var(--space-2);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.preview-content h4,
+.preview-content h5,
+.preview-content h6 {
+  margin: var(--space-4) 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.preview-content p {
+  max-width: 72ch;
+  margin-bottom: var(--space-4);
+}
+
+.preview-content p:has(> .excalidraw-embed-placeholder:only-child),
+.preview-content p:has(> .video-embed-placeholder:only-child),
+.preview-content p:has(> .plantuml-shell:only-child) {
+  max-width: none;
+  margin-bottom: 0;
+}
+
+.preview-content a {
+  color: var(--color-primary);
+  text-decoration: none;
+  border-bottom: 1px solid oklch(from var(--color-primary) l c h / 0.3);
+  transition: border-color var(--transition-interactive);
+}
+
+.preview-content a:hover {
+  border-bottom-color: var(--color-primary);
+}
+
+.preview-content strong {
+  font-weight: 600;
+}
+
+.preview-content em {
+  font-style: italic;
+}
+
+.preview-content del {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+}
+
+.preview-content ul,
+.preview-content ol {
+  margin-bottom: var(--space-4);
+  padding-left: var(--space-6);
+}
+
+.preview-content li {
+  margin-bottom: var(--space-1);
+}
+
+.preview-content li > ul,
+.preview-content li > ol {
+  margin-top: var(--space-1);
+  margin-bottom: 0;
+}
+
+.preview-content .task-list-item {
+  list-style: none;
+  margin-left: calc(var(--space-6) * -1);
+  padding-left: var(--space-1);
+}
+
+.preview-content .task-list-item input[type='checkbox'] {
+  margin-right: var(--space-2);
+  accent-color: var(--color-primary);
+  vertical-align: middle;
+}
+
+.preview-content blockquote {
+  margin: var(--space-4) 0;
+  padding: var(--space-3) var(--space-5);
+  border-left: 3px solid var(--color-primary);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+}
+
+.preview-content blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+.preview-content code {
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-offset);
+  color: var(--color-primary);
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+}
+
+.preview-content pre {
+  max-width: 100%;
+  margin: var(--space-4) 0;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  -webkit-overflow-scrolling: touch;
+}
+
+.preview-content pre code {
+  display: block;
+  width: fit-content;
+  min-width: 100%;
+  padding: var(--space-4);
+  background: none;
+  color: var(--color-text);
+  font-size: var(--text-ui-sm);
+  line-height: 1.6;
+  white-space: pre;
+  word-wrap: normal;
+  overflow-wrap: normal;
+}
+
+.preview-content .table-wrapper {
+  margin: var(--space-4) 0;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  -webkit-overflow-scrolling: touch;
+}
+
+.preview-content table {
+  width: 100%;
+  min-width: 100%;
+  border-collapse: collapse;
+  white-space: nowrap;
+}
+
+.preview-content th,
+.preview-content td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-divider);
+  text-align: left;
+  font-size: var(--text-sm);
+}
+
+.preview-content th {
+  background: var(--color-surface-offset);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.preview-content tr:last-child td {
+  border-bottom: none;
+}
+
+.preview-content tr:hover td {
+  background: var(--color-surface-offset);
+}
+
+.preview-content hr {
+  height: 1px;
+  margin: var(--space-8) 0;
+  border: none;
+  background: var(--color-divider);
+}
+
+.preview-content img {
+  max-width: 100%;
+  height: auto;
+  margin: var(--space-4) 0;
+  border-radius: var(--radius-md);
+  cursor: zoom-in;
+}

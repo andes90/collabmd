@@ -1,0 +1,19 @@
+apiVersion: v2
+name: collabmd
+description: A Helm chart for deploying CollabMD on Kubernetes
+type: application
+version: 0.1.0
+appVersion: "0.1.21"
+home: https://github.com/andes90/collabmd
+sources:
+  - https://github.com/andes90/collabmd
+keywords:
+  - markdown
+  - collaboration
+  - docs
+  - obsidian
+  - kubernetes
+maintainers:
+  - name: andes90
+annotations:
+  category: Application

@@ -1,0 +1,155 @@
+/* ===== GIT / BRANCH ===== */
+
+.git-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.git-panel.active {
+  display: flex;
+}
+
+.git-branch-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--color-divider);
+  font-size: var(--text-xs);
+}
+
+.git-branch-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+  width: 100%;
+}
+
+.git-branch-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-offset);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-weight: 500;
+}
+
+.git-branch-name svg {
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+
+.git-sync-info {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  flex-shrink: 0;
+}
+
+.git-sync-metric {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.git-sync-metric--ahead {
+  color: var(--color-success);
+}
+
+.git-sync-metric--behind {
+  color: var(--color-text-faint);
+}
+
+.git-sync-info-muted {
+  color: var(--color-text-faint);
+}
+
+.git-change-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.git-branch-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+}
+
+.git-panel-mode-switch {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.git-panel-mode-btn {
+  min-width: 0;
+}
+
+.git-branch-actions .ui-action-pill {
+  width: 100%;
+  justify-content: center;
+}
+
+.git-branch-actions .ui-action-pill svg {
+  flex-shrink: 0;
+}
+
+.git-change-add {
+  color: var(--diff-add-text);
+}
+
+.git-change-del {
+  color: var(--diff-del-text);
+}
+
+.git-panel-footer {
+  margin-top: auto;
+  padding: var(--space-3);
+  border-top: 1px solid var(--color-divider);
+}
+
+.git-panel-footer-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.git-panel-footer-actions .ui-action-button {
+  width: 100%;
+}
+
+.git-footer-commit-btn {
+  width: 100%;
+  border: 1px solid var(--border-accent-soft);
+  background: var(--surface-accent-soft);
+  color: var(--color-primary);
+}
+
+.git-footer-commit-btn:hover:not(:disabled) {
+  background: var(--surface-accent-strong);
+}
+
+.git-panel-empty {
+  padding: var(--space-4);
+  color: var(--color-text-faint);
+  text-align: center;
+  font-size: var(--text-xs);
+}

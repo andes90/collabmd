@@ -1,0 +1,104 @@
+/* ===== COMPONENTS / SCROLLBARS ===== */
+
+.preview-container,
+.cm-scroller,
+.file-tree,
+.git-panel,
+.diff-scroll,
+.comments-drawer-list,
+.comments-drawer-item-quote,
+.comment-card-quote,
+.comment-card-scroll,
+.markdown-toolbar,
+.comment-markdown pre,
+.comment-markdown .comment-markdown-table,
+.preview-content pre,
+.preview-content .table-wrapper,
+.preview-content .mermaid-frame,
+.preview-content .plantuml-frame,
+.plantuml-maximized-root .plantuml-frame {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-surface-dynamic) transparent;
+}
+
+.preview-container::-webkit-scrollbar,
+.cm-scroller::-webkit-scrollbar,
+.file-tree::-webkit-scrollbar,
+.git-panel::-webkit-scrollbar,
+.diff-scroll::-webkit-scrollbar,
+.comments-drawer-list::-webkit-scrollbar,
+.comments-drawer-item-quote::-webkit-scrollbar,
+.comment-card-quote::-webkit-scrollbar,
+.comment-card-scroll::-webkit-scrollbar,
+.markdown-toolbar::-webkit-scrollbar,
+.comment-markdown pre::-webkit-scrollbar,
+.comment-markdown .comment-markdown-table::-webkit-scrollbar,
+.preview-content pre::-webkit-scrollbar,
+.preview-content .table-wrapper::-webkit-scrollbar,
+.preview-content .mermaid-frame::-webkit-scrollbar,
+.preview-content .plantuml-frame::-webkit-scrollbar,
+.plantuml-maximized-root .plantuml-frame::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.preview-container::-webkit-scrollbar-track,
+.cm-scroller::-webkit-scrollbar-track,
+.file-tree::-webkit-scrollbar-track,
+.git-panel::-webkit-scrollbar-track,
+.diff-scroll::-webkit-scrollbar-track,
+.comments-drawer-list::-webkit-scrollbar-track,
+.comments-drawer-item-quote::-webkit-scrollbar-track,
+.comment-card-quote::-webkit-scrollbar-track,
+.comment-card-scroll::-webkit-scrollbar-track,
+.markdown-toolbar::-webkit-scrollbar-track,
+.comment-markdown pre::-webkit-scrollbar-track,
+.comment-markdown .comment-markdown-table::-webkit-scrollbar-track,
+.preview-content pre::-webkit-scrollbar-track,
+.preview-content .table-wrapper::-webkit-scrollbar-track,
+.preview-content .mermaid-frame::-webkit-scrollbar-track,
+.preview-content .plantuml-frame::-webkit-scrollbar-track,
+.plantuml-maximized-root .plantuml-frame::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.preview-container::-webkit-scrollbar-thumb,
+.cm-scroller::-webkit-scrollbar-thumb,
+.file-tree::-webkit-scrollbar-thumb,
+.git-panel::-webkit-scrollbar-thumb,
+.diff-scroll::-webkit-scrollbar-thumb,
+.comments-drawer-list::-webkit-scrollbar-thumb,
+.comments-drawer-item-quote::-webkit-scrollbar-thumb,
+.comment-card-quote::-webkit-scrollbar-thumb,
+.comment-card-scroll::-webkit-scrollbar-thumb,
+.markdown-toolbar::-webkit-scrollbar-thumb,
+.comment-markdown pre::-webkit-scrollbar-thumb,
+.comment-markdown .comment-markdown-table::-webkit-scrollbar-thumb,
+.preview-content pre::-webkit-scrollbar-thumb,
+.preview-content .table-wrapper::-webkit-scrollbar-thumb,
+.preview-content .mermaid-frame::-webkit-scrollbar-thumb,
+.preview-content .plantuml-frame::-webkit-scrollbar-thumb,
+.plantuml-maximized-root .plantuml-frame::-webkit-scrollbar-thumb {
+  background: var(--color-surface-dynamic);
+  border-radius: var(--radius-full);
+}
+
+.preview-container::-webkit-scrollbar-thumb:hover,
+.cm-scroller::-webkit-scrollbar-thumb:hover,
+.file-tree::-webkit-scrollbar-thumb:hover,
+.git-panel::-webkit-scrollbar-thumb:hover,
+.diff-scroll::-webkit-scrollbar-thumb:hover,
+.comments-drawer-list::-webkit-scrollbar-thumb:hover,
+.comments-drawer-item-quote::-webkit-scrollbar-thumb:hover,
+.comment-card-quote::-webkit-scrollbar-thumb:hover,
+.comment-card-scroll::-webkit-scrollbar-thumb:hover,
+.markdown-toolbar::-webkit-scrollbar-thumb:hover,
+.comment-markdown pre::-webkit-scrollbar-thumb:hover,
+.comment-markdown .comment-markdown-table::-webkit-scrollbar-thumb:hover,
+.preview-content pre::-webkit-scrollbar-thumb:hover,
+.preview-content .table-wrapper::-webkit-scrollbar-thumb:hover,
+.preview-content .mermaid-frame::-webkit-scrollbar-thumb:hover,
+.preview-content .plantuml-frame::-webkit-scrollbar-thumb:hover,
+.plantuml-maximized-root .plantuml-frame::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-faint);
+}

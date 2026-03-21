@@ -1,0 +1,105 @@
+/* ===== GIT / FILES ===== */
+
+.git-section {
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.git-section-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--text-meta);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-align: left;
+}
+
+.git-section-header:hover {
+  background: var(--color-surface-offset);
+}
+
+.git-section-count {
+  min-height: 20px;
+}
+
+.git-section-chevron {
+  color: var(--color-text-faint);
+  transition: transform 150ms ease;
+}
+
+.git-section-chevron.collapsed {
+  transform: rotate(-90deg);
+}
+
+.git-file-list {
+  padding: var(--space-1) 0;
+}
+
+.git-file-row {
+  margin: 0 var(--space-2) 2px;
+  --ui-item-row-bg-hover: var(--color-surface-offset);
+  --ui-item-row-bg-active: var(--color-primary-highlight);
+}
+
+.git-file-item {
+  padding: 5px var(--space-2) 5px calc(var(--space-2) + 10px);
+  border-radius: calc(var(--radius-md) - 2px);
+  background: transparent;
+  color: var(--color-text-muted);
+  text-align: left;
+  transition: color var(--transition-interactive);
+}
+
+.git-file-item:hover {
+  color: var(--color-text);
+}
+
+.git-file-item.active {
+  color: var(--color-primary);
+}
+
+.git-file-row.active .git-file-path {
+  color: color-mix(in oklab, var(--color-primary) 56%, var(--color-text-muted));
+}
+
+.git-file-icon {
+  flex-shrink: 0;
+  opacity: 0.5;
+}
+
+.git-file-copy {
+  min-width: 0;
+}
+
+.git-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-ui-sm);
+}
+
+.git-file-path {
+  overflow: hidden;
+  color: var(--color-text-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-meta);
+}
+
+.git-file-actions {
+  padding-right: 4px;
+}
+
+.git-file-actions .ui-action-icon {
+  width: 30px;
+}
+
+.git-file-row.active .ui-action-icon--surface {
+  background: var(--surface-accent-subtle);
+  color: var(--color-text);
+}

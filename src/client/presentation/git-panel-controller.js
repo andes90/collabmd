@@ -46,15 +46,15 @@ function actionIconSvg(action) {
 function badgeClass(status) {
   switch (status) {
     case 'added':
-      return 'added';
+      return 'ui-status-badge--success';
     case 'deleted':
-      return 'deleted';
+      return 'ui-status-badge--danger';
     case 'renamed':
-      return 'renamed';
+      return 'ui-status-badge--accent';
     case 'untracked':
-      return 'untracked';
+      return 'ui-status-badge--muted';
     default:
-      return 'modified';
+      return 'ui-status-badge--warning';
   }
 }
 
@@ -75,8 +75,8 @@ function renderBranchMetrics(summary = {}, branch = {}) {
   if (branch.upstream || Number(branch.ahead || 0) > 0 || Number(branch.behind || 0) > 0) {
     return `
       <span class="git-sync-info" aria-label="Remote sync status">
-        <span style="color: var(--color-success);">&#8593;${Number(branch.ahead || 0)}</span>
-        <span style="color: var(--color-text-faint);">&#8595;${Number(branch.behind || 0)}</span>
+        <span class="git-sync-metric git-sync-metric--ahead">&#8593;${Number(branch.ahead || 0)}</span>
+        <span class="git-sync-metric git-sync-metric--behind">&#8595;${Number(branch.behind || 0)}</span>
       </span>
     `;
   }
@@ -680,7 +680,7 @@ export class GitPanelController {
         <button class="git-section-header" type="button" data-git-section-toggle="${escapeHtml(section.key)}">
           ${chevronSvg(isCollapsed)}
           ${escapeHtml(section.label)}
-          <span class="git-section-count">${files.length}</span>
+          <span class="ui-pill-badge ui-pill-badge--count ui-pill-badge--muted git-section-count">${files.length}</span>
         </button>
         <div class="git-file-list${isCollapsed ? ' hidden' : ''}">
           ${files.map((file) => this.renderFile(file)).join('')}
@@ -699,7 +699,7 @@ export class GitPanelController {
         <button class="git-section-header" type="button" data-git-section-toggle="pull-backups">
           ${chevronSvg(this.collapsedSections.has('pull-backups'))}
           Pull Backups
-          <span class="git-section-count">${this.pullBackups.length}</span>
+          <span class="ui-pill-badge ui-pill-badge--count ui-pill-badge--muted git-section-count">${this.pullBackups.length}</span>
         </button>
         <div class="git-file-list${this.collapsedSections.has('pull-backups') ? ' hidden' : ''}">
           ${this.pullBackups.map((backup) => this.renderPullBackup(backup)).join('')}
@@ -713,18 +713,18 @@ export class GitPanelController {
     const fileCount = Number(backup?.fileCount || 0);
 
     return `
-      <div class="git-file-row">
+      <div class="ui-item-row git-file-row">
         <button
-          class="git-file-item"
+          class="ui-item-main git-file-item"
           type="button"
           data-git-pull-backup-path="${escapeHtml(backup.summaryPath || '')}"
         >
           ${fileIconSvg()}
-          <span class="git-file-copy">
-            <span class="git-file-name">Pull backup ${escapeHtml(backup.id || '')}</span>
-            <span class="git-file-path">${escapeHtml(`${createdAt} · ${backup.branch || 'HEAD'} · ${fileCount} file${fileCount === 1 ? '' : 's'}`)}</span>
+          <span class="ui-item-copy git-file-copy">
+            <span class="ui-item-title git-file-name">Pull backup ${escapeHtml(backup.id || '')}</span>
+            <span class="ui-item-subtitle git-file-path">${escapeHtml(`${createdAt} · ${backup.branch || 'HEAD'} · ${fileCount} file${fileCount === 1 ? '' : 's'}`)}</span>
           </span>
-          <span class="git-status-badge modified">BK</span>
+          <span class="ui-status-badge ui-status-badge--warning">BK</span>
         </button>
       </div>
     `;
@@ -746,23 +746,23 @@ export class GitPanelController {
     const isResetPending = this.pendingActionKey === resetActionKey;
 
     return `
-      <div class="git-file-row${isActive ? ' active' : ''}">
+      <div class="ui-item-row git-file-row${isActive ? ' active' : ''}">
         <button
-          class="git-file-item${isActive ? ' active' : ''}"
+          class="ui-item-main git-file-item${isActive ? ' active' : ''}"
           type="button"
           data-git-path="${escapeHtml(file.path)}"
           data-git-scope="${escapeHtml(file.scope)}"
         >
           ${fileIconSvg()}
-          <span class="git-file-copy">
-            <span class="git-file-name">${escapeHtml(displayName)}</span>
-            ${dirPath ? `<span class="git-file-path">${escapeHtml(dirPath)}</span>` : ''}
+          <span class="ui-item-copy git-file-copy">
+            <span class="ui-item-title git-file-name">${escapeHtml(displayName)}</span>
+            ${dirPath ? `<span class="ui-item-subtitle git-file-path">${escapeHtml(dirPath)}</span>` : ''}
           </span>
-          <span class="git-status-badge ${statusClass}">${escapeHtml(file.code)}</span>
+          <span class="ui-status-badge ${statusClass}">${escapeHtml(file.code)}</span>
         </button>
-        <div class="git-file-actions">
+        <div class="ui-item-actions git-file-actions">
           <button
-            class="git-file-action-btn"
+            class="ui-icon-button ui-action-icon ui-action-icon--surface"
             type="button"
             data-git-file-action="reset"
             data-git-path="${escapeHtml(file.path)}"
@@ -774,7 +774,7 @@ export class GitPanelController {
             ${isResetPending ? '...' : actionIconSvg('reset')}
           </button>
           <button
-            class="git-file-action-btn"
+            class="ui-icon-button ui-action-icon ui-action-icon--surface"
             type="button"
             data-git-file-action="${stageAction.value}"
             data-git-path="${escapeHtml(file.path)}"
@@ -792,9 +792,9 @@ export class GitPanelController {
 
   renderPanelModes() {
     return `
-      <div class="git-panel-mode-switch" role="tablist" aria-label="Git panel modes">
+      <div class="ui-segmented-control ui-segmented-control--pill git-panel-mode-switch" role="tablist" aria-label="Git panel modes">
         <button
-          class="git-panel-mode-btn${this.panelMode === 'changes' ? ' active' : ''}"
+          class="ui-segmented-btn git-panel-mode-btn${this.panelMode === 'changes' ? ' active' : ''}"
           type="button"
           data-git-panel-mode="changes"
           aria-selected="${this.panelMode === 'changes'}"
@@ -802,7 +802,7 @@ export class GitPanelController {
           Changes
         </button>
         <button
-          class="git-panel-mode-btn${this.panelMode === 'history' ? ' active' : ''}"
+          class="ui-segmented-btn git-panel-mode-btn${this.panelMode === 'history' ? ' active' : ''}"
           type="button"
           data-git-panel-mode="history"
           aria-selected="${this.panelMode === 'history'}"
@@ -819,22 +819,22 @@ export class GitPanelController {
 
     return `
       <button
-        class="git-history-row${isActive ? ' active' : ''}"
+        class="ui-record-surface git-history-row${isActive ? ' active' : ''}"
         type="button"
         data-git-commit-hash="${escapeHtml(commit.hash || '')}"
         title="${escapeHtml(commit.authoredAt || '')}"
       >
-        <span class="git-history-row-top">
-          <span class="git-history-subject">${renderHistoryRowTitle(commit)}</span>
-          <span class="git-history-hash">${escapeHtml(commit.shortHash || '')}</span>
+        <span class="ui-record-header git-history-row-top">
+          <span class="ui-record-title git-history-subject">${renderHistoryRowTitle(commit)}</span>
+          <span class="ui-pill-badge ui-pill-badge--code git-history-hash">${escapeHtml(commit.shortHash || '')}</span>
         </span>
-        <span class="git-history-row-meta">
+        <span class="ui-record-meta git-history-row-meta">
           <span>${escapeHtml(commit.authorName || 'Unknown')}</span>
           <span>${escapeHtml(commit.relativeDateLabel || '')}</span>
           <span>${fileCount} file${fileCount === 1 ? '' : 's'}</span>
           ${commit.isMergeCommit ? '<span>Merge</span>' : ''}
         </span>
-        <span class="git-history-row-stats">
+        <span class="ui-record-meta git-history-row-stats">
           <span class="git-change-add">+${Number(commit.additions || 0)}</span>
           <span class="git-change-del">-${Number(commit.deletions || 0)}</span>
         </span>
@@ -867,8 +867,8 @@ export class GitPanelController {
       </div>
       ${this.history.hasMore ? `
         <div class="git-history-footer">
-          <button
-            class="git-history-load-more"
+            <button
+              class="ui-button ui-button--compact ui-action-button ui-action-button--surface btn btn-secondary git-history-load-more"
             type="button"
             data-git-history-load-more
             ${this.history.loadingMore ? 'disabled' : ''}
@@ -896,12 +896,12 @@ export class GitPanelController {
       ${hasChanges ? `
         <div class="git-panel-footer">
           <div class="git-panel-footer-actions">
-            <button class="git-view-all-btn" type="button" data-git-view-all>
+            <button class="ui-button ui-button--compact ui-action-button ui-action-button--surface btn btn-secondary" type="button" data-git-view-all>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
               View Full Diff
             </button>
             <button
-              class="git-footer-commit-btn"
+              class="ui-button ui-action-button ui-action-button--wide btn btn-primary git-footer-commit-btn"
               type="button"
               data-git-commit-staged
               ${!hasStagedChanges || isCommitPending ? 'disabled' : ''}
@@ -953,7 +953,7 @@ export class GitPanelController {
         </div>
         <div class="git-branch-actions" role="group" aria-label="Remote sync actions">
           <button
-            class="git-branch-action-btn"
+            class="ui-button ui-button--compact ui-pill-button ui-action-pill ui-action-pill--surface btn btn-secondary"
             type="button"
             data-git-sync-action="pull"
             title="${hasUpstream ? 'Pull remote changes (fast-forward only)' : 'No upstream branch configured'}"
@@ -963,7 +963,7 @@ export class GitPanelController {
             ${isPullPending ? '...' : `${actionIconSvg('pull')}<span>Pull</span>`}
           </button>
           <button
-            class="git-branch-action-btn"
+            class="ui-button ui-button--compact ui-pill-button ui-action-pill ui-action-pill--surface btn btn-secondary"
             type="button"
             data-git-sync-action="push"
             title="${hasUpstream ? 'Push local commits' : 'No upstream branch configured'}"

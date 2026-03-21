@@ -1,0 +1,132 @@
+/* ===== SHARED OVERLAYS ===== */
+
+.editor-loading {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-8);
+}
+
+.editor-loading.hidden {
+  display: none;
+}
+
+.skeleton-line {
+  height: 16px;
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-offset);
+  animation: pulse-skeleton 1.5s ease-in-out infinite;
+}
+
+.skeleton-line--title {
+  width: 40%;
+  height: 32px;
+}
+
+.skeleton-line--full {
+  width: 100%;
+}
+
+.skeleton-line--ninety {
+  width: 90%;
+}
+
+.skeleton-line--ninety-five {
+  width: 95%;
+}
+
+.skeleton-line--eighty {
+  width: 80%;
+}
+
+.skeleton-line--eighty-five {
+  width: 85%;
+}
+
+.skeleton-line--break {
+  margin-bottom: 24px;
+}
+
+@keyframes pulse-skeleton {
+  0% {
+    opacity: 0.6;
+  }
+
+  50% {
+    opacity: 0.3;
+  }
+
+  100% {
+    opacity: 0.6;
+  }
+}
+
+.file-context-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 120px;
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+  transform-origin: top left;
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 0.15s cubic-bezier(0.16, 1, 0.3, 1), transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@starting-style {
+  .file-context-menu {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
+.file-context-item {
+  display: block;
+  width: 100%;
+  padding: var(--space-1) var(--space-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-interactive);
+  font-family: var(--font-body);
+  font-size: var(--text-ui-sm);
+}
+
+.file-context-item:hover {
+  background: var(--color-surface-offset);
+}
+
+.file-context-danger {
+  color: var(--color-error);
+}
+
+.wiki-link {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.wiki-link:hover {
+  text-decoration-style: solid;
+}
+
+.wiki-link-new {
+  color: var(--color-text-muted);
+  text-decoration-style: dashed;
+  opacity: 0.7;
+}
+
+.wiki-link-new:hover {
+  color: var(--color-primary);
+  opacity: 1;
+  text-decoration-style: dashed;
+}

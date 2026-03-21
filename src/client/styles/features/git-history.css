@@ -1,0 +1,55 @@
+/* ===== GIT / HISTORY ===== */
+
+.git-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+}
+
+.git-history-row {
+  --ui-record-padding: 10px 11px;
+  --ui-record-gap: 4px;
+  --ui-record-border: var(--color-border);
+  --ui-record-bg: var(--surface-overlay-raised);
+  --ui-record-border-hover: var(--border-accent-muted);
+  --ui-record-bg-hover: var(--surface-fill-subtle);
+  --ui-record-border-active: var(--border-accent-stronger);
+  --ui-record-bg-active: var(--surface-accent-subtle);
+  --ui-record-shadow-active: var(--shadow-accent-inset);
+}
+
+.git-history-subject {
+  color: var(--color-text);
+  font-size: var(--text-label);
+  font-weight: 700;
+}
+
+.git-history-row-top,
+.git-history-row-meta,
+.git-history-row-stats {
+  gap: 6px;
+}
+
+.git-history-hash {
+  flex-shrink: 0;
+}
+
+.git-history-row-meta {
+  color: var(--color-text-faint);
+  font-size: var(--text-caption);
+}
+
+.git-history-row-stats {
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  font-weight: 700;
+}
+
+.git-history-footer {
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+.git-history-load-more {
+  width: 100%;
+}

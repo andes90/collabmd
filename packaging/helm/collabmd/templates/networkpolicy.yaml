@@ -1,0 +1,55 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "collabmd.fullname" . }}
+  labels:
+    {{- include "collabmd.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "collabmd.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.service.targetPort }}
+      {{- if or .Values.networkPolicy.ingress.additionalFrom .Values.networkPolicy.ingress.namespaceSelector .Values.networkPolicy.ingress.podSelector }}
+      from:
+        {{- if or .Values.networkPolicy.ingress.namespaceSelector .Values.networkPolicy.ingress.podSelector }}
+        - {{- with .Values.networkPolicy.ingress.namespaceSelector }}
+          namespaceSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.networkPolicy.ingress.podSelector }}
+          podSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        {{- end }}
+        {{- with .Values.networkPolicy.ingress.additionalFrom }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- end }}
+  egress:
+    {{- if .Values.networkPolicy.egress.allowDns }}
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    {{- end }}
+    {{- if .Values.plantuml.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "collabmd.plantumlSelectorLabels" . | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.plantuml.service.port }}
+    {{- end }}
+    {{- with .Values.networkPolicy.egress.additionalTo }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}

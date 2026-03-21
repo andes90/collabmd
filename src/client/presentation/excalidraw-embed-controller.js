@@ -638,14 +638,14 @@ export class ExcalidrawEmbedController {
 
     const openBtn = document.createElement('button');
     openBtn.type = 'button';
-    openBtn.className = 'excalidraw-embed-btn diagram-preview-action-btn';
+    openBtn.className = 'excalidraw-embed-btn ui-preview-action ui-preview-action--icon-only';
     openBtn.title = 'Edit in Excalidraw';
     openBtn.setAttribute('aria-label', 'Edit in Excalidraw');
     setDiagramActionButtonIcon(openBtn, 'edit');
 
     const maxBtn = document.createElement('button');
     maxBtn.type = 'button';
-    maxBtn.className = 'excalidraw-embed-btn diagram-preview-action-btn';
+    maxBtn.className = 'excalidraw-embed-btn ui-preview-action ui-preview-action--icon-only';
     maxBtn.title = 'Maximize diagram';
     maxBtn.setAttribute('aria-label', 'Maximize diagram');
     setDiagramActionButtonIcon(maxBtn, 'maximize');

@@ -1,0 +1,21 @@
+{{- if .Values.tests.enabled }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "collabmd.fullname" . }}-test-connection"
+  labels:
+    {{- include "collabmd.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  containers:
+    - name: wget
+      image: busybox:1.36
+      command:
+        - sh
+        - -c
+        - >
+          wget -T 5 -qO- http://{{ include "collabmd.fullname" . }}:{{ .Values.service.port }}/health
+  restartPolicy: Never
+{{- end }}

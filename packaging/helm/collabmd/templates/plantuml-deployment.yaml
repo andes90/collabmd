@@ -1,0 +1,33 @@
+{{- if .Values.plantuml.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "collabmd.plantumlFullname" . }}
+  labels:
+    {{- include "collabmd.labels" . | nindent 4 }}
+    app.kubernetes.io/component: plantuml
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "collabmd.plantumlSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "collabmd.plantumlSelectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: plantuml
+          image: "{{ .Values.plantuml.image.repository }}:{{ .Values.plantuml.image.tag }}"
+          imagePullPolicy: {{ .Values.plantuml.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.plantuml.service.port }}
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.plantuml.resources | nindent 12 }}
+{{- end }}

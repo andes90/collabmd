@@ -554,7 +554,7 @@ export class PlantUmlPreviewHydrator extends DiagramPreviewHydrator {
   createToolButton(label, ariaLabel) {
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'plantuml-tool-btn diagram-preview-action-btn';
+    button.className = 'plantuml-tool-btn ui-preview-action';
     button.setAttribute('aria-label', ariaLabel);
     button.title = ariaLabel;
     button.textContent = label;

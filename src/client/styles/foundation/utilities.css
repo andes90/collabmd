@@ -1,0 +1,36 @@
+/* ===== FOUNDATION / UTILITIES ===== */
+
+.hidden,
+.u-hidden {
+  display: none !important;
+}
+
+html[data-initial-file-requested="true"] .empty-state {
+  display: none !important;
+}
+
+html[data-initial-file-requested="true"] .editor-page.hidden {
+  display: flex !important;
+}
+
+.skip-link {
+  position: fixed;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 1000;
+  width: auto;
+  height: auto;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  clip: rect(0, 0, 0, 0);
+  transform: translateY(calc(-100% - var(--space-2)));
+  transition: transform var(--transition-interactive);
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  clip: auto;
+  transform: translateY(0);
+}

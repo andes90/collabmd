@@ -326,6 +326,26 @@ docker run -p 1234:1234 -v /path/to/vault:/data ghcr.io/andes90/collabmd:latest
 
 The container listens on `0.0.0.0:1234` and stores vault files at `/data`.
 
+### Kubernetes / Helm
+
+CollabMD now includes a Helm chart at [`packaging/helm/collabmd`](./packaging/helm/collabmd).
+
+Use it when you want a Kubernetes-native deployment with:
+
+- one supported application replica
+- a persistent volume mounted at `/data`
+- optional ingress
+- optional bundled PlantUML
+- secret-backed auth and private git bootstrap settings
+
+Quick start:
+
+```bash
+helm install collabmd ./packaging/helm/collabmd
+```
+
+For examples covering ingress, OIDC, PlantUML, and private git bootstrap, see [packaging/helm/collabmd/README.md](./packaging/helm/collabmd/README.md).
+
 To bootstrap `/data` from a private git repository instead, pass the repo URL plus SSH credentials:
 
 ```bash

@@ -561,7 +561,7 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
   createZoomButton(label, ariaLabel) {
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'mermaid-zoom-btn diagram-preview-action-btn';
+    button.className = 'mermaid-zoom-btn ui-preview-action';
     button.setAttribute('aria-label', ariaLabel);
     button.title = ariaLabel;
     button.textContent = label;

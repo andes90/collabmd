@@ -3,7 +3,7 @@ import { dirname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 import { tmpdir } from 'os';
-import { build, transform } from 'esbuild';
+import { build } from 'esbuild';
 
 const require = createRequire(import.meta.url);
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -213,17 +213,18 @@ async function bundleExcalidrawApp() {
 
 async function bundleStyles() {
   await mkdir(clientStyleOutputDir, { recursive: true });
-
-  await Promise.all(styleAssetFiles.map(async (fileName) => {
-    const source = await readFile(resolve(clientStyleSourceDir, fileName), 'utf8');
-    const result = await transform(source, {
-      loader: 'css',
-      minify: true,
-      target: ['chrome120', 'firefox120', 'safari17'],
-    });
-
-    await writeFile(resolve(clientStyleOutputDir, fileName), result.code, 'utf8');
-  }));
+  await build({
+    absWorkingDir: buildWorkingDir,
+    bundle: true,
+    entryNames: '[name]',
+    entryPoints: styleAssetFiles.map((fileName) => resolve(clientStyleSourceDir, fileName)),
+    loader: {
+      '.css': 'css',
+    },
+    minify: true,
+    outdir: clientStyleOutputDir,
+    target: ['chrome120', 'firefox120', 'safari17'],
+  });
 }
 
 try {
