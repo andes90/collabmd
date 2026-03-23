@@ -3,6 +3,8 @@ import {
   navigateToGitCommit,
   navigateToFile,
   navigateToGitDiff,
+  navigateToGitFileHistory,
+  navigateToGitFilePreview,
   navigateToGitHistory,
 } from './runtime-config.js';
 
@@ -11,8 +13,8 @@ export class BrowserNavigationPort {
     return getHashRoute();
   }
 
-  navigateToFile(filePath) {
-    navigateToFile(filePath);
+  navigateToFile(filePath, options) {
+    navigateToFile(filePath, options);
   }
 
   navigateToGitDiff(payload) {
@@ -25,5 +27,13 @@ export class BrowserNavigationPort {
 
   navigateToGitHistory() {
     navigateToGitHistory();
+  }
+
+  navigateToGitFileHistory(payload) {
+    navigateToGitFileHistory(payload);
+  }
+
+  navigateToGitFilePreview(payload) {
+    navigateToGitFilePreview(payload);
   }
 }

@@ -3,8 +3,8 @@
 .git-history-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 10px;
+  gap: var(--space-1);
+  padding: var(--space-3);
 }
 
 .git-history-row {
@@ -28,7 +28,7 @@
 .git-history-row-top,
 .git-history-row-meta,
 .git-history-row-stats {
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .git-history-hash {
@@ -52,4 +52,288 @@
 
 .git-history-load-more {
   width: 100%;
+}
+
+.file-history-shell {
+  --file-history-shell-chrome-offset: calc(
+    var(--toolbar-h)
+    + var(--control-h-md)
+    + (var(--space-2) * 2)
+    + (var(--space-3) * 2)
+    + 1px
+  );
+  box-sizing: border-box;
+  display: grid;
+  flex: 1 0 auto;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-3);
+  overflow: visible;
+  width: 100%;
+  min-height: 0;
+  padding: var(--space-3);
+}
+
+.file-history-sidebar,
+.file-history-detail {
+  min-width: 0;
+}
+
+.file-history-sidebar {
+  position: sticky;
+  top: var(--space-4);
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-height: calc(100dvh - var(--file-history-shell-chrome-offset));
+  min-height: 0;
+  overflow: hidden;
+  padding: var(--space-3);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-xl);
+  background: var(--surface-overlay-raised);
+  box-shadow: var(--shadow-elevated-soft);
+}
+
+.file-history-sidebar-header {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.file-history-sidebar-copy {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  line-height: 1.5;
+}
+
+.file-history-kicker {
+  color: var(--color-text-faint);
+  font-size: var(--text-caption);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.file-history-title {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.file-history-path {
+  color: var(--color-text);
+  font-size: var(--text-title-sm);
+  font-weight: 700;
+}
+
+.file-history-dir {
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+}
+
+.file-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.file-history-item {
+  --ui-record-padding: var(--space-3);
+  --ui-record-gap: var(--space-2);
+  --ui-record-border: var(--color-border);
+  --ui-record-bg: var(--surface-overlay-offset);
+  --ui-record-border-hover: var(--color-border);
+  --ui-record-bg-hover: var(--surface-fill-strong);
+  --ui-record-border-active: var(--border-accent-strong);
+  --ui-record-bg-active: var(--surface-accent-subtle);
+  --ui-record-shadow-active: var(--shadow-accent-inset);
+  box-sizing: border-box;
+  display: block;
+  max-width: 100%;
+  width: 100%;
+  text-align: left;
+}
+
+.file-history-item.active {
+  border-color: var(--border-accent-strong);
+  box-shadow: var(--shadow-accent-outline);
+}
+
+.file-history-item-local {
+  --ui-record-border: color-mix(in srgb, var(--color-primary) 20%, var(--color-divider));
+  --ui-record-bg: color-mix(in srgb, var(--surface-accent-subtle) 58%, var(--surface-overlay-offset));
+}
+
+.file-history-item-top,
+.file-history-item-copy {
+  display: flex;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.file-history-item-top {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.file-history-item-copy {
+  flex: 1;
+  flex-direction: column;
+}
+
+.file-history-item-title {
+  overflow: hidden;
+  color: var(--color-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-label);
+  font-weight: 700;
+}
+
+.file-history-item-meta {
+  overflow: hidden;
+  color: var(--color-text-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-caption);
+}
+
+.file-history-item-badge {
+  flex-shrink: 0;
+}
+
+.file-history-item-stats {
+  display: inline-flex;
+  gap: var(--space-2);
+  color: var(--color-text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  font-weight: 700;
+}
+
+.file-history-footer {
+  padding: 0;
+}
+
+.file-history-detail {
+  align-self: start;
+  display: grid;
+  grid-template-rows: auto auto;
+  gap: var(--space-3);
+  min-height: 0;
+  min-width: 0;
+}
+
+.file-history-detail-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  align-content: start;
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(180deg, var(--surface-accent-subtle), var(--color-surface));
+  overflow: hidden;
+}
+
+.file-history-detail-copy {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.file-history-detail-kicker {
+  color: var(--color-text-faint);
+  font-size: var(--text-caption);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.file-history-detail-title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--text-title-md);
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.file-history-detail-meta {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-label);
+  line-height: 1.5;
+}
+
+.file-history-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  align-self: start;
+  flex-shrink: 0;
+}
+
+.file-history-detail-body {
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-xl);
+  background: var(--surface-overlay-raised);
+  min-height: auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.file-history-diff-block {
+  width: max-content;
+  min-width: 100%;
+  overflow: visible;
+}
+
+.file-history-diff-block .diff-file-header,
+.file-history-diff-block .diff-hunk-header,
+.file-history-diff-block .diff-line,
+.file-history-diff-block .diff-split-hunk,
+.file-history-diff-block .diff-split-row {
+  min-width: max-content;
+}
+
+@media (max-width: 960px) {
+  .file-history-shell {
+    grid-template-columns: 1fr;
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+
+  .file-history-sidebar {
+    position: static;
+    max-height: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .file-history-shell {
+    padding: var(--space-3);
+  }
+
+  .file-history-detail-header {
+    flex-direction: column;
+  }
+
+  .file-history-detail-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .file-history-detail-actions .ui-button {
+    flex: 1;
+  }
 }

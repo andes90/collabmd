@@ -494,8 +494,10 @@ Open `http://localhost:1234`.
 Useful commands:
 
 ```bash
-npm run build                 # Build client bundle
+npm run build                 # Build the Vite client into dist/client
 npm run check                 # Syntax check all entry points
+npm run dev:client            # Start the Vite dev server with API/WebSocket proxying
+npm run dev:server            # Start only the backend server for local frontend development
 npm run start                 # Build + start server
 npm run start:local-plantuml  # Build + start server with local docker-compose PlantUML
 npm run start:prod            # Start server (expects previous build)
@@ -541,11 +543,13 @@ bin/
   collabmd.js              CLI entry point
 src/
   client/
+    app/                     Vite-owned HTML entries and browser entry modules
     application/           app orchestration, preview rendering, workspace coordination
     bootstrap/             app-shell composition and startup wiring
     domain/                markdown editing, wiki-link, room, and vault helpers
     infrastructure/        runtime config, auth bootstrap, browser ports, collaborative editor session
     presentation/          file explorer, backlinks, quick switcher, outline, scroll sync, theme, layout
+    static/                Vite passthrough assets copied into the built client
     styles/                app CSS
   domain/                  shared wiki-link helpers
   server/
@@ -554,14 +558,13 @@ src/
     domain/                collaboration room model, registry, backlink index, server-side abstractions
     infrastructure/        HTTP handlers, git service, vault file store, PlantUML, WebSocket gateway
     startup/               preflight vault bootstrap, including remote git checkout setup
-public/
-  assets/                  built CSS, JS, and vendored browser assets
-  index.html               app shell
+dist/
+  client/                  built client served by the backend and packaged for release
 scripts/
-  build-client.mjs         client bundling and vendored browser assets
   cloudflare-tunnel.mjs    Cloudflare quick tunnel helper
   local-plantuml-compose.mjs
   capture-readme-assets.mjs
+vite.config.mjs            Vite multi-page build and dev-server proxy config
 ```
 
 </details>

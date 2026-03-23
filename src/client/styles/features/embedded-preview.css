@@ -2,7 +2,7 @@
 
 .preview-content .video-embed-shell {
   display: block;
-  background: #000;
+  background: var(--surface-media-canvas);
 }
 
 .preview-content .video-embed,
@@ -51,7 +51,7 @@
   height: 100%;
   max-width: 100%;
   border: none;
-  background: #000;
+  background: var(--surface-media-canvas);
 }
 
 .preview-content .video-embed-player {
@@ -107,7 +107,7 @@ body.mermaid-maximized-open::before {
   position: fixed;
   inset: 0;
   z-index: 170;
-  background: oklch(0.1 0 0 / 0.42);
+  background: var(--surface-scrim);
   backdrop-filter: blur(2px);
 }
 
@@ -187,7 +187,7 @@ body.plantuml-maximized-open::before {
   position: fixed;
   inset: 0;
   z-index: 170;
-  background: oklch(0.1 0 0 / 0.42);
+  background: var(--surface-scrim);
   backdrop-filter: blur(2px);
 }
 

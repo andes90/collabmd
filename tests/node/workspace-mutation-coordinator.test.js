@@ -209,3 +209,58 @@ test('WorkspaceMutationCoordinator avoids a full rescan for API directory creati
   assert.equal(harness.coordinator.workspaceState.entries.has('guides'), true);
   assert.equal(harness.coordinator.workspaceState.entries.has('guides/start'), true);
 });
+
+test('WorkspaceMutationCoordinator derives descendant rename entries for directory renames', async (t) => {
+  const harness = await createCoordinatorWithVault(t, {
+    'docs/guides/intro.md': '# Intro\n',
+    'docs/guides/setup.md': '# Setup\n',
+  });
+
+  const workspaceChange = await harness.coordinator.createDirectoryRenameWorkspaceChange('docs/guides', 'docs/reference');
+
+  assert.deepEqual(workspaceChange.renamedPaths, [
+    { oldPath: 'docs/guides', newPath: 'docs/reference' },
+    { oldPath: 'docs/guides/intro.md', newPath: 'docs/reference/intro.md' },
+    { oldPath: 'docs/guides/setup.md', newPath: 'docs/reference/setup.md' },
+  ]);
+});
+
+test('WorkspaceMutationCoordinator avoids a full rescan for API directory renames', async (t) => {
+  const harness = await createCoordinatorWithVault(t, {
+    'docs/guides/intro.md': '# Intro\n',
+  });
+
+  const workspaceChange = await harness.coordinator.createDirectoryRenameWorkspaceChange('docs/guides', 'docs/reference');
+  await harness.vaultFileStore.renameDirectory('docs/guides', 'docs/reference');
+  await harness.coordinator.apply({
+    action: 'rename-directory',
+    origin: 'api',
+    publishEvent: false,
+    workspaceChange,
+  });
+
+  assert.equal(harness.scanCalls, 0);
+  assert.equal(harness.coordinator.workspaceState.entries.has('docs/guides'), false);
+  assert.equal(harness.coordinator.workspaceState.entries.has('docs/reference'), true);
+  assert.equal(harness.coordinator.workspaceState.entries.has('docs/reference/intro.md'), true);
+});
+
+test('WorkspaceMutationCoordinator avoids a full rescan for API directory deletion', async (t) => {
+  const harness = await createCoordinatorWithVault(t, {
+    'docs/guides/intro.md': '# Intro\n',
+  });
+
+  const workspaceChange = await harness.coordinator.createDirectoryDeleteWorkspaceChange('docs/guides');
+  await harness.vaultFileStore.deleteDirectory('docs/guides', { recursive: true });
+  await harness.coordinator.apply({
+    action: 'delete-directory',
+    origin: 'api',
+    publishEvent: false,
+    workspaceChange,
+  });
+
+  assert.equal(harness.scanCalls, 0);
+  assert.equal(harness.coordinator.workspaceState.entries.has('docs/guides'), false);
+  assert.equal(harness.coordinator.workspaceState.entries.has('docs/guides/intro.md'), false);
+  assert.equal(harness.coordinator.workspaceState.entries.has('docs'), true);
+});

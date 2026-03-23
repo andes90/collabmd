@@ -90,10 +90,16 @@ function createController(overrides = {}) {
     },
     setSidebarTab: (value) => events.push(['sidebar-tab', value]),
     showGitCommit: async (route) => {
-      events.push(['show-git-commit', route.hash ?? null, route.path ?? null]);
+      events.push(['show-git-commit', route.hash ?? null, route.path ?? null, route.historyFilePath ?? null]);
     },
     showGitDiff: async (route) => {
       events.push(['show-git-diff', route.scope ?? 'all', route.filePath ?? null]);
+    },
+    showGitFileHistory: async (route) => {
+      events.push(['show-git-file-history', route.filePath ?? null]);
+    },
+    showGitFilePreview: async (route) => {
+      events.push(['show-git-file-preview', route.hash ?? null, route.filePath ?? null, route.currentFilePath ?? null]);
     },
     showGitHistory: async () => {
       events.push(['show-git-history']);
@@ -117,7 +123,7 @@ function createController(overrides = {}) {
   };
 }
 
-test('WorkspaceRouteController routes hash changes to empty, git diff, git history, git commit, and file views', async () => {
+test('WorkspaceRouteController routes hash changes to empty, git diff, git file history, git file preview, git history, git commit, and file views', async () => {
   const empty = createController({
     navigation: {
       getHashRoute: () => ({ type: 'empty' }),
@@ -155,16 +161,50 @@ test('WorkspaceRouteController routes hash changes to empty, git diff, git histo
     ['show-git-history'],
   ]);
 
+  const gitFileHistory = createController({
+    navigation: {
+      getHashRoute: () => ({ filePath: 'README.md', type: 'git-file-history' }),
+      navigateToFile() {},
+    },
+  });
+  await gitFileHistory.controller.handleHashChange();
+  assert.deepEqual(gitFileHistory.events, [
+    ['sidebar-tab', 'files'],
+    ['show-git-file-history', 'README.md'],
+  ]);
+
+  const gitFilePreview = createController({
+    navigation: {
+      getHashRoute: () => ({
+        currentFilePath: 'docs/README.md',
+        filePath: 'README.md',
+        hash: 'abc1234',
+        type: 'git-file-preview',
+      }),
+      navigateToFile() {},
+    },
+  });
+  await gitFilePreview.controller.handleHashChange();
+  assert.deepEqual(gitFilePreview.events, [
+    ['sidebar-tab', 'files'],
+    ['show-git-file-preview', 'abc1234', 'README.md', 'docs/README.md'],
+  ]);
+
   const gitCommit = createController({
     navigation: {
-      getHashRoute: () => ({ hash: 'abc1234', path: 'README.md', type: 'git-commit' }),
+      getHashRoute: () => ({
+        hash: 'abc1234',
+        historyFilePath: 'docs/README.md',
+        path: 'README.md',
+        type: 'git-commit',
+      }),
       navigateToFile() {},
     },
   });
   await gitCommit.controller.handleHashChange();
   assert.deepEqual(gitCommit.events, [
     ['sidebar-tab', 'git'],
-    ['show-git-commit', 'abc1234', 'README.md'],
+    ['show-git-commit', 'abc1234', 'README.md', 'docs/README.md'],
   ]);
 
   const file = createController({

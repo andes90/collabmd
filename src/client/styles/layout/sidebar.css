@@ -174,3 +174,36 @@
 .file-tree-children {
   /* Children indentation handled by paddingLeft on items */
 }
+
+.file-action-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  background: oklch(from var(--color-bg) l c h / 0.44);
+}
+
+.file-action-sheet {
+  position: fixed;
+  right: var(--space-3);
+  bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+  left: var(--space-3);
+  z-index: 131;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: oklch(from var(--color-surface) l c h / 0.98);
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(12px);
+}
+
+.file-action-sheet-item {
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.file-action-sheet-item.file-context-danger {
+  color: var(--color-danger);
+}

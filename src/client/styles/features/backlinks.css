@@ -45,11 +45,16 @@
 .backlinks-header {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: var(--space-2);
+  width: 100%;
   padding: var(--space-3) 0;
+  border: none;
+  background: none;
   cursor: pointer;
   user-select: none;
   color: var(--color-text-muted);
+  text-align: left;
   transition: color var(--transition-interactive);
   font-size: var(--text-sm);
   font-weight: 600;

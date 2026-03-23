@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>draw.io — CollabMD</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #0f172a; color: #e2e8f0; font: 13px/1.4 system-ui, -apple-system, sans-serif; }
+    body[data-theme="light"] { background: #f8fafc; color: #0f172a; }
+    #root { display: flex; flex-direction: column; width: 100%; height: 100%; }
+    .drawio-shell { display: flex; flex-direction: column; width: 100%; height: 100%; }
+    .drawio-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; padding: 8px 12px; border-bottom: 1px solid rgba(148, 163, 184, 0.2); background: rgba(15, 23, 42, 0.9); }
+    body[data-theme="light"] .drawio-banner { background: rgba(255, 255, 255, 0.9); }
+    .drawio-banner-status { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .drawio-banner-pill { display: inline-flex; align-items: center; justify-content: center; min-height: 24px; padding: 0 8px; border-radius: 999px; background: rgba(59, 130, 246, 0.18); color: #bfdbfe; font-weight: 600; white-space: nowrap; }
+    body[data-theme="light"] .drawio-banner-pill { background: rgba(59, 130, 246, 0.12); color: #1d4ed8; }
+    .drawio-banner-copy { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .drawio-banner-actions { display: flex; align-items: center; gap: 8px; }
+    .drawio-btn { min-height: 30px; padding: 0 10px; border: 1px solid rgba(148, 163, 184, 0.28); border-radius: 999px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+    .drawio-btn[hidden] { display: none !important; }
+    .drawio-btn:disabled { opacity: 0.6; cursor: default; }
+    .drawio-frame-shell { position: relative; flex: 1; min-height: 0; }
+    .drawio-frame { width: 100%; height: 100%; border: 0; background: transparent; }
+    .drawio-frame.is-read-only { pointer-events: none; }
+    .drawio-loading, .drawio-error { display: flex; align-items: center; justify-content: center; flex: 1; padding: 24px; text-align: center; }
+    .drawio-error { color: #fca5a5; }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div class="drawio-loading" id="loadingState">Loading draw.io…</div>
+  </div>
+  <script type="module" src="./drawio-editor-entry.js"></script>
+</body>
+</html>

@@ -67,10 +67,9 @@
   display: flex;
   flex-direction: column;
   gap: 5px;
-  overflow: auto;
-  padding-inline-end: 4px;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding-block-end: 2px;
-  scrollbar-gutter: stable;
 }
 
 .diff-index-item {

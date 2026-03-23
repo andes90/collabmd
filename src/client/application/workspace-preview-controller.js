@@ -7,10 +7,12 @@ import { resolveApiUrl } from '../domain/runtime-paths.js';
 export class WorkspacePreviewController {
   constructor({
     backlinksPanel,
+    drawioEmbed,
     elements,
     excalidrawEmbed,
     getDisplayName,
     getSession,
+    isDrawioFile,
     isExcalidrawFile,
     isImageFile,
     isMermaidFile,
@@ -23,10 +25,20 @@ export class WorkspacePreviewController {
     videoEmbed,
   }) {
     this.backlinksPanel = backlinksPanel;
+    this.drawioEmbed = drawioEmbed ?? {
+      detachForCommit() {},
+      hydrateVisibleEmbeds() {},
+      reconcileEmbeds() {},
+      setHydrationPaused() {},
+      syncLayout() {},
+      updateLocalUser() {},
+      updateTheme() {},
+    };
     this.elements = elements;
     this.excalidrawEmbed = excalidrawEmbed;
     this.getDisplayName = getDisplayName;
     this.getSession = getSession;
+    this.isDrawioFile = isDrawioFile ?? (() => false);
     this.isExcalidrawFile = isExcalidrawFile ?? (() => false);
     this.isImageFile = isImageFile ?? (() => false);
     this.isMermaidFile = isMermaidFile ?? (() => false);
@@ -60,6 +72,7 @@ export class WorkspacePreviewController {
   }
 
   resetPreviewMode() {
+    this.elements.previewContent?.classList.remove('is-drawio-file-preview');
     this.elements.previewContent?.classList.remove('is-excalidraw-file-preview');
     this.elements.previewContent?.classList.remove('is-image-file-preview');
     this.elements.previewContent?.classList.remove('is-mermaid-file-preview');
@@ -67,6 +80,7 @@ export class WorkspacePreviewController {
   }
 
   syncFileChrome(filePath) {
+    const isDrawio = this.isDrawioFile(filePath);
     const isExcalidraw = this.isExcalidrawFile(filePath);
     const isImage = this.isImageFile(filePath);
     const isMarkdown = isMarkdownFilePath(filePath);
@@ -79,7 +93,7 @@ export class WorkspacePreviewController {
     this.elements.previewContent?.classList.toggle('is-mermaid-file-preview', isMermaid);
     this.elements.previewContent?.classList.toggle('is-plantuml-file-preview', isPlantUml);
 
-    if (isExcalidraw || isImage) {
+    if (isDrawio || isExcalidraw || isImage) {
       this.layoutController.setView('preview', { persist: false });
       this.outlineController.close();
       this.backlinksPanel.clear();
@@ -99,6 +113,7 @@ export class WorkspacePreviewController {
     }
 
     this.videoEmbed?.detachForCommit();
+    this.drawioEmbed.detachForCommit();
     this.excalidrawEmbed.detachForCommit();
     this.resetPreviewMode();
     previewElement.classList.add('is-excalidraw-file-preview');
@@ -124,8 +139,50 @@ export class WorkspacePreviewController {
     this.scrollSyncController.setLargeDocumentMode(false);
     this.scrollSyncController.invalidatePreviewBlocks();
     this.videoEmbed?.reconcileEmbeds(previewElement);
+    this.drawioEmbed.reconcileEmbeds(previewElement);
     this.excalidrawEmbed.reconcileEmbeds(previewElement, { isLargeDocument: false });
+    this.drawioEmbed.hydrateVisibleEmbeds();
     this.excalidrawEmbed.hydrateVisibleEmbeds();
+    this.schedulePreviewLayoutSyncCallback({ delayMs: 0 });
+  }
+
+  renderDrawioFilePreview(filePath) {
+    const previewElement = this.elements.previewContent;
+    if (!previewElement) {
+      return;
+    }
+
+    this.videoEmbed?.detachForCommit();
+    this.drawioEmbed.detachForCommit();
+    this.excalidrawEmbed.detachForCommit();
+    this.resetPreviewMode();
+    previewElement.classList.add('is-drawio-file-preview');
+    const renderHost = this.previewRenderer.ensureRenderHost();
+    this.previewRenderer.normalizePreviewChildren(renderHost);
+
+    const placeholder = document.createElement('div');
+    placeholder.className = 'drawio-embed-placeholder';
+    placeholder.dataset.drawioKey = `${filePath}#file-preview`;
+    placeholder.dataset.drawioLabel = this.getDisplayName(filePath);
+    placeholder.dataset.drawioMode = 'edit';
+    placeholder.dataset.drawioTarget = filePath;
+    const loadingShell = document.createElement('div');
+    loadingShell.className = 'preview-shell';
+    loadingShell.textContent = 'Loading draw.io preview…';
+    placeholder.appendChild(loadingShell);
+
+    if (renderHost) {
+      renderHost.replaceChildren(placeholder);
+      renderHost.style.minHeight = '';
+    }
+
+    previewElement.dataset.renderPhase = 'ready';
+    this.outlineController.refresh();
+    this.scrollSyncController.setLargeDocumentMode(false);
+    this.scrollSyncController.invalidatePreviewBlocks();
+    this.videoEmbed?.reconcileEmbeds(previewElement);
+    this.drawioEmbed.reconcileEmbeds(previewElement);
+    this.drawioEmbed.hydrateVisibleEmbeds();
     this.schedulePreviewLayoutSyncCallback({ delayMs: 0 });
   }
 
@@ -136,6 +193,7 @@ export class WorkspacePreviewController {
     }
 
     this.videoEmbed?.detachForCommit();
+    this.drawioEmbed.detachForCommit();
     this.excalidrawEmbed.detachForCommit();
     this.resetPreviewMode();
     previewElement.classList.add('is-image-file-preview');
@@ -158,6 +216,41 @@ export class WorkspacePreviewController {
 
     previewElement.dataset.renderPhase = 'ready';
     this.outlineController.refresh();
+    this.scrollSyncController.setLargeDocumentMode(false);
+    this.scrollSyncController.invalidatePreviewBlocks();
+    this.videoEmbed?.reconcileEmbeds(previewElement);
+    this.schedulePreviewLayoutSyncCallback({ delayMs: 0 });
+  }
+
+  renderTextFilePreview({ content = '' } = {}) {
+    const previewElement = this.elements.previewContent;
+    if (!previewElement) {
+      return;
+    }
+
+    this.videoEmbed?.detachForCommit();
+    this.drawioEmbed.detachForCommit();
+    this.excalidrawEmbed.detachForCommit();
+    this.resetPreviewMode();
+    const renderHost = this.previewRenderer.ensureRenderHost();
+    this.previewRenderer.normalizePreviewChildren(renderHost);
+
+    const shell = document.createElement('div');
+    shell.className = 'preview-shell';
+    const pre = document.createElement('pre');
+    const code = document.createElement('code');
+    code.textContent = String(content ?? '');
+    pre.appendChild(code);
+    shell.appendChild(pre);
+
+    if (renderHost) {
+      renderHost.replaceChildren(shell);
+      renderHost.style.minHeight = '';
+    }
+
+    previewElement.dataset.renderPhase = 'ready';
+    this.outlineController.close();
+    this.backlinksPanel.clear();
     this.scrollSyncController.setLargeDocumentMode(false);
     this.scrollSyncController.invalidatePreviewBlocks();
     this.videoEmbed?.reconcileEmbeds(previewElement);
@@ -205,8 +298,9 @@ export class WorkspacePreviewController {
       setPreviewLayoutSyncTimer(null);
 
       const hasSession = Boolean(this.getSession());
+      const isDrawioPreview = this.elements.previewContent?.classList?.contains?.('is-drawio-file-preview') ?? false;
       const isExcalidrawPreview = this.elements.previewContent?.classList?.contains?.('is-excalidraw-file-preview') ?? false;
-      if ((!hasSession && !isExcalidrawPreview) || !this.elements.previewContent) {
+      if ((!hasSession && !isDrawioPreview && !isExcalidrawPreview) || !this.elements.previewContent) {
         return;
       }
 
@@ -222,8 +316,9 @@ export class WorkspacePreviewController {
       this.previewRenderer.scheduleActiveMermaidRefit();
       this.previewRenderer.scheduleActivePlantUmlRefit();
       this.videoEmbed?.syncLayout();
+      this.drawioEmbed.syncLayout();
       this.excalidrawEmbed.syncLayout();
-      if (isExcalidrawPreview && !hasSession) {
+      if ((isDrawioPreview || isExcalidrawPreview) && !hasSession) {
         return;
       }
 
@@ -254,6 +349,7 @@ export class WorkspacePreviewController {
     const nextPaused = Boolean(isActive);
     setHydrationPaused(nextPaused);
     this.previewRenderer.setHydrationPaused(nextPaused);
+    this.drawioEmbed.setHydrationPaused(nextPaused);
     this.excalidrawEmbed.setHydrationPaused(nextPaused);
 
     if (nextPaused) {

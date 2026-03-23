@@ -262,6 +262,10 @@ export class GitService {
     return this.historyService.listHistory({ limit, offset });
   }
 
+  async getFileHistory({ limit = 30, offset = 0, path } = {}) {
+    return this.historyService.listFileHistory({ limit, offset, path });
+  }
+
   async getCommit({ allowLargePatch = false, hash, metaOnly = false, path = null } = {}) {
     return this.historyService.getCommit({
       allowLargePatch,
@@ -269,6 +273,10 @@ export class GitService {
       metaOnly,
       path,
     });
+  }
+
+  async getFileSnapshot({ hash, path } = {}) {
+    return this.historyService.getFileSnapshot({ hash, path });
   }
 
   async getHeadRef() {

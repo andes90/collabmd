@@ -38,6 +38,74 @@
     max-width: none;
   }
 
+  .toolbar {
+    gap: var(--space-1);
+    padding: 0 var(--space-2);
+  }
+
+  .toolbar-left {
+    gap: var(--space-1);
+    min-width: 0;
+  }
+
+  .toolbar-room-info {
+    gap: var(--space-1);
+  }
+
+  .toolbar-room-name {
+    max-width: min(38vw, 140px);
+    font-size: var(--text-xs);
+  }
+
+  .toolbar-badge {
+    max-width: 68px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .toolbar-presence-cluster {
+    display: none;
+  }
+
+  .toolbar-overflow-toggle {
+    display: inline-flex;
+  }
+
+  .toolbar-overflow-menu {
+    position: absolute;
+    top: calc(100% + var(--space-2));
+    right: 0;
+    z-index: 14;
+    display: none;
+    min-width: min(260px, calc(100vw - 24px));
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-1);
+    padding: var(--space-2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: oklch(from var(--color-surface) l c h / 0.98);
+    box-shadow: var(--shadow-lg);
+    backdrop-filter: blur(12px);
+  }
+
+  .toolbar-right.is-overflow-open .toolbar-overflow-menu {
+    display: flex;
+  }
+
+  .toolbar-overflow-menu .ui-toolbar-button,
+  .toolbar-overflow-menu .chat-container {
+    width: 100%;
+  }
+
+  .toolbar-overflow-menu .ui-toolbar-button-label {
+    display: inline;
+  }
+
+  .toolbar-overflow-menu .ui-toolbar-button {
+    justify-content: flex-start;
+  }
+
   .sidebar-close-btn {
     display: inline-flex;
   }
@@ -150,6 +218,10 @@
     scrollbar-width: thin;
   }
 
+  .markdown-toolbar-popover {
+    max-width: min(240px, calc(100vw - 24px));
+  }
+
   .outline-panel {
     position: absolute;
     inset: 0;
@@ -166,17 +238,25 @@
     display: none !important;
   }
 
+  .comments-drawer {
+    position: absolute;
+    inset: 0;
+    width: auto;
+    min-width: 0;
+    border-left: none;
+    border-top: 1px solid var(--color-divider);
+    background: oklch(from var(--color-surface) l c h / 0.98);
+    backdrop-filter: blur(10px);
+    box-shadow: var(--shadow-lg);
+    z-index: 6;
+  }
+
+  .comments-drawer.hidden {
+    display: none !important;
+  }
+
   #outlineToggle {
     display: inline-flex !important;
-  }
-
-  .toolbar {
-    padding: 0 var(--space-2);
-  }
-
-  .toolbar-room-name {
-    max-width: 120px;
-    font-size: var(--text-xs);
   }
 
   .chat-panel {

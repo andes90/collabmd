@@ -1,4 +1,5 @@
 import {
+  isDrawioFilePath,
   isExcalidrawFilePath,
   isMermaidFilePath,
   isPlantUmlFilePath,
@@ -24,6 +25,10 @@ function decodeHeaderMetadata(value) {
 function selectWriteOperation(vaultFileStore, filePath, content) {
   if (isExcalidrawFilePath(filePath)) {
     return vaultFileStore.writeExcalidrawFile(filePath, content);
+  }
+
+  if (isDrawioFilePath(filePath)) {
+    return vaultFileStore.writeDrawioFile(filePath, content);
   }
 
   if (isMermaidFilePath(filePath)) {
@@ -52,6 +57,10 @@ function handleVaultError(req, res, error, logMessage, fallbackMessage) {
   console.error(logMessage, error.message);
   jsonResponse(req, res, 500, { error: fallbackMessage });
   return true;
+}
+
+function getDirectoryDeleteStatusCode(message = '') {
+  return String(message).includes('Directory is not empty') ? 409 : 400;
 }
 
 export function createVaultApiCommandHandler({
@@ -242,6 +251,69 @@ export function createVaultApiCommandHandler({
         jsonResponse(req, res, 201, { ok: true });
       } catch (error) {
         handleVaultError(req, res, error, '[api] Failed to create directory:', 'Failed to create directory');
+      }
+      return true;
+    }
+
+    if (requestUrl.pathname === '/api/directory' && req.method === 'PATCH') {
+      try {
+        const body = await parseJsonBody(req);
+        if (!body.oldPath || !body.newPath) {
+          jsonResponse(req, res, 400, { error: 'Missing oldPath or newPath' });
+          return true;
+        }
+
+        const workspaceChange = await workspaceMutationCoordinator?.createDirectoryRenameWorkspaceChange?.(body.oldPath, body.newPath);
+        const result = await vaultFileStore.renameDirectory(body.oldPath, body.newPath);
+        if (!result.ok) {
+          jsonResponse(req, res, 400, { error: result.error });
+          return true;
+        }
+
+        await workspaceMutationCoordinator?.apply?.({
+          action: 'rename-directory',
+          origin: 'api',
+          requestId: readRequestId(req),
+          workspaceChange: workspaceChange ?? {
+            renamedPaths: [{ oldPath: body.oldPath, newPath: body.newPath }],
+          },
+        });
+
+        jsonResponse(req, res, 200, { ok: true, path: body.newPath });
+      } catch (error) {
+        handleVaultError(req, res, error, '[api] Failed to rename directory:', 'Failed to rename directory');
+      }
+      return true;
+    }
+
+    if (requestUrl.pathname === '/api/directory' && req.method === 'DELETE') {
+      const dirPath = requestUrl.searchParams.get('path');
+      const recursive = requestUrl.searchParams.get('recursive') === '1';
+      if (!dirPath) {
+        jsonResponse(req, res, 400, { error: 'Missing path parameter' });
+        return true;
+      }
+
+      try {
+        const workspaceChange = await workspaceMutationCoordinator?.createDirectoryDeleteWorkspaceChange?.(dirPath);
+        const result = await vaultFileStore.deleteDirectory(dirPath, { recursive });
+        if (!result.ok) {
+          jsonResponse(req, res, getDirectoryDeleteStatusCode(result.error), { error: result.error });
+          return true;
+        }
+
+        await workspaceMutationCoordinator?.apply?.({
+          action: 'delete-directory',
+          origin: 'api',
+          requestId: readRequestId(req),
+          workspaceChange: workspaceChange ?? {
+            deletedPaths: [dirPath],
+          },
+        });
+
+        jsonResponse(req, res, 200, { ok: true });
+      } catch (error) {
+        handleVaultError(req, res, error, '[api] Failed to delete directory:', 'Failed to delete directory');
       }
       return true;
     }

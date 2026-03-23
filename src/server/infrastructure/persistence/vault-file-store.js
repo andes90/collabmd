@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'fs/promises';
+import { mkdir, readFile, readdir, rename, rm, rmdir, stat, writeFile } from 'fs/promises';
 import { basename, dirname, extname, join, relative, resolve } from 'path';
 
 import {
@@ -12,6 +12,7 @@ import {
   INVALID_VAULT_FILE_PATH_ERROR,
   isIgnoredVaultEntry,
   resolveVaultDirectoryPath,
+  resolveVaultDirectoryRenamePaths,
   resolveVaultFilePath,
   resolveVaultRenamePaths,
   sanitizeVaultPath,
@@ -71,6 +72,26 @@ function createWorkspaceEntry(relativePath, type) {
     path: relativePath,
     type: type === 'directory' ? 'directory' : getVaultTreeNodeType(relativePath),
   };
+}
+
+function replacePathPrefix(pathValue, oldPrefix, newPrefix) {
+  if (pathValue === oldPrefix) {
+    return newPrefix;
+  }
+
+  return `${newPrefix}${pathValue.slice(oldPrefix.length)}`;
+}
+
+function sortWorkspacePaths(paths = [], direction = 'asc') {
+  const factor = direction === 'desc' ? -1 : 1;
+  return [...paths].sort((left, right) => {
+    const depthDelta = left.split('/').length - right.split('/').length;
+    if (depthDelta !== 0) {
+      return depthDelta * factor;
+    }
+
+    return left.localeCompare(right, undefined, { sensitivity: 'base' }) * factor;
+  });
 }
 
 async function cleanupPaths(paths = []) {
@@ -298,6 +319,10 @@ export class VaultFileStore {
     return this.readContentFile(filePath, 'excalidraw');
   }
 
+  async readDrawioFile(filePath) {
+    return this.readContentFile(filePath, 'drawio');
+  }
+
   async readMermaidFile(filePath) {
     return this.readContentFile(filePath, 'mermaid');
   }
@@ -334,6 +359,10 @@ export class VaultFileStore {
 
   async writeExcalidrawFile(filePath, content, options = {}) {
     return this.writeContentFile(filePath, content, 'excalidraw', options);
+  }
+
+  async writeDrawioFile(filePath, content, options = {}) {
+    return this.writeContentFile(filePath, content, 'drawio', options);
   }
 
   async writeMermaidFile(filePath, content, options = {}) {
@@ -550,6 +579,58 @@ export class VaultFileStore {
     return { ok: true };
   }
 
+  async listWorkspacePathsUnder(pathValue) {
+    const normalizedRoot = String(pathValue ?? '').replace(/\\/g, '/').trim();
+    if (!normalizedRoot) {
+      return [];
+    }
+
+    const { absolute } = resolveVaultDirectoryPath(this.vaultDir, normalizedRoot);
+    if (!absolute) {
+      return [];
+    }
+
+    try {
+      const info = await stat(absolute);
+      if (!info.isDirectory()) {
+        return [];
+      }
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        return [];
+      }
+
+      throw error;
+    }
+
+    const paths = [normalizedRoot];
+    const visitDirectory = async (directoryPath) => {
+      const dirEntries = await readdir(directoryPath, { withFileTypes: true });
+      const sortedEntries = dirEntries.sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }));
+
+      for (const entry of sortedEntries) {
+        if (isIgnoredVaultEntry(entry.name)) {
+          continue;
+        }
+
+        const childAbsolutePath = join(directoryPath, entry.name);
+        const relativePath = toVaultRelativePath(this.vaultDir, childAbsolutePath).replace(/\\/g, '/');
+        if (entry.isDirectory()) {
+          paths.push(relativePath);
+          await visitDirectory(childAbsolutePath);
+          continue;
+        }
+
+        if (isVaultFilePath(entry.name)) {
+          paths.push(relativePath);
+        }
+      }
+    };
+
+    await visitDirectory(absolute);
+    return sortWorkspacePaths(paths);
+  }
+
   async deleteFile(filePath) {
     const { absolute, error } = resolveVaultFilePath(this.vaultDir, filePath);
     if (!absolute) {
@@ -571,6 +652,14 @@ export class VaultFileStore {
     const { absoluteNew, absoluteOld, error } = resolveVaultRenamePaths(this.vaultDir, oldPath, newPath);
     if (!absoluteOld || !absoluteNew) {
       return { ok: false, error };
+    }
+
+    if (absoluteOld === absoluteNew) {
+      return { ok: true };
+    }
+
+    if (await pathExists(absoluteNew)) {
+      return { ok: false, error: 'Target path already exists' };
     }
 
     try {
@@ -599,6 +688,82 @@ export class VaultFileStore {
     }
   }
 
+  async renameDirectory(oldPath, newPath) {
+    const { absoluteNew, absoluteOld, error } = resolveVaultDirectoryRenamePaths(this.vaultDir, oldPath, newPath);
+    if (!absoluteOld || !absoluteNew) {
+      return { ok: false, error };
+    }
+
+    if (absoluteOld === absoluteNew) {
+      return { ok: true };
+    }
+
+    if (await pathExists(absoluteNew)) {
+      return { ok: false, error: 'Target path already exists' };
+    }
+
+    const managedPaths = await this.listWorkspacePathsUnder(oldPath);
+    const nextManagedPaths = managedPaths.map((pathValue) => replacePathPrefix(pathValue, oldPath, newPath));
+
+    try {
+      await this.runManagedWrite([oldPath, newPath, ...managedPaths, ...nextManagedPaths], async () => {
+        await mkdir(dirname(absoluteNew), { recursive: true });
+        await rename(absoluteOld, absoluteNew);
+        await Promise.all(
+          managedPaths.map((pathValue, index) => this.sidecarStore.renameAllForFile(pathValue, nextManagedPaths[index])),
+        );
+      });
+      return { ok: true };
+    } catch (renameError) {
+      return { ok: false, error: renameError.message };
+    }
+  }
+
+  async deleteDirectory(dirPath, { recursive = false } = {}) {
+    const { absolute, error } = resolveVaultDirectoryPath(this.vaultDir, dirPath);
+    if (!absolute) {
+      return { ok: false, error };
+    }
+
+    const managedPaths = await this.listWorkspacePathsUnder(dirPath);
+
+    try {
+      const info = await stat(absolute);
+      if (!info.isDirectory()) {
+        return { ok: false, error: 'Path is not a directory' };
+      }
+    } catch (statError) {
+      if (statError.code === 'ENOENT') {
+        return { ok: true };
+      }
+
+      return { ok: false, error: statError.message };
+    }
+
+    try {
+      if (!recursive) {
+        const contents = await readdir(absolute);
+        if (contents.length > 0) {
+          return { ok: false, error: 'Directory is not empty' };
+        }
+      }
+
+      await this.runManagedWrite([dirPath, ...managedPaths], async () => {
+        if (recursive) {
+          await rm(absolute, { force: true, recursive: true });
+        } else {
+          await rmdir(absolute);
+        }
+        await Promise.all(
+          managedPaths.map((pathValue) => this.sidecarStore.deleteAllForFile(pathValue)),
+        );
+      });
+      return { ok: true };
+    } catch (deleteError) {
+      return { ok: false, error: deleteError.message };
+    }
+  }
+
   async countVaultFiles() {
     return this.countFilesInDir(this.vaultDir);
   }
@@ -623,12 +788,10 @@ export class VaultFileStore {
   async reconcileCollaborationSnapshots({
     changedPaths = [],
     deletedPaths = [],
-    renamedPaths = [],
   } = {}) {
     const affectedPaths = new Set([
       ...(changedPaths ?? []).filter(Boolean),
       ...(deletedPaths ?? []).filter(Boolean),
-      ...((renamedPaths ?? []).flatMap((entry) => [entry?.oldPath, entry?.newPath]).filter(Boolean)),
     ]);
 
     await Promise.allSettled(

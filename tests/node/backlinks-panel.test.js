@@ -367,7 +367,7 @@ test('BacklinksPanel renders the mention count and collapses again when the file
   assert.equal(inline.toggle.textContent, 'Linked Mention');
 });
 
-test('BacklinksPanel closes on escape, outside click, and item selection', async (t) => {
+test('BacklinksPanel closes on escape, outside tap, and item selection', async (t) => {
   const selectedFiles = [];
   const { dock, documentHarness, panel } = createBacklinksPanel(t, {
     'projects/collabmd.md': [
@@ -388,7 +388,23 @@ test('BacklinksPanel closes on escape, outside click, and item selection', async
   assert.equal(dock.panel.classList.contains('expanded'), false);
 
   dock.header.click();
-  documentHarness.dispatch('pointerdown', { target: new FakeElement('div') });
+  const outsideTarget = new FakeElement('div');
+  documentHarness.dispatch('pointerdown', {
+    button: 0,
+    clientX: 40,
+    clientY: 24,
+    pointerId: 1,
+    pointerType: 'touch',
+    target: outsideTarget,
+  });
+  documentHarness.dispatch('pointerup', {
+    button: 0,
+    clientX: 40,
+    clientY: 24,
+    pointerId: 1,
+    pointerType: 'touch',
+    target: outsideTarget,
+  });
   assert.equal(dock.panel.classList.contains('expanded'), false);
 
   dock.header.click();

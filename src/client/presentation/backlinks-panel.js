@@ -23,6 +23,7 @@ export class BacklinksPanel {
     this._currentFile = null;
     this._fetchController = null;
     this._backlinks = [];
+    this._pendingOutsidePointer = null;
 
     const desktopPanel = this.panelRoot?.querySelector('[data-backlinks-variant="dock"]') ?? this.panelRoot;
     this.panels = [
@@ -37,9 +38,45 @@ export class BacklinksPanel {
 
       const target = event?.target;
       if (target && this.panels.some(({ panel }) => panel?.contains?.(target))) {
+        this._pendingOutsidePointer = null;
         return;
       }
 
+      if (event?.pointerType === 'mouse' && event?.button !== 0) {
+        return;
+      }
+
+      this._pendingOutsidePointer = {
+        pointerId: event?.pointerId ?? 'mouse',
+        startX: Number(event?.clientX ?? 0),
+        startY: Number(event?.clientY ?? 0),
+      };
+    };
+
+    this.handleDocumentPointerMove = (event) => {
+      if (!this._pendingOutsidePointer) {
+        return;
+      }
+
+      const deltaX = Math.abs(Number(event?.clientX ?? 0) - this._pendingOutsidePointer.startX);
+      const deltaY = Math.abs(Number(event?.clientY ?? 0) - this._pendingOutsidePointer.startY);
+      if (deltaX > 10 || deltaY > 10) {
+        this._pendingOutsidePointer = null;
+      }
+    };
+
+    this.handleDocumentPointerEnd = (event) => {
+      if (!this._expanded || !this._pendingOutsidePointer) {
+        return;
+      }
+
+      const target = event?.target;
+      if (target && this.panels.some(({ panel }) => panel?.contains?.(target))) {
+        this._pendingOutsidePointer = null;
+        return;
+      }
+
+      this._pendingOutsidePointer = null;
       this.close();
     };
 
@@ -60,20 +97,15 @@ export class BacklinksPanel {
       refs.header?.addEventListener('click', () => {
         if (this._backlinks.length === 0) return;
         this._expanded = !this._expanded;
+        this._pendingOutsidePointer = null;
         this._applyExpandState();
-      });
-
-      refs.header?.addEventListener('keydown', (event) => {
-        if (event.key !== 'Enter' && event.key !== ' ') {
-          return;
-        }
-
-        event.preventDefault();
-        refs.header.click();
       });
     });
 
     this.documentRef?.addEventListener?.('pointerdown', this.handleDocumentPointerDown);
+    this.documentRef?.addEventListener?.('pointermove', this.handleDocumentPointerMove, { passive: true });
+    this.documentRef?.addEventListener?.('pointerup', this.handleDocumentPointerEnd);
+    this.documentRef?.addEventListener?.('pointercancel', this.handleDocumentPointerEnd);
     this.documentRef?.addEventListener?.('keydown', this.handleDocumentKeyDown);
   }
 
@@ -126,6 +158,7 @@ export class BacklinksPanel {
     }
 
     this._expanded = false;
+    this._pendingOutsidePointer = null;
     this._applyExpandState();
   }
 

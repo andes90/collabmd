@@ -20,7 +20,7 @@
   margin-left: -4px;
   border: 2px solid var(--color-surface);
   border-radius: var(--radius-full);
-  color: white;
+  color: var(--color-text-on-dark);
   font-size: var(--text-meta);
   font-weight: 600;
   flex-shrink: 0;
@@ -56,15 +56,15 @@
   width: 14px;
   height: 14px;
   border-radius: var(--radius-full);
-  background: rgb(255 255 255 / 0.22);
+  background: var(--surface-avatar-muted);
   font-size: var(--text-micro);
 }
 
 .user-avatar-self-label {
   padding: 2px 4px;
   border-radius: var(--radius-full);
-  background: rgb(15 17 23 / 0.84);
-  color: #fff;
+  background: var(--surface-avatar-label);
+  color: var(--color-text-on-dark);
   font-size: var(--text-micro);
   font-weight: 700;
   letter-spacing: 0.04em;

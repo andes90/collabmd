@@ -1,13 +1,17 @@
 import { createGitRequestError } from './errors.js';
+import { getVaultFileKind, isImageAttachmentFilePath } from '../../../domain/file-kind.js';
 import { normalizeRelativeGitPath } from './path-utils.js';
 import {
   countPatchLines,
+  parseNumstatEntries,
   parseNameStatusEntries,
   parseUnifiedDiff,
 } from './parsers.js';
 import {
   createCommitDiffResponse,
   createEmptyStats,
+  createFileHistoryResponse,
+  createFileSnapshotResponse,
   createHistoryResponse,
 } from './responses.js';
 
@@ -181,6 +185,86 @@ export class GitHistoryService {
     });
   }
 
+  async listFileHistory({ limit = DEFAULT_HISTORY_LIMIT, offset = 0, path } = {}) {
+    const isGitRepo = await this.commandRunner.isGitRepo();
+    const normalizedLimit = clampHistoryLimit(limit);
+    const normalizedOffset = normalizeHistoryOffset(offset);
+    const normalizedPath = normalizeRelativeGitPath(path);
+
+    if (!isGitRepo) {
+      return createFileHistoryResponse({
+        commits: [],
+        hasMore: false,
+        isGitRepo: false,
+        limit: normalizedLimit,
+        offset: normalizedOffset,
+        path: normalizedPath,
+      });
+    }
+
+    const cacheKey = JSON.stringify({
+      limit: normalizedLimit,
+      offset: normalizedOffset,
+      path: normalizedPath,
+      type: 'file-history',
+    });
+    const cached = getCachedValue(this.historyCache, cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    return this.runRequest(cacheKey, async () => {
+      const hasHeadCommit = await this.hasHeadCommit();
+      if (!hasHeadCommit) {
+        return setCachedValue(this.historyCache, cacheKey, createFileHistoryResponse({
+          commits: [],
+          hasMore: false,
+          limit: normalizedLimit,
+          offset: normalizedOffset,
+          path: normalizedPath,
+        }), this.responseCacheTtlMs);
+      }
+
+      const logArgs = [
+        'log',
+        'HEAD',
+        `--skip=${normalizedOffset}`,
+        '-n',
+        String(normalizedLimit + 1),
+        '--follow',
+        '--find-renames=20%',
+        '--date=iso-strict',
+        '--format=%x1e%H%x1f%h%x1f%s%x1f%an%x1f%ae%x1f%aI%x1f%P',
+        '--',
+        normalizedPath,
+      ];
+      const [nameStatusOutput, numstatOutput] = await Promise.all([
+        this.commandRunner.execGit([
+          ...logArgs.slice(0, -2),
+          '--name-status',
+          ...logArgs.slice(-2),
+        ]),
+        this.commandRunner.execGit([
+          ...logArgs.slice(0, -2),
+          '--numstat',
+          ...logArgs.slice(-2),
+        ]),
+      ]);
+
+      const commits = this.mergeFileHistoryChunks(nameStatusOutput, numstatOutput);
+      const hasMore = commits.length > normalizedLimit;
+      const response = createFileHistoryResponse({
+        commits: commits.slice(0, normalizedLimit),
+        hasMore,
+        limit: normalizedLimit,
+        offset: normalizedOffset,
+        path: normalizedPath,
+      });
+
+      return setCachedValue(this.historyCache, cacheKey, response, this.responseCacheTtlMs);
+    });
+  }
+
   async getCommit({ allowLargePatch = false, hash, metaOnly = false, path = null } = {}) {
     const isGitRepo = await this.commandRunner.isGitRepo();
     if (!isGitRepo) {
@@ -311,6 +395,57 @@ export class GitHistoryService {
     });
   }
 
+  async getFileSnapshot({ hash, path } = {}) {
+    const isGitRepo = await this.commandRunner.isGitRepo();
+    const normalizedHash = this.normalizeCommitHash(hash);
+    const normalizedPath = normalizeRelativeGitPath(path);
+
+    if (!isGitRepo) {
+      return createFileSnapshotResponse({
+        content: '',
+        fileKind: getVaultFileKind(normalizedPath),
+        hash: normalizedHash,
+        isGitRepo: false,
+        path: normalizedPath,
+      });
+    }
+
+    if (isImageAttachmentFilePath(normalizedPath)) {
+      throw createGitRequestError(400, 'Binary file snapshots are not supported');
+    }
+
+    const fileKind = getVaultFileKind(normalizedPath);
+    if (!fileKind) {
+      throw createGitRequestError(400, 'Unsupported file snapshot type');
+    }
+
+    const cacheKey = JSON.stringify({
+      hash: normalizedHash,
+      path: normalizedPath,
+      type: 'file-snapshot',
+    });
+    const cached = getCachedValue(this.commitCache, cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    return this.runRequest(cacheKey, async () => {
+      let content = '';
+      try {
+        content = await this.commandRunner.execGit(['show', `${normalizedHash}:${normalizedPath}`]);
+      } catch {
+        throw createGitRequestError(404, 'Commit file not found');
+      }
+
+      return setCachedValue(this.commitCache, cacheKey, createFileSnapshotResponse({
+        content,
+        fileKind,
+        hash: normalizedHash,
+        path: normalizedPath,
+      }), this.responseCacheTtlMs);
+    });
+  }
+
   async runRequest(key, callback) {
     if (this.pendingRequests.has(key)) {
       return this.pendingRequests.get(key);
@@ -387,6 +522,70 @@ export class GitHistoryService {
       shortHash,
       subject,
     };
+  }
+
+  parseFileHistoryChunk(chunk) {
+    const [headerLine = '', ...detailLines] = String(chunk ?? '')
+      .split(/\r?\n/u)
+      .filter((line) => line.length > 0);
+    const [
+      hash = '',
+      shortHash = '',
+      subject = '',
+      authorName = '',
+      authorEmail = '',
+      authoredAt = '',
+      rawParents = '',
+    ] = headerLine.split('\x1f');
+    const parentHashes = rawParents.split(' ').map((value) => value.trim()).filter(Boolean);
+
+    return {
+      authorEmail,
+      authorName,
+      authoredAt,
+      detailLines,
+      hash,
+      isMergeCommit: parentHashes.length > 1,
+      parentCount: parentHashes.length,
+      relativeDateLabel: formatRelativeDate(authoredAt),
+      shortHash,
+      subject,
+    };
+  }
+
+  mergeFileHistoryChunks(nameStatusOutput, numstatOutput) {
+    const nameStatusChunks = String(nameStatusOutput ?? '')
+      .split('\x1e')
+      .map((chunk) => chunk.trim())
+      .filter(Boolean)
+      .map((chunk) => this.parseFileHistoryChunk(chunk));
+    const numstatChunks = String(numstatOutput ?? '')
+      .split('\x1e')
+      .map((chunk) => chunk.trim())
+      .filter(Boolean)
+      .map((chunk) => this.parseFileHistoryChunk(chunk));
+
+    return nameStatusChunks.map((chunk, index) => {
+      const nameStatusEntry = parseNameStatusEntries(chunk.detailLines.join('\n'))[0] ?? null;
+      const numstatEntry = parseNumstatEntries(numstatChunks[index]?.detailLines?.join('\n') ?? '')[0] ?? null;
+      return {
+        additions: Number(numstatEntry?.additions || 0),
+        authorEmail: chunk.authorEmail,
+        authorName: chunk.authorName,
+        authoredAt: chunk.authoredAt,
+        deletions: Number(numstatEntry?.deletions || 0),
+        filesChanged: 1,
+        hash: chunk.hash,
+        isMergeCommit: chunk.isMergeCommit,
+        oldPath: nameStatusEntry?.oldPath ?? null,
+        parentCount: chunk.parentCount,
+        pathAtCommit: nameStatusEntry?.path ?? null,
+        relativeDateLabel: chunk.relativeDateLabel,
+        shortHash: chunk.shortHash,
+        status: nameStatusEntry?.status ?? 'modified',
+        subject: chunk.subject,
+      };
+    }).filter((entry) => entry.hash && entry.pathAtCommit);
   }
 
   async loadCommitMetadata(hash) {

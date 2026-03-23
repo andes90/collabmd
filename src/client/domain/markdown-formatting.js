@@ -14,7 +14,13 @@ const VIDEO_URL_PLACEHOLDER = 'https://';
 const CODE_BLOCK_PLACEHOLDER = 'code';
 const TABLE_HEADERS = Object.freeze(['Column 1', 'Column 2']);
 const TABLE_CELL_PLACEHOLDER = 'Value';
-
+const BLOCK_PREFIX_PATTERNS = Object.freeze({
+  heading: /^#{1,6}\s+/,
+  quote: /^>\s+/,
+  bulletList: /^[-*+]\s+/,
+  numberedList: /^\d+\.\s+/,
+  taskList: /^-\s\[(?: |x|X)\]\s+/,
+});
 function normalizeRange(range, textLength) {
   const from = Math.max(0, Math.min(range.from, range.to, textLength));
   const to = Math.max(0, Math.min(Math.max(range.from, range.to), textLength));
@@ -54,6 +60,21 @@ function getLineSelection(text, range) {
 
 function wrapInline(text, range, token, placeholder) {
   const selected = text.slice(range.from, range.to);
+  if (
+    selected.length > (token.length * 2)
+    && selected.startsWith(token)
+    && selected.endsWith(token)
+  ) {
+    const unwrapped = selected.slice(token.length, selected.length - token.length);
+    return {
+      anchor: range.from,
+      from: range.from,
+      head: range.from + unwrapped.length,
+      insert: unwrapped,
+      to: range.to,
+    };
+  }
+
   if (selected.length > 0) {
     return {
       anchor: range.from + token.length,
@@ -174,12 +195,101 @@ function formatVideo(text, range) {
   };
 }
 
-function prefixSelectedLines(text, range, prefixFactory, matcher) {
+function stripSupportedBlockPrefix(line) {
+  if (BLOCK_PREFIX_PATTERNS.taskList.test(line)) {
+    return line.replace(BLOCK_PREFIX_PATTERNS.taskList, '');
+  }
+
+  if (BLOCK_PREFIX_PATTERNS.numberedList.test(line)) {
+    return line.replace(BLOCK_PREFIX_PATTERNS.numberedList, '');
+  }
+
+  if (BLOCK_PREFIX_PATTERNS.bulletList.test(line)) {
+    return line.replace(BLOCK_PREFIX_PATTERNS.bulletList, '');
+  }
+
+  if (BLOCK_PREFIX_PATTERNS.quote.test(line)) {
+    return line.replace(BLOCK_PREFIX_PATTERNS.quote, '');
+  }
+
+  if (BLOCK_PREFIX_PATTERNS.heading.test(line)) {
+    return line.replace(BLOCK_PREFIX_PATTERNS.heading, '');
+  }
+
+  return line;
+}
+
+function matchesBlockAction(line, action) {
+  switch (action) {
+    case 'paragraph':
+      return !(
+        BLOCK_PREFIX_PATTERNS.taskList.test(line)
+        || BLOCK_PREFIX_PATTERNS.numberedList.test(line)
+        || BLOCK_PREFIX_PATTERNS.bulletList.test(line)
+        || BLOCK_PREFIX_PATTERNS.quote.test(line)
+        || BLOCK_PREFIX_PATTERNS.heading.test(line)
+      );
+    case 'heading-1':
+      return /^#\s+/.test(line);
+    case 'heading-2':
+      return /^##\s+/.test(line);
+    case 'heading-3':
+      return /^###\s+/.test(line);
+    case 'heading-4':
+      return /^####\s+/.test(line);
+    case 'heading-5':
+      return /^#####\s+/.test(line);
+    case 'heading-6':
+      return /^######\s+/.test(line);
+    case 'quote':
+      return BLOCK_PREFIX_PATTERNS.quote.test(line);
+    case 'bullet-list':
+      return BLOCK_PREFIX_PATTERNS.bulletList.test(line) && !BLOCK_PREFIX_PATTERNS.taskList.test(line);
+    case 'numbered-list':
+      return BLOCK_PREFIX_PATTERNS.numberedList.test(line);
+    case 'task-list':
+      return BLOCK_PREFIX_PATTERNS.taskList.test(line);
+    default:
+      return false;
+  }
+}
+
+function prefixForBlockAction(action, index) {
+  switch (action) {
+    case 'heading-1':
+      return '# ';
+    case 'heading-2':
+      return '## ';
+    case 'heading-3':
+      return '### ';
+    case 'heading-4':
+      return '#### ';
+    case 'heading-5':
+      return '##### ';
+    case 'heading-6':
+      return '###### ';
+    case 'quote':
+      return '> ';
+    case 'bullet-list':
+      return '- ';
+    case 'numbered-list':
+      return `${index + 1}. `;
+    case 'task-list':
+      return '- [ ] ';
+    default:
+      return '';
+  }
+}
+
+function normalizeBlockLines(text, range, action) {
   const lineRange = getLineSelection(text, range);
   const block = text.slice(lineRange.from, lineRange.to);
   const lines = block.split('\n');
-  const matchesPrefix = (line) => matcher.test(line);
-  const shouldUnprefix = lines.every((line) => line.trim().length === 0 || matchesPrefix(line));
+  const nonEmptyLines = lines.filter((line) => line.trim().length > 0);
+  const shouldResetToParagraph = action !== 'paragraph'
+    && nonEmptyLines.length > 0
+    && nonEmptyLines.every((line) => matchesBlockAction(line, action));
+  const targetAction = shouldResetToParagraph ? 'paragraph' : action;
   let visibleLineIndex = 0;
 
   const nextLines = lines.map((line) => {
@@ -187,13 +297,14 @@ function prefixSelectedLines(text, range, prefixFactory, matcher) {
       return line;
     }
 
-    if (shouldUnprefix) {
-      return matchesPrefix(line) ? line.replace(matcher, '') : line;
+    const normalizedLine = stripSupportedBlockPrefix(line);
+    if (targetAction === 'paragraph') {
+      return normalizedLine;
     }
 
-    const prefix = prefixFactory(visibleLineIndex);
+    const prefix = prefixForBlockAction(targetAction, visibleLineIndex);
     visibleLineIndex += 1;
-    return `${prefix}${line}`;
+    return `${prefix}${normalizedLine}`;
   });
 
   return {
@@ -205,50 +316,41 @@ function prefixSelectedLines(text, range, prefixFactory, matcher) {
   };
 }
 
-function formatHeading(text, range) {
-  return prefixSelectedLines(text, range, () => '## ', /^#{1,6}\s+/);
+function formatHeading(text, range, level) {
+  return normalizeBlockLines(text, range, `heading-${level}`);
 }
 
 function formatBulletList(text, range) {
-  return prefixSelectedLines(text, range, () => '- ', /^[-*+]\s+/);
+  return normalizeBlockLines(text, range, 'bullet-list');
 }
 
 function formatQuote(text, range) {
-  return prefixSelectedLines(text, range, () => '> ', /^>\s+/);
+  return normalizeBlockLines(text, range, 'quote');
 }
 
 function formatTaskList(text, range) {
-  return prefixSelectedLines(text, range, () => '- [ ] ', /^-\s\[(?: |x|X)\]\s+/);
+  return normalizeBlockLines(text, range, 'task-list');
 }
 
 function formatNumberedList(text, range) {
+  return normalizeBlockLines(text, range, 'numbered-list');
+}
+
+function formatParagraph(text, range) {
   const lineRange = getLineSelection(text, range);
   const block = text.slice(lineRange.from, lineRange.to);
-  const lines = block.split('\n');
-  const shouldUnprefix = lines.every((line) => line.trim().length === 0 || /^\d+\.\s+/.test(line));
-  let counter = 1;
+  const unwrapped = unwrapCodeFence(block);
+  if (unwrapped !== null) {
+    return {
+      anchor: lineRange.from,
+      from: lineRange.from,
+      head: lineRange.from + unwrapped.length,
+      insert: unwrapped,
+      to: lineRange.to,
+    };
+  }
 
-  const nextLines = lines.map((line) => {
-    if (line.trim().length === 0) {
-      return line;
-    }
-
-    if (shouldUnprefix) {
-      return line.replace(/^\d+\.\s+/, '');
-    }
-
-    const nextLine = `${counter}. ${line}`;
-    counter += 1;
-    return nextLine;
-  });
-
-  return {
-    anchor: lineRange.from,
-    from: lineRange.from,
-    head: lineRange.from + nextLines.join('\n').length,
-    insert: nextLines.join('\n'),
-    to: lineRange.to,
-  };
+  return normalizeBlockLines(text, range, 'paragraph');
 }
 
 function unwrapCodeFence(block) {
@@ -332,39 +434,82 @@ function formatHorizontalRule(text, range) {
 export function createMarkdownToolbarEdit(documentText, selectionRange, action) {
   const text = String(documentText ?? '');
   const range = normalizeRange(selectionRange, text.length);
+  let edit = null;
 
   switch (action) {
     case 'bold':
-      return wrapInline(text, range, '**', INLINE_PLACEHOLDERS.bold);
+      edit = wrapInline(text, range, '**', INLINE_PLACEHOLDERS.bold);
+      break;
     case 'italic':
-      return wrapInline(text, range, '_', INLINE_PLACEHOLDERS.italic);
+      edit = wrapInline(text, range, '_', INLINE_PLACEHOLDERS.italic);
+      break;
     case 'strikethrough':
-      return wrapInline(text, range, '~~', INLINE_PLACEHOLDERS.strikethrough);
+      edit = wrapInline(text, range, '~~', INLINE_PLACEHOLDERS.strikethrough);
+      break;
     case 'code':
-      return wrapInline(text, range, '`', INLINE_PLACEHOLDERS.code);
+      edit = wrapInline(text, range, '`', INLINE_PLACEHOLDERS.code);
+      break;
     case 'link':
-      return formatLink(text, range);
+      edit = formatLink(text, range);
+      break;
     case 'image':
-      return formatImage(text, range);
+      edit = formatImage(text, range);
+      break;
     case 'video':
-      return formatVideo(text, range);
+      edit = formatVideo(text, range);
+      break;
+    case 'paragraph':
+      edit = formatParagraph(text, range);
+      break;
     case 'heading':
-      return formatHeading(text, range);
+      edit = formatHeading(text, range, 2);
+      break;
+    case 'heading-1':
+      edit = formatHeading(text, range, 1);
+      break;
+    case 'heading-2':
+      edit = formatHeading(text, range, 2);
+      break;
+    case 'heading-3':
+      edit = formatHeading(text, range, 3);
+      break;
+    case 'heading-4':
+      edit = formatHeading(text, range, 4);
+      break;
+    case 'heading-5':
+      edit = formatHeading(text, range, 5);
+      break;
+    case 'heading-6':
+      edit = formatHeading(text, range, 6);
+      break;
     case 'quote':
-      return formatQuote(text, range);
+      edit = formatQuote(text, range);
+      break;
     case 'bullet-list':
-      return formatBulletList(text, range);
+      edit = formatBulletList(text, range);
+      break;
     case 'numbered-list':
-      return formatNumberedList(text, range);
+      edit = formatNumberedList(text, range);
+      break;
     case 'task-list':
-      return formatTaskList(text, range);
+      edit = formatTaskList(text, range);
+      break;
     case 'code-block':
-      return formatCodeBlock(text, range);
+      edit = formatCodeBlock(text, range);
+      break;
     case 'table':
-      return formatTable(text, range);
+      edit = formatTable(text, range);
+      break;
     case 'horizontal-rule':
-      return formatHorizontalRule(text, range);
+      edit = formatHorizontalRule(text, range);
+      break;
     default:
       return null;
   }
+
+  if (!edit) {
+    return null;
+  }
+
+  return text.slice(edit.from, edit.to) === edit.insert ? null : edit;
 }

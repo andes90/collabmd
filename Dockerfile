@@ -26,7 +26,7 @@ RUN addgroup -g 1001 -S collabmd \
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
-COPY --from=build /app/public ./public
+COPY --from=build /app/dist ./dist
 COPY --from=build /app/src ./src
 COPY --from=build /app/bin ./bin
 COPY --from=build /app/scripts ./scripts

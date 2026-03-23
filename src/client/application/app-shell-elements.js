@@ -38,6 +38,8 @@ export function bindAppShellElements(doc = document) {
     editorPage: doc.getElementById('editor-page'),
     diffPage: doc.getElementById('diff-page'),
     fileSearch: doc.getElementById('fileSearch'),
+    fileHistoryButton: doc.getElementById('fileHistoryBtn'),
+    fileHistoryButtonLabel: doc.getElementById('fileHistoryBtnLabel'),
     filesSidebarTab: doc.getElementById('filesSidebarTab'),
     gitSearch: doc.getElementById('gitSearch'),
     gitSearchInput: doc.getElementById('gitSearchInput'),
@@ -74,6 +76,8 @@ export function bindAppShellElements(doc = document) {
     tabLockTitle: doc.getElementById('tabLockTitle'),
     toolbarCenter: doc.getElementById('toolbarCenter'),
     toolbarDiffBadge: doc.getElementById('toolbarDiffBadge'),
+    toolbarOverflowMenu: doc.getElementById('toolbarOverflowMenu'),
+    toolbarOverflowToggle: doc.getElementById('toolbarOverflowToggle'),
     sidebarTabs: doc.getElementById('sidebarTabs'),
   };
 }

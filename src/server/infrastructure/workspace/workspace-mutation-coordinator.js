@@ -34,6 +34,10 @@ function normalizeWorkspacePath(pathValue = '') {
   return String(pathValue ?? '').replace(/\\/g, '/').trim();
 }
 
+function isDirectoryWorkspaceEntry(entry = {}) {
+  return entry?.type === 'directory' || entry?.nodeType === 'directory';
+}
+
 function getParentDirectoryPath(pathValue = '') {
   const parentPath = dirname(normalizeWorkspacePath(pathValue)).replace(/\\/g, '/');
   return parentPath === '.' ? '' : parentPath;
@@ -191,14 +195,16 @@ export class WorkspaceMutationCoordinator {
   isIncrementalApiAction(action) {
     return action === 'create-directory'
       || action === 'create-file'
+      || action === 'delete-directory'
       || action === 'delete-file'
+      || action === 'rename-directory'
       || action === 'rename-file'
       || action === 'upload-attachment'
       || action === 'write-file';
   }
 
   async readWorkspacePathState(pathValue, {
-    expectDirectory = false,
+    expectDirectory = null,
   } = {}) {
     const normalizedPath = normalizeWorkspacePath(pathValue);
     if (!normalizedPath) {
@@ -212,11 +218,22 @@ export class WorkspaceMutationCoordinator {
 
     try {
       const info = await stat(absolutePath);
-      if (expectDirectory) {
+      if (expectDirectory === true) {
         if (!info.isDirectory()) {
           return null;
         }
 
+        return {
+          entry: createWorkspaceEntry(normalizedPath, 'directory'),
+          metadata: createWorkspaceMetadata(normalizedPath, 'directory', info),
+        };
+      }
+
+      if (expectDirectory === false && info.isDirectory()) {
+        return null;
+      }
+
+      if (info.isDirectory()) {
         return {
           entry: createWorkspaceEntry(normalizedPath, 'directory'),
           metadata: createWorkspaceMetadata(normalizedPath, 'directory', info),
@@ -296,7 +313,10 @@ export class WorkspaceMutationCoordinator {
         return null;
       }
 
-      const nextPathState = await this.readWorkspacePathState(entry.newPath);
+      const previousEntry = previousState.entries.get(entry.oldPath);
+      const nextPathState = await this.readWorkspacePathState(entry.newPath, {
+        expectDirectory: isDirectoryWorkspaceEntry(previousEntry) ? true : null,
+      });
       if (!nextPathState) {
         return null;
       }
@@ -439,6 +459,67 @@ export class WorkspaceMutationCoordinator {
     }
 
     return filtered;
+  }
+
+  async getWorkspaceStateSnapshot() {
+    return this.workspaceState ?? this.vaultFileStore.scanWorkspaceState();
+  }
+
+  async createDirectoryRenameWorkspaceChange(oldPath, newPath) {
+    const normalizedOldPath = normalizeWorkspacePath(oldPath);
+    const normalizedNewPath = normalizeWorkspacePath(newPath);
+    if (!normalizedOldPath || !normalizedNewPath || normalizedOldPath === normalizedNewPath) {
+      return createEmptyWorkspaceChange();
+    }
+
+    const workspaceState = await this.getWorkspaceStateSnapshot();
+    const renamedPaths = Array.from(workspaceState.entries.keys())
+      .filter((pathValue) => pathValue === normalizedOldPath || pathValue.startsWith(`${normalizedOldPath}/`))
+      .sort((left, right) => {
+        const depthDelta = left.split('/').length - right.split('/').length;
+        if (depthDelta !== 0) {
+          return depthDelta;
+        }
+
+        return left.localeCompare(right, undefined, { sensitivity: 'base' });
+      })
+      .map((pathValue) => ({
+        oldPath: pathValue,
+        newPath: pathValue === normalizedOldPath
+          ? normalizedNewPath
+          : `${normalizedNewPath}${pathValue.slice(normalizedOldPath.length)}`,
+      }));
+
+    if (renamedPaths.length === 0) {
+      renamedPaths.push({ oldPath: normalizedOldPath, newPath: normalizedNewPath });
+    }
+
+    return createWorkspaceChange({ renamedPaths });
+  }
+
+  async createDirectoryDeleteWorkspaceChange(pathValue) {
+    const normalizedPath = normalizeWorkspacePath(pathValue);
+    if (!normalizedPath) {
+      return createEmptyWorkspaceChange();
+    }
+
+    const workspaceState = await this.getWorkspaceStateSnapshot();
+    const deletedPaths = Array.from(workspaceState.entries.keys())
+      .filter((entryPath) => entryPath === normalizedPath || entryPath.startsWith(`${normalizedPath}/`))
+      .sort((left, right) => {
+        const depthDelta = right.split('/').length - left.split('/').length;
+        if (depthDelta !== 0) {
+          return depthDelta;
+        }
+
+        return left.localeCompare(right, undefined, { sensitivity: 'base' });
+      });
+
+    if (deletedPaths.length === 0) {
+      deletedPaths.push(normalizedPath);
+    }
+
+    return createWorkspaceChange({ deletedPaths });
   }
 
   async reconcileBacklinks(workspaceChange, nextState, {

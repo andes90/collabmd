@@ -1,4 +1,6 @@
 import {
+  getVaultFileKind,
+  isDrawioFilePath,
   isExcalidrawFilePath,
   isImageAttachmentFilePath,
   isMermaidFilePath,
@@ -9,6 +11,10 @@ import {
 export const workspaceFeature = {
   isExcalidrawFile(filePath) {
     return isExcalidrawFilePath(filePath);
+  },
+
+  isDrawioFile(filePath) {
+    return isDrawioFilePath(filePath);
   },
 
   isImageFile(filePath) {
@@ -28,7 +34,48 @@ export const workspaceFeature = {
   },
 
   getPreviewSource() {
+    const previewDocument = this.getStaticPreviewDocument?.();
+    const previewFilePath = previewDocument?.currentFilePath ?? previewDocument?.filePath ?? null;
+    if (previewDocument && previewFilePath && previewFilePath === this.currentFilePath) {
+      if (this.isMermaidFile(this.currentFilePath)) {
+        return this.createDiagramPreviewDocument('mermaid', previewDocument.content);
+      }
+
+      if (this.isPlantUmlFile(this.currentFilePath)) {
+        return this.createDiagramPreviewDocument('plantuml', previewDocument.content);
+      }
+
+      return String(previewDocument.content ?? '');
+    }
+
     return this.workspacePreviewController.getPreviewSource(this.currentFilePath);
+  },
+
+  getStaticPreviewDocument() {
+    return this._staticPreviewDocument ?? null;
+  },
+
+  setStaticPreviewDocument(document) {
+    const normalizedFilePath = document?.filePath ?? document?.path ?? null;
+    const normalizedCurrentFilePath = document?.currentFilePath ?? normalizedFilePath;
+    this._staticPreviewDocument = document
+      ? {
+        content: String(document.content ?? ''),
+        currentFilePath: normalizedCurrentFilePath,
+        fileKind: document.fileKind ?? getVaultFileKind(normalizedFilePath),
+        filePath: normalizedFilePath,
+        hash: document.hash ?? null,
+      }
+      : null;
+  },
+
+  clearStaticPreviewDocument() {
+    this._staticPreviewDocument = null;
+  },
+
+  supportsFileHistory(filePath) {
+    const kind = getVaultFileKind(filePath);
+    return kind !== null && kind !== 'image';
   },
 
   getDisplayName(filePath) {
@@ -49,8 +96,16 @@ export const workspaceFeature = {
     this.workspacePreviewController.renderExcalidrawFilePreview(filePath);
   },
 
+  renderDrawioFilePreview(filePath) {
+    this.workspacePreviewController.renderDrawioFilePreview(filePath);
+  },
+
   renderImageFilePreview(filePath) {
     this.workspacePreviewController.renderImageFilePreview(filePath);
+  },
+
+  renderTextFilePreview(payload) {
+    this.workspacePreviewController.renderTextFilePreview(payload);
   },
 
   createResizeHandler() {

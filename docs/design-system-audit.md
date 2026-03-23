@@ -19,7 +19,7 @@
 ## High-Drift Areas
 - Shared actions diverged into several families: `btn`, `sidebar-action-btn`, `diff-nav-btn`, `pane-header-btn`, `markdown-toolbar-btn`, `diagram-preview-action-btn`, and feature-local pill buttons.
 - Typography and shape values drifted outside the token scale, especially `11px`, `12px`, `13px`, and multiple raw radii.
-- Some presentation bypassed the system entirely through inline styles in [`public/index.html`](/Users/andes/Documents/andes/collabmd/public/index.html) and generated HTML in [`git-panel-controller.js`](/Users/andes/Documents/andes/collabmd/src/client/presentation/git-panel-controller.js).
+- Some presentation bypassed the system entirely through inline styles in [`index.html`](/Users/andes/Documents/andes/collabmd/src/client/app/index.html) and generated HTML in [`git-panel-controller.js`](/Users/andes/Documents/andes/collabmd/src/client/presentation/git-panel-controller.js).
 - Semantic token gaps existed: `--color-surface-raised` and `--color-surface-ink` were referenced but not defined.
 
 ## Refactor Direction
@@ -34,7 +34,7 @@
 - Shared tokens, shared components, feature styles, and third-party overrides are separated by layer instead of mixed in the same file.
 - Vendor overrides contain only vendor-specific styling; reusable scrollbar behavior lives outside overrides.
 - The source tree names the real UI vocabulary directly: tokens, primitives, shared components, layout, feature manifests, and feature submodules.
-- `style.css` remains an ordered manifest, and public asset names stay `base.css` and `style.css`.
+- `style.css` remains an ordered manifest, and the bundler owns the emitted hashed CSS asset names.
 - `npm run build` and `node --test tests/node/http-server.test.js tests/node/package-packaging.test.js` pass after the refactor.
 
 Status: met in the current source tree after the final module-boundary split.

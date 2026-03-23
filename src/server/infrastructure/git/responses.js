@@ -102,6 +102,24 @@ export function createHistoryResponse({
   };
 }
 
+export function createFileHistoryResponse({
+  commits = [],
+  hasMore = false,
+  isGitRepo = true,
+  limit = 30,
+  offset = 0,
+  path = null,
+} = {}) {
+  return {
+    commits,
+    hasMore,
+    isGitRepo,
+    limit,
+    offset,
+    path,
+  };
+}
+
 export function createCommitDiffResponse({
   commit = null,
   files = [],
@@ -122,6 +140,22 @@ export function createCommitDiffResponse({
     path,
     source: 'commit',
     summary,
+  };
+}
+
+export function createFileSnapshotResponse({
+  content = '',
+  fileKind = null,
+  hash = null,
+  isGitRepo = true,
+  path = null,
+} = {}) {
+  return {
+    content,
+    fileKind,
+    hash,
+    isGitRepo,
+    path,
   };
 }
 

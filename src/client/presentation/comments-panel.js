@@ -9,7 +9,7 @@ function isCommentablePreviewBlock(element) {
     return false;
   }
 
-  const interactiveEmbedSelector = '.mermaid-shell, .plantuml-shell, .excalidraw-embed, .excalidraw-embed-placeholder';
+  const interactiveEmbedSelector = '.mermaid-shell, .plantuml-shell, .drawio-embed, .drawio-embed-placeholder, .excalidraw-embed, .excalidraw-embed-placeholder';
   return !element.matches(interactiveEmbedSelector) && !element.querySelector(interactiveEmbedSelector);
 }
 
@@ -228,7 +228,7 @@ export class CommentsPanel {
       return;
     }
 
-    if (this.previewElement.querySelector('.mermaid-shell, .plantuml-shell, .excalidraw-embed, .excalidraw-embed-placeholder')) {
+    if (this.previewElement.querySelector('.mermaid-shell, .plantuml-shell, .drawio-embed, .drawio-embed-placeholder, .excalidraw-embed, .excalidraw-embed-placeholder')) {
       return;
     }
 

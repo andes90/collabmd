@@ -79,6 +79,7 @@ function createCoordinator(overrides = {}) {
     getLocalUser: () => null,
     getStoredUserName: () => 'Tester',
     getTheme: () => 'light',
+    isDrawioFile: () => false,
     isExcalidrawFile: () => false,
     isMermaidFile: () => false,
     isPlantUmlFile: () => false,
@@ -105,6 +106,9 @@ function createCoordinator(overrides = {}) {
     onImagePaste: () => {
       events.push('image-paste');
     },
+    onRenderDrawioPreview: () => {
+      events.push('render-drawio');
+    },
     onRenderExcalidrawPreview: () => {
       events.push('render-excalidraw');
     },
@@ -125,6 +129,7 @@ function createCoordinator(overrides = {}) {
       events.push('render-presence');
     },
     scrollContainerForSession: () => null,
+    shouldUseDrawioPreview: () => true,
     showEditorLoading: () => {
       events.push('show-loading');
     },
@@ -246,6 +251,27 @@ test('WorkspaceCoordinator skips creating an editor session for Excalidraw files
   assert.equal(coordinator.getSession(), null);
   assert.ok(events.includes('open-ready'));
   assert.ok(events.includes('render-excalidraw'));
+});
+
+test('WorkspaceCoordinator skips creating an editor session for draw.io files', async () => {
+  let createSessionCalls = 0;
+  const { coordinator, events } = createCoordinator({
+    createEditorSession: () => {
+      createSessionCalls += 1;
+      return {
+        destroy() {},
+      };
+    },
+    isDrawioFile: (filePath) => filePath?.endsWith('.drawio'),
+    shouldUseDrawioPreview: () => true,
+  });
+
+  await coordinator.openFile('vault/architecture.drawio');
+
+  assert.equal(createSessionCalls, 0);
+  assert.equal(coordinator.getSession(), null);
+  assert.ok(events.includes('open-ready'));
+  assert.ok(events.includes('render-drawio'));
 });
 
 test('WorkspaceCoordinator skips creating an editor session for image attachments', async () => {

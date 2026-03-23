@@ -9,6 +9,7 @@ export class WorkspaceChromeController {
     getDisplayName,
     loadBacklinks,
     onBeforeFileOpen,
+    onRenderDrawioPreview,
     onFileOpenError,
     onFileOpenReady,
     onRenderExcalidrawPreview,
@@ -27,6 +28,7 @@ export class WorkspaceChromeController {
     this.getDisplayName = getDisplayName;
     this.loadBacklinks = loadBacklinks;
     this.onBeforeFileOpen = onBeforeFileOpen;
+    this.onRenderDrawioPreview = onRenderDrawioPreview;
     this.onFileOpenError = onFileOpenError;
     this.onFileOpenReady = onFileOpenReady;
     this.onRenderExcalidrawPreview = onRenderExcalidrawPreview;
@@ -71,6 +73,7 @@ export class WorkspaceChromeController {
   }
 
   finalizeFileOpen({
+    isDrawio = false,
     filePath,
     isExcalidraw = false,
     isImage = false,
@@ -79,6 +82,9 @@ export class WorkspaceChromeController {
   }) {
     if (isExcalidraw) {
       this.onRenderExcalidrawPreview(filePath);
+    }
+    if (isDrawio) {
+      this.onRenderDrawioPreview(filePath);
     }
     if (isImage) {
       this.onRenderImagePreview(filePath);

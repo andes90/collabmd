@@ -1,6 +1,7 @@
 export const LARGE_DOCUMENT_CHAR_THRESHOLD = 150000;
 export const LARGE_DOCUMENT_MERMAID_THRESHOLD = 20;
 export const LARGE_DOCUMENT_EXCALIDRAW_THRESHOLD = 8;
+export const LARGE_DOCUMENT_DRAWIO_THRESHOLD = 8;
 export const LARGE_DOCUMENT_PLANTUML_THRESHOLD = 12;
 
 function countMatches(source, pattern) {
@@ -15,6 +16,7 @@ export function analyzeMarkdownComplexity(markdownText = '') {
 
   return {
     chars: source.length,
+    drawioEmbeds: countMatches(source, /!\[\[[^\]]+\.drawio(?:\|[^\]]+)?\]\]/gi),
     excalidrawEmbeds: countMatches(source, /!\[\[[^\]]+\.excalidraw(?:\|[^\]]+)?\]\]/gi),
     mermaidBlocks: countMatches(source, /(^|\n)```mermaid\b/gi) + mermaidEmbeds,
     plantumlBlocks: plantUmlFences + plantUmlEmbeds,
@@ -27,6 +29,7 @@ export function isLargeDocumentStats(stats) {
     && (
       stats.chars >= LARGE_DOCUMENT_CHAR_THRESHOLD
       || stats.mermaidBlocks >= LARGE_DOCUMENT_MERMAID_THRESHOLD
+      || stats.drawioEmbeds >= LARGE_DOCUMENT_DRAWIO_THRESHOLD
       || stats.excalidrawEmbeds >= LARGE_DOCUMENT_EXCALIDRAW_THRESHOLD
       || stats.plantumlBlocks >= LARGE_DOCUMENT_PLANTUML_THRESHOLD
     )
@@ -37,6 +40,7 @@ export function getRenderProfile(markdownText = '') {
   const source = String(markdownText);
   const hasMermaid = /(^|\n)```mermaid\b/i.test(source)
     || /!\[\[[^\]]+\.(?:mmd|mermaid)(?:\|[^\]]+)?\]\]/i.test(source);
+  const hasDrawioEmbed = /!\[\[[^\]]+\.drawio(?:\|[^\]]+)?\]\]/i.test(source);
   const hasExcalidrawEmbed = /!\[\[[^\]]+\.excalidraw(?:\|[^\]]+)?\]\]/i.test(source);
   const hasPlantUml = /(^|\n)```(?:plantuml|puml)\b/i.test(source)
     || /!\[\[[^\]]+\.(?:puml|plantuml)(?:\|[^\]]+)?\]\]/i.test(source);
@@ -49,7 +53,7 @@ export function getRenderProfile(markdownText = '') {
     };
   }
 
-  if (hasMermaid || hasExcalidrawEmbed || hasPlantUml) {
+  if (hasMermaid || hasDrawioEmbed || hasExcalidrawEmbed || hasPlantUml) {
     return {
       debounceMs: 0,
       deferUntilIdle: false,

@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { execFile as execFileCallback } from 'node:child_process';
 import { createServer } from 'node:http';
 import { request } from 'node:http';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { gunzipSync } from 'node:zlib';
 import WebSocket from 'ws';
@@ -17,6 +18,8 @@ import { waitForCondition } from './helpers/test-server.js';
 import { waitForProviderSync } from './helpers/collaboration-protocol.js';
 
 const execFile = promisify(execFileCallback);
+const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const clientDistDir = resolve(rootDir, 'dist/client');
 
 function httpRequest(url, { method = 'GET', headers = {}, body } = {}) {
   return new Promise((resolve, reject) => {
@@ -55,6 +58,23 @@ function extractCookieHeader(setCookieHeader) {
   return String(rawValue || '').split(';')[0];
 }
 
+function extractAssetPath(html, pattern, label) {
+  const match = String(html || '').match(pattern);
+  assert.ok(match, `expected ${label} asset path`);
+  return match[1];
+}
+
+async function createPublicDirSnapshot() {
+  const tempRoot = await mkdtemp(join(tmpdir(), 'collabmd-public-'));
+  const publicDir = resolve(tempRoot, 'public');
+  await cp(clientDistDir, publicDir, { recursive: true });
+
+  return {
+    cleanup: () => rm(tempRoot, { force: true, recursive: true }),
+    publicDir,
+  };
+}
+
 async function startPlantUmlStub() {
   const requests = [];
   const server = createServer((req, res) => {
@@ -86,7 +106,12 @@ async function startPlantUmlStub() {
 }
 
 test('HTTP server serves health, runtime config, and static assets', async (t) => {
-  const app = await startTestServer();
+  const publicDirSnapshot = await createPublicDirSnapshot();
+  t.after(() => publicDirSnapshot.cleanup());
+
+  const app = await startTestServer({
+    publicDir: publicDirSnapshot.publicDir,
+  });
   t.after(() => app.close());
 
   const healthResponse = await httpRequest(`${app.baseUrl}/health`);
@@ -98,18 +123,27 @@ test('HTTP server serves health, runtime config, and static assets', async (t) =
   assert.match(runtimeConfigResponse.body, /window\.__COLLABMD_CONFIG__/);
   assert.match(runtimeConfigResponse.body, /"gitEnabled":true/);
   assert.match(runtimeConfigResponse.body, /"strategy":"none"/);
+  assert.match(runtimeConfigResponse.body, /"build":\{"id":"[^"]+"/);
   assert.equal(runtimeConfigResponse.headers['cache-control'], 'no-store');
+
+  const versionResponse = await httpRequest(`${app.baseUrl}/version.json`);
+  assert.equal(versionResponse.statusCode, 200);
+  assert.equal(versionResponse.headers['cache-control'], 'no-store');
+  const versionPayload = JSON.parse(versionResponse.body);
+  assert.equal(versionPayload.build.packageVersion, app.server.config.build.packageVersion);
+  assert.equal(versionPayload.build.id, app.server.config.build.id);
 
   const indexResponse = await httpRequest(`${app.baseUrl}/`);
   assert.equal(indexResponse.statusCode, 200);
   assert.match(indexResponse.body, /CollabMD/);
   assert.equal(indexResponse.headers['cache-control'], 'no-store');
+  const styleAssetPath = extractAssetPath(indexResponse.body, /href="\.\/(assets\/[^"]+-[A-Za-z0-9_-]{8,}\.css)"/, 'style asset');
 
-  const assetHeadResponse = await httpRequest(`${app.baseUrl}/assets/css/style.css`, { method: 'HEAD' });
+  const assetHeadResponse = await httpRequest(`${app.baseUrl}/${styleAssetPath}`, { method: 'HEAD' });
   assert.equal(assetHeadResponse.statusCode, 200);
-  assert.equal(assetHeadResponse.headers['cache-control'], 'public, max-age=0, must-revalidate');
+  assert.equal(assetHeadResponse.headers['cache-control'], 'public, max-age=31536000, immutable');
 
-  const compressedAssetResponse = await httpRequest(`${app.baseUrl}/assets/css/style.css`, {
+  const compressedAssetResponse = await httpRequest(`${app.baseUrl}/${styleAssetPath}`, {
     headers: {
       'Accept-Encoding': 'gzip',
     },
@@ -163,13 +197,69 @@ test('HTTP server serves /api/files from the cached workspace tree', async (t) =
   assert.match(treeResponse.body, /"type":"directory"/);
 });
 
+test('HTTP server renames directories and requires recursive delete for non-empty folders', async (t) => {
+  const app = await startTestServer();
+  t.after(() => app.close());
+
+  const createDirResponse = await httpRequest(`${app.baseUrl}/api/directory`, {
+    body: JSON.stringify({ path: 'docs/guides' }),
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    method: 'POST',
+  });
+  assert.equal(createDirResponse.statusCode, 201);
+
+  const createFileResponse = await httpRequest(`${app.baseUrl}/api/file`, {
+    body: JSON.stringify({ content: '# Guide\n', path: 'docs/guides/guide.md' }),
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    method: 'POST',
+  });
+  assert.equal(createFileResponse.statusCode, 201);
+
+  const renameDirResponse = await httpRequest(`${app.baseUrl}/api/directory`, {
+    body: JSON.stringify({ oldPath: 'docs/guides', newPath: 'docs/reference' }),
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    method: 'PATCH',
+  });
+  assert.equal(renameDirResponse.statusCode, 200);
+
+  const renamedTreeResponse = await httpRequest(`${app.baseUrl}/api/files`);
+  assert.equal(renamedTreeResponse.statusCode, 200);
+  assert.match(renamedTreeResponse.body, /"path":"docs\/reference"/);
+  assert.match(renamedTreeResponse.body, /"path":"docs\/reference\/guide\.md"/);
+
+  const rejectedDeleteResponse = await httpRequest(`${app.baseUrl}/api/directory?path=docs%2Freference`, {
+    method: 'DELETE',
+  });
+  assert.equal(rejectedDeleteResponse.statusCode, 409);
+  assert.match(rejectedDeleteResponse.body, /Directory is not empty/);
+
+  const recursiveDeleteResponse = await httpRequest(`${app.baseUrl}/api/directory?path=docs%2Freference&recursive=1`, {
+    method: 'DELETE',
+  });
+  assert.equal(recursiveDeleteResponse.statusCode, 200);
+
+  const finalTreeResponse = await httpRequest(`${app.baseUrl}/api/files`);
+  assert.equal(finalTreeResponse.statusCode, 200);
+  assert.doesNotMatch(finalTreeResponse.body, /docs\/reference/);
+});
+
 test('HTTP server serves prefixed routes when BASE_PATH is configured', async (t) => {
+  const publicDirSnapshot = await createPublicDirSnapshot();
+  t.after(() => publicDirSnapshot.cleanup());
+
   const app = await startTestServer({
     auth: {
       password: 'test-password-123',
       strategy: 'password',
     },
     basePath: '/collabmd',
+    publicDir: publicDirSnapshot.publicDir,
   });
   t.after(() => app.close());
 
@@ -182,7 +272,16 @@ test('HTTP server serves prefixed routes when BASE_PATH is configured', async (t
   assert.match(runtimeConfigResponse.body, /"basePath":"\/collabmd"/);
   assert.match(runtimeConfigResponse.body, /"sessionEndpoint":"\/collabmd\/api\/auth\/session"/);
 
-  const assetResponse = await httpRequest(`${app.appBaseUrl}/assets/css/style.css`);
+  const versionResponse = await httpRequest(`${app.appBaseUrl}/version.json`);
+  assert.equal(versionResponse.statusCode, 200);
+  assert.equal(versionResponse.headers['cache-control'], 'no-store');
+  const versionPayload = JSON.parse(versionResponse.body);
+  assert.equal(versionPayload.build.packageVersion, app.server.config.build.packageVersion);
+  assert.equal(versionPayload.build.id, app.server.config.build.id);
+
+  const indexResponse = await httpRequest(`${app.appBaseUrl}/`);
+  const styleAssetPath = extractAssetPath(indexResponse.body, /href="\.\/(assets\/[^"]+-[A-Za-z0-9_-]{8,}\.css)"/, 'style asset');
+  const assetResponse = await httpRequest(`${app.appBaseUrl}/${styleAssetPath}`);
   assert.equal(assetResponse.statusCode, 200);
 
   const unauthenticatedApiResponse = await httpRequest(`${app.appBaseUrl}/api/files`);
@@ -547,21 +646,22 @@ test('HTTP git reset invalidates stale collaboration snapshots so reopening hydr
   assert.equal(reopenedDoc.getText('codemirror').toString(), '# Test\n\nHello from test vault.\n');
 });
 
-test('HTTP server supports password auth without blocking static assets', async (t) => {
+test('HTTP server enforces password auth for API session flow', async (t) => {
+  const publicDirSnapshot = await createPublicDirSnapshot();
+  t.after(() => publicDirSnapshot.cleanup());
+
   const app = await startTestServer({
     auth: {
       password: 'test-password-123',
       strategy: 'password',
     },
+    publicDir: publicDirSnapshot.publicDir,
   });
   t.after(() => app.close());
 
   const runtimeConfigResponse = await httpRequest(`${app.baseUrl}/app-config.js`);
   assert.equal(runtimeConfigResponse.statusCode, 200);
   assert.match(runtimeConfigResponse.body, /"strategy":"password"/);
-
-  const assetResponse = await httpRequest(`${app.baseUrl}/assets/css/style.css`);
-  assert.equal(assetResponse.statusCode, 200);
 
   const unauthenticatedApiResponse = await httpRequest(`${app.baseUrl}/api/files`);
   assert.equal(unauthenticatedApiResponse.statusCode, 401);

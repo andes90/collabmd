@@ -22,11 +22,39 @@
   font-size: var(--text-xs);
   pointer-events: auto;
   opacity: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   transform: translateX(0) scale(1);
   transition:
     opacity 300ms cubic-bezier(0.16, 1, 0.3, 1),
     transform 300ms cubic-bezier(0.16, 1, 0.3, 1),
     display 300ms cubic-bezier(0.16, 1, 0.3, 1) allow-discrete;
+}
+
+.toast__message {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.toast__action,
+.toast__dismiss {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.toast__action {
+  color: var(--color-primary);
+}
+
+.toast__dismiss {
+  opacity: 0.72;
 }
 
 @starting-style {

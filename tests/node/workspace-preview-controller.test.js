@@ -9,6 +9,7 @@ function createController(overrides = {}) {
 
   return new WorkspacePreviewController({
     backlinksPanel: { clear() {}, ...(overrides.backlinksPanel || {}) },
+    drawioEmbed: { setHydrationPaused() {}, syncLayout() {}, ...(overrides.drawioEmbed || {}) },
     elements: overrides.elements ?? {
       markdownToolbar: { classList: { toggle() {} } },
       outlineToggle: { classList: { toggle() {} } },
@@ -17,6 +18,7 @@ function createController(overrides = {}) {
     excalidrawEmbed: { setHydrationPaused() {}, ...(overrides.excalidrawEmbed || {}) },
     getDisplayName: (filePath) => filePath,
     getSession,
+    isDrawioFile: (filePath) => filePath?.endsWith('.drawio'),
     isExcalidrawFile: (filePath) => filePath?.endsWith('.excalidraw'),
     isImageFile: (filePath) => filePath?.endsWith('.png'),
     isMermaidFile: (filePath) => filePath?.endsWith('.mmd'),
@@ -117,6 +119,35 @@ test('WorkspacePreviewController forces Excalidraw files into preview without ov
   });
 
   controller.syncFileChrome('diagram.excalidraw');
+
+  assert.deepEqual(events, [
+    ['set-view', 'preview', { persist: false }],
+    ['outline-close'],
+    ['backlinks-clear'],
+  ]);
+});
+
+test('WorkspacePreviewController forces draw.io files into preview without overwriting layout preference', () => {
+  const events = [];
+  const controller = createController({
+    layoutController: {
+      setView(view, options) {
+        events.push(['set-view', view, options]);
+      },
+    },
+    outlineController: {
+      close() {
+        events.push(['outline-close']);
+      },
+    },
+    backlinksPanel: {
+      clear() {
+        events.push(['backlinks-clear']);
+      },
+    },
+  });
+
+  controller.syncFileChrome('diagram.drawio');
 
   assert.deepEqual(events, [
     ['set-view', 'preview', { persist: false }],

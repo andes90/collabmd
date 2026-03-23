@@ -145,7 +145,7 @@
   width: 28px;
   height: 28px;
   border-radius: var(--radius-full);
-  color: white;
+  color: var(--color-text-on-dark);
   font-size: var(--text-label);
   font-weight: 700;
   flex-shrink: 0;

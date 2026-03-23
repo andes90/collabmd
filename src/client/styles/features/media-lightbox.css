@@ -17,7 +17,7 @@
   position: absolute;
   inset: 0;
   border: none;
-  background: oklch(0.08 0.01 260 / 0.82);
+  background: var(--surface-scrim-strong);
   backdrop-filter: blur(10px);
   cursor: zoom-out;
 }
@@ -47,7 +47,7 @@
   padding: 8px 12px;
   border-radius: var(--radius-full);
   background: var(--surface-inverse-glass);
-  color: white;
+  color: var(--color-text-on-dark);
   text-overflow: ellipsis;
   white-space: nowrap;
   backdrop-filter: blur(12px);
@@ -72,7 +72,7 @@
   border: none;
   border-radius: var(--radius-full);
   background: var(--surface-inverse-glass);
-  color: white;
+  color: var(--color-text-on-dark);
   backdrop-filter: blur(12px);
   box-shadow: var(--shadow-media-soft);
   transition: background 0.18s ease, transform 0.18s ease;
@@ -94,7 +94,7 @@
   padding: 8px 12px;
   border-radius: var(--radius-full);
   background: var(--surface-inverse-glass);
-  color: white;
+  color: var(--color-text-on-dark);
   text-align: center;
   backdrop-filter: blur(12px);
   box-shadow: var(--shadow-media-soft);

@@ -20,6 +20,30 @@ Welcome to the test vault.
 - [[projects/collabmd]]
 `;
 
+async function longPress(locator, {
+  clientX = 24,
+  clientY = 24,
+  pointerId = 1,
+} = {}) {
+  await locator.dispatchEvent('pointerdown', {
+    bubbles: true,
+    button: 0,
+    clientX,
+    clientY,
+    pointerId,
+    pointerType: 'touch',
+  });
+  await locator.page().waitForTimeout(460);
+  await locator.dispatchEvent('pointerup', {
+    bubbles: true,
+    button: 0,
+    clientX,
+    clientY,
+    pointerId,
+    pointerType: 'touch',
+  });
+}
+
 test.describe('mobile outline', () => {
   test.use({
     viewport: { width: 390, height: 844 },
@@ -68,6 +92,38 @@ test.describe('mobile linked mentions', () => {
     await expect(inlinePanel).toBeVisible();
 
     await inlinePanel.locator('.backlinks-header').click();
+    await expect(inlinePanel).toHaveClass(/expanded/);
+    await expect(inlinePanel.locator('.backlinks-body')).toBeVisible();
+  });
+
+  test('keeps linked mentions expanded while scrolling a long mobile preview', async ({ page }) => {
+    await openFile(page, 'projects/collabmd.md', { waitFor: 'preview' });
+    await expect(page.locator('#editorLayout')).toHaveAttribute('data-view', 'preview');
+
+    await page.locator('#mobileViewToggle').click();
+    await waitForEditor(page);
+    await replaceEditorContent(page, [
+      '# Mobile Backlinks Stress',
+      '',
+      ...Array.from({ length: 80 }, (_, index) => `Paragraph ${index + 1}: ${'linked mention stability '.repeat(8)}`),
+    ].join('\n\n'));
+    await page.locator('#mobileViewToggle').click();
+
+    await page.locator('#previewContainer').evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+
+    const inlinePanel = page.locator('#backlinksInlinePanel');
+    await expect(inlinePanel).toBeVisible();
+
+    await inlinePanel.locator('.backlinks-header').click();
+    await expect(inlinePanel).toHaveClass(/expanded/);
+
+    await page.locator('#previewContainer').evaluate((element) => {
+      element.scrollTop = Math.max(0, element.scrollTop - 32);
+    });
+    await page.waitForTimeout(200);
+
     await expect(inlinePanel).toHaveClass(/expanded/);
     await expect(inlinePanel.locator('.backlinks-body')).toBeVisible();
   });
@@ -183,5 +239,114 @@ test.describe('mobile sidebar', () => {
     await waitForPreview(page);
     await expect(page.locator('#editorLayout')).toHaveAttribute('data-view', 'preview');
     await expect(sidebar).toBeHidden();
+  });
+
+  test('opens mobile file explorer actions from a long press', async ({ page }) => {
+    await openHome(page);
+    await ensureMobileSidebarVisible(page);
+
+    await longPress(page.locator('#fileTree .file-tree-item', { hasText: 'README' }).first());
+    await expect(page.locator('.file-action-sheet')).toBeVisible();
+    await expect(page.locator('.file-action-sheet')).toContainText('Rename / move');
+
+    await page.locator('.file-action-sheet-item', { hasText: 'Cancel' }).click();
+    await expect(page.locator('.file-action-sheet')).toBeHidden();
+
+    await longPress(page.locator('#fileTree'));
+    await expect(page.locator('.file-action-sheet')).toBeVisible();
+    await expect(page.locator('.file-action-sheet')).toContainText('New markdown file');
+  });
+});
+
+test.describe('mobile markdown toolbar', () => {
+  test.use({
+    viewport: { width: 390, height: 844 },
+  });
+
+  test('keeps the markdown toolbar as a horizontal scrolling rail', async ({ page }) => {
+    await openFile(page, 'README.md', { waitFor: 'preview' });
+    await expect(page.locator('#editorLayout')).toHaveAttribute('data-view', 'preview');
+
+    await page.locator('#mobileViewToggle').click();
+    await waitForEditor(page);
+
+    const initialMetrics = await page.locator('#markdownToolbar').evaluate((element) => ({
+      clientHeight: element.clientHeight,
+      clientWidth: element.clientWidth,
+      scrollLeft: element.scrollLeft,
+      scrollWidth: element.scrollWidth,
+    }));
+
+    expect(initialMetrics.clientHeight).toBeGreaterThan(0);
+    expect(initialMetrics.scrollWidth).toBeGreaterThanOrEqual(initialMetrics.clientWidth);
+
+    await page.locator('#markdownToolbar').evaluate((element) => {
+      element.scrollLeft = element.scrollWidth;
+    });
+
+    const scrolledMetrics = await page.locator('#markdownToolbar').evaluate((element) => {
+      const toolbarRect = element.getBoundingClientRect();
+      const lastButton = element.querySelector('[data-markdown-action="horizontal-rule"]');
+      const lastRect = lastButton?.getBoundingClientRect();
+      return {
+        overflow: element.scrollWidth - element.clientWidth,
+        scrollLeft: element.scrollLeft,
+        lastRightOverflow: lastRect ? Math.max(0, Math.ceil(lastRect.right - toolbarRect.right)) : null,
+      };
+    });
+
+    if (scrolledMetrics.overflow > 1) {
+      expect(scrolledMetrics.scrollLeft).toBeGreaterThan(0);
+    }
+    expect(scrolledMetrics.lastRightOverflow).toBeLessThanOrEqual(1);
+    await expect(page.locator('[data-markdown-action="horizontal-rule"]')).toBeVisible();
+  });
+
+  test('shows the heading menu as a visible popover on mobile', async ({ page }) => {
+    await openFile(page, 'README.md', { waitFor: 'preview' });
+    await page.locator('#mobileViewToggle').click();
+    await waitForEditor(page);
+
+    await page.locator('[data-markdown-block-menu-toggle]').click();
+
+    const popover = page.locator('#editorContainer .markdown-toolbar-popover');
+    await expect(popover).toBeVisible();
+    await expect(popover.locator('[data-markdown-block-menu]')).toContainText('Heading 1');
+    await expect(popover.locator('[data-markdown-block-menu]')).toContainText('Heading 2');
+  });
+});
+
+test.describe('mobile comments and header chrome', () => {
+  test.use({
+    viewport: { width: 390, height: 844 },
+  });
+
+  test('keeps preview width stable when comments open on mobile', async ({ page }) => {
+    await openFile(page, 'README.md', { waitFor: 'preview' });
+    await expect(page.locator('#commentsToggle')).toBeVisible();
+
+    const beforeWidth = await page.locator('#previewContainer').evaluate((element) => element.getBoundingClientRect().width);
+    await page.locator('#commentsToggle').click();
+    await expect(page.locator('#commentsDrawer')).toBeVisible();
+    const afterWidth = await page.locator('#previewContainer').evaluate((element) => element.getBoundingClientRect().width);
+
+    expect(Math.abs(afterWidth - beforeWidth)).toBeLessThanOrEqual(1);
+  });
+
+  test('moves secondary toolbar actions into a mobile overflow menu', async ({ page }) => {
+    await openFile(page, 'README.md', { waitFor: 'preview' });
+
+    await expect(page.locator('#sidebarToggle')).toBeVisible();
+    await expect(page.locator('#mobileViewToggle')).toBeVisible();
+    await expect(page.locator('#toolbarOverflowToggle')).toBeVisible();
+    await expect(page.locator('#editNameBtn')).toBeHidden();
+    await expect(page.locator('#shareBtn')).toBeHidden();
+
+    await page.locator('#toolbarOverflowToggle').click();
+
+    await expect(page.locator('#editNameBtn')).toBeVisible();
+    await expect(page.locator('#chatToggleBtn')).toBeVisible();
+    await expect(page.locator('#shareBtn')).toBeVisible();
+    await expect(page.locator('#themeToggleBtn')).toBeVisible();
   });
 });

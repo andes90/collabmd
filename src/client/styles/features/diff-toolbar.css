@@ -30,7 +30,7 @@
 }
 
 .diff-toolbar-actions-group-git {
-  padding: 3px;
+  padding: var(--space-1);
   border: 1px solid var(--color-divider);
   border-radius: var(--radius-lg);
   background: var(--surface-overlay);
@@ -39,7 +39,7 @@
 
 .diff-toolbar-actions-divider {
   width: 1px;
-  height: 28px;
+  height: var(--control-h-xs);
   background: var(--color-divider);
   opacity: 0.9;
 }
@@ -87,4 +87,12 @@
 
 .diff-content {
   min-width: fit-content;
+  min-height: 100%;
+}
+
+.diff-content--history {
+  display: flex;
+  min-width: 0;
+  min-height: 100%;
+  width: 100%;
 }

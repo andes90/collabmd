@@ -713,6 +713,34 @@ test('GitService lists current-branch history summaries without patch payloads',
   assert.equal('hunks' in history.commits[0], false);
 });
 
+test('GitService returns file history entries that follow renames', async (t) => {
+  const repoDir = await mkdtemp(join(tmpdir(), 'collabmd-git-file-history-'));
+  t.after(async () => {
+    await rm(repoDir, { force: true, recursive: true });
+  });
+
+  await runGit(repoDir, ['init']);
+  await runGit(repoDir, ['config', 'user.email', 'tests@example.com']);
+  await runGit(repoDir, ['config', 'user.name', 'CollabMD Tests']);
+  await writeFile(join(repoDir, 'before.md'), '# Before\nbase\n', 'utf8');
+  await runGit(repoDir, ['add', 'before.md']);
+  await runGit(repoDir, ['commit', '-m', 'Add before']);
+  await runGit(repoDir, ['mv', 'before.md', 'after.md']);
+  await writeFile(join(repoDir, 'after.md'), '# Before\nbase\nupdated\n', 'utf8');
+  await runGit(repoDir, ['add', 'after.md']);
+  await runGit(repoDir, ['commit', '-m', 'Rename file']);
+
+  const gitService = new GitService({ vaultDir: repoDir });
+  const history = await gitService.getFileHistory({ limit: 10, offset: 0, path: 'after.md' });
+
+  assert.equal(history.isGitRepo, true);
+  assert.equal(history.commits.length, 2);
+  assert.equal(history.commits[0].status, 'renamed');
+  assert.equal(history.commits[0].oldPath, 'before.md');
+  assert.equal(history.commits[0].pathAtCommit, 'after.md');
+  assert.equal(history.commits[1].pathAtCommit, 'before.md');
+});
+
 test('GitService returns root commit metadata and file-scoped commit diffs', async (t) => {
   const repoDir = await mkdtemp(join(tmpdir(), 'collabmd-git-commit-detail-'));
   t.after(async () => {
@@ -740,6 +768,34 @@ test('GitService returns root commit metadata and file-scoped commit diffs', asy
   assert.equal(detail.files[0].path, 'tracked.md');
   assert.equal(detail.files[0].status, 'added');
   assert.equal(detail.files[0].hunks.length > 0, true);
+});
+
+test('GitService returns historical file snapshots for text vault files', async (t) => {
+  const repoDir = await mkdtemp(join(tmpdir(), 'collabmd-git-file-snapshot-'));
+  t.after(async () => {
+    await rm(repoDir, { force: true, recursive: true });
+  });
+
+  await runGit(repoDir, ['init']);
+  await runGit(repoDir, ['config', 'user.email', 'tests@example.com']);
+  await runGit(repoDir, ['config', 'user.name', 'CollabMD Tests']);
+  await writeFile(join(repoDir, 'tracked.md'), '# Root\n\nhello\n', 'utf8');
+  await runGit(repoDir, ['add', 'tracked.md']);
+  await runGit(repoDir, ['commit', '-m', 'Initial commit']);
+  const rootHash = await runGitOutput(repoDir, ['rev-parse', 'HEAD']);
+
+  const gitService = new GitService({ vaultDir: repoDir });
+  const snapshot = await gitService.getFileSnapshot({ hash: rootHash, path: 'tracked.md' });
+
+  assert.equal(snapshot.hash, rootHash);
+  assert.equal(snapshot.path, 'tracked.md');
+  assert.equal(snapshot.fileKind, 'markdown');
+  assert.equal(snapshot.content, '# Root\n\nhello\n');
+
+  await assert.rejects(
+    gitService.getFileSnapshot({ hash: rootHash, path: 'missing.md' }),
+    (error) => error?.statusCode === 404,
+  );
 });
 
 test('GitService guards large commit file diffs and deduplicates repeated identical requests', async (t) => {

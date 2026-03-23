@@ -52,8 +52,14 @@
   --surface-overlay-raised: color-mix(in oklab, var(--color-surface) 94%, transparent);
   --surface-overlay-header: color-mix(in srgb, var(--color-surface-offset) 76%, var(--color-bg) 24%);
   --surface-overlay-offset: color-mix(in oklab, var(--color-surface-offset) 82%, transparent);
+  --surface-scrim: oklch(0.1 0 0 / 0.42);
+  --surface-scrim-strong: oklch(0.08 0.01 260 / 0.82);
   --surface-inverse-glass: oklch(0.18 0.02 260 / 0.68);
   --surface-inverse-glass-hover: oklch(0.24 0.02 260 / 0.82);
+  --surface-media-canvas: #000;
+  --surface-embed-canvas: #ffffff;
+  --surface-avatar-muted: rgb(255 255 255 / 0.22);
+  --surface-avatar-label: rgb(15 17 23 / 0.84);
   --surface-accent-subtle: color-mix(in oklab, var(--color-primary) 8%, var(--color-surface));
   --surface-accent-soft: color-mix(in oklab, var(--color-primary) 16%, transparent);
   --surface-accent-strong: color-mix(in oklab, var(--color-primary) 22%, transparent);
@@ -108,6 +114,7 @@
   --shadow-focus-compact: 0 0 0 2px oklch(from var(--color-primary) l c h / 0.45);
   --interactive-border: color-mix(in oklab, var(--color-primary) 22%, transparent);
   --interactive-surface: color-mix(in oklab, var(--color-primary) 14%, transparent);
+  --color-text-on-dark: #ffffff;
   --shadow-sm: 0 1px 2px oklch(0.2 0.02 260 / 0.06);
   --shadow-md: 0 4px 12px oklch(0.2 0.02 260 / 0.08);
   --shadow-lg: 0 12px 32px oklch(0.2 0.02 260 / 0.12);
@@ -164,8 +171,14 @@
   --surface-overlay-raised: color-mix(in oklab, var(--color-surface) 94%, transparent);
   --surface-overlay-header: color-mix(in srgb, var(--color-surface-offset) 76%, var(--color-bg) 24%);
   --surface-overlay-offset: color-mix(in oklab, var(--color-surface-offset) 82%, transparent);
+  --surface-scrim: oklch(0.1 0 0 / 0.42);
+  --surface-scrim-strong: oklch(0.08 0.01 260 / 0.82);
   --surface-inverse-glass: oklch(0.18 0.02 260 / 0.68);
   --surface-inverse-glass-hover: oklch(0.24 0.02 260 / 0.82);
+  --surface-media-canvas: #000;
+  --surface-embed-canvas: #121212;
+  --surface-avatar-muted: rgb(255 255 255 / 0.22);
+  --surface-avatar-label: rgb(15 17 23 / 0.84);
   --surface-accent-subtle: color-mix(in oklab, var(--color-primary) 8%, var(--color-surface));
   --surface-accent-soft: color-mix(in oklab, var(--color-primary) 16%, transparent);
   --surface-accent-strong: color-mix(in oklab, var(--color-primary) 22%, transparent);
@@ -220,6 +233,7 @@
   --shadow-focus-compact: 0 0 0 2px oklch(from var(--color-primary) l c h / 0.45);
   --interactive-border: color-mix(in oklab, var(--color-primary) 32%, transparent);
   --interactive-surface: color-mix(in oklab, var(--color-primary) 18%, transparent);
+  --color-text-on-dark: #ffffff;
   --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.25);
   --shadow-md: 0 4px 12px oklch(0 0 0 / 0.35);
   --shadow-lg: 0 12px 32px oklch(0 0 0 / 0.5);
@@ -263,8 +277,14 @@
     --surface-overlay-raised: color-mix(in oklab, var(--color-surface) 94%, transparent);
     --surface-overlay-header: color-mix(in srgb, var(--color-surface-offset) 76%, var(--color-bg) 24%);
     --surface-overlay-offset: color-mix(in oklab, var(--color-surface-offset) 82%, transparent);
+    --surface-scrim: oklch(0.1 0 0 / 0.42);
+    --surface-scrim-strong: oklch(0.08 0.01 260 / 0.82);
     --surface-inverse-glass: oklch(0.18 0.02 260 / 0.68);
     --surface-inverse-glass-hover: oklch(0.24 0.02 260 / 0.82);
+    --surface-media-canvas: #000;
+    --surface-embed-canvas: #121212;
+    --surface-avatar-muted: rgb(255 255 255 / 0.22);
+    --surface-avatar-label: rgb(15 17 23 / 0.84);
     --surface-accent-subtle: color-mix(in oklab, var(--color-primary) 8%, var(--color-surface));
     --surface-accent-soft: color-mix(in oklab, var(--color-primary) 16%, transparent);
     --surface-accent-strong: color-mix(in oklab, var(--color-primary) 22%, transparent);
@@ -319,6 +339,7 @@
     --shadow-focus-compact: 0 0 0 2px oklch(from var(--color-primary) l c h / 0.45);
     --interactive-border: color-mix(in oklab, var(--color-primary) 32%, transparent);
     --interactive-surface: color-mix(in oklab, var(--color-primary) 18%, transparent);
+    --color-text-on-dark: #ffffff;
     --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.25);
     --shadow-md: 0 4px 12px oklch(0 0 0 / 0.35);
     --shadow-lg: 0 12px 32px oklch(0 0 0 / 0.5);

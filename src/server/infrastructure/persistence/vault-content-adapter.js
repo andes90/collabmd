@@ -1,4 +1,5 @@
 import {
+  isDrawioFilePath,
   isExcalidrawFilePath,
   isMarkdownFilePath,
   isMermaidFilePath,
@@ -31,6 +32,11 @@ const adapters = [
     invalidPathError: 'Invalid file path — must end in .excalidraw',
     kind: 'excalidraw',
     matches: isExcalidrawFilePath,
+  }),
+  new VaultContentAdapter({
+    invalidPathError: 'Invalid file path — must end in .drawio',
+    kind: 'drawio',
+    matches: isDrawioFilePath,
   }),
   new VaultContentAdapter({
     invalidPathError: 'Invalid file path — must end in .mmd or .mermaid',

@@ -79,6 +79,10 @@ function createExcalidrawPlaceholder({ embedKey, label, target }) {
   return `<span class="excalidraw-embed-placeholder diagram-preview-shell" data-embed-key="${escapeHtml(embedKey)}" data-embed-target="${escapeHtml(target)}" data-embed-label="${escapeHtml(label)}"><span class="excalidraw-embed-placeholder-card diagram-preview-placeholder-card"><span class="excalidraw-embed-placeholder-copy diagram-preview-placeholder-copy"><strong>${escapeHtml(label)}</strong><span>Loads when visible</span></span><button type="button" class="excalidraw-embed-placeholder-btn diagram-preview-placeholder-btn" data-embed-key="${escapeHtml(embedKey)}">Load diagram</button></span></span>`;
 }
 
+function createDrawioPlaceholder({ embedKey, label, target }) {
+  return `<span class="drawio-embed-placeholder diagram-preview-shell" data-drawio-key="${escapeHtml(embedKey)}" data-drawio-target="${escapeHtml(target)}" data-drawio-label="${escapeHtml(label)}" data-drawio-mode="view"><span class="drawio-embed-placeholder-card diagram-preview-placeholder-card"><span class="drawio-embed-placeholder-copy diagram-preview-placeholder-copy"><strong>${escapeHtml(label)}</strong><span>Loads when visible</span></span><button type="button" class="drawio-embed-placeholder-btn diagram-preview-placeholder-btn" data-drawio-key="${escapeHtml(embedKey)}">Load diagram</button></span></span>`;
+}
+
 function getDirectVideoMimeType(pathname = '') {
   const match = pathname.toLowerCase().match(/\.(mp4|ogg|webm)$/i);
   if (!match) {
@@ -220,12 +224,13 @@ function resolveLocalAttachmentUrl(source = '', {
 }
 
 function renderInlineWikiText(content, {
+  drawioEmbedCounts,
   excalidrawEmbedCounts,
   fileList,
   mermaidEmbedCounts,
   plantUmlEmbedCounts,
 }) {
-  const regex = /!\[\[([^\]|]+\.(?:excalidraw|mmd|mermaid|puml|plantuml))(?:\|([^\]]+))?\]\]|\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/gi;
+  const regex = /!\[\[([^\]|]+\.(?:excalidraw|drawio|mmd|mermaid|puml|plantuml))(?:\|([^\]]+))?\]\]|\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/gi;
   let lastIndex = 0;
   let html = '';
   let match;
@@ -245,6 +250,14 @@ function renderInlineWikiText(content, {
         html += createExcalidrawPlaceholder({
           embedKey: `${target}#${occurrenceIndex}`,
           label: normalizePreviewTypography(label.replace(/\.excalidraw$/i, '')),
+          target,
+        });
+      } else if (/\.drawio$/i.test(target)) {
+        const occurrenceIndex = drawioEmbedCounts.get(target) ?? 0;
+        drawioEmbedCounts.set(target, occurrenceIndex + 1);
+        html += createDrawioPlaceholder({
+          embedKey: `${target}#${occurrenceIndex}`,
+          label: normalizePreviewTypography(label.replace(/\.drawio$/i, '')),
           target,
         });
       } else if (/\.(?:mmd|mermaid)$/i.test(target)) {
@@ -325,6 +338,7 @@ function createMarkdownRenderer(fileList = [], {
     });
   });
 
+  const drawioEmbedCounts = new Map();
   const excalidrawEmbedCounts = new Map();
   const mermaidCounts = new Map();
   const mermaidEmbedCounts = new Map();
@@ -398,6 +412,7 @@ function createMarkdownRenderer(fileList = [], {
 
     if (content.startsWith('[x] ') || content.startsWith('[X] ')) {
       return `<input type="checkbox" checked disabled> ${renderInlineWikiText(content.slice(4), {
+        drawioEmbedCounts,
         excalidrawEmbedCounts,
         fileList,
         mermaidEmbedCounts,
@@ -407,6 +422,7 @@ function createMarkdownRenderer(fileList = [], {
 
     if (content.startsWith('[ ] ')) {
       return `<input type="checkbox" disabled> ${renderInlineWikiText(content.slice(4), {
+        drawioEmbedCounts,
         excalidrawEmbedCounts,
         fileList,
         mermaidEmbedCounts,
@@ -415,6 +431,7 @@ function createMarkdownRenderer(fileList = [], {
     }
 
     return renderInlineWikiText(content, {
+      drawioEmbedCounts,
       excalidrawEmbedCounts,
       fileList,
       mermaidEmbedCounts,

@@ -1,7 +1,7 @@
 import { readFile } from 'fs/promises';
 import { extname, normalize, resolve } from 'path';
 
-import { sendResponse, textResponse } from './http-response.js';
+import { jsonResponse, sendResponse, textResponse } from './http-response.js';
 
 const CONTENT_TYPES = {
   '.css': 'text/css; charset=utf-8',
@@ -12,7 +12,7 @@ const CONTENT_TYPES = {
 };
 
 function isVersionedAssetPath(pathname = '') {
-  return /-[A-Z0-9]{8,}\.(?:css|js|woff2?|ttf|svg)$/iu.test(pathname);
+  return /-[A-Za-z0-9_-]{8,}\.(?:css|js|woff2?|ttf|svg)$/u.test(pathname);
 }
 
 function getStaticCacheControl(pathname = '', extension = '') {
@@ -46,6 +46,8 @@ function getStaticCacheControl(pathname = '', extension = '') {
 function buildRuntimeConfig({
   auth,
   basePath,
+  build,
+  drawioBaseUrl,
   gitEnabled,
   nodeEnv,
   publicWsBaseUrl,
@@ -54,6 +56,8 @@ function buildRuntimeConfig({
   return `window.__COLLABMD_CONFIG__ = ${JSON.stringify({
     auth,
     basePath,
+    build,
+    drawioBaseUrl,
     environment: nodeEnv,
     gitEnabled,
     publicWsBaseUrl,
@@ -121,6 +125,13 @@ export function createStaticHandler(config, authService = null) {
           'Content-Type': 'text/javascript; charset=utf-8',
         },
         statusCode: 200,
+      });
+      return true;
+    }
+
+    if (requestUrl.pathname === '/version.json') {
+      jsonResponse(req, res, 200, {
+        build: config.build ?? { id: '', packageVersion: '' },
       });
       return true;
     }

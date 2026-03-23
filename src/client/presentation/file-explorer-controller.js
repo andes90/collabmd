@@ -5,20 +5,33 @@ import { FileTreeState } from './file-tree-state.js';
 import { FileExplorerView } from './file-explorer-view.js';
 
 export class FileExplorerController {
-  constructor({ onFileSelect, onFileDelete, toastController, vaultClient = vaultApiClient }) {
+  constructor({
+    mobileBreakpointQuery = window.matchMedia('(max-width: 768px)'),
+    onFileSelect,
+    onFileDelete,
+    pendingWorkspaceRequestIds = null,
+    toastController,
+    vaultClient = vaultApiClient,
+  }) {
     this.onFileSelect = onFileSelect;
     this.onFileDelete = onFileDelete;
     this.toastController = toastController;
     this.vaultClient = vaultClient;
     this.state = new FileTreeState();
     this.view = new FileExplorerView({
+      mobileBreakpointQuery,
+      onDirectorySelect: (pathValue) => {
+        this.state.expandDirectoryPath(pathValue);
+        this.state.setSearchQuery('');
+        this.renderTree({ reset: true });
+      },
       onDirectoryToggle: (pathValue) => {
         this.state.toggleDirectory(pathValue);
         this.renderTree();
       },
       onFileContextMenu: (event, payload) => {
         if (payload.type === 'directory') {
-          this.view.showContextMenu(event, this.actionController.createContextMenuItems(payload.directoryPath));
+          this.view.showContextMenu(event, this.actionController.getDirectoryContextMenuItems(payload.directoryPath));
           return;
         }
 
@@ -38,6 +51,7 @@ export class FileExplorerController {
     this.actionController = new FileActionController({
       onFileDelete: this.onFileDelete,
       onFileSelect: this.onFileSelect,
+      pendingWorkspaceRequestIds,
       refresh: () => this.refresh(),
       state: this.state,
       toastController: this.toastController,

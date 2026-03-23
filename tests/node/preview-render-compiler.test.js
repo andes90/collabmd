@@ -47,6 +47,22 @@ test('compilePreviewDocument emits stable excalidraw placeholder keys and wiki-l
   assert.equal(stats.plantumlBlocks, 1);
 });
 
+test('compilePreviewDocument emits stable draw.io embed shell keys', () => {
+  const markdown = [
+    '![[architecture.drawio]]',
+    '',
+    '![[architecture.drawio|Architecture]]',
+  ].join('\n');
+
+  const { html, stats } = compilePreviewDocument({ markdownText: markdown });
+
+  assert.match(html, /data-drawio-key="architecture\.drawio#0"/);
+  assert.match(html, /data-drawio-key="architecture\.drawio#1"/);
+  assert.match(html, /data-drawio-target="architecture\.drawio"/);
+  assert.match(html, /<strong>Architecture<\/strong>/);
+  assert.equal(stats.drawioEmbeds, 2);
+});
+
 test('compilePreviewDocument keeps Mermaid keys stable across unrelated markdown edits', () => {
   const baseMarkdown = [
     '```mermaid',
@@ -259,6 +275,9 @@ test('large-document classification triggers on any configured threshold', () =>
 
   const largeByMermaidEmbed = analyzeMarkdownComplexity('![[diagram.mmd]]\n'.repeat(20));
   assert.equal(isLargeDocumentStats(largeByMermaidEmbed), true);
+
+  const largeByDrawio = analyzeMarkdownComplexity('![[diagram.drawio]]\n'.repeat(8));
+  assert.equal(isLargeDocumentStats(largeByDrawio), true);
 
   const largeByExcalidraw = analyzeMarkdownComplexity('![[diagram.excalidraw]]\n'.repeat(8));
   assert.equal(isLargeDocumentStats(largeByExcalidraw), true);

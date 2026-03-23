@@ -71,6 +71,11 @@ export function getClientRuntimeConfig() {
       strategy: 'none',
     },
     basePath: '',
+    build: {
+      id: '',
+      packageVersion: '',
+    },
+    drawioBaseUrl: 'https://embed.diagrams.net',
     environment: 'development',
     gitEnabled: true,
     publicWsBaseUrl: '',
@@ -89,6 +94,11 @@ export function getClientRuntimeConfig() {
     strategy: 'none',
     ...(rawConfig.auth ?? {}),
   };
+  const buildConfig = {
+    id: '',
+    packageVersion: '',
+    ...(rawConfig.build ?? {}),
+  };
 
   return {
     ...rawConfig,
@@ -99,6 +109,7 @@ export function getClientRuntimeConfig() {
       statusEndpoint: applyBasePath(basePath, authConfig.statusEndpoint),
     },
     basePath,
+    build: buildConfig,
     wsBasePath: normalizeRoutePath(rawConfig.wsBasePath, '/ws'),
   };
 }

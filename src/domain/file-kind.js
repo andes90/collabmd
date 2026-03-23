@@ -1,10 +1,12 @@
 const MARKDOWN_FILE_EXTENSIONS = Object.freeze(['.md', '.markdown', '.mdx']);
 const EXCALIDRAW_FILE_EXTENSION = '.excalidraw';
+const DRAWIO_FILE_EXTENSION = '.drawio';
 const MERMAID_FILE_EXTENSIONS = Object.freeze(['.mmd', '.mermaid']);
 const PLANTUML_FILE_EXTENSIONS = Object.freeze(['.puml', '.plantuml']);
 const IMAGE_ATTACHMENT_EXTENSIONS = Object.freeze(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg']);
 const DIAGRAM_FILE_EXTENSIONS = Object.freeze([
   EXCALIDRAW_FILE_EXTENSION,
+  DRAWIO_FILE_EXTENSION,
   ...MERMAID_FILE_EXTENSIONS,
   ...PLANTUML_FILE_EXTENSIONS,
 ]);
@@ -13,7 +15,7 @@ const VAULT_FILE_EXTENSIONS = Object.freeze([
   ...DIAGRAM_FILE_EXTENSIONS,
   ...IMAGE_ATTACHMENT_EXTENSIONS,
 ]);
-const STRIP_VAULT_EXTENSION_PATTERN = /\.(?:md|markdown|mdx|excalidraw|mmd|mermaid|puml|plantuml|png|jpe?g|webp|gif|svg)$/i;
+const STRIP_VAULT_EXTENSION_PATTERN = /\.(?:md|markdown|mdx|excalidraw|drawio|mmd|mermaid|puml|plantuml|png|jpe?g|webp|gif|svg)$/i;
 
 function normalizeFilePath(filePath) {
   return String(filePath ?? '').trim().toLowerCase();
@@ -26,6 +28,7 @@ function hasFileExtension(filePath, extensions) {
 
 export {
   DIAGRAM_FILE_EXTENSIONS,
+  DRAWIO_FILE_EXTENSION,
   EXCALIDRAW_FILE_EXTENSION,
   IMAGE_ATTACHMENT_EXTENSIONS,
   MARKDOWN_FILE_EXTENSIONS,
@@ -41,6 +44,10 @@ export function getVaultFileKind(filePath) {
 
   if (hasFileExtension(filePath, [EXCALIDRAW_FILE_EXTENSION])) {
     return 'excalidraw';
+  }
+
+  if (hasFileExtension(filePath, [DRAWIO_FILE_EXTENSION])) {
+    return 'drawio';
   }
 
   if (hasFileExtension(filePath, MERMAID_FILE_EXTENSIONS)) {
@@ -88,6 +95,10 @@ export function isMermaidFilePath(filePath) {
   return getVaultFileKind(filePath) === 'mermaid';
 }
 
+export function isDrawioFilePath(filePath) {
+  return getVaultFileKind(filePath) === 'drawio';
+}
+
 export function isPlantUmlFilePath(filePath) {
   return getVaultFileKind(filePath) === 'plantuml';
 }
@@ -98,7 +109,7 @@ export function isImageAttachmentFilePath(filePath) {
 
 export function isDiagramFilePath(filePath) {
   const kind = getVaultFileKind(filePath);
-  return kind === 'excalidraw' || kind === 'mermaid' || kind === 'plantuml';
+  return kind === 'excalidraw' || kind === 'drawio' || kind === 'mermaid' || kind === 'plantuml';
 }
 
 export function isVaultFilePath(filePath) {

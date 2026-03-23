@@ -60,6 +60,12 @@ function createContext(overrides = {}) {
       navigateToGitDiff(payload) {
         events.push(['navigate-diff', payload]);
       },
+      navigateToGitFileHistory(payload) {
+        events.push(['navigate-file-history', payload]);
+      },
+      navigateToGitFilePreview(payload) {
+        events.push(['navigate-file-preview', payload]);
+      },
       navigateToGitHistory() {
         events.push(['navigate-history']);
       },
@@ -296,4 +302,108 @@ test('gitFeature shows a specific toast when pull fails because fast-forward is 
   assert.deepEqual(events, [
     ['toast', 'Cannot pull because local and remote commits have diverged. Fast-forward only pull is not possible.'],
   ]);
+});
+
+test('gitFeature opens history preview against the current workspace file when the commit path is historical', async (t) => {
+  installWindowStub(t);
+  const fetchCalls = [];
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    fetchCalls.push(String(url));
+    return {
+      ok: true,
+      async json() {
+        return {
+          content: '# Historical snapshot',
+          fileKind: 'markdown',
+          hash: 'abc1234',
+          path: 'docs/old-name.md',
+        };
+      },
+    };
+  };
+  t.after(() => {
+    globalThis.fetch = previousFetch;
+  });
+
+  const previewDocuments = [];
+  const { context, events } = createContext({
+    commentUi: {
+      attachSession(value) {
+        events.push(['attach-session', value]);
+      },
+      setCurrentFile(filePath, options) {
+        events.push(['comment-file', filePath, options.fileKind, options.supported]);
+      },
+    },
+    getCommentFileKind(filePath) {
+      return filePath.endsWith('.md') ? 'markdown' : 'unknown';
+    },
+    handleCommentSelectionChange(value) {
+      events.push(['comment-selection', value]);
+    },
+    handleCommentThreadsChange(threads) {
+      events.push(['comment-threads', threads.length]);
+    },
+    layoutController: {
+      setView(view, options) {
+        events.push(['layout-view', view, options.persist]);
+      },
+    },
+    previewRenderer: {
+      beginDocumentLoad() {
+        events.push(['preview-load']);
+      },
+      queueRender() {
+        events.push(['preview-render']);
+      },
+    },
+    resetPreviewMode() {
+      events.push(['reset-preview']);
+    },
+    setStaticPreviewDocument(document) {
+      previewDocuments.push(document);
+    },
+    supportsFileHistory() {
+      return true;
+    },
+    syncMainChrome({ badgeLabel, mode, title }) {
+      events.push(['main-chrome', badgeLabel, mode, title]);
+    },
+    syncFileHistoryButton({ filePath, mode }) {
+      events.push(['history-button', filePath, mode]);
+    },
+    workspaceRouteController: {
+      showEmptyState() {
+        events.push(['show-empty']);
+      },
+      showPreviewOnlyState(filePath) {
+        events.push(['preview-only', filePath]);
+      },
+    },
+  });
+
+  await gitFeature.showGitFilePreview.call(context, {
+    hash: 'abc1234',
+    filePath: 'docs/old-name.md',
+    currentFilePath: 'docs/current-name.md',
+  });
+
+  assert.deepEqual(fetchCalls, ['/api/git/file-snapshot?hash=abc1234&path=docs%2Fold-name.md']);
+  assert.deepEqual(previewDocuments, [{
+    content: '# Historical snapshot',
+    currentFilePath: 'docs/current-name.md',
+    fileKind: 'markdown',
+    hash: 'abc1234',
+    path: 'docs/old-name.md',
+  }]);
+  assert.ok(events.some((event) => (
+    event[0] === 'preview-only'
+    && event[1] === 'docs/current-name.md'
+  )));
+  assert.ok(events.some((event) => (
+    event[0] === 'history-button'
+    && event[1] === 'docs/current-name.md'
+    && event[2] === 'history-preview'
+  )));
 });

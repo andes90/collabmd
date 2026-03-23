@@ -1,6 +1,7 @@
 import { basename } from 'node:path';
 
 import {
+  isDrawioFilePath,
   isExcalidrawFilePath,
   isImageAttachmentFilePath,
   isMermaidFilePath,
@@ -43,6 +44,10 @@ function createAttachmentHeaders(attachment) {
 function selectReadOperation(vaultFileStore, filePath) {
   if (isExcalidrawFilePath(filePath)) {
     return vaultFileStore.readExcalidrawFile(filePath);
+  }
+
+  if (isDrawioFilePath(filePath)) {
+    return vaultFileStore.readDrawioFile(filePath);
   }
 
   if (isMermaidFilePath(filePath)) {

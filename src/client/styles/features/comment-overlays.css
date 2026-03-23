@@ -5,11 +5,12 @@
 .comment-preview-highlights {
   position: absolute;
   inset: 0;
+  overflow: visible;
   pointer-events: none;
 }
 
 .comment-preview-badge {
-  right: var(--preview-comment-rail-inset);
+  right: calc(var(--preview-comment-rail-inset) - var(--preview-comment-rail-offset, 0px));
 }
 
 .comment-marker-icon {

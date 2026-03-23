@@ -319,6 +319,111 @@ test('VaultFileStore includes empty directories in the file tree', async (t) => 
   assert.deepEqual(drafts.children, []);
 });
 
+test('VaultFileStore renames directories and preserves nested sidecars', async (t) => {
+  const { store, cleanup, vaultDir } = await createVaultStore();
+  t.after(cleanup);
+
+  await store.writeCommentThreads('notes/daily.md', [{
+    anchorEnd: { assoc: 0, type: null },
+    anchorEndLine: 1,
+    anchorKind: 'line',
+    anchorQuote: '# Daily',
+    anchorStart: { assoc: 0, type: null },
+    anchorStartLine: 1,
+    createdAt: 1,
+    createdByColor: '#111827',
+    createdByName: 'Tester',
+    createdByPeerId: 'peer-1',
+    id: 'thread-1',
+    messages: [{
+      body: 'hello',
+      createdAt: 1,
+      id: 'message-1',
+      peerId: 'peer-1',
+      userColor: '#111827',
+      userName: 'Tester',
+    }],
+    resolvedAt: null,
+    resolvedByColor: '',
+    resolvedByName: '',
+    resolvedByPeerId: '',
+  }]);
+  await store.writeCollaborationSnapshot('notes/daily.md', Uint8Array.from([1, 2, 3]));
+
+  const result = await store.renameDirectory('notes', 'archive/notes');
+  assert.equal(result.ok, true);
+  assert.equal(await pathExists(join(vaultDir, 'notes')), false);
+  assert.equal(await pathExists(join(vaultDir, 'archive/notes/daily.md')), true);
+  assert.deepEqual(await store.readCommentThreads('archive/notes/daily.md'), [{
+    anchorEnd: { assoc: 0, type: null },
+    anchorEndLine: 1,
+    anchorKind: 'line',
+    anchorQuote: '# Daily',
+    anchorStart: { assoc: 0, type: null },
+    anchorStartLine: 1,
+    createdAt: 1,
+    createdByColor: '#111827',
+    createdByName: 'Tester',
+    createdByPeerId: 'peer-1',
+    id: 'thread-1',
+    messages: [{
+      body: 'hello',
+      createdAt: 1,
+      id: 'message-1',
+      peerId: 'peer-1',
+      userColor: '#111827',
+      userName: 'Tester',
+    }],
+    resolvedAt: null,
+    resolvedByColor: '',
+    resolvedByName: '',
+    resolvedByPeerId: '',
+  }]);
+  assert.deepEqual(Array.from(await store.readCollaborationSnapshot('archive/notes/daily.md') ?? []), [1, 2, 3]);
+});
+
+test('VaultFileStore rejects deleting non-empty directories unless recursive and removes nested content recursively', async (t) => {
+  const { store, cleanup, vaultDir } = await createVaultStore();
+  t.after(cleanup);
+
+  await store.writeCommentThreads('notes/daily.md', [{
+    anchorEnd: { assoc: 0, type: null },
+    anchorEndLine: 1,
+    anchorKind: 'line',
+    anchorQuote: '# Daily',
+    anchorStart: { assoc: 0, type: null },
+    anchorStartLine: 1,
+    createdAt: 1,
+    createdByColor: '#111827',
+    createdByName: 'Tester',
+    createdByPeerId: 'peer-1',
+    id: 'thread-delete',
+    messages: [{
+      body: 'remove',
+      createdAt: 1,
+      id: 'message-delete',
+      peerId: 'peer-1',
+      userColor: '#111827',
+      userName: 'Tester',
+    }],
+    resolvedAt: null,
+    resolvedByColor: '',
+    resolvedByName: '',
+    resolvedByPeerId: '',
+  }]);
+  await store.writeCollaborationSnapshot('notes/daily.md', Uint8Array.from([4, 5, 6]));
+
+  const rejected = await store.deleteDirectory('notes');
+  assert.equal(rejected.ok, false);
+  assert.equal(rejected.error, 'Directory is not empty');
+
+  const deleted = await store.deleteDirectory('notes', { recursive: true });
+  assert.equal(deleted.ok, true);
+  assert.equal(await pathExists(join(vaultDir, 'notes')), false);
+  assert.deepEqual(await store.readCommentThreads('notes/daily.md'), []);
+  assert.equal(await store.readCollaborationSnapshot('notes/daily.md'), null);
+});
+
 test('VaultFileStore writes image attachments next to their source markdown document', async (t) => {
   const { store, cleanup } = await createVaultStore();
   t.after(cleanup);

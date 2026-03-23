@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile as execFileCallback } from 'node:child_process';
-import { access, mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
@@ -61,11 +61,12 @@ async function packProject() {
     env: npmEnv,
   });
 
-  const { stdout } = await execFile('npm', ['pack', '--pack-destination', packDir, '--json'], {
+  const { stdout } = await execFile('npm', ['pack', '--pack-destination', packDir, '--json', '--silent'], {
     cwd: rootDir,
     env: npmEnv,
   });
-  const [packResult] = JSON.parse(stdout);
+  const packJsonMatch = stdout.match(/\[\s*\{[\s\S]*\]\s*$/);
+  const [packResult] = JSON.parse(packJsonMatch?.[0] || '[]');
   const tarballPath = resolve(packDir, packResult.filename);
 
   await execFile('tar', ['-xzf', tarballPath, '-C', unpackDir]);
@@ -76,17 +77,40 @@ async function packProject() {
   };
 }
 
+function extractAssetPath(html, pattern, label) {
+  const match = String(html || '').match(pattern);
+  assert.ok(match, `expected ${label} asset reference`);
+  return match[1];
+}
+
 test('npm pack includes built public assets and runtime helper scripts required by the packaged install', async () => {
   const artifact = await packProject();
 
   try {
     const packagedPaths = new Set(await listRelativeFiles(artifact.packageRoot));
+    const indexHtml = await readFile(resolve(artifact.packageRoot, 'dist/client/index.html'), 'utf8');
+    const excalidrawHtml = await readFile(resolve(artifact.packageRoot, 'dist/client/excalidraw-editor.html'), 'utf8');
+    const mainAssetPath = extractAssetPath(indexHtml, /src="\.\/(assets\/[^"]+\.js)"/, 'main asset');
+    const mainCssPath = extractAssetPath(indexHtml, /href="\.\/(assets\/[^"]+-[A-Za-z0-9_-]{8,}\.css)"/, 'main stylesheet');
+    const excalidrawJsPath = extractAssetPath(excalidrawHtml, /src="\.\/(assets\/[^"]+\.js)"/, 'Excalidraw script');
+    const excalidrawBundle = await readFile(resolve(artifact.packageRoot, 'dist/client', excalidrawJsPath), 'utf8');
+    const excalidrawCssPath = excalidrawBundle.match(/\bexcalidraw-editor-[A-Za-z0-9_-]+\.css\b/u)?.[0];
 
-    assert.ok(packagedPaths.has('public/index.html'));
-    assert.ok(packagedPaths.has('public/assets/css/base.css'));
-    assert.ok(packagedPaths.has('public/assets/css/style.css'));
-    assert.ok(packagedPaths.has('public/assets/js/main.js'));
-    assert.ok(packagedPaths.has('public/assets/vendor/highlight/github-dark.min.css'));
+    assert.ok(packagedPaths.has('dist/client/index.html'));
+    assert.ok(packagedPaths.has('dist/client/excalidraw-editor.html'));
+    assert.ok(packagedPaths.has(`dist/client/${mainAssetPath}`));
+    assert.ok(packagedPaths.has(`dist/client/${mainCssPath}`));
+    assert.ok(packagedPaths.has(`dist/client/${excalidrawJsPath}`));
+    assert.ok(excalidrawCssPath, 'expected packaged build to include the Excalidraw stylesheet reference');
+    assert.ok(packagedPaths.has(`dist/client/assets/${excalidrawCssPath}`));
+    assert.ok(
+      Array.from(packagedPaths).some((path) => /dist\/client\/assets\/github-dark\.min-[A-Za-z0-9_-]+\.css$/u.test(path)),
+      'expected packaged build to include the dark highlight theme asset',
+    );
+    assert.ok(
+      Array.from(packagedPaths).some((path) => /dist\/client\/assets\/github\.min-[A-Za-z0-9_-]+\.css$/u.test(path)),
+      'expected packaged build to include the light highlight theme asset',
+    );
     assert.ok(packagedPaths.has('docker-compose.yml'));
     assert.ok(packagedPaths.has('scripts/cloudflare-tunnel.mjs'));
     assert.ok(packagedPaths.has('scripts/local-plantuml-compose.mjs'));

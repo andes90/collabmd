@@ -50,6 +50,10 @@
   --content-narrow: 640px;
   --content-default: 960px;
   --content-wide: 1200px;
+  --preview-content-width: 720px;
+  --panel-comments-width: min(300px, 34vw);
+  --panel-comments-min-width: 240px;
+  --panel-outline-width: 220px;
 
   --toolbar-h: 48px;
   --control-h-xs: 28px;

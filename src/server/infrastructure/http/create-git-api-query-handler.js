@@ -83,6 +83,19 @@ export function createGitApiQueryHandler({ gitService }) {
       return true;
     }
 
+    if (requestUrl.pathname === '/api/git/file-history' && req.method === 'GET') {
+      try {
+        jsonResponse(req, res, 200, await gitService.getFileHistory({
+          limit: readHistoryLimit(requestUrl.searchParams.get('limit')),
+          offset: readHistoryOffset(requestUrl.searchParams.get('offset')),
+          path: requestUrl.searchParams.get('path'),
+        }));
+      } catch (error) {
+        handleGitError(req, res, error, '[api] Failed to read git file history:', 'Failed to read git file history');
+      }
+      return true;
+    }
+
     if (requestUrl.pathname === '/api/git/commit' && req.method === 'GET') {
       try {
         jsonResponse(req, res, 200, await gitService.getCommit({
@@ -93,6 +106,18 @@ export function createGitApiQueryHandler({ gitService }) {
         }));
       } catch (error) {
         handleGitError(req, res, error, '[api] Failed to read git commit:', 'Failed to read git commit');
+      }
+      return true;
+    }
+
+    if (requestUrl.pathname === '/api/git/file-snapshot' && req.method === 'GET') {
+      try {
+        jsonResponse(req, res, 200, await gitService.getFileSnapshot({
+          hash: requestUrl.searchParams.get('hash'),
+          path: requestUrl.searchParams.get('path'),
+        }));
+      } catch (error) {
+        handleGitError(req, res, error, '[api] Failed to read git file snapshot:', 'Failed to read git file snapshot');
       }
       return true;
     }

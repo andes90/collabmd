@@ -83,9 +83,127 @@
 }
 
 .excalidraw-embed,
-.excalidraw-embed-placeholder {
+.excalidraw-embed-placeholder,
+.drawio-embed,
+.drawio-embed-placeholder {
   display: block;
   transition: box-shadow 0.18s ease;
+}
+
+.drawio-embed {
+  width: 100%;
+  max-width: none;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.drawio-embed.is-direct-file {
+  flex: 1;
+}
+
+.drawio-embed.is-static-preview {
+  display: flex;
+  flex-direction: column;
+}
+
+.drawio-embed-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 38px;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
+}
+
+.drawio-embed-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drawio-embed-btn {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.drawio-embed-iframe {
+  width: 100%;
+  min-height: 420px;
+  border: 0;
+  background: transparent;
+}
+
+.drawio-embed-image-shell {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: var(--surface-embed-canvas);
+  cursor: pointer;
+}
+
+.drawio-embed-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: transparent;
+}
+
+.drawio-export-iframe {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.drawio-viewer-shell {
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  width: 100%;
+  min-height: 220px;
+  background: var(--surface-embed-canvas);
+}
+
+.drawio-viewer-frame {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  min-height: 220px;
+  background: var(--surface-embed-canvas);
+  cursor: pointer;
+}
+
+.drawio-viewer-frame svg,
+.drawio-viewer-frame iframe,
+.drawio-viewer-frame > div {
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.drawio-viewer-frame svg {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .excalidraw-embed-overlay-root {
@@ -111,7 +229,7 @@ body.excalidraw-maximized-open::before {
   position: fixed;
   inset: 0;
   z-index: 170;
-  background: oklch(0.1 0 0 / 0.42);
+  background: var(--surface-scrim);
   backdrop-filter: blur(2px);
 }
 
@@ -157,11 +275,7 @@ body.excalidraw-maximized-open .resizer {
   width: 100%;
   min-height: 200px;
   border: none;
-  background: white;
-}
-
-[data-theme="dark"] .excalidraw-embed-iframe {
-  background: #121212;
+  background: var(--surface-embed-canvas);
 }
 
 .excalidraw-embed.is-maximized {

@@ -1,16 +1,9 @@
 import { createWorkspaceChange } from '../../../domain/workspace-change.js';
 import { resolveApiUrl } from '../../domain/runtime-paths.js';
+import { createWorkspaceRequestId } from '../../domain/workspace-request-id.js';
 
 function normalizeWorkspaceChange(workspaceChange = {}) {
   return createWorkspaceChange(workspaceChange);
-}
-
-function createWorkspaceRequestId() {
-  if (globalThis.crypto?.randomUUID) {
-    return globalThis.crypto.randomUUID();
-  }
-
-  return `workspace-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
 }
 
 export const gitFeature = {
@@ -53,12 +46,12 @@ export const gitFeature = {
     this.navigation.navigateToGitDiff({ filePath, scope });
   },
 
-  handleGitCommitSelection(hash, { closeSidebarOnMobile = false, path = null } = {}) {
+  handleGitCommitSelection(hash, { closeSidebarOnMobile = false, historyFilePath = null, path = null } = {}) {
     if (closeSidebarOnMobile) {
       this.closeSidebarOnMobile();
     }
 
-    this.navigation.navigateToGitCommit({ hash, path });
+    this.navigation.navigateToGitCommit({ hash, historyFilePath, path });
   },
 
   handleGitHistorySelection({ closeSidebarOnMobile = false } = {}) {
@@ -67,6 +60,30 @@ export const gitFeature = {
     }
 
     this.navigation.navigateToGitHistory();
+  },
+
+  handleGitFileHistorySelection(filePath = this.currentFilePath, { closeSidebarOnMobile = false } = {}) {
+    if (closeSidebarOnMobile) {
+      this.closeSidebarOnMobile();
+    }
+
+    if (!filePath) {
+      return;
+    }
+
+    this.navigation.navigateToGitFileHistory({ filePath });
+  },
+
+  handleGitFilePreviewSelection({ hash, path, currentFilePath = null, closeSidebarOnMobile = false } = {}) {
+    if (closeSidebarOnMobile) {
+      this.closeSidebarOnMobile();
+    }
+
+    if (!hash || !path) {
+      return;
+    }
+
+    this.navigation.navigateToGitFilePreview({ hash, path, currentFilePath });
   },
 
   handleGitRepoChange(isGitRepo, status = null) {
@@ -80,6 +97,7 @@ export const gitFeature = {
     this.gitDiffView.setRepoStatus(this.gitRepoAvailable ? status : null);
 
     if (!this.gitRepoAvailable && this.activeSidebarTab === 'git') {
+      this.syncFileHistoryButton({ mode: this.navigation.getHashRoute().type === 'git-file-preview' ? 'history-preview' : 'editor' });
       this.setSidebarTab('files');
       return;
     }
@@ -92,43 +110,95 @@ export const gitFeature = {
     ) {
       this.setSidebarTab('git');
     }
+
+    this.syncFileHistoryButton({
+      filePath: this.currentFilePath,
+      mode: routeType === 'git-file-preview'
+        ? 'history-preview'
+        : routeType === 'file'
+          ? 'editor'
+          : 'empty',
+    });
   },
 
-  syncMainChrome({ mode, title = null } = {}) {
-    const isDiffMode = mode === 'diff';
-    this.elements.toolbarCenter?.classList.toggle('hidden', isDiffMode);
-    this.elements.mobileViewToggle?.classList.toggle('hidden', isDiffMode);
-    this.elements.userCount?.classList.toggle('hidden', isDiffMode);
-    this.elements.toolbarDiffBadge?.classList.toggle('hidden', !isDiffMode);
+  syncFileHistoryButton({ filePath = this.currentFilePath, mode = 'editor' } = {}) {
+    const button = this.elements.fileHistoryButton;
+    const label = this.elements.fileHistoryButtonLabel;
+    if (!button || !label) {
+      return;
+    }
+
+    const supported = this.gitRepoAvailable && this.supportsFileHistory?.(filePath);
+    if (!supported) {
+      button.classList.add('hidden');
+      return;
+    }
+
+    button.classList.remove('hidden');
+    if (mode === 'history-preview') {
+      label.textContent = 'Back to History';
+      button.setAttribute('aria-label', 'Back to file history');
+      button.title = 'Back to file history';
+      return;
+    }
+
+    if (mode !== 'editor') {
+      button.classList.add('hidden');
+      return;
+    }
+
+    label.textContent = 'History';
+    button.setAttribute('aria-label', 'Open file history');
+    button.title = 'View file history';
+  },
+
+  syncMainChrome({ badgeLabel = '', mode, title = null } = {}) {
+    const isSpecialMode = mode === 'diff' || mode === 'history' || mode === 'history-preview';
+    this.elements.toolbarCenter?.classList.toggle('hidden', isSpecialMode);
+    this.elements.mobileViewToggle?.classList.toggle('hidden', isSpecialMode);
+    this.elements.userCount?.classList.toggle('hidden', isSpecialMode);
+    this.elements.toolbarDiffBadge?.classList.toggle('hidden', !badgeLabel);
+    if (this.elements.toolbarDiffBadge) {
+      this.elements.toolbarDiffBadge.textContent = badgeLabel;
+    }
 
     if (title && this.elements.activeFileName) {
       this.elements.activeFileName.textContent = title;
     }
+
+    this.syncFileHistoryButton({ filePath: this.currentFilePath, mode });
   },
 
   async showGitDiff({ filePath = null, scope = 'all' } = {}) {
+    this.clearStaticPreviewDocument?.();
     this.gitPanel.setSelection(filePath ? { path: filePath, scope, source: 'workspace' } : {});
     this.gitPanel.setMode('changes');
     this.showDiffState();
     this.syncMainChrome({
+      badgeLabel: 'Diff',
       mode: 'diff',
       title: this.gitDiffView.getToolbarTitle({ filePath, scope }),
     });
+    this.syncFileHistoryButton({ filePath, mode: 'diff' });
     await this.gitDiffView.openWorkspaceDiff({ filePath, scope });
   },
 
-  async showGitCommit({ hash, path = null } = {}) {
+  async showGitCommit({ hash, path = null, historyFilePath = null } = {}) {
+    this.clearStaticPreviewDocument?.();
     this.gitPanel.setMode('history');
     this.gitPanel.setSelection(hash ? { commitHash: hash, path, source: 'commit' } : { source: 'commit' });
     this.showDiffState();
     this.syncMainChrome({
+      badgeLabel: 'Diff',
       mode: 'diff',
       title: this.gitDiffView.getToolbarTitle({ commitHash: hash, path, source: 'commit' }),
     });
-    await this.gitDiffView.openCommitDiff({ hash, path });
+    this.syncFileHistoryButton({ filePath: path, mode: 'diff' });
+    await this.gitDiffView.openCommitDiff({ hash, historyFilePath, path });
   },
 
   async showGitHistory() {
+    this.clearStaticPreviewDocument?.();
     this.gitPanel.setMode('history');
     this.gitPanel.setSelection({ source: 'commit' });
     this.workspaceRouteController?.showEmptyState?.();
@@ -136,29 +206,128 @@ export const gitFeature = {
       mode: 'empty',
       title: 'Git History',
     });
+    this.syncFileHistoryButton({ mode: 'empty' });
+  },
+
+  async showGitFileHistory({ filePath = null } = {}) {
+    if (!filePath) {
+      this.workspaceRouteController?.showEmptyState?.();
+      return;
+    }
+
+    this.clearStaticPreviewDocument?.();
+    this.commentUi?.attachSession?.(null);
+    this.commentUi?.setCurrentFile?.(filePath, {
+      fileKind: this.getCommentFileKind(filePath),
+      supported: false,
+    });
+    this.handleCommentThreadsChange?.([]);
+    this.handleCommentSelectionChange?.(null);
+    this.workspaceRouteController?.showFileHistoryState?.(filePath);
+    this.syncMainChrome({
+      badgeLabel: 'History',
+      mode: 'history',
+      title: this.getDisplayName(filePath),
+    });
+    this.syncFileHistoryButton({ filePath, mode: 'history' });
+    await this.fileHistoryView.openFileHistory({ filePath });
+  },
+
+  async showGitFilePreview({ hash, filePath = null, currentFilePath = null } = {}) {
+    const resolvedCurrentFilePath = String(currentFilePath ?? '').trim() || filePath;
+    if (!hash || !filePath || !resolvedCurrentFilePath) {
+      this.workspaceRouteController?.showEmptyState?.();
+      return;
+    }
+
+    this.commentUi?.attachSession?.(null);
+    this.commentUi?.setCurrentFile?.(resolvedCurrentFilePath, {
+      fileKind: this.getCommentFileKind(resolvedCurrentFilePath),
+      supported: false,
+    });
+    this.handleCommentThreadsChange?.([]);
+    this.handleCommentSelectionChange?.(null);
+    this.workspaceRouteController?.showPreviewOnlyState?.(resolvedCurrentFilePath);
+    this.layoutController.setView('preview', { persist: false });
+    this.syncMainChrome({
+      badgeLabel: 'History Preview',
+      mode: 'history-preview',
+      title: this.getDisplayName(resolvedCurrentFilePath),
+    });
+    this.syncFileHistoryButton({ filePath: resolvedCurrentFilePath, mode: 'history-preview' });
+
+    try {
+      const query = new URLSearchParams();
+      query.set('hash', hash);
+      query.set('path', filePath);
+      const response = await fetch(resolveApiUrl(`/git/file-snapshot?${query.toString()}`));
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to load historical file preview');
+      }
+
+      this.setStaticPreviewDocument?.({
+        ...data,
+        currentFilePath: resolvedCurrentFilePath,
+      });
+      this.resetPreviewMode();
+      this.elements.markdownToolbar?.classList.add('hidden');
+      this.elements.outlineToggle?.classList.toggle('hidden', data.fileKind !== 'markdown');
+
+      if (data.fileKind === 'markdown' || data.fileKind === 'mermaid' || data.fileKind === 'plantuml') {
+        if (data.fileKind === 'mermaid') {
+          this.elements.previewContent?.classList.add('is-mermaid-file-preview');
+        } else if (data.fileKind === 'plantuml') {
+          this.elements.previewContent?.classList.add('is-plantuml-file-preview');
+        }
+        this.previewRenderer.beginDocumentLoad();
+        this.previewRenderer.queueRender();
+        return;
+      }
+
+      this.elements.outlineToggle?.classList.add('hidden');
+      this.renderTextFilePreview({
+        content: data.content,
+        filePath: resolvedCurrentFilePath,
+      });
+    } catch (error) {
+      console.error('[git-preview] Failed to load file snapshot:', error);
+      this.clearStaticPreviewDocument?.();
+      this.toastController.show('Failed to load historical file preview');
+      this.renderTextFilePreview({
+        content: 'Failed to load historical file preview.',
+        filePath: resolvedCurrentFilePath,
+      });
+      this.elements.outlineToggle?.classList.add('hidden');
+    }
   },
 
   async postGitAction(endpoint, payload) {
     const requestId = createWorkspaceRequestId();
     this.pendingWorkspaceRequestIds?.add(requestId);
-    const response = await fetch(endpoint, {
-      body: JSON.stringify(payload),
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CollabMD-Request-Id': requestId,
-      },
-      method: 'POST',
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      this.pendingWorkspaceRequestIds?.delete(requestId);
-      const error = new Error(data.error || 'Git action failed');
-      if (typeof data?.code === 'string') {
-        error.code = data.code;
+    try {
+      const response = await fetch(endpoint, {
+        body: JSON.stringify(payload),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CollabMD-Request-Id': requestId,
+        },
+        method: 'POST',
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        this.pendingWorkspaceRequestIds?.delete(requestId);
+        const error = new Error(data.error || 'Git action failed');
+        if (typeof data?.code === 'string') {
+          error.code = data.code;
+        }
+        throw error;
       }
+      return data;
+    } catch (error) {
+      this.pendingWorkspaceRequestIds?.delete(requestId);
       throw error;
     }
-    return data;
   },
 
   async refreshWorkspaceAfterGitAction({ filePath = null, preferredScope = null } = {}) {
@@ -175,8 +344,22 @@ export const gitFeature = {
       return;
     }
 
+    if (route.type === 'git-file-history') {
+      await this.showGitFileHistory({ filePath: route.filePath });
+      return;
+    }
+
+    if (route.type === 'git-file-preview') {
+      await this.showGitFilePreview({
+        hash: route.hash,
+        filePath: route.filePath,
+        currentFilePath: route.currentFilePath,
+      });
+      return;
+    }
+
     if (route.type === 'git-commit') {
-      await this.showGitCommit({ hash: route.hash, path: route.path });
+      await this.showGitCommit({ hash: route.hash, path: route.path, historyFilePath: route.historyFilePath });
       return;
     }
 

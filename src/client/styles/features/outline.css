@@ -3,7 +3,7 @@
 .outline-panel {
   display: flex;
   flex-direction: column;
-  width: 220px;
+  width: var(--preview-floating-outline-width, var(--panel-outline-width));
   flex-shrink: 0;
   overflow: hidden;
   border-left: 1px solid var(--color-divider);

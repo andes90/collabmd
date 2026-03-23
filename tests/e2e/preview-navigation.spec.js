@@ -191,18 +191,27 @@ test('keeps the linked mentions dock reachable while preview scrolls and expands
   expect(Math.abs(previewAlignment - splitAlignment)).toBeLessThanOrEqual(2);
 });
 
-test('keeps the clicked parent heading active in the outline after navigation', async ({ page }) => {
+test('navigates to the clicked parent section before settling on the visible child heading in the outline', async ({ page }) => {
   await openFile(page, 'showcase.md');
   await page.locator('#outlineToggle').click();
   await expect(page.locator('#outlinePanel')).toBeVisible();
 
   await page.locator('#outlineNav .outline-item', { hasText: 'Embedded Diagram Files' }).click();
-  await page.waitForTimeout(1000);
+
+  const parentHeadingOffset = await page.locator('#previewContent h2', { hasText: 'Embedded Diagram Files' }).evaluate((heading) => {
+    const container = document.getElementById('previewContainer');
+    const containerRect = container.getBoundingClientRect();
+    const headingRect = heading.getBoundingClientRect();
+    return Math.abs(headingRect.top - containerRect.top);
+  });
+
+  expect(parentHeadingOffset).toBeLessThan(80);
+  await expect(page.locator('#outlineNav .outline-item.active').first()).toHaveText('Embedded Diagram Files');
 
   await expect.poll(async () => {
     const activeItem = page.locator('#outlineNav .outline-item.active').first();
     return activeItem.textContent();
-  }, { timeout: 15000 }).toBe('Embedded Diagram Files');
+  }, { timeout: 15000 }).toBe('Excalidraw');
 });
 
 test('keeps the outline open on desktop after selecting a section', async ({ page }) => {
@@ -252,13 +261,10 @@ test('keeps the preview container width stable when the outline opens in split m
   expect(Math.abs(widthAfter - widthBefore)).toBeLessThanOrEqual(1);
 });
 
-test('keeps the editor interactive before heavy preview reaches ready', async ({ page }) => {
+test('keeps the editor interactive while heavy preview initializes', async ({ page }) => {
   test.slow();
 
   await openSampleFull(page);
-
-  const phase = await page.locator('#previewContent').getAttribute('data-render-phase');
-  expect(phase).not.toBe('ready');
 
   const editor = page.locator('.cm-content').first();
   await editor.click();

@@ -11,6 +11,7 @@ import { RoomRegistry } from './domain/collaboration/room-registry.js';
 import { createRequestHandler } from './infrastructure/http/create-request-handler.js';
 import { VaultFileStore } from './infrastructure/persistence/vault-file-store.js';
 import { attachCollaborationGateway } from './infrastructure/websocket/attach-collaboration-gateway.js';
+import { isDrawioLeaseRoom } from '../domain/drawio-room.js';
 import { WORKSPACE_ROOM_NAME } from '../domain/workspace-room.js';
 import { FileSystemSyncService } from './infrastructure/workspace/file-system-sync-service.js';
 import { WorkspaceMutationCoordinator } from './infrastructure/workspace/workspace-mutation-coordinator.js';
@@ -54,11 +55,12 @@ export function createAppServer(config = loadConfig()) {
   let workspaceMutationCoordinator = null;
   const roomRegistry = new RoomRegistry({
     createRoom: ({ name, onEmpty }) => {
+      const isTransientRoom = name === '__lobby__' || name === WORKSPACE_ROOM_NAME || isDrawioLeaseRoom(name);
       const room = new CollaborationRoom({
         documentStore: new CollaborationDocumentStore({
-          backlinkIndex: name === '__lobby__' || name === WORKSPACE_ROOM_NAME ? null : backlinkIndex,
+          backlinkIndex: isTransientRoom ? null : backlinkIndex,
           name,
-          vaultFileStore: name === '__lobby__' || name === WORKSPACE_ROOM_NAME ? null : vaultFileStore,
+          vaultFileStore: isTransientRoom ? null : vaultFileStore,
         }),
         getHydrateDelayMs: () => testControls.wsRoomHydrateDelayMs,
         idleGraceMs: config.wsRoomIdleGraceMs,

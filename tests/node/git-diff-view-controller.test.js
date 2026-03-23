@@ -357,3 +357,49 @@ test('GitDiffViewController scrolls stacked commit view to selected file section
     behavior: 'smooth',
   });
 });
+
+test('GitDiffViewController routes back to file history when commit diff carries file history context', async (t) => {
+  const harness = createHarness();
+  t.after(() => harness.restore());
+  installWindowStub(t);
+
+  installFetchStub(t, [
+    {
+      body: {
+        commit: { hash: 'abc1234', shortHash: 'abc1234', subject: 'Commit title' },
+        files: [
+          { path: 'docs/old-name.md', stats: { additions: 1, deletions: 0 }, status: 'modified' },
+        ],
+        summary: { additions: 1, deletions: 0, filesChanged: 1 },
+      },
+    },
+    {
+      body: {
+        files: [{
+          path: 'docs/old-name.md',
+          hunks: [{ header: '@@ -1 +1 @@', lines: [] }],
+          stats: { additions: 1, deletions: 0 },
+          status: 'modified',
+        }],
+      },
+    },
+  ]);
+
+  const events = [];
+  const controller = new GitDiffViewController({
+    onBackToHistory: (payload) => events.push(payload),
+  });
+  controller.initialize();
+
+  await controller.openCommitDiff({
+    hash: 'abc1234',
+    historyFilePath: 'docs/current-name.md',
+    path: 'docs/old-name.md',
+  });
+  harness.elements.diffBackToHistoryBtn.dispatch('click');
+
+  assert.deepEqual(events, [{
+    hash: 'abc1234',
+    historyFilePath: 'docs/current-name.md',
+  }]);
+});

@@ -189,6 +189,7 @@ export class GitDiffViewController {
     this.requestScope = 'all';
     this.commitHash = null;
     this.commitMeta = null;
+    this.historyFilePath = null;
     this.pendingAction = null;
     this.repoStatus = null;
   }
@@ -200,7 +201,10 @@ export class GitDiffViewController {
       if (!this.commitMeta?.hash) {
         return;
       }
-      this.onBackToHistory?.(this.commitMeta.hash);
+      this.onBackToHistory?.({
+        hash: this.commitMeta.hash,
+        historyFilePath: this.historyFilePath,
+      });
     });
     this.openEditorButton?.addEventListener('click', () => {
       if (this.source !== 'workspace') {
@@ -300,6 +304,7 @@ export class GitDiffViewController {
     this.requestScope = 'all';
     this.commitHash = null;
     this.commitMeta = null;
+    this.historyFilePath = null;
     this.pendingAction = null;
     this.repoStatus = null;
     this.syncToolbar();
@@ -310,6 +315,7 @@ export class GitDiffViewController {
     this.layoutMode = 'focused';
     this.commitHash = null;
     this.commitMeta = null;
+    this.historyFilePath = null;
     this.activeFilePath = filePath;
     this.fileCache.clear();
     this.fileErrors.clear();
@@ -360,11 +366,12 @@ export class GitDiffViewController {
     }
   }
 
-  async openCommitDiff({ hash, path = null } = {}) {
+  async openCommitDiff({ hash, path = null, historyFilePath = null } = {}) {
     this.source = 'commit';
     this.layoutMode = 'stacked';
     this.commitHash = String(hash ?? '').trim() || null;
     this.commitMeta = null;
+    this.historyFilePath = String(historyFilePath ?? '').trim() || null;
     this.activeFilePath = path || null;
     this.fileCache.clear();
     this.fileErrors.clear();
@@ -1133,6 +1140,7 @@ export class GitDiffViewController {
     }
 
     this.modeButtons.forEach((button) => {
+      button.classList.remove('hidden');
       button.classList.toggle('active', button.getAttribute('data-diff-mode') === this.mode);
     });
     this.layoutButtons.forEach((button) => {
@@ -1148,7 +1156,11 @@ export class GitDiffViewController {
     this.editorActionsGroup?.classList.toggle('hidden', isCommitSource);
     this.actionsDivider?.classList.toggle('hidden', isCommitSource);
     this.layoutToggle?.classList.toggle('hidden', !isCommitSource);
+    this.stats?.classList.remove('hidden');
 
+    if (this.openEditorButton) {
+      this.openEditorButton.textContent = 'Open in Editor';
+    }
     this.openEditorButton?.toggleAttribute('disabled', !hasCurrentFile || isCommitSource);
     if (this.primaryActionButton) {
       this.primaryActionButton.textContent = this.pendingAction === primaryAction
@@ -1168,6 +1180,8 @@ export class GitDiffViewController {
       'disabled',
       isCommitSource || !actionState.canCommit || Boolean(this.pendingAction),
     );
+    this.prevButton?.classList.remove('hidden');
+    this.nextButton?.classList.remove('hidden');
     this.prevButton?.classList.toggle('hidden', isStackedCommit);
     this.nextButton?.classList.toggle('hidden', isStackedCommit);
     this.prevButton?.toggleAttribute('disabled', isStackedCommit || this.currentIndex <= 0);

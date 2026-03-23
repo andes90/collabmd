@@ -2,9 +2,12 @@ export class WorkspaceRouteController {
   constructor({
     backlinksPanel,
     clearInitialFileBootstrap,
+    clearStaticPreviewDocument = null,
     closeSidebarOnMobile,
+    drawioEmbed,
     elements,
     excalidrawEmbed,
+    fileHistoryView = null,
     fileExplorer,
     getIsTabActive,
     getSessionLoadToken,
@@ -24,6 +27,8 @@ export class WorkspaceRouteController {
     setCurrentFilePath,
     showGitCommit,
     showGitDiff,
+    showGitFileHistory,
+    showGitFilePreview,
     showGitHistory,
     syncMainChrome,
     videoEmbed,
@@ -32,9 +37,12 @@ export class WorkspaceRouteController {
   }) {
     this.backlinksPanel = backlinksPanel;
     this.clearInitialFileBootstrap = clearInitialFileBootstrap;
+    this.clearStaticPreviewDocument = clearStaticPreviewDocument;
     this.closeSidebarOnMobile = closeSidebarOnMobile;
+    this.drawioEmbed = drawioEmbed ?? { setHydrationPaused() {} };
     this.elements = elements;
     this.excalidrawEmbed = excalidrawEmbed;
+    this.fileHistoryView = fileHistoryView;
     this.fileExplorer = fileExplorer;
     this.getIsTabActive = getIsTabActive;
     this.getSessionLoadToken = getSessionLoadToken;
@@ -54,6 +62,8 @@ export class WorkspaceRouteController {
     this.setCurrentFilePath = setCurrentFilePath;
     this.showGitCommit = showGitCommit;
     this.showGitDiff = showGitDiff;
+    this.showGitFileHistory = showGitFileHistory;
+    this.showGitFilePreview = showGitFilePreview;
     this.showGitHistory = showGitHistory;
     this.syncMainChrome = syncMainChrome;
     this.videoEmbed = videoEmbed;
@@ -80,6 +90,18 @@ export class WorkspaceRouteController {
       return;
     }
 
+    if (route.type === 'git-file-history') {
+      this.setSidebarTab('files');
+      await this.showGitFileHistory(route);
+      return;
+    }
+
+    if (route.type === 'git-file-preview') {
+      this.setSidebarTab('files');
+      await this.showGitFilePreview(route);
+      return;
+    }
+
     if (route.type === 'git-history') {
       this.setSidebarTab('git');
       await this.showGitHistory();
@@ -93,12 +115,14 @@ export class WorkspaceRouteController {
     }
 
     this.setSidebarTab('files');
-    await this.openFile(route.filePath);
+    await this.openFile(route.filePath, { drawioMode: route.drawioMode || null });
   }
 
   showEmptyState() {
     this.gitDiffView.hide();
+    this.fileHistoryView?.hide?.();
     this.workspaceCoordinator.cleanupSession();
+    this.clearStaticPreviewDocument?.();
     this.setSession(null);
     this.setSessionLoadToken(this.getSessionLoadToken() + 1);
     this.clearInitialFileBootstrap();
@@ -129,8 +153,10 @@ export class WorkspaceRouteController {
   }
 
   showDiffState() {
+    this.fileHistoryView?.hide?.();
     this.setSessionLoadToken(this.getSessionLoadToken() + 1);
     this.clearInitialFileBootstrap();
+    this.clearStaticPreviewDocument?.();
     this.workspaceCoordinator.cleanupSession();
     this.setSession(null);
     this.resetPreviewMode();
@@ -157,12 +183,76 @@ export class WorkspaceRouteController {
     this.backlinksPanel.clear();
   }
 
-  async openFile(filePath) {
+  showFileHistoryState(filePath) {
+    this.gitDiffView.hide();
+    this.setSessionLoadToken(this.getSessionLoadToken() + 1);
+    this.clearInitialFileBootstrap();
+    this.clearStaticPreviewDocument?.();
+    this.workspaceCoordinator.cleanupSession();
+    this.setSession(null);
+    this.resetPreviewMode();
+    this.layoutController.reset();
+    this.setCurrentFilePath(filePath);
+    this.lobby.setCurrentFile(null);
+    this.fileExplorer.setActiveFile(filePath);
+
+    this.elements.emptyState?.classList.add('hidden');
+    this.elements.editorPage?.classList.add('hidden');
+    this.elements.diffPage?.classList.remove('hidden');
+    if (this.elements.previewContent) {
+      this.elements.previewContent.innerHTML = '';
+      this.elements.previewContent.dataset.renderPhase = 'ready';
+    }
+    this.videoEmbed?.reconcileEmbeds(this.elements.previewContent);
+    this.resetPreviewSurface();
+
+    this.elements.outlineToggle?.classList.add('hidden');
+    this.elements.markdownToolbar?.classList.add('hidden');
+
+    this.renderAvatars();
+    this.renderPresence();
+    this.backlinksPanel.clear();
+  }
+
+  showPreviewOnlyState(filePath) {
+    this.gitDiffView.hide();
+    this.fileHistoryView?.hide?.();
+    this.setSessionLoadToken(this.getSessionLoadToken() + 1);
+    this.clearInitialFileBootstrap();
+    this.clearStaticPreviewDocument?.();
+    this.workspaceCoordinator.cleanupSession();
+    this.setSession(null);
+    this.resetPreviewMode();
+    this.layoutController.reset();
+    this.setCurrentFilePath(filePath);
+    this.lobby.setCurrentFile(null);
+    this.fileExplorer.setActiveFile(filePath);
+
+    this.elements.emptyState?.classList.add('hidden');
+    this.elements.editorPage?.classList.remove('hidden');
+    this.elements.diffPage?.classList.add('hidden');
+    if (this.elements.previewContent) {
+      this.elements.previewContent.innerHTML = '';
+      this.elements.previewContent.dataset.renderPhase = 'ready';
+    }
+    this.videoEmbed?.reconcileEmbeds(this.elements.previewContent);
+    this.resetPreviewSurface();
+
+    this.elements.markdownToolbar?.classList.add('hidden');
+
+    this.renderAvatars();
+    this.renderPresence();
+    this.backlinksPanel.clear();
+  }
+
+  async openFile(filePath, options = {}) {
     this.imageLightbox?.close?.();
     this.gitPanel.setSelection();
     this.gitDiffView.hide();
+    this.fileHistoryView?.hide?.();
+    this.clearStaticPreviewDocument?.();
     this.syncMainChrome({ mode: 'editor' });
-    await this.workspaceCoordinator.openFile(filePath);
+    await this.workspaceCoordinator.openFile(filePath, options);
     this.setSession(this.workspaceCoordinator.getSession());
   }
 
@@ -182,6 +272,7 @@ export class WorkspaceRouteController {
   resetPreviewSurface() {
     this.imageLightbox?.close?.();
     this.previewRenderer.setHydrationPaused(false);
+    this.drawioEmbed.setHydrationPaused(false);
     this.excalidrawEmbed.setHydrationPaused(false);
     this.videoEmbed?.detachForCommit();
     this.scrollSyncController.setLargeDocumentMode(false);

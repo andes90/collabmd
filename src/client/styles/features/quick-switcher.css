@@ -7,7 +7,7 @@
   display: flex;
   justify-content: center;
   padding-top: min(20vh, 160px);
-  background: oklch(0.1 0 0 / 0.5);
+  background: var(--surface-scrim);
   backdrop-filter: blur(4px);
   opacity: 0;
   visibility: hidden;

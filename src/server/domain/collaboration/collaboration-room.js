@@ -17,6 +17,7 @@ import {
   serializeExcalidrawRoomScene,
   tryParseExcalidrawSceneJson,
 } from '../../../domain/excalidraw-room-codec.js';
+import { isDrawioLeaseRoom } from '../../../domain/drawio-room.js';
 import { normalizeWorkspaceEvent } from '../../../domain/workspace-change.js';
 import { WORKSPACE_EVENT_MAX_MESSAGES, WORKSPACE_ROOM_NAME } from '../../../domain/workspace-room.js';
 
@@ -657,6 +658,10 @@ export class CollaborationRoom {
 
   getPersistedContent() {
     if (isWorkspaceRoom(this.name)) {
+      return null;
+    }
+
+    if (isDrawioLeaseRoom(this.name)) {
       return null;
     }
 

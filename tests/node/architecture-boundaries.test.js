@@ -11,6 +11,10 @@ const DYNAMIC_IMPORT_PATTERN = /\bimport\(\s*['"]([^'"]+)['"]\s*\)/g;
 const EXPORT_FROM_PATTERN = /\bexport\s+(?:\*|\{[^}]*\})\s+from\s+['"]([^'"]+)['"]/g;
 const INTERNAL_SPECIFIER_PREFIXES = ['.', '/', 'src/'];
 
+function normalizeImportSpecifier(specifier) {
+  return String(specifier ?? '').split(/[?#]/u, 1)[0];
+}
+
 const RULES = [
   {
     name: 'shared-domain-isolated',
@@ -106,15 +110,17 @@ async function pathExists(path) {
 }
 
 async function resolveImport(fromFile, specifier) {
-  if (specifier.startsWith('src/')) {
-    return resolve(repoRoot, specifier);
+  const normalizedSpecifier = normalizeImportSpecifier(specifier);
+
+  if (normalizedSpecifier.startsWith('src/')) {
+    return resolve(repoRoot, normalizedSpecifier);
   }
 
-  if (specifier.startsWith('/')) {
-    return resolve(repoRoot, `.${specifier}`);
+  if (normalizedSpecifier.startsWith('/')) {
+    return resolve(repoRoot, `.${normalizedSpecifier}`);
   }
 
-  const candidate = resolve(dirname(fromFile), specifier);
+  const candidate = resolve(dirname(fromFile), normalizedSpecifier);
   const variants = [
     candidate,
     `${candidate}.js`,

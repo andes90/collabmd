@@ -23,6 +23,7 @@
 }
 
 .editor-layout[data-view="preview"] .preview-content.is-excalidraw-file-preview,
+.editor-layout[data-view="preview"] .preview-content.is-drawio-file-preview,
 .editor-layout[data-view="preview"] .preview-content.is-image-file-preview,
 .editor-layout[data-view="preview"] .preview-content.is-mermaid-file-preview,
 .editor-layout[data-view="preview"] .preview-content.is-plantuml-file-preview {

@@ -3,7 +3,7 @@ import { isAbsolute, normalize, relative, resolve } from 'path';
 import { isVaultFilePath } from '../../../domain/file-kind.js';
 
 export const IGNORED_DIRECTORIES = new Set(['.git', '.obsidian', '.trash', 'node_modules', '.DS_Store']);
-export const VAULT_FILE_PATH_REQUIREMENT = '.md, .excalidraw, .mmd, .mermaid, .puml, .plantuml, .png, .jpg, .jpeg, .webp, .gif, or .svg';
+export const VAULT_FILE_PATH_REQUIREMENT = '.md, .excalidraw, .drawio, .mmd, .mermaid, .puml, .plantuml, .png, .jpg, .jpeg, .webp, .gif, or .svg';
 export const INVALID_VAULT_FILE_PATH_ERROR = `Invalid file path — must end in ${VAULT_FILE_PATH_REQUIREMENT}`;
 export const INVALID_DIRECTORY_PATH_ERROR = 'Invalid directory path';
 
@@ -61,6 +61,17 @@ export function resolveVaultDirectoryPath(vaultDir, requestedPath) {
   }
 
   return { absolute, error: null };
+}
+
+export function resolveVaultDirectoryRenamePaths(vaultDir, oldPath, newPath) {
+  const absoluteOld = sanitizeVaultPath(vaultDir, oldPath);
+  const absoluteNew = sanitizeVaultPath(vaultDir, newPath);
+
+  if (!absoluteOld || !absoluteNew) {
+    return { absoluteNew: null, absoluteOld: null, error: INVALID_DIRECTORY_PATH_ERROR };
+  }
+
+  return { absoluteNew, absoluteOld, error: null };
 }
 
 export function resolveVaultRenamePaths(vaultDir, oldPath, newPath) {

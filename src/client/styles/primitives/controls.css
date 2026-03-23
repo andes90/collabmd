@@ -124,8 +124,9 @@
 }
 
 .ui-icon-button--toolbar {
-  width: 36px;
-  min-width: 36px;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
 }
 
 .ui-pill-button {

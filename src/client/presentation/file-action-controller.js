@@ -1,15 +1,16 @@
 import {
   getVaultFileExtension,
-  stripVaultFileExtension,
 } from '../../domain/file-kind.js';
 import {
   composeVaultChildPath,
+  createDrawioStarter,
   createMarkdownStarter,
   createMermaidStarter,
   createPlantUmlStarter,
   ensureVaultExtension,
   normalizeVaultPathInput,
 } from '../domain/vault-paths.js';
+import { createWorkspaceRequestId } from '../domain/workspace-request-id.js';
 
 function getPathLeaf(path) {
   return String(path ?? '')
@@ -17,6 +18,18 @@ function getPathLeaf(path) {
     .split('/')
     .filter(Boolean)
     .pop() || '';
+}
+
+function replacePathPrefix(pathValue, oldPrefix, newPrefix) {
+  if (pathValue === oldPrefix) {
+    return newPrefix;
+  }
+
+  return `${newPrefix}${pathValue.slice(oldPrefix.length)}`;
+}
+
+function formatCount(value, singularLabel, pluralLabel) {
+  return `${value} ${value === 1 ? singularLabel : pluralLabel}`;
 }
 
 function createEmptyExcalidrawScene() {
@@ -30,10 +43,22 @@ function createEmptyExcalidrawScene() {
   });
 }
 
+function withRequestId(payload, requestId) {
+  if (!requestId) {
+    return payload;
+  }
+
+  return {
+    ...payload,
+    requestId,
+  };
+}
+
 export class FileActionController {
   constructor({
     onFileDelete,
     onFileSelect,
+    pendingWorkspaceRequestIds = null,
     state,
     toastController,
     vaultClient,
@@ -42,6 +67,7 @@ export class FileActionController {
   }) {
     this.onFileDelete = onFileDelete;
     this.onFileSelect = onFileSelect;
+    this.pendingWorkspaceRequestIds = pendingWorkspaceRequestIds;
     this.state = state;
     this.toastController = toastController;
     this.vaultClient = vaultClient;
@@ -49,6 +75,7 @@ export class FileActionController {
     this.refresh = refresh;
     this.newFileButton = document.getElementById('newFileBtn');
     this.newDrawingButton = document.getElementById('newDrawingBtn');
+    this.newDrawioButton = document.getElementById('newDrawioBtn');
     this.newMermaidButton = document.getElementById('newMermaidBtn');
     this.newPlantumlButton = document.getElementById('newPlantumlBtn');
     this.newFolderButton = document.getElementById('newFolderBtn');
@@ -71,6 +98,7 @@ export class FileActionController {
   initialize() {
     this.newFileButton?.addEventListener('click', () => this.handleNewFile());
     this.newDrawingButton?.addEventListener('click', () => this.handleNewDrawing());
+    this.newDrawioButton?.addEventListener('click', () => this.handleNewDrawio());
     this.newMermaidButton?.addEventListener('click', () => this.handleNewMermaid());
     this.newPlantumlButton?.addEventListener('click', () => this.handleNewPlantUml());
     this.newFolderButton?.addEventListener('click', () => this.handleNewFolder());
@@ -94,6 +122,10 @@ export class FileActionController {
         onSelect: () => this.handleNewDrawing({ parentDir }),
       },
       {
+        label: 'New draw.io diagram',
+        onSelect: () => this.handleNewDrawio({ parentDir }),
+      },
+      {
         label: 'New Mermaid diagram',
         onSelect: () => this.handleNewMermaid({ parentDir }),
       },
@@ -108,11 +140,26 @@ export class FileActionController {
     ];
   }
 
+  getDirectoryContextMenuItems(directoryPath) {
+    return [
+      ...this.createContextMenuItems(directoryPath),
+      {
+        label: 'Rename / move',
+        onSelect: () => this.handleRenameDirectory(directoryPath),
+      },
+      {
+        label: 'Delete',
+        danger: true,
+        onSelect: () => this.handleDeleteDirectory(directoryPath),
+      },
+    ];
+  }
+
   getFileContextMenuItems(filePath) {
     return [
       {
-        label: 'Rename',
-        onSelect: () => this.handleRename(filePath),
+        label: 'Rename / move',
+        onSelect: () => this.handleRenameFile(filePath),
       },
       {
         label: 'Delete',
@@ -134,6 +181,35 @@ export class FileActionController {
 
   ensureExtension(pathValue, extension) {
     return ensureVaultExtension(pathValue, extension);
+  }
+
+  createPendingWorkspaceRequestId() {
+    if (!this.pendingWorkspaceRequestIds) {
+      return null;
+    }
+
+    const requestId = createWorkspaceRequestId();
+    this.pendingWorkspaceRequestIds.add(requestId);
+    return requestId;
+  }
+
+  clearPendingWorkspaceRequestId(requestId) {
+    if (!requestId) {
+      return;
+    }
+
+    this.pendingWorkspaceRequestIds?.delete(requestId);
+  }
+
+  async runWorkspaceMutation(callback) {
+    const requestId = this.createPendingWorkspaceRequestId();
+
+    try {
+      return await callback(requestId);
+    } catch (error) {
+      this.clearPendingWorkspaceRequestId(requestId);
+      throw error;
+    }
   }
 
   openActionDialog({
@@ -323,7 +399,10 @@ export class FileActionController {
 
   async createVaultFile(filePath, content, { openAfterCreate = false, errorMessage = 'Failed to create file' } = {}) {
     try {
-      await this.vaultClient.createFile({ content, path: filePath });
+      await this.runWorkspaceMutation((requestId) => this.vaultClient.createFile(withRequestId({
+        content,
+        path: filePath,
+      }, requestId)));
       this.state.expandDirectoryPath(filePath, { includeLeaf: false });
       await this.refresh();
 
@@ -346,7 +425,10 @@ export class FileActionController {
     }
 
     try {
-      await this.vaultClient.createDirectory(directoryPath);
+      await this.runWorkspaceMutation((requestId) => this.vaultClient.createDirectory(
+        directoryPath,
+        withRequestId({}, requestId),
+      ));
       this.state.expandDirectoryPath(directoryPath);
       await this.refresh();
       return true;
@@ -357,38 +439,41 @@ export class FileActionController {
   }
 
   async renameVaultFile(filePath, nextName, extension) {
-    const normalizedName = String(nextName ?? '').trim();
-    if (!normalizedName) {
-      this.showToast('File name is required');
+    const normalizedPath = normalizeVaultPathInput(nextName);
+    if (!normalizedPath) {
+      this.showToast('File path is required');
       return false;
     }
 
-    if (/[\\/]/u.test(normalizedName)) {
-      this.showToast('Rename only supports the file name right now');
+    const requestedExtension = getVaultFileExtension(normalizedPath);
+    if (requestedExtension && requestedExtension.toLowerCase() !== String(extension ?? '').toLowerCase()) {
+      this.showToast(`File type changes are not supported during rename. Keep the ${extension} extension.`);
       return false;
     }
 
-    const baseName = stripVaultFileExtension(normalizedName).trim();
-    if (!baseName) {
-      this.showToast('File name is required');
+    const finalPath = requestedExtension
+      ? normalizedPath
+      : `${normalizedPath}${extension}`;
+    if (!getPathLeaf(finalPath)) {
+      this.showToast('File path is required');
       return false;
     }
 
-    const dir = filePath.includes('/') ? filePath.substring(0, filePath.lastIndexOf('/') + 1) : '';
-    const newPath = `${dir}${baseName}${extension}`;
-
-    if (newPath === filePath) {
+    if (finalPath === filePath) {
       return true;
     }
 
     try {
-      await this.vaultClient.renameFile({ newPath, oldPath: filePath });
-      this.state.expandDirectoryPath(newPath, { includeLeaf: false });
+      await this.runWorkspaceMutation((requestId) => this.vaultClient.renameFile(withRequestId({
+        newPath: finalPath,
+        oldPath: filePath,
+      }, requestId)));
+      this.state.expandDirectoryPath(finalPath, { includeLeaf: false });
       await this.refresh();
 
       if (this.state.activeFilePath === filePath) {
-        this.state.activeFilePath = newPath;
-        this.onFileSelect?.(newPath);
+        this.state.activeFilePath = finalPath;
+        this.onFileSelect?.(finalPath);
       }
 
       return true;
@@ -398,9 +483,42 @@ export class FileActionController {
     }
   }
 
+  async renameDirectory(oldPath, nextPath) {
+    const normalizedPath = normalizeVaultPathInput(nextPath);
+    if (!normalizedPath) {
+      this.showToast('Folder path is required');
+      return false;
+    }
+
+    if (normalizedPath === oldPath) {
+      return true;
+    }
+
+    try {
+      await this.runWorkspaceMutation((requestId) => this.vaultClient.renameDirectory(withRequestId({
+        newPath: normalizedPath,
+        oldPath,
+      }, requestId)));
+      this.state.replaceExpandedDirectoryPrefix(oldPath, normalizedPath);
+      this.state.expandDirectoryPath(normalizedPath);
+      await this.refresh();
+
+      if (this.state.activeFilePath && this.state.activeFilePath.startsWith(`${oldPath}/`)) {
+        const nextActivePath = replacePathPrefix(this.state.activeFilePath, oldPath, normalizedPath);
+        this.state.activeFilePath = nextActivePath;
+        this.onFileSelect?.(nextActivePath);
+      }
+
+      return true;
+    } catch (error) {
+      this.showToast(error?.message || 'Failed to rename folder');
+      return false;
+    }
+  }
+
   async deleteVaultFile(filePath) {
     try {
-      await this.vaultClient.deleteFile(filePath);
+      await this.runWorkspaceMutation((requestId) => this.vaultClient.deleteFile(filePath, withRequestId({}, requestId)));
       await this.refresh();
 
       if (this.state.activeFilePath === filePath) {
@@ -411,6 +529,28 @@ export class FileActionController {
       return true;
     } catch (error) {
       this.showToast(error?.message || 'Failed to delete');
+      return false;
+    }
+  }
+
+  async deleteDirectory(pathValue, { recursive = false } = {}) {
+    try {
+      await this.runWorkspaceMutation((requestId) => this.vaultClient.deleteDirectory(
+        pathValue,
+        withRequestId({ recursive }, requestId),
+      ));
+      const activeFilePath = this.state.activeFilePath;
+      await this.refresh();
+      this.state.removeExpandedDirectoryPrefix(pathValue);
+
+      if (activeFilePath && activeFilePath.startsWith(`${pathValue}/`)) {
+        this.state.activeFilePath = null;
+        this.onFileDelete?.(activeFilePath);
+      }
+
+      return true;
+    } catch (error) {
+      this.showToast(error?.message || 'Failed to delete folder');
       return false;
     }
   }
@@ -536,6 +676,36 @@ export class FileActionController {
     });
   }
 
+  handleNewDrawio({ parentDir = '' } = {}) {
+    const context = this.getCreateContext(parentDir);
+
+    this.openActionDialog({
+      title: 'Create draw.io diagram',
+      copy: context.normalizedParentDir
+        ? 'Create a new `.drawio` diagram inside the selected folder.'
+        : 'Create a new `.drawio` diagram with a native starter document.',
+      label: `Diagram ${context.inputLabelSuffix}`,
+      hint: `${context.hintPrefix} ".drawio" is added automatically.`,
+      note: context.note,
+      placeholder: context.normalizedParentDir ? 'architecture' : 'diagrams/architecture',
+      submitLabel: 'Create diagram',
+      emptyMessage: 'Diagram path is required',
+      onSubmit: (value) => {
+        const normalizedPath = normalizeVaultPathInput(value);
+        if (!normalizedPath) {
+          this.showToast('Diagram path is required');
+          return false;
+        }
+
+        const starter = createDrawioStarter(composeVaultChildPath(context.normalizedParentDir, normalizedPath));
+        return this.createVaultFile(starter.path, starter.content, {
+          errorMessage: 'Failed to create draw.io diagram',
+          openAfterCreate: true,
+        });
+      },
+    });
+  }
+
   handleNewPlantUml({ parentDir = '' } = {}) {
     const context = this.getCreateContext(parentDir);
 
@@ -566,19 +736,31 @@ export class FileActionController {
     });
   }
 
-  handleRename(filePath) {
-    const currentName = getPathLeaf(filePath);
-    const extension = getVaultFileExtension(currentName) ?? '.md';
+  handleRenameFile(filePath) {
+    const extension = getVaultFileExtension(filePath) || '.md';
 
     this.openActionDialog({
-      title: 'Rename file',
-      copy: 'Update the file name without changing its current type.',
-      label: 'Name',
-      hint: `${extension} is kept automatically.`,
-      value: stripVaultFileExtension(currentName),
-      submitLabel: 'Rename file',
-      emptyMessage: 'File name is required',
+      title: 'Rename or move file',
+      copy: 'Update the relative path without changing the file type.',
+      label: 'Path',
+      hint: `Use "/" to move the file into another folder. ${extension} is kept automatically.`,
+      value: filePath,
+      submitLabel: 'Save file path',
+      emptyMessage: 'File path is required',
       onSubmit: (value) => this.renameVaultFile(filePath, value, extension),
+    });
+  }
+
+  handleRenameDirectory(directoryPath) {
+    this.openActionDialog({
+      title: 'Rename or move folder',
+      copy: 'Update the relative path for this folder and everything inside it.',
+      label: 'Path',
+      hint: 'Use "/" to move the folder into another location in the vault.',
+      value: directoryPath,
+      submitLabel: 'Save folder path',
+      emptyMessage: 'Folder path is required',
+      onSubmit: (value) => this.renameDirectory(directoryPath, value),
     });
   }
 
@@ -591,6 +773,24 @@ export class FileActionController {
       destructive: true,
       requiresInput: false,
       onSubmit: () => this.deleteVaultFile(filePath),
+    });
+  }
+
+  handleDeleteDirectory(directoryPath) {
+    const { directoryCount, fileCount } = this.state.getDirectoryDescendantSummary(directoryPath);
+    const hasDescendants = directoryCount > 0 || fileCount > 0;
+    const summary = hasDescendants
+      ? `This will permanently remove ${formatCount(fileCount, 'file', 'files')} and ${formatCount(directoryCount, 'nested folder', 'nested folders')} inside this folder.`
+      : 'This permanently removes the empty folder from the vault.';
+
+    this.openActionDialog({
+      title: hasDescendants ? 'Delete folder and contents' : 'Delete folder',
+      copy: summary,
+      note: directoryPath,
+      submitLabel: hasDescendants ? 'Delete folder and contents' : 'Delete folder',
+      destructive: true,
+      requiresInput: false,
+      onSubmit: () => this.deleteDirectory(directoryPath, { recursive: hasDescendants }),
     });
   }
 }

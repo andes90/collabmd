@@ -498,7 +498,6 @@ async function waitForPendingRoomWrites({
       return;
     }
 
-    // eslint-disable-next-line no-await-in-loop
     await new Promise((resolve) => window.setTimeout(resolve, intervalMs));
   }
 }
@@ -509,8 +508,6 @@ async function prepareRealtimeRoomDisconnect() {
 }
 
 window.addEventListener('pagehide', disconnectRealtimeRoomOnce);
-window.addEventListener('beforeunload', disconnectRealtimeRoomOnce);
-window.addEventListener('unload', disconnectRealtimeRoomOnce);
 
 window.addEventListener('message', (event) => {
   if (event.origin !== parentOrigin) {
