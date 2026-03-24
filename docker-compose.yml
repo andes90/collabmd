@@ -6,7 +6,7 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: 1234
-      AUTH_STRATEGY: ${AUTH_STRATEGY:-none}
+      AUTH_STRATEGY: ${AUTH_STRATEGY:-password}
       AUTH_PASSWORD: ${AUTH_PASSWORD:-}
       AUTH_SESSION_COOKIE_NAME: ${AUTH_SESSION_COOKIE_NAME:-collabmd_auth}
       AUTH_SESSION_SECRET: ${AUTH_SESSION_SECRET:-}
@@ -25,6 +25,13 @@ services:
       COLLABMD_GIT_SSH_KNOWN_HOSTS_FILE: ${COLLABMD_GIT_SSH_KNOWN_HOSTS_FILE:-}
       COLLABMD_GIT_USER_NAME: ${COLLABMD_GIT_USER_NAME:-}
       COLLABMD_GIT_USER_EMAIL: ${COLLABMD_GIT_USER_EMAIL:-}
+    cap_drop:
+      - ALL
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=64m
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:1234/health || exit 1"]
       interval: 30s
@@ -50,6 +57,10 @@ services:
 
   plantuml:
     image: plantuml/plantuml-server:jetty
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "127.0.0.1:${PLANTUML_HOST_PORT:-18080}:8080"
     restart: unless-stopped

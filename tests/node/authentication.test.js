@@ -4,7 +4,6 @@ import { createSign, generateKeyPairSync } from 'node:crypto';
 import { createServer } from 'node:http';
 
 import {
-  AUTH_STRATEGY_NONE,
   AUTH_STRATEGY_OIDC,
   AUTH_STRATEGY_PASSWORD,
   createAuthService,
@@ -315,13 +314,14 @@ async function startFakeOidcIssuer() {
   };
 }
 
-test('loadConfig defaults auth to none', () => withAuthEnvCleared(() => {
+test('loadConfig defaults auth to password', () => withAuthEnvCleared(() => {
   const config = loadConfig({
     vaultDir: process.cwd(),
   });
 
-  assert.equal(config.auth.strategy, AUTH_STRATEGY_NONE);
-  assert.equal(config.auth.password, '');
+  assert.equal(config.auth.strategy, AUTH_STRATEGY_PASSWORD);
+  assert.equal(config.auth.password.length > 0, true);
+  assert.equal(config.auth.passwordWasGenerated, true);
 }));
 
 test('password auth generates a password when one is not provided', () => withAuthEnvCleared(() => {

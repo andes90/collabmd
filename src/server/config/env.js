@@ -2,7 +2,6 @@ import { resolve } from 'path';
 import { fileURLToPath } from 'url';
 
 import {
-  AUTH_STRATEGY_NONE,
   AUTH_STRATEGY_OIDC,
   AUTH_STRATEGY_PASSWORD,
   SUPPORTED_AUTH_STRATEGIES,
@@ -85,7 +84,7 @@ function normalizePublicBaseUrl(rawValue) {
 }
 
 function normalizeAuthStrategy(rawStrategy) {
-  const normalized = String(rawStrategy ?? AUTH_STRATEGY_NONE).trim().toLowerCase();
+  const normalized = String(rawStrategy ?? AUTH_STRATEGY_PASSWORD).trim().toLowerCase();
   if (!SUPPORTED_AUTH_STRATEGIES.has(normalized)) {
     throw new Error(
       `Unsupported auth strategy "${rawStrategy}". Supported values: ${Array.from(SUPPORTED_AUTH_STRATEGIES).join(', ')}`,
@@ -260,7 +259,7 @@ export function loadConfig(overrides = {}) {
   const authStrategy = normalizeAuthStrategy(
     authOverrides.strategy
     ?? process.env.AUTH_STRATEGY
-    ?? AUTH_STRATEGY_NONE,
+    ?? AUTH_STRATEGY_PASSWORD,
   );
   const passwordWasGenerated = authStrategy === AUTH_STRATEGY_PASSWORD
     && !(authOverrides.password || process.env.AUTH_PASSWORD);
@@ -277,6 +276,11 @@ export function loadConfig(overrides = {}) {
     publicDir,
   });
 
+  const sessionTtlMs = parsePositiveInt(
+    authOverrides.sessionTtlMs ?? process.env.AUTH_SESSION_TTL_MS,
+    24 * 60 * 60 * 1000,
+  );
+
   return {
     auth: {
       generatedPassword: passwordWasGenerated ? password : '',
@@ -285,6 +289,7 @@ export function loadConfig(overrides = {}) {
       passwordWasGenerated,
       sessionCookieName: authOverrides.sessionCookieName || process.env.AUTH_SESSION_COOKIE_NAME || 'collabmd_auth',
       sessionSecret: authOverrides.sessionSecret || process.env.AUTH_SESSION_SECRET || createRandomSessionSecret(),
+      sessionTtlMs,
       strategy: authStrategy,
     },
     basePath,

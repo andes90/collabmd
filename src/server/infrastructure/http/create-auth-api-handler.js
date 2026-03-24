@@ -1,5 +1,6 @@
 import { getRequestErrorStatusCode } from './http-errors.js';
 import { jsonResponse } from './http-response.js';
+import { createRateLimiter } from './rate-limiter.js';
 import { parseJsonBody } from './request-body.js';
 
 function applyAuthResponse(req, res, result) {
@@ -20,6 +21,8 @@ function applyAuthResponse(req, res, result) {
 }
 
 export function createAuthApiHandler({ authService }) {
+  const loginLimiter = createRateLimiter({ maxAttempts: 5, windowMs: 60_000 });
+
   return async function handleAuthApi(req, res, requestUrl) {
     if (!(requestUrl.pathname === '/api/auth' || requestUrl.pathname.startsWith('/api/auth/'))) {
       return false;
@@ -50,6 +53,14 @@ export function createAuthApiHandler({ authService }) {
     }
 
     if (requestUrl.pathname === '/api/auth/session' && req.method === 'POST') {
+      if (!loginLimiter.isAllowed(req)) {
+        res.setHeader('Retry-After', '60');
+        jsonResponse(req, res, 429, { error: 'Too many login attempts. Try again later.' });
+        return true;
+      }
+
+      loginLimiter.record(req);
+
       try {
         const body = await parseJsonBody(req);
         return applyAuthResponse(req, res, await authService.createSession(req, body));

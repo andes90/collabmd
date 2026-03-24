@@ -18,8 +18,8 @@ const { values, positionals } = parseArgs({
     'local-plantuml': { type: 'boolean', default: false },
     port: { type: 'string', short: 'p', default: '1234' },
     host: { type: 'string' },
-    'no-tunnel': { type: 'boolean', default: false },
-    tunnel: { type: 'boolean', default: true },
+    'no-tunnel': { type: 'boolean', default: true },
+    tunnel: { type: 'boolean', default: false },
     version: { type: 'boolean', short: 'v', default: false },
   },
   strict: false,
@@ -43,10 +43,10 @@ if (values.help) {
   Options:
     -p, --port <port>    Port to listen on (default: 1234)
     --host <host>        Host to bind to (default: HOST env var, otherwise 127.0.0.1)
-    --auth <strategy>    Auth strategy: none, password, oidc (default: none)
+    --auth <strategy>    Auth strategy: none, password, oidc (default: password)
     --auth-password <pw> Password for --auth password (default: generated per run)
     --local-plantuml     Start the bundled docker-compose PlantUML service and use it
-    --no-tunnel          Don't start Cloudflare Tunnel
+    --tunnel             Start a Cloudflare Tunnel (default: disabled)
     -v, --version        Show version
     -h, --help           Show this help
 
@@ -63,7 +63,7 @@ if (values.help) {
 
 const port = parseInt(values.port ?? process.env.PORT ?? '1234', 10) || 1234;
 const host = values.host || process.env.HOST || '127.0.0.1';
-const enableTunnel = !values['no-tunnel'];
+const enableTunnel = values.tunnel === true;
 const useLocalPlantUml = values['local-plantuml'];
 
 const { resolveCliVaultDir, loadConfig } = await import('../src/server/config/env.js');
@@ -199,6 +199,7 @@ try {
     console.log('  Auth:   oidc (not implemented yet)');
   } else {
     console.log('  Auth:   none');
+    console.log('  WARNING: Authentication is disabled. Anyone with network access can read and modify your vault.');
   }
 
   if (enableTunnel) {

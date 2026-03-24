@@ -58,6 +58,7 @@ function createBootstrapConfig(vaultDir, remoteDir, {
   identityName = '',
 } = {}) {
   return loadConfig({
+    auth: { strategy: 'none' },
     git: {
       identity: {
         email: identityEmail,

@@ -21,7 +21,11 @@ function rejectUpgrade(socket, statusCode, statusMessage, {
 
 function extractRoomName(pathname, wsBasePath) {
   const roomSegment = pathname.slice(wsBasePath.length + 1);
-  return decodeURIComponent(roomSegment || 'default');
+  const decoded = decodeURIComponent(roomSegment || 'default');
+  if (decoded.includes('\0') || decoded.includes('..')) {
+    return null;
+  }
+  return decoded;
 }
 
 function stripBasePath(pathname, basePath) {
@@ -96,6 +100,10 @@ export function attachCollaborationGateway({
 
   websocketServer.on('connection', (ws, req, requestUrl) => {
     const roomName = extractRoomName(requestUrl.pathname, wsBasePath);
+    if (!roomName) {
+      ws.close(1008, 'Invalid room name');
+      return;
+    }
     const room = roomRegistry.getOrCreate(roomName);
     const session = new ClientSocketSession({
       onDisconnected: (disconnectedRoomName) => {
