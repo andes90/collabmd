@@ -2,12 +2,16 @@ export class LayoutController {
   constructor({
     mobileBreakpointQuery = window.matchMedia('(max-width: 768px)'),
     onMeasureEditor,
+    onPersistView = null,
     onViewRequest = null,
+    readPersistedView = null,
   }) {
     this.mobileBreakpointQuery = mobileBreakpointQuery;
     this.onMeasureEditor = onMeasureEditor;
+    this.onPersistView = onPersistView;
     this.onViewRequest = onViewRequest;
-    this.preferredView = 'split';
+    this.readPersistedView = readPersistedView;
+    this.preferredView = readPersistedView?.() ?? 'split';
     this.mobileShowsEditor = !this.isMobileViewport();
     this.currentView = this.mobileShowsEditor ? this.preferredView : 'preview';
     this.editorLayout = document.getElementById('editorLayout');
@@ -87,6 +91,7 @@ export class LayoutController {
 
     if (persist) {
       this.preferredView = view;
+      this.onPersistView?.(view);
     }
 
     this.applyView(view);

@@ -9,6 +9,7 @@ import {
   createRandomAuthPassword,
   createRandomSessionSecret,
 } from '../auth/create-auth-service.js';
+import { OIDC_PROVIDER_GENERIC, OIDC_PROVIDER_GOOGLE } from '../auth/auth-constants.js';
 import { loadBuildInfo } from './build-info.js';
 import { isPerfLoggingEnabled } from './perf-logging.js';
 
@@ -268,7 +269,7 @@ function loadOidcConfig(overrides = {}, { basePath = '' } = {}) {
     clientSecret,
     flowCookieName,
     issuer,
-    provider: 'google',
+    provider: issuer === 'https://accounts.google.com' ? OIDC_PROVIDER_GOOGLE : OIDC_PROVIDER_GENERIC,
     publicBaseUrl,
   };
 }

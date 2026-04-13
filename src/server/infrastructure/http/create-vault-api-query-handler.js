@@ -361,6 +361,64 @@ async function handleBacklinks(req, res, requestUrl, { backlinkIndex }) {
   }
 }
 
+const CONTENT_SEARCH_MIN_LENGTH = 2;
+const CONTENT_SEARCH_MAX_RESULTS = 20;
+const CONTENT_SEARCH_CONTEXT_CHARS = 120;
+
+function flattenTextFilePaths(nodes, files = []) {
+  for (const node of nodes) {
+    if (node.type === 'file' || node.type === 'mermaid' || node.type === 'plantuml') {
+      files.push(node.path);
+    } else if (node.type === 'directory' && Array.isArray(node.children)) {
+      flattenTextFilePaths(node.children, files);
+    }
+  }
+  return files;
+}
+
+async function handleContentSearch(req, res, requestUrl, { vaultFileStore, workspaceMutationCoordinator }) {
+  const query = String(requestUrl.searchParams.get('q') ?? '').trim().toLowerCase();
+  if (query.length < CONTENT_SEARCH_MIN_LENGTH) {
+    jsonResponse(req, res, 400, { error: `Query must be at least ${CONTENT_SEARCH_MIN_LENGTH} characters` });
+    return;
+  }
+
+  try {
+    const tree = workspaceMutationCoordinator?.getWorkspaceTree?.() ?? await vaultFileStore.tree();
+    const filePaths = flattenTextFilePaths(tree);
+    const results = [];
+
+    for (const filePath of filePaths) {
+      if (results.length >= CONTENT_SEARCH_MAX_RESULTS) break;
+
+      let content;
+      try {
+        content = await vaultFileStore.readMarkdownFile(filePath);
+      } catch {
+        continue;
+      }
+      if (!content) continue;
+
+      const lowerContent = content.toLowerCase();
+      const idx = lowerContent.indexOf(query);
+      if (idx === -1) continue;
+
+      const start = Math.max(0, idx - Math.floor(CONTENT_SEARCH_CONTEXT_CHARS / 2));
+      const end = Math.min(content.length, idx + query.length + Math.ceil(CONTENT_SEARCH_CONTEXT_CHARS / 2));
+      let excerpt = content.slice(start, end).replace(/\s+/g, ' ').trim();
+      if (start > 0) excerpt = `\u2026${excerpt}`;
+      if (end < content.length) excerpt = `${excerpt}\u2026`;
+
+      results.push({ excerpt, filePath });
+    }
+
+    jsonResponse(req, res, 200, { results });
+  } catch (error) {
+    console.error('[api] Content search failed:', error.message);
+    jsonResponse(req, res, 500, { error: 'Content search failed' });
+  }
+}
+
 // --- Route table ---
 
 function createRouteTable(context) {
@@ -371,6 +429,7 @@ function createRouteTable(context) {
     { method: 'POST', path: '/api/base/export', handler: handleBaseExport },
     { method: 'GET', path: '/api/files', handler: handleFileTree },
     { method: 'GET', path: '/api/file', handler: handleFileRead },
+    { method: 'GET', path: '/api/search', handler: handleContentSearch },
     { method: 'GET', path: '/api/download/file', handler: handleFileDownload },
     { method: 'GET', path: '/api/download/directory', handler: handleDirectoryDownload },
     { method: 'GET', path: '/api/attachment', handler: handleAttachmentRead },

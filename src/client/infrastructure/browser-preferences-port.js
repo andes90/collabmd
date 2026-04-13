@@ -2,12 +2,14 @@ export class BrowserPreferencesPort {
   constructor({
     chatNotificationsKey,
     lineWrappingKey,
+    preferredViewKey,
     sidebarVisibleKey,
     userNameKey,
     storage = globalThis.localStorage,
   }) {
     this.chatNotificationsKey = chatNotificationsKey;
     this.lineWrappingKey = lineWrappingKey;
+    this.preferredViewKey = preferredViewKey;
     this.sidebarVisibleKey = sidebarVisibleKey;
     this.storage = storage;
     this.userNameKey = userNameKey;
@@ -56,6 +58,26 @@ export class BrowserPreferencesPort {
   setSidebarVisible(showSidebar) {
     try {
       this.storage.setItem(this.sidebarVisibleKey, showSidebar ? 'true' : 'false');
+    } catch {
+      // Ignore storage errors.
+    }
+  }
+
+  getPreferredView() {
+    try {
+      const view = this.storage.getItem(this.preferredViewKey);
+      if (view === 'split' || view === 'editor' || view === 'preview') {
+        return view;
+      }
+    } catch {
+      // Ignore storage errors.
+    }
+    return null;
+  }
+
+  setPreferredView(view) {
+    try {
+      this.storage.setItem(this.preferredViewKey, view);
     } catch {
       // Ignore storage errors.
     }

@@ -87,6 +87,11 @@ export class VaultApiClient {
     return parseApiResponse(response, 'Failed to read file');
   }
 
+  async searchContent(query) {
+    const response = await fetch(resolveApiUrl(`/search?q=${encodeURIComponent(query)}`));
+    return parseApiResponse(response, 'Content search failed');
+  }
+
   async queryBase({
     activeFilePath = '',
     path = '',

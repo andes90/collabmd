@@ -625,7 +625,7 @@ test('oidc auth rejects users outside the allowed email and domain lists', async
   }, new URL(`http://127.0.0.1:3000/api/auth/oidc/callback?code=test-code&state=${encodeURIComponent(flowPayload.state)}`));
 
   assert.equal(callbackResult.statusCode, 302);
-  assert.match(callbackResult.redirectTo, /auth_error=This\+Google\+account\+is\+not\+in\+the\+allowed\+email\+or\+domain\+list\./);
+  assert.match(callbackResult.redirectTo, /auth_error=This\+account\+is\+not\+in\+the\+allowed\+email\+or\+domain\+list\./);
 });
 
 test('oidc auth allows an exact email allowlist match outside the allowed domains', async (t) => {

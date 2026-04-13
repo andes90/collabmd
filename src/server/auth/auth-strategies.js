@@ -241,10 +241,10 @@ export function createOidcStrategy(authConfig, sessionCookieManager, flowCookieM
           !claims
           || !isNonEmptyString(claims.sub)
           || !isNonEmptyString(claims.email)
-          || claims.email_verified !== true
+          || claims.email_verified === false
           || !isNonEmptyString(claims.name)
         ) {
-          return createErrorRedirect(req, 'Google account is missing a verified email or name.', flowPayload);
+          return createErrorRedirect(req, 'Sign-in failed: the provider did not return a verified email or name.', flowPayload);
         }
 
         const accessDecision = isOidcUserAllowed(authConfig.oidc, claims.email);
@@ -283,7 +283,7 @@ export function createOidcStrategy(authConfig, sessionCookieManager, flowCookieM
         });
       } catch (error) {
         console.error('[auth] OIDC callback failed:', error.message);
-        return createErrorRedirect(req, 'Google sign-in failed. Try again.', flowPayload);
+        return createErrorRedirect(req, 'Sign-in failed. Try again.', flowPayload);
       }
     },
 

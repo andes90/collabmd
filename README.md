@@ -162,7 +162,6 @@ Then share the printed URL and password with your collaborator. If `cloudflared`
 ## Current limitations
 
 - Single-instance deployment only: collaboration room state is kept in-process and is not shared across replicas
-- `oidc` currently supports Google only
 - Source-anchored comments currently support markdown, Mermaid, and PlantUML text files, but not `.excalidraw` or `.drawio`
 - Windows use is supported via WSL2 rather than native Windows execution
 
@@ -180,7 +179,8 @@ CollabMD starts a local server, scans the vault, and opens a browser-based edito
 - **`[[wiki-links]]` + backlinks** — jump between notes and inspect linked mentions
 - **Room chat** — discuss changes without leaving the workspace
 - **Presence + follow mode** — see who is online and follow another collaborator's active cursor
-- **Quick switcher + outline** — move around large vaults and long documents faster
+- **Quick switcher (Ctrl+K)** — unified file and content search to move around large vaults faster
+- **Outline** — navigate long documents with table of contents
 - **Standalone diagram files** — open `.mmd` / `.mermaid` or `.puml` / `.plantuml` files in side-by-side editor + preview, `.excalidraw` files in direct preview mode, and `.drawio` files in an embedded diagrams.net editor/viewer
 
 Comment threads are source-anchored and currently supported for markdown, Mermaid, and PlantUML text files. You can comment on a whole line or a text selection, then reopen the thread from either the editor marker or the preview bubble. Excalidraw and draw.io files are currently excluded from comments.
@@ -236,10 +236,12 @@ collabmd --auth password
 # Require an explicit password
 collabmd --auth password --auth-password "shared-secret"
 
-# Use Google OIDC on a stable public domain
+# Use OIDC on a stable public domain (works with any OIDC provider)
 PUBLIC_BASE_URL=https://notes.example.com \
-AUTH_OIDC_CLIENT_ID=your-google-client-id \
-AUTH_OIDC_CLIENT_SECRET=your-google-client-secret \
+AUTH_OIDC_ISSUER_URL=https://your-oidc-provider.com \
+AUTH_OIDC_CLIENT_ID=your-client-id \
+AUTH_OIDC_CLIENT_SECRET=your-client-secret \
+AUTH_OIDC_ALLOWED_EMAILS=user@example.com \
 collabmd --auth oidc --no-tunnel
 
 # Use the local docker-compose PlantUML service
@@ -272,21 +274,23 @@ To disable the tunnel:
 collabmd --no-tunnel
 ```
 
-### Google OIDC setup
+### OIDC setup
 
-`--auth oidc` uses Google OpenID Connect with the authorization code + PKCE flow.
+`--auth oidc` supports any OIDC-compliant provider (Keycloak, Auth0, Okta, Google, etc.) using the authorization code + PKCE flow.
 
-For the full Google Cloud Console walkthrough, including where to create the OAuth client and copy the client ID/client secret, see [docs/google-oidc-setup.md](https://github.com/andes90/collabmd/blob/master/docs/google-oidc-setup.md).
+For a Google-specific setup walkthrough, see [docs/google-oidc-setup.md](https://github.com/andes90/collabmd/blob/master/docs/google-oidc-setup.md).
 
 Required environment variables:
 
 ```bash
 PUBLIC_BASE_URL=https://notes.example.com
-AUTH_OIDC_CLIENT_ID=your-google-client-id
-AUTH_OIDC_CLIENT_SECRET=your-google-client-secret
+AUTH_OIDC_ISSUER_URL=https://your-oidc-provider.com  # e.g., http://localhost:8080/realms/collabmd for Keycloak
+AUTH_OIDC_CLIENT_ID=your-client-id
+AUTH_OIDC_CLIENT_SECRET=your-client-secret
+AUTH_OIDC_ALLOWED_EMAILS=user1@example.com,user2@example.com  # optional, comma-separated
 ```
 
-In Google Cloud Console, create a Web application OAuth client and register this redirect URI:
+In your OIDC provider, create a Web application OAuth client and register this redirect URI:
 
 ```text
 https://notes.example.com/api/auth/oidc/callback
@@ -301,9 +305,9 @@ https://notes.example.com/collabmd/api/auth/oidc/callback
 Notes:
 
 - OIDC requires a stable public URL and is not compatible with ephemeral Cloudflare Quick Tunnel URLs
-- After sign-in, the verified Google name/email become the displayed app identity and the default in-app git commit author
+- After sign-in, the verified email becomes the displayed app identity and the default in-app git commit author
 - Set `AUTH_SESSION_MAX_AGE_MS` to keep the signed-in session valid longer than the default token lifetime
-- You can restrict sign-in to exact users with `AUTH_OIDC_ALLOWED_EMAILS` or entire domains with `AUTH_OIDC_ALLOWED_DOMAINS`
+- Restrict sign-in to specific users with `AUTH_OIDC_ALLOWED_EMAILS` (comma-separated list)
 - The CLI disables the tunnel automatically when `--auth oidc` is active
 
 ### Draw.io setup

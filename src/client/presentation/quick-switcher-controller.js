@@ -2,6 +2,8 @@ import { stripVaultFileExtension } from '../../domain/file-kind.js';
 import { escapeHtml } from '../domain/vault-utils.js';
 
 const MAX_VISIBLE_RESULTS = 12;
+const CONTENT_SEARCH_DEBOUNCE_MS = 300;
+const CONTENT_SEARCH_MIN_QUERY_LENGTH = 2;
 
 function stripDisplayExtension(filePath) {
   return stripVaultFileExtension(filePath);
@@ -22,9 +24,10 @@ function createCorpusEntry(filePath) {
 }
 
 export class QuickSwitcherController {
-  constructor({ getFileList, onFileSelect }) {
+  constructor({ getFileList, onFileSelect, searchContent = null }) {
     this.getFileList = getFileList;
     this.onFileSelect = onFileSelect;
+    this.searchContent = searchContent;
 
     this.overlay = document.getElementById('quickSwitcher');
     this.input = document.getElementById('quickSwitcherInput');
@@ -36,6 +39,9 @@ export class QuickSwitcherController {
     this.lastFileListRef = null;
     this.selectedIndex = 0;
     this.isOpen = false;
+    this._contentSearchTimer = null;
+    this._contentResults = [];
+    this._contentSearchPending = false;
 
     this.bindEvents();
   }
@@ -137,11 +143,14 @@ export class QuickSwitcherController {
   close() {
     if (!this.overlay) return;
 
+    clearTimeout(this._contentSearchTimer);
+    this._contentSearchPending = false;
     this._cancelPendingFocus();
     this.isOpen = false;
     this.overlay.classList.remove('visible');
     this.input.value = '';
     this.resultsList.innerHTML = '';
+    this._contentResults = [];
   }
 
   toggle() {
@@ -153,6 +162,10 @@ export class QuickSwitcherController {
   }
 
   filterFiles() {
+    clearTimeout(this._contentSearchTimer);
+    this._contentResults = [];
+    this._contentSearchPending = false;
+
     const query = this.input?.value.trim().toLowerCase() ?? '';
     const allFiles = this.getFileList?.() ?? [];
     if (allFiles !== this.lastFileListRef) {
@@ -197,6 +210,77 @@ export class QuickSwitcherController {
 
     this.selectedIndex = 0;
     this.renderResults(query);
+
+    if (this.searchContent && query.length >= CONTENT_SEARCH_MIN_QUERY_LENGTH) {
+      this._contentSearchPending = true;
+      this._contentSearchTimer = setTimeout(() => {
+        this._contentSearchPending = false;
+        this.searchContent(query)
+          .then(({ results }) => {
+            if (this.input?.value.trim().toLowerCase() !== query) return;
+            this._contentResults = results ?? [];
+            this._appendContentSection(query);
+          })
+          .catch(() => {});
+      }, CONTENT_SEARCH_DEBOUNCE_MS);
+    }
+  }
+
+  _appendContentSection(query) {
+    if (!this.resultsList) return;
+
+    if (this._contentResults.length === 0) {
+      if (this.filteredFiles.length === 0 && this.hint) {
+        this.hint.textContent = 'No results found';
+        this.hint.classList.remove('hidden');
+      }
+      return;
+    }
+
+    if (this.hint) this.hint.classList.add('hidden');
+
+    const separator = document.createElement('div');
+    separator.className = 'qs-section-label';
+    separator.textContent = 'In content';
+    this.resultsList.appendChild(separator);
+
+    const fileCount = this.filteredFiles.length;
+    const fragment = document.createDocumentFragment();
+
+    this._contentResults.forEach(({ filePath, excerpt }, i) => {
+      const index = fileCount + i;
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'qs-result-item';
+      if (index === this.selectedIndex) item.classList.add('selected');
+      item.dataset.index = String(index);
+
+      const displayName = stripDisplayExtension(filePath);
+      const fileName = displayName.split('/').pop() || displayName;
+      const dirPath = displayName.includes('/') ? displayName.substring(0, displayName.lastIndexOf('/')) : '';
+
+      item.innerHTML = `
+        <svg class="qs-result-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <div class="qs-result-content">
+          <div class="qs-result-name">${this.highlightMatch(fileName, query)}${dirPath ? ` <span class="qs-result-path">${escapeHtml(dirPath)}</span>` : ''}</div>
+          <div class="qs-result-excerpt">${this.highlightMatch(excerpt, query)}</div>
+        </div>
+      `;
+
+      item.addEventListener('click', () => {
+        this.selectedIndex = index;
+        this.close();
+        this.onFileSelect?.(filePath);
+      });
+      item.addEventListener('mouseenter', () => {
+        this.selectedIndex = index;
+        this.updateSelection();
+      });
+
+      fragment.appendChild(item);
+    });
+
+    this.resultsList.appendChild(fragment);
   }
 
   fuzzyScore(entry, query) {
@@ -238,7 +322,13 @@ export class QuickSwitcherController {
 
     if (this.filteredFiles.length === 0) {
       if (this.hint) {
-        this.hint.textContent = query ? 'No files found' : 'No files in vault';
+        if (!query) {
+          this.hint.textContent = this.searchContent ? 'Type to search files and content' : 'No files in vault';
+        } else if (this._contentSearchPending) {
+          this.hint.textContent = 'Searching\u2026';
+        } else {
+          this.hint.textContent = 'No results found';
+        }
         this.hint.classList.remove('hidden');
       }
       return;
@@ -313,8 +403,9 @@ export class QuickSwitcherController {
   }
 
   moveSelection(delta) {
-    if (this.filteredFiles.length === 0) return;
-    this.selectedIndex = (this.selectedIndex + delta + this.filteredFiles.length) % this.filteredFiles.length;
+    const count = this.filteredFiles.length + this._contentResults.length;
+    if (count === 0) return;
+    this.selectedIndex = (this.selectedIndex + delta + count) % count;
     this.updateSelection();
   }
 
@@ -332,10 +423,18 @@ export class QuickSwitcherController {
   }
 
   confirmSelection() {
-    const filePath = this.filteredFiles[this.selectedIndex];
-    if (filePath) {
-      this.close();
-      this.onFileSelect?.(filePath);
+    if (this.selectedIndex < this.filteredFiles.length) {
+      const filePath = this.filteredFiles[this.selectedIndex];
+      if (filePath) {
+        this.close();
+        this.onFileSelect?.(filePath);
+      }
+    } else {
+      const result = this._contentResults[this.selectedIndex - this.filteredFiles.length];
+      if (result) {
+        this.close();
+        this.onFileSelect?.(result.filePath);
+      }
     }
   }
 }

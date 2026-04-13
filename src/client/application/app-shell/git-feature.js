@@ -513,11 +513,18 @@ export const gitFeature = {
     await this.runGitActionWithStatus('Pushing branch...', async () => {
       try {
         const result = await this.postGitAction('push', {});
+        if (result.rebased) {
+          this.toastController.show('Remote had new commits — rebased and pushed successfully.', 4000);
+        }
         await this.finalizeGitAction({
           action: 'push',
           result,
         });
       } catch (error) {
+        if (error?.code === 'push_rebase_conflict') {
+          this.toastController.show('Push failed: the remote has conflicting changes. Pull first to review the differences.', 6000);
+          return;
+        }
         this.toastController.show(error.message || 'Failed to push branch');
       }
     });

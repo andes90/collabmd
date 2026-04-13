@@ -21,8 +21,7 @@ import { USER_NAME_MAX_LENGTH, normalizeUserName } from '../../domain/room.js';
 
 /** @this {UiIdentityContext} */
 function isIdentityManagedByAuth() {
-  return this.runtimeConfig?.auth?.strategy === 'oidc'
-    && this.runtimeConfig?.auth?.provider === 'google';
+  return this.runtimeConfig?.auth?.strategy === 'oidc';
 }
 
 /** @this {UiIdentityContext} */

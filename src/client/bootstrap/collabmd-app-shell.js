@@ -213,6 +213,7 @@ export class CollabMdAppShell {
     this.preferences = new BrowserPreferencesPort({
       chatNotificationsKey: 'collabmd-chat-notifications-enabled',
       lineWrappingKey: 'collabmd-editor-line-wrap',
+      preferredViewKey: 'collabmd-preferred-view',
       sidebarVisibleKey: 'collabmd-sidebar-visible',
       userNameKey: 'collabmd-user-name',
     });
@@ -241,6 +242,7 @@ export class CollabMdAppShell {
     this.mobileBreakpointQuery = window.matchMedia('(max-width: 768px)');
     this.pendingWorkspaceRequestIds = new Set();
     this._fileOpenPerf = null;
+    this.toolbarOverflowOpen = false;
     this.versionMonitor = new AppVersionMonitor({
       currentBuildId: this.runtimeConfig.build?.id,
       onUpdateAvailable: (payload) => this.promptForVersionReload(payload),
@@ -370,7 +372,9 @@ export class CollabMdAppShell {
     this.layoutController = new LayoutController({
       mobileBreakpointQuery: this.mobileBreakpointQuery,
       onMeasureEditor: () => this.session?.requestMeasure(),
+      onPersistView: (view) => this.preferences.setPreferredView(view),
       onViewRequest: (view) => this.handleLayoutViewRequest(view),
+      readPersistedView: () => this.preferences.getPreferredView(),
     });
     this.scrollSyncController = new ScrollSyncController({
       getEditorLineNumber: () => this.session?.getTopVisibleLineNumber(0.35) ?? 1,
@@ -786,6 +790,7 @@ export class CollabMdAppShell {
       this.quickSwitcher = new QuickSwitcherController({
         getFileList: () => this.fileExplorer.flatFiles,
         onFileSelect: (filePath) => this.handleFileSelection(filePath, { closeSidebarOnMobile: true }),
+        searchContent: (query) => this.vaultApiClient.searchContent(query),
       });
     }
 

@@ -606,11 +606,11 @@ export function appShellTemplate() {
             <circle cx="11" cy="11" r="8"></circle>
             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
           </svg>
-          <input type="text" class="qs-input" id="quickSwitcherInput" placeholder="Search files..." autocomplete="off" spellcheck="false">
+          <input type="text" class="qs-input" id="quickSwitcherInput" placeholder="Search files and content..." autocomplete="off" spellcheck="false">
           <kbd class="qs-kbd">esc</kbd>
         </div>
         <div class="qs-results" id="quickSwitcherResults"></div>
-        <div class="qs-hint" id="quickSwitcherHint">Type to search files</div>
+        <div class="qs-hint" id="quickSwitcherHint">Type to search files and content</div>
       </div>
     </div>
   `;

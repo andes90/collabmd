@@ -82,7 +82,7 @@ async function fetchAuthStatus(config) {
 
 function syncOidcIdentityToLocalState(status) {
   const authConfig = status?.auth ?? {};
-  if (authConfig.strategy !== 'oidc' || authConfig.provider !== 'google') {
+  if (authConfig.strategy !== 'oidc') {
     return;
   }
 
@@ -150,15 +150,19 @@ function renderOidcPrompt(card, config, {
   heading.textContent = 'Authentication required';
 
   const copy = document.createElement('p');
-  copy.textContent = 'Sign in with Google to join this session.';
+  copy.textContent = 'Sign in to join this session.';
 
   const actions = document.createElement('div');
   actions.className = 'auth-gate-actions';
 
+  const isGoogle = config.provider === 'google';
   const signInButton = document.createElement('button');
-  signInButton.className = 'ui-button ui-button--secondary auth-gate-button auth-gate-button--google';
+  signInButton.className = `ui-button ui-button--secondary auth-gate-button${isGoogle ? ' auth-gate-button--google' : ''}`;
   signInButton.type = 'button';
-  signInButton.append(createGoogleIcon(), document.createTextNode(config.submitLabel || 'Continue with Google'));
+  if (isGoogle) {
+    signInButton.append(createGoogleIcon());
+  }
+  signInButton.append(document.createTextNode(config.submitLabel || 'Continue'));
 
   const error = document.createElement('div');
   error.className = 'auth-gate-error';

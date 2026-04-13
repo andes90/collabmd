@@ -118,10 +118,10 @@ export function isOidcUserAllowed(oidcConfig, email) {
   return {
     allowed: false,
     error: allowedEmails.length > 0 && allowedDomains.length > 0
-      ? 'This Google account is not in the allowed email or domain list.'
+      ? 'This account is not in the allowed email or domain list.'
       : allowedEmails.length > 0
-        ? 'This Google account is not in the allowed email list.'
-        : 'This Google account is not in an allowed domain.',
+        ? 'This account is not in the allowed email list.'
+        : 'This account is not in an allowed domain.',
   };
 }
 
@@ -214,11 +214,11 @@ export function buildClientConfig(authConfig, { basePath = '' } = {}) {
     enabled: true,
     implemented: true,
     loginEndpoint,
-    provider: OIDC_PROVIDER_GOOGLE,
+    provider: authConfig.oidc.provider,
     requiresLogin: true,
     sessionEndpoint,
     statusEndpoint,
     strategy: AUTH_STRATEGY_OIDC,
-    submitLabel: 'Continue with Google',
+    submitLabel: authConfig.oidc.provider === OIDC_PROVIDER_GOOGLE ? 'Continue with Google' : 'Continue with OIDC',
   };
 }

@@ -308,12 +308,42 @@ function bindEvents() {
   });
 
   document.addEventListener('pointerdown', (event) => {
-    this.handleDocumentPointerDown(event);
+    this.handleMarkdownToolbarDocumentPointerDown?.(event);
+
+    // Close toolbar overflow menu when clicking outside
+    if (
+      this.toolbarOverflowOpen
+      && !this.elements.toolbarOverflowMenu?.contains(event.target)
+      && !this.elements.toolbarOverflowToggle?.contains(event.target)
+    ) {
+      this.closeToolbarOverflowMenu();
+    }
+
+    // Close chat panel when clicking outside
+    if (this.chatIsOpen && !this.elements.chatContainer?.contains(event.target)) {
+      this.closeChatPanel();
+    }
   });
 
   document.addEventListener('keydown', (event) => {
-    this.handleDocumentKeydown(event);
+    if (event.key === 'Escape' && this.toolbarOverflowOpen) {
+      this.closeToolbarOverflowMenu();
+      return;
+    }
+    if (event.key === 'Escape' && this.chatIsOpen) {
+      this.closeChatPanel();
+    }
   });
+
+  // Ctrl+K / Cmd+K must be captured before CodeMirror (which intercepts it in
+  // the bubble phase for its own "deleteToLineEnd" command).
+  document.addEventListener('keydown', (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
+      event.preventDefault();
+      event.stopPropagation();
+      void this.toggleQuickSwitcher();
+    }
+  }, { capture: true });
 }
 
 /** @this {UiShellContext} */
@@ -351,11 +381,8 @@ function handleDocumentKeydown(event) {
     return;
   }
 
-  if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
-    event.preventDefault();
-    void this.toggleQuickSwitcher();
-  }
 }
+
 
 function isNestedTaskListClickTarget(target, taskItem) {
   const nestedList = target.closest('ul, ol');

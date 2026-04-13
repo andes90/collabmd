@@ -147,13 +147,55 @@ export class GitService {
       throw createGitRequestError(409, 'No upstream branch is configured for push');
     }
 
-    const output = await this.commandRunner.execGit(['push']);
-    this.invalidateStatusCache();
-    return {
-      ok: true,
-      output: output.trim(),
-      workspaceChange: createEmptyWorkspaceChange(),
-    };
+    try {
+      const output = await this.commandRunner.execGit(['push']);
+      this.invalidateStatusCache();
+      return {
+        ok: true,
+        output: output.trim(),
+        workspaceChange: createEmptyWorkspaceChange(),
+      };
+    } catch (pushError) {
+      const message = String(pushError?.message ?? '');
+      const isNonFastForward = message.includes('non-fast-forward') || message.includes('fetch first');
+      if (!isNonFastForward) {
+        throw pushError;
+      }
+
+      // Remote has advanced: fetch + rebase local commits on top, then retry push.
+      const branchName = status.branch.name ?? 'HEAD';
+      const beforeLocalRef = await this.getHeadRef();
+
+      await this.commandRunner.execGit(['fetch', 'origin']);
+
+      try {
+        await this.commandRunner.execGit(['rebase', 'origin/' + branchName]);
+      } catch {
+        await this.commandRunner.execGit(['rebase', '--abort']).catch(() => {});
+        this.invalidateStatusCache();
+        throw createGitRequestError(
+          409,
+          'Push failed: the remote has new commits that conflict with your local commits. Resolve the conflicts manually.',
+          'push_rebase_conflict',
+        );
+      }
+
+      // Compute which files changed from the remote commits so CollabMD can
+      // reload the corresponding rooms — otherwise stale Yjs content would be
+      // persisted back to disk and git would flag those files as modified.
+      const remoteWorkspaceChange = beforeLocalRef
+        ? await this.createWorkspaceChangeFromRefs(beforeLocalRef, `origin/${branchName}`)
+        : createEmptyWorkspaceChange();
+
+      const output = await this.commandRunner.execGit(['push']);
+      this.invalidateStatusCache();
+      return {
+        ok: true,
+        output: output.trim(),
+        rebased: true,
+        workspaceChange: remoteWorkspaceChange,
+      };
+    }
   }
 
   async pullBranch() {
