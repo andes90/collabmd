@@ -224,11 +224,13 @@ test('compilePreviewDocument renders YAML frontmatter as a metadata block and pr
 
   assert.match(html, /<section class="frontmatter-block" data-source-line="1" data-source-line-end="6">/);
   assert.match(html, /<div class="frontmatter-label">Properties<\/div>/);
-  assert.match(html, /<dt class="frontmatter-key">title<\/dt>/);
+  assert.match(html, /<div class="frontmatter-property" data-type="text">/);
+  assert.match(html, /<span class="frontmatter-key-text">title<\/span>/);
   assert.match(html, /<span class="frontmatter-value-text">Demo note<\/span>/);
-  assert.match(html, /<dt class="frontmatter-key">tags<\/dt>/);
-  assert.match(html, /<span class="frontmatter-value-pill">alpha<\/span>/);
-  assert.match(html, /<span class="frontmatter-value-pill">beta<\/span>/);
+  assert.match(html, /<div class="frontmatter-property" data-type="tags">/);
+  assert.match(html, /<span class="frontmatter-key-text">tags<\/span>/);
+  assert.match(html, /<span class="frontmatter-value-pill frontmatter-value-tag">#alpha<\/span>/);
+  assert.match(html, /<span class="frontmatter-value-pill frontmatter-value-tag">#beta<\/span>/);
   assert.doesNotMatch(html, /<hr>\s*<p[^>]*>title: Demo note/);
   assert.match(html, /<h1[^>]*data-source-line="8"[^>]*data-source-line-end="8"[^>]*id="heading"[^>]*>Heading<\/h1>/);
   assert.match(html, /<p data-source-line="10" data-source-line-end="10">Body copy<\/p>/);
@@ -251,9 +253,11 @@ test('compilePreviewDocument renders complex and empty YAML frontmatter values',
   const { html } = compilePreviewDocument({ markdownText: markdown });
 
   assert.match(html, /<section class="frontmatter-block" data-source-line="1" data-source-line-end="8">/);
-  assert.match(html, /<dt class="frontmatter-key">aliases<\/dt>/);
-  assert.match(html, /<div class="frontmatter-value-list"><\/div>/);
-  assert.match(html, /<dt class="frontmatter-key">config<\/dt>/);
+  assert.match(html, /<div class="frontmatter-property" data-type="aliases">/);
+  assert.match(html, /<span class="frontmatter-key-text">aliases<\/span>/);
+  assert.match(html, /<div class="frontmatter-value-list"><span class="frontmatter-value-empty">Empty<\/span><\/div>/);
+  assert.match(html, /<div class="frontmatter-property" data-type="object">/);
+  assert.match(html, /<span class="frontmatter-key-text">config<\/span>/);
   assert.match(html, /<pre class="frontmatter-value-code"><code>theme: ocean/);
   assert.match(html, /widgets:\n {2}- chart\n {2}- table/);
 });
@@ -294,6 +298,99 @@ test('compilePreviewDocument renders interactive frontmatter controls for previe
   assert.match(html, /<button type="button" class="frontmatter-toggle" aria-controls="frontmatter-body-1-5" aria-expanded="false">Show<\/button>/);
   assert.match(html, /<div class="frontmatter-summary">2 properties hidden<\/div>/);
   assert.match(html, /<div class="frontmatter-content" id="frontmatter-body-1-5" hidden>/);
+});
+
+test('compilePreviewDocument formats date-only frontmatter values without time component', () => {
+  const markdown = [
+    '---',
+    'created: 2026-05-06',
+    'modified: 2026-01-15T10:30:00Z',
+    '---',
+    '',
+    '# Heading',
+  ].join('\n');
+
+  const { html } = compilePreviewDocument({ markdownText: markdown });
+
+  assert.match(html, /<div class="frontmatter-property" data-type="date">/);
+  assert.match(html, /<time class="frontmatter-value-date" datetime="2026-05-06T00:00:00\.000Z">2026-05-06<\/time>/);
+  assert.match(html, /<time class="frontmatter-value-date"[^>]*>2026-01-15 10:30<\/time>/);
+});
+
+test('compilePreviewDocument renders booleans, numbers, and empty placeholders with type metadata', () => {
+  const markdown = [
+    '---',
+    'published: true',
+    'draft: false',
+    'priority: 42',
+    'note:',
+    '---',
+    '',
+    '# Heading',
+  ].join('\n');
+
+  const { html } = compilePreviewDocument({ markdownText: markdown });
+
+  assert.match(html, /<div class="frontmatter-property" data-type="bool">[\s\S]*?<span class="frontmatter-value-bool" data-value="true">✓ true<\/span>/);
+  assert.match(html, /<span class="frontmatter-value-bool" data-value="false">✗ false<\/span>/);
+  assert.match(html, /<div class="frontmatter-property" data-type="number">[\s\S]*?<span class="frontmatter-value-number">42<\/span>/);
+  assert.match(html, /<div class="frontmatter-property" data-type="empty">[\s\S]*?<span class="frontmatter-value-empty">Empty<\/span>/);
+});
+
+test('compilePreviewDocument turns URL frontmatter values into external links', () => {
+  const markdown = [
+    '---',
+    'homepage: https://example.com/path',
+    '---',
+    '',
+    '# Heading',
+  ].join('\n');
+
+  const { html } = compilePreviewDocument({ markdownText: markdown });
+
+  assert.match(html, /<div class="frontmatter-property" data-type="link">/);
+  assert.match(html, /<a class="frontmatter-value-link" href="https:\/\/example\.com\/path" target="_blank" rel="noreferrer noopener">https:\/\/example\.com\/path<\/a>/);
+});
+
+test('compilePreviewDocument resolves wiki-link strings inside frontmatter', () => {
+  const markdown = [
+    '---',
+    'related: "[[README]]"',
+    'broken: "[[missing-note|See it]]"',
+    '---',
+    '',
+    '# Heading',
+  ].join('\n');
+
+  const { html } = compilePreviewDocument({
+    fileList: ['README.md'],
+    markdownText: markdown,
+  });
+
+  assert.match(html, /<div class="frontmatter-property" data-type="wikilink">/);
+  assert.match(html, /<a class="wiki-link" href="#" data-wiki-target="README" title="README">README<\/a>/);
+  assert.match(html, /<a class="wiki-link wiki-link-new" href="#" data-wiki-target="missing-note" title="Create &quot;missing-note&quot;">See it<\/a>/);
+});
+
+test('compilePreviewDocument prefixes tag pills with hash and styles aliases distinctly', () => {
+  const markdown = [
+    '---',
+    'tags:',
+    '  - alpha',
+    '  - beta',
+    'aliases:',
+    '  - "Alt name"',
+    '---',
+    '',
+    '# Heading',
+  ].join('\n');
+
+  const { html } = compilePreviewDocument({ markdownText: markdown });
+
+  assert.match(html, /<div class="frontmatter-property" data-type="tags">/);
+  assert.match(html, /<span class="frontmatter-value-pill frontmatter-value-tag">#alpha<\/span>/);
+  assert.match(html, /<div class="frontmatter-property" data-type="aliases">/);
+  assert.match(html, /<span class="frontmatter-value-pill frontmatter-value-alias">Alt name<\/span>/);
 });
 
 test('compilePreviewDocument normalizes ASCII arrows in preview text', () => {

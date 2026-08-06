@@ -660,7 +660,9 @@ export function compilePreviewDocument({
   const renderedMarkdown = frontmatter ? frontmatter.bodyMarkdown : normalizedMarkdown;
   const frontmatterHtml = renderFrontmatterBlock(frontmatter, {
     collapsed: frontmatterCollapsed,
+    fileList,
     interactive: frontmatterInteractive,
+    wikiLinkAutoCreate,
   });
 
   return {

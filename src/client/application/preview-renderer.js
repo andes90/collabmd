@@ -46,7 +46,7 @@ export class PreviewRenderer {
     this.currentStats = null;
     this.isLargeDocument = false;
     this.hydrationPaused = false;
-    this.frontmatterCollapsed = false;
+    this.frontmatterCollapsed = true;
 
     this.handlePreviewClick = (event) => {
       const frontmatterToggle = event.target.closest('.frontmatter-toggle');
@@ -177,7 +177,7 @@ export class PreviewRenderer {
     this.readyRenderVersion = 0;
     this.currentStats = null;
     this.isLargeDocument = false;
-    this.frontmatterCollapsed = false;
+    this.frontmatterCollapsed = true;
     if (this.renderExecutor.hasPendingJob()) {
       this.renderExecutor.reset('Document changed');
     }
