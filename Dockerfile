@@ -6,7 +6,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
-RUN npm run build
+RUN npm run build && npm prune --omit=dev
 
 FROM node:26-alpine AS runtime
 
@@ -20,7 +20,7 @@ ENV COLLABMD_VAULT_DIR=/data
 RUN apk add --no-cache git openssh-client ca-certificates ripgrep
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+COPY --from=build /app/node_modules ./node_modules
 
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/src ./src
