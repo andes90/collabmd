@@ -1,3 +1,6 @@
+import { getCollabMdSyntaxGuide, listCollabMdContentCapabilities } from '../../domain/collabmd-content-capabilities.js';
+import { createEditableContentRevision } from '../../domain/editable-content-revision.js';
+import { validateExactTextReplacements } from '../../domain/exact-text-edits.js';
 import { getVaultFileKind } from '../../domain/file-kind.js';
 
 const MAX_DOCUMENT_CHARACTERS = 200_000;
@@ -9,45 +12,6 @@ function throwIfAborted(signal) {
   if (signal?.aborted) {
     throw signal.reason ?? new DOMException('Tool execution was cancelled', 'AbortError');
   }
-}
-
-async function createRevision(content) {
-  const digest = await globalThis.crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode(content),
-  );
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
-}
-
-function validateReplacements(replacements) {
-  if (!Array.isArray(replacements) || replacements.length === 0) {
-    throw new Error('At least one text replacement is required');
-  }
-  if (replacements.length > MAX_REPLACEMENTS) {
-    throw new Error(`At most ${MAX_REPLACEMENTS} text replacements are allowed`);
-  }
-
-  let characterCount = 0;
-  for (const replacement of replacements) {
-    if (
-      !replacement
-      || typeof replacement.oldText !== 'string'
-      || typeof replacement.newText !== 'string'
-      || replacement.oldText.length === 0
-    ) {
-      throw new Error('Each replacement requires non-empty oldText and string newText');
-    }
-    if (replacement.oldText === replacement.newText) {
-      throw new Error('A replacement must change the document');
-    }
-
-    characterCount += replacement.oldText.length + replacement.newText.length;
-  }
-
-  if (characterCount > MAX_REPLACEMENT_CHARACTERS) {
-    throw new Error(`Text replacements may contain at most ${MAX_REPLACEMENT_CHARACTERS} characters`);
-  }
-  return replacements;
 }
 
 export class WebMcpToolRegistry {
@@ -129,13 +93,34 @@ export class WebMcpToolRegistry {
             if (content.length > MAX_DOCUMENT_CHARACTERS) {
               throw new Error(`Documents larger than ${MAX_DOCUMENT_CHARACTERS} characters are not available to agents`);
             }
-            const revision = await createRevision(content);
+            const revision = await createEditableContentRevision(content);
             throwIfAborted(signal);
             const current = this.getActiveContext({ expectedPath: path });
             if (current.session !== session || current.session.getText() !== content) {
               throw new Error('The active document changed while it was being read');
             }
             return { content, kind, path, revision };
+          },
+        }, { signal: controller.signal }),
+        this.modelContext.registerTool({
+          name: 'collabmd_get_supported_syntax',
+          description: 'Describe CollabMD-supported file kinds, extensions, syntax, and agent write support.',
+          inputSchema: {
+            additionalProperties: false,
+            properties: {
+              kind: { type: 'string' },
+            },
+            type: 'object',
+          },
+          annotations: {
+            readOnlyHint: true,
+          },
+          execute: async (input = {}, { signal } = {}) => {
+            throwIfAborted(signal);
+            if (!input.kind) return { capabilities: listCollabMdContentCapabilities() };
+            const syntax = getCollabMdSyntaxGuide(input.kind);
+            if (!syntax) throw new Error('Unknown CollabMD content kind');
+            return syntax;
           },
         }, { signal: controller.signal }),
         this.modelContext.registerTool({
@@ -169,13 +154,16 @@ export class WebMcpToolRegistry {
             if (!input || typeof input.path !== 'string' || typeof input.revision !== 'string') {
               throw new Error('path, revision, and replacements are required');
             }
-            const replacements = validateReplacements(input.replacements);
+            const replacements = validateExactTextReplacements(input.replacements, {
+              maxCharacters: MAX_REPLACEMENT_CHARACTERS,
+              maxReplacements: MAX_REPLACEMENTS,
+            });
             const { path, session } = this.getActiveContext({ expectedPath: input.path });
             const content = session.getText();
             if (content.length > MAX_DOCUMENT_CHARACTERS) {
               throw new Error(`Documents larger than ${MAX_DOCUMENT_CHARACTERS} characters cannot be edited by agents`);
             }
-            const revision = await createRevision(content);
+            const revision = await createEditableContentRevision(content);
             throwIfAborted(signal);
             const current = this.getActiveContext({ expectedPath: path });
             if (
@@ -187,7 +175,7 @@ export class WebMcpToolRegistry {
             }
 
             const replacementCount = session.applyTextReplacements(replacements);
-            const nextRevision = await createRevision(session.getText());
+            const nextRevision = await createEditableContentRevision(session.getText());
             try {
               this.onDidEdit?.({ path, replacementCount });
             } catch (error) {

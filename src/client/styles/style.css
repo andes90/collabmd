@@ -21,6 +21,7 @@
 @import './features/collaboration-presence.css';
 @import './features/collaboration-chat.css';
 @import './features/collaboration-dialogs.css';
+@import './features/agent-connection.css';
 @import './features/preview-markdown.css';
 @import './features/media-lightbox.css';
 @import './features/embedded-preview.css';

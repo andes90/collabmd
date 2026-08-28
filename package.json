@@ -19,10 +19,16 @@
     "scripts/cloudflare-tunnel.mjs",
     "scripts/local-plantuml-compose.mjs",
     "scripts/local-structurizr-compose.mjs",
-    "src/"
+    "src/",
+    "integrations/"
   ],
   "bin": {
     "collabmd": "./bin/collabmd.js"
+  },
+  "pi": {
+    "extensions": [
+      "./integrations/pi/index.ts"
+    ]
   },
   "scripts": {
     "prepack": "npm run build",
@@ -80,6 +86,9 @@
     "@codemirror/view": "^6.43.9",
     "@embedpdf/snippet": "2.15.0",
     "@excalidraw/excalidraw": "0.18.0-abeeaeb",
+    "@modelcontextprotocol/client": "^2.0.0",
+    "@modelcontextprotocol/node": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
     "@replit/codemirror-vim": "^6.4.0",
     "@turbodocx/html-to-docx": "^1.22.0",
     "archiver": "^8.0.0",

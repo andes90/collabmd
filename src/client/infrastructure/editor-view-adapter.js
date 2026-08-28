@@ -50,6 +50,7 @@ import {
   isPlantUmlFilePath,
   isStructurizrFilePath,
 } from '../../domain/file-kind.js';
+import { resolveExactTextChanges } from '../../domain/exact-text-edits.js';
 import { normalizeCommentQuote } from '../../domain/comment-threads.js';
 import { formatDocumentText } from '../domain/document-formatter.js';
 import { createMarkdownToolbarEdit } from '../domain/markdown-formatting.js';
@@ -1149,23 +1150,7 @@ export class EditorViewAdapter {
     }
 
     const { state } = this.editorView;
-    const content = state.doc.toString();
-    const changes = replacements.map(({ newText, oldText }) => {
-      if (!content.includes(oldText)) {
-        throw new Error('A requested text replacement no longer matches the document');
-      }
-      const from = content.indexOf(oldText);
-      if (content.includes(oldText, from + 1)) {
-        throw new Error('A requested text replacement is not unique in the document');
-      }
-      return { from, insert: newText, to: from + oldText.length };
-    }).sort((left, right) => left.from - right.from);
-
-    for (let index = 1; index < changes.length; index += 1) {
-      if (changes[index].from < changes[index - 1].to) {
-        throw new Error('Requested text replacements overlap');
-      }
-    }
+    const changes = resolveExactTextChanges(state.doc.toString(), replacements);
 
     this.editorView.dispatch({ changes, userEvent: 'input' });
     return changes.length;

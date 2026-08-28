@@ -306,7 +306,7 @@ export class WorkspaceReconciliation {
     });
   }
 
-  async writeEditableContent({ content, origin = 'api', path, requestId = null } = {}) {
+  async writeEditableContent({ content, origin = 'api', path, requestId = null, sourceRef = null } = {}) {
     const result = await this.vaultFileStore.writeEditableVaultContent(path, content);
     if (!result.ok) {
       return result;
@@ -316,6 +316,7 @@ export class WorkspaceReconciliation {
       action: 'write-file',
       origin,
       requestId,
+      sourceRef,
       workspaceChange: createWorkspaceChange({
         changedPaths: [path],
       }),
@@ -344,7 +345,7 @@ export class WorkspaceReconciliation {
     return result;
   }
 
-  async createFile({ content = '', origin = 'api', path, requestId = null } = {}) {
+  async createFile({ content = '', origin = 'api', path, requestId = null, sourceRef = null } = {}) {
     const result = await this.vaultFileStore.createFile(path, content);
     if (!result.ok) {
       return result;
@@ -354,6 +355,7 @@ export class WorkspaceReconciliation {
       action: 'create-file',
       origin,
       requestId,
+      sourceRef,
       workspaceChange: createWorkspaceChange({
         changedPaths: [path],
       }),

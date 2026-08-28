@@ -45,6 +45,7 @@ function getStaticCacheControl(pathname = '', extension = '') {
 }
 
 function buildRuntimeConfig({
+  agentAccess,
   auth,
   basePath,
   build,
@@ -59,6 +60,11 @@ function buildRuntimeConfig({
   wsBasePath,
 }) {
   return `window.__COLLABMD_CONFIG__ = ${JSON.stringify({
+    agentAccess: {
+      enabled: Boolean(agentAccess?.enabled),
+      endpoint: agentAccess?.endpoint || '',
+      managed: Boolean(agentAccess?.enabled && auth?.strategy !== 'none'),
+    },
     auth,
     basePath,
     build,

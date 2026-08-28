@@ -730,6 +730,27 @@ export class HostedWorkspaceService {
     return { ok: true };
   }
 
+  async recordAgentConnectionEvent({ connection, type, user }) {
+    if (!this.enabled) return;
+    const access = await this.authorizeWorkspaceAccess({ user });
+    if (!access.ok) {
+      throw createHostedError(access.statusCode, access.body.error, access.body.code);
+    }
+    await this.store.createAuditEvent(createAuditEvent({
+      actor: access.membership,
+      metadata: {
+        clientKind: connection.clientKind,
+        connectionId: connection.id,
+        expiresAt: connection.expiresAt,
+        label: connection.label,
+        scopes: connection.scopes,
+      },
+      targetRole: access.membership.role,
+      timestamp: nowMs(),
+      type,
+    }));
+  }
+
   async listAuditEvents(user) {
     await this.requireAdmin(user);
     return (await this.store.listAuditEvents()).map(publicAuditEvent);

@@ -136,6 +136,10 @@ _Avoid_: Active membership, current access, presence
 A person who belongs to a **Team** and can access and edit that team's **Workspace**. Collaborators are added through workspace invitations rather than by open domain access alone.
 _Avoid_: User, team member, account
 
+**Agent Connection**:
+An authorization that lets one named external AI agent client access a **Workspace** with explicit scopes and expiry. In a **Single-tenant hosted workspace**, a **Collaborator** grants the connection and the agent acts on that collaborator's behalf; losing team membership ends access. In password-protected **Self-hosted CollabMD**, Agent Connections have workspace-level attribution. A no-auth self-hosted workspace does not create Agent Connections: MCP follows the workspace's anonymous access policy. Revocation or expiry always ends managed access, and agent-origin metadata remains distinct from any human attribution.
+_Avoid_: Agent membership, service account, anonymous managed token
+
 **Team Admin**:
 A **Collaborator** who can manage workspace access for the **Team**, including inviting collaborators, removing collaborators, and changing roles. During **Workspace Claim**, the first authenticated claimant becomes the initial Team Admin; after that, the team must always have at least one Team Admin.
 _Avoid_: Owner, super admin, host user
@@ -153,7 +157,7 @@ The current access relationship between one email address and a **Team**: pendin
 _Avoid_: User status, auth state, account state
 
 **Access Audit Trail**:
-A record of hosted workspace events for a **Team**, such as successful workspace claim, invitations, acceptances, revocations, removals, self-service leaves, role changes, and publish actions. It is visible to Team Admins, does not include ordinary sign-ins or sign-outs, is retained indefinitely in the first version, and does not replace published change history in the team's vault source.
+A record of hosted workspace events for a **Team**, such as successful workspace claim, invitations, acceptances, revocations, removals, self-service leaves, role changes, **Agent Connection** grants and revocations, and publish actions. It is visible to Team Admins, does not include ordinary sign-ins, sign-outs, Vault Content reads, or editable content saves, is retained indefinitely in the first version, and does not replace published change history in the team's vault source.
 _Avoid_: Git history, activity feed, edit log
 
 **Operational Security Event**:

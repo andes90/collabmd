@@ -1,5 +1,8 @@
 export function bindAppShellElements(doc = document) {
   return {
+    agentConnectionContent: doc.getElementById('agentConnectionContent'),
+    agentConnectionDialog: doc.getElementById('agentConnectionDialog'),
+    connectAgentButton: doc.getElementById('connectAgentBtn'),
     currentUserName: doc.getElementById('currentUserName'),
     chatContainer: doc.getElementById('chatContainer'),
     chatEmptyState: doc.getElementById('chatEmptyState'),

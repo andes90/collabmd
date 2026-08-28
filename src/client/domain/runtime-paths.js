@@ -60,6 +60,11 @@ function applyBasePath(basePath, pathValue) {
 
 export function getClientRuntimeConfig() {
   const rawConfig = {
+    agentAccess: {
+      enabled: false,
+      endpoint: '',
+      managed: false,
+    },
     auth: {
       enabled: false,
       implemented: true,

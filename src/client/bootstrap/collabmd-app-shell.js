@@ -18,6 +18,7 @@ import { uiFeatureSidebarMethods } from '../application/app-shell/ui-feature-sid
 import { uiFeatureTabActivityMethods } from '../application/app-shell/ui-feature-tab-activity.js';
 import { uiFeatureToolbarMethods } from '../application/app-shell/ui-feature-toolbar.js';
 import { workspaceFeature } from '../application/app-shell/workspace-feature.js';
+import { AgentConnectionApiClient } from '../infrastructure/agent-connection-api-client.js';
 import { LOBBY_CHAT_MESSAGE_MAX_LENGTH, LobbyPresence } from '../infrastructure/lobby-presence.js';
 import { BrowserPreferencesPort } from '../infrastructure/browser-preferences-port.js';
 import { BrowserNotificationPort } from '../infrastructure/browser-notification-port.js';
@@ -37,6 +38,7 @@ import { TabActivityLock } from '../infrastructure/tab-activity-lock.js';
 import { vaultApiClient } from '../infrastructure/vault-api-client.js';
 import { WebMcpToolRegistry } from '../infrastructure/webmcp-tool-registry.js';
 import { WorkspaceSyncClient } from '../infrastructure/workspace-sync-client.js';
+import { AgentConnectionController } from '../presentation/agent-connection-controller.js';
 import { BacklinksPanel } from '../presentation/backlinks-panel.js';
 import { CommentOverviewController } from '../presentation/comment-overview-controller.js';
 import { CommentUiController } from '../presentation/comment-ui-controller.js';
@@ -167,6 +169,15 @@ export class CollabMdAppShell {
 
     this.toastController = new ToastController(this.elements.toastContainer);
     this.chatToastController = new ToastController(this.elements.chatToastContainer);
+    this.agentConnectionController = new AgentConnectionController({
+      apiClient: new AgentConnectionApiClient(),
+      closeToolbarMenu: () => this.closeToolbarOverflowMenu(),
+      content: this.elements.agentConnectionContent,
+      dialog: this.elements.agentConnectionDialog,
+      runtimeConfig: this.runtimeConfig,
+      toastController: this.toastController,
+      trigger: this.elements.connectAgentButton,
+    });
     this.webMcpTools = new WebMcpToolRegistry({
       getActiveFilePath: () => this.currentFilePath,
       getIsTabActive: () => this.isTabActive,

@@ -1,3 +1,5 @@
+import { createAgentApiHandler } from './create-agent-api-handler.js';
+import { createAgentMcpHandler } from '../mcp/create-agent-mcp-handler.js';
 import { createAuthApiHandler } from './create-auth-api-handler.js';
 import { createGitApiCommandHandler } from './create-git-api-command-handler.js';
 import { createGitApiQueryHandler } from './create-git-api-query-handler.js';
@@ -38,6 +40,7 @@ export function createRequestHandler(
   hostedWorkspaceService = null,
   githubSetupFlow = null,
   structurizrWorkspaceService = null,
+  agentIntegration = null,
 ) {
   const handleStaticRequest = createStaticHandler(config, authService, searchService);
   const handleAuthApi = createAuthApiHandler({ authService });
@@ -73,6 +76,18 @@ export function createRequestHandler(
     basePath: config.basePath,
     service: structurizrWorkspaceService,
   });
+  const handleAgentApi = createAgentApiHandler({
+    agentConnectionService: agentIntegration?.connectionService,
+    authService,
+    config,
+  });
+  const handleAgentMcp = agentIntegration
+    ? createAgentMcpHandler({
+        agentConnectionService: agentIntegration.connectionService,
+        agentContentService: agentIntegration.contentService,
+        config,
+      })
+    : async () => false;
 
   function handleBasePathRedirect(req, res, originalRequestUrl) {
     if (
@@ -182,6 +197,10 @@ export function createRequestHandler(
       return;
     }
 
+    if (await handleAgentMcp(req, res, requestUrl)) {
+      return;
+    }
+
     if (requestUrl.pathname.startsWith('/api/') || handleStructurizrApi.requiresAuthorization(requestUrl)) {
       const authorization = authService.authorizeApiRequest(req);
       if (!authorization.ok) {
@@ -196,6 +215,10 @@ export function createRequestHandler(
         jsonResponse(req, res, hostedAuthorization.statusCode, hostedAuthorization.body);
         return;
       }
+    }
+
+    if (await handleAgentApi(req, res, requestUrl)) {
+      return;
     }
 
     if (await handleStructurizrApi(req, res, requestUrl)) {

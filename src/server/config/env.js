@@ -406,6 +406,38 @@ function loadHostedConfig(overrides = {}, { authStrategy, vaultDir } = {}) {
   };
 }
 
+function loadAgentAccessConfig(overrides = {}, { basePath, oidc, vaultDir } = {}) {
+  const enabled = overrides.enabled ?? parseBooleanFlag(
+    process.env.COLLABMD_AGENT_ACCESS_ENABLED,
+    false,
+  );
+  const publicHostname = oidc?.publicBaseUrl
+    ? new URL(oidc.publicBaseUrl).hostname.toLowerCase()
+    : '';
+  return {
+    allowedHosts: Array.from(new Set([
+      'localhost',
+      '127.0.0.1',
+      '::1',
+      publicHostname,
+      ...normalizeCsvList(
+        overrides.allowedHosts ?? process.env.COLLABMD_AGENT_ALLOWED_HOSTS,
+      ).map((host) => host.toLowerCase()),
+    ].filter(Boolean))),
+    connectionTtlMs: parsePositiveInt(
+      overrides.connectionTtlMs ?? process.env.COLLABMD_AGENT_CONNECTION_TTL_MS,
+      30 * 24 * 60 * 60 * 1000,
+    ),
+    dbPath: resolve(
+      overrides.dbPath
+        ?? process.env.COLLABMD_AGENT_METADATA_DB_PATH
+        ?? resolve(vaultDir, '.collabmd/agent-access.sqlite'),
+    ),
+    enabled,
+    endpoint: `${basePath}/mcp`,
+  };
+}
+
 export function loadConfig(overrides = {}) {
   const nodeEnv = process.env.NODE_ENV || 'development';
   const vaultDir = resolveConfiguredVaultDir(overrides);
@@ -427,6 +459,11 @@ export function loadConfig(overrides = {}) {
     : null;
   const git = loadGitConfig(overrides.git);
   const hosted = loadHostedConfig(overrides.hosted, { authStrategy, vaultDir });
+  const agentAccess = loadAgentAccessConfig(overrides.agentAccess, {
+    basePath,
+    oidc,
+    vaultDir,
+  });
   const structurizr = loadStructurizrConfig(overrides.structurizr, { vaultDir });
   const build = loadBuildInfo({
     explicitBuildId: process.env.COLLABMD_BUILD_ID,
@@ -435,6 +472,7 @@ export function loadConfig(overrides = {}) {
   });
 
   return {
+    agentAccess,
     auth: {
       generatedPassword: passwordWasGenerated ? password : '',
       oidc,

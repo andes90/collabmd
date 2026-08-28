@@ -31,6 +31,7 @@ export async function startTestServer(overrides = {}) {
   await writeFile(join(vaultDir, 'test.md'), '# Test\n\nHello from test vault.\n', 'utf-8');
 
   const baseConfig = loadConfig({
+    agentAccess: overrides.agentAccess,
     auth: overrides.auth,
     vaultDir,
   });
@@ -46,6 +47,10 @@ export async function startTestServer(overrides = {}) {
     auth: {
       ...baseConfig.auth,
       ...(overrides.auth ?? {}),
+    },
+    agentAccess: {
+      ...baseConfig.agentAccess,
+      ...(overrides.agentAccess ?? {}),
     },
   };
   const server = createAppServer(config);

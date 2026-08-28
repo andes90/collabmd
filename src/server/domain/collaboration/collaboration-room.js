@@ -21,6 +21,7 @@ import {
   tryParseExcalidrawSceneJson,
 } from '../../../domain/excalidraw-room-codec.js';
 import { isDrawioLeaseRoom } from '../../../domain/drawio-room.js';
+import { normalizeEditableText } from '../../../domain/editable-text.js';
 import { normalizeWorkspaceEvent } from '../../../domain/workspace-change.js';
 import { WORKSPACE_EVENT_MAX_MESSAGES, WORKSPACE_ROOM_NAME } from '../../../domain/workspace-room.js';
 
@@ -130,9 +131,6 @@ function isWorkspaceRoom(name) {
   return name === WORKSPACE_ROOM_NAME;
 }
 
-function normalizeEditableText(content) {
-  return String(content ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-}
 
 function isContentCleanOrigin(origin) {
   return origin === 'hydrate'
@@ -867,6 +865,36 @@ export class CollaborationRoom {
       migrateLegacyExcalidrawRoomData(doc, legacyScene);
     }, 'hydrate');
     return true;
+  }
+
+  isHydrated() {
+    return this.hydrated;
+  }
+
+  readEditableContent() {
+    if (!this.hydrated || this.deleted || this.destroyed || isExcalidrawRoom(this.name)) {
+      return null;
+    }
+    return this.doc.getText('codemirror').toString();
+  }
+
+  applyExactTextChanges(changes, { origin = 'agent' } = {}) {
+    if (!this.hydrated || this.deleted || this.destroyed || isExcalidrawRoom(this.name)) {
+      throw new Error('The collaborative document is unavailable');
+    }
+    const ytext = this.doc.getText('codemirror');
+    this.doc.transact(() => {
+      for (let index = changes.length - 1; index >= 0; index -= 1) {
+        const change = changes[index];
+        if (change.to > change.from) {
+          ytext.delete(change.from, change.to - change.from);
+        }
+        if (change.insert) {
+          ytext.insert(change.from, change.insert);
+        }
+      }
+    }, origin);
+    return changes.length;
   }
 
   getPersistedContent() {

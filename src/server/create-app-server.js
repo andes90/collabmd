@@ -2,6 +2,8 @@ import { createServer } from 'http';
 import { resolve } from 'node:path';
 
 import { loadConfig } from './config/env.js';
+import { AgentConnectionService } from './application/agent-connection-service.js';
+import { AgentContentService } from './application/agent-content-service.js';
 import { createAuthService } from './auth/create-auth-service.js';
 import { logPerfEvent } from './config/perf-logging.js';
 import { BacklinkIndex } from './domain/backlink-index.js';
@@ -19,6 +21,7 @@ import { StructurizrWorkspaceService } from './infrastructure/structurizr/struct
 import { RoomRegistry } from './domain/collaboration/room-registry.js';
 import { RipgrepSearchService } from './domain/ripgrep-search-service.js';
 import { createRequestHandler } from './infrastructure/http/create-request-handler.js';
+import { AgentConnectionStore } from './infrastructure/persistence/agent-connection-store.js';
 import { HostedMetadataStore } from './infrastructure/persistence/hosted-metadata-store.js';
 import { VaultFileStore } from './infrastructure/persistence/vault-file-store.js';
 import { attachCollaborationGateway } from './infrastructure/websocket/attach-collaboration-gateway.js';
@@ -142,6 +145,21 @@ export function createAppServer(config = loadConfig()) {
       vaultDir: vaultFileStore.vaultDir,
     }),
   });
+  const agentConnectionStore = new AgentConnectionStore({
+    dbPath: config.agentAccess.dbPath,
+  });
+  const agentConnectionService = new AgentConnectionService({
+    authStrategy: config.auth.strategy,
+    connectionTtlMs: config.agentAccess.connectionTtlMs,
+    hostedWorkspaceService,
+    store: agentConnectionStore,
+  });
+  const agentContentService = new AgentContentService({
+    roomRegistry,
+    searchService,
+    vaultFileStore,
+    workspaceMutationCoordinator,
+  });
   vaultFileStore.setManagedWriteTracker(workspaceMutationCoordinator);
   fileSystemSyncService = new FileSystemSyncService({
     mutationCoordinator: workspaceMutationCoordinator,
@@ -165,6 +183,12 @@ export function createAppServer(config = loadConfig()) {
     hostedWorkspaceService,
     githubSetupFlow,
     structurizrWorkspaceService,
+    config.agentAccess.enabled
+      ? {
+          connectionService: agentConnectionService,
+          contentService: agentContentService,
+        }
+      : null,
   );
   const httpServer = createServer((req, res) => {
     requestHandler(req, res).catch((error) => {
@@ -199,6 +223,9 @@ export function createAppServer(config = loadConfig()) {
       await ensureCollabMetadataGitExclude(config.vaultDir);
     }
     await hostedWorkspaceService.initialize();
+    if (config.agentAccess.enabled && config.auth.strategy !== 'none') {
+      await agentConnectionService.initialize();
+    }
 
     const searchCapabilityStartedAt = Date.now();
     config.search = await searchService.initialize();
@@ -310,6 +337,9 @@ export function createAppServer(config = loadConfig()) {
         closeHttpServer(httpServer),
         config.git?.cleanup?.(),
         hostedWorkspaceService.close(),
+        config.agentAccess.enabled && config.auth.strategy !== 'none'
+          ? agentConnectionStore.close()
+          : Promise.resolve(),
       ]);
     })().then(() => undefined);
 
@@ -318,6 +348,8 @@ export function createAppServer(config = loadConfig()) {
 
   return {
     close,
+    agentConnectionService,
+    agentContentService,
     collaborationGateway,
     config,
     httpServer,

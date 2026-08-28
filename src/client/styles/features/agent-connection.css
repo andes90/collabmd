@@ -1,0 +1,202 @@
+.agent-connection-dialog {
+  width: min(680px, calc(100vw - var(--space-6)));
+}
+
+#agentConnectionContent,
+.agent-connection-form,
+.agent-connection-section,
+.agent-connection-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.agent-connection-section h3,
+.agent-connection-scopes legend {
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.agent-connection-section code,
+.agent-connection-section pre,
+.agent-connection-details > code,
+.agent-connection-details pre {
+  overflow: auto;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-offset);
+  color: var(--color-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--text-xs);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.agent-connection-section p,
+.agent-connection-note,
+.agent-connection-empty p,
+.agent-connection-status,
+.agent-connection-card span,
+.agent-connection-card small,
+.agent-connection-live,
+.agent-connection-details p,
+.agent-connection-step-header p,
+.agent-connection-steps span {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.agent-connection-status.is-error,
+.agent-connection-warning {
+  color: var(--color-error);
+}
+
+.agent-connection-empty {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-offset);
+}
+
+.agent-connection-empty strong,
+.agent-connection-step-header h3,
+.agent-connection-steps strong {
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+.agent-connection-step-header {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.agent-connection-step-header > span {
+  color: var(--color-primary);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.agent-connection-steps {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding-left: var(--space-5);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.agent-connection-steps code {
+  color: var(--color-text);
+  font-size: var(--text-xs);
+}
+
+.agent-connection-steps--setup {
+  padding-left: var(--space-6);
+}
+
+.agent-connection-steps--setup > li {
+  padding-left: var(--space-1);
+}
+
+.agent-connection-steps--setup > li::marker {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.agent-connection-steps--setup li > div {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.agent-connection-steps--setup .ui-button {
+  justify-self: start;
+  margin-top: var(--space-2);
+}
+
+.agent-connection-details {
+  display: grid;
+  gap: var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.agent-connection-details[open] {
+  padding-bottom: var(--space-1);
+}
+
+.agent-connection-details summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.agent-connection-details > :not(summary) {
+  margin-top: var(--space-3);
+}
+
+.agent-connection-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-offset);
+}
+
+.agent-connection-card > div {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.agent-connection-scopes {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.agent-connection-scopes label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+.agent-connection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.agent-connection-token {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+@media (max-width: 640px) {
+  .agent-connection-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .agent-connection-actions {
+    display: grid;
+  }
+
+  .agent-connection-steps--setup .ui-button {
+    justify-self: stretch;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-connection-dialog {
+    transition: none;
+  }
+}

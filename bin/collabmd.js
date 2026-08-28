@@ -225,6 +225,9 @@ try {
   } else {
     console.log('  Auth:   none');
   }
+  if (config.agentAccess?.enabled) {
+    console.log(`  Agent: http://${info.host}:${info.port}${config.agentAccess.endpoint}`);
+  }
 
   if (enableTunnel) {
     console.log('  Tunnel: starting...');

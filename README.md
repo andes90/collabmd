@@ -67,6 +67,7 @@ Prefer video? [Open the WebM demo](https://raw.githubusercontent.com/andes90/col
 - **External edit sync** — changes made from tools like Obsidian or direct file writes are reflected back into open documents and the file explorer
 - **Git review** — review an open file's changes, include them in the next commit, and commit with a message from the browser
 - **Experimental WebMCP editing** — supported browser agents can read and apply bounded exact-text edits to the active Markdown, Mermaid, PlantUML, or Structurizr document as the logged-in collaborator
+- **Remote AI agent access** — connect Codex, Pi, or another MCP client to search, cite, edit, and create supported Vault Content; protected workspaces use scoped, revocable Agent Connections
 - **File upload** — import multiple supported Markdown, HTML, Base, diagram, image, and PDF files into the vault from the file explorer
 - **Markdown with context** — live preview, wiki-links, backlinks, outline, quick switcher, and scroll sync
 - **Global text search** — search text across supported vault files with ripgrep-backed results grouped by file
@@ -165,6 +166,66 @@ Then share the printed URL and password with your collaborator. If `cloudflared`
 - Set `AUTH_SESSION_MAX_AGE_MS` if you want auth sessions to stay valid longer and survive browser restarts until that expiry
 - If `cloudflared` is installed, CollabMD may expose the app through a Cloudflare Quick Tunnel unless you pass `--no-tunnel`
 - `--auth oidc` requires a stable `PUBLIC_BASE_URL`; Quick Tunnel URLs are not supported for OIDC
+
+## Connect an AI agent
+
+Enable MCP Streamable HTTP access:
+
+```bash
+COLLABMD_AGENT_ACCESS_ENABLED=true collabmd --no-tunnel
+```
+
+CollabMD exposes `/mcp`, or `<BASE_PATH>/mcp` when a base path is configured, with these tools:
+
+- `list_documents`, `search_vault`, and `read_document`
+- `apply_text_edits` with exact replacements and revision conflict protection
+- `create_document`
+- `get_collabmd_syntax`
+
+`search_vault` uses the server's ripgrep installation. Install `rg` on source or npm deployments; the Docker image already includes it.
+
+Agent writes initially support Markdown, HTML, Mermaid, PlantUML, and Structurizr text. Base, Excalidraw, draw.io, PDF, images, delete, rename, Git, and publish are not writable through Agent Access.
+
+With password or OIDC auth, open **More actions → Connect AI Agent** after signing in. Create a named connection, choose read/edit scope, and copy the token shown once. Tokens expire after 30 days by default and can be revoked from the same dialog. OIDC connections retain Collaborator attribution; shared-password connections are workspace-level because password sessions have no individual identity.
+
+Codex with password or OIDC:
+
+```toml
+[mcp_servers.collabmd]
+url = "https://notes.example.com/mcp"
+bearer_token_env_var = "COLLABMD_ACCESS_TOKEN"
+default_tools_approval_mode = "writes"
+```
+
+```bash
+export COLLABMD_ACCESS_TOKEN='token-shown-once'
+```
+
+CollabMD currently uses preconfigured bearer credentials rather than MCP OAuth enrollment. Do not run `codex mcp login`; set `bearer_token_env_var` as shown above.
+
+Pi with password or OIDC:
+
+```bash
+pi install npm:collabmd
+export COLLABMD_MCP_URL='https://notes.example.com/mcp'
+export COLLABMD_ACCESS_TOKEN='token-shown-once'
+```
+
+For `AUTH_STRATEGY=none`, MCP uses the same anonymous access policy as the web app: anyone who can reach `/mcp` can read, edit, and create supported Vault Content. No bearer token is required. Omit `bearer_token_env_var` from Codex configuration and set only `COLLABMD_MCP_URL` for Pi.
+
+Generic MCP clients use:
+
+```text
+URL: https://notes.example.com/mcp
+Transport: Streamable HTTP
+Authorization: Bearer <token>
+```
+
+The `Authorization` header is required for password and OIDC workspaces. Omit it for `AUTH_STRATEGY=none`.
+
+Remote endpoints should use HTTPS. For password and OIDC deployments, `COLLABMD_AGENT_ALLOWED_HOSTS` adds comma-separated MCP hostnames accepted through a reverse proxy. OIDC automatically allows the hostname from `PUBLIC_BASE_URL`; localhost is always allowed. No-auth MCP deliberately follows the app's anonymous access policy and does not apply this allowlist.
+
+Vault text returned to an agent is untrusted input. Never paste managed Agent Access tokens into agent prompts or chat history. Treat every no-auth workspace URL as anonymous automated write access to the Vault.
 
 ## Current limitations
 
@@ -684,6 +745,10 @@ vite.config.mjs            Vite multi-page build and dev-server proxy config
 | `AUTH_OIDC_CLIENT_SECRET` | Google OAuth client secret used for `AUTH_STRATEGY=oidc` | |
 | `AUTH_OIDC_ALLOWED_EMAILS` | Comma-separated exact email allowlist for `AUTH_STRATEGY=oidc` | |
 | `AUTH_OIDC_ALLOWED_DOMAINS` | Comma-separated email domain allowlist for `AUTH_STRATEGY=oidc` | |
+| `COLLABMD_AGENT_ACCESS_ENABLED` | Enable scoped MCP Agent Access | `false` |
+| `COLLABMD_AGENT_ALLOWED_HOSTS` | Extra comma-separated MCP request hostnames for password/OIDC deployments; ignored by no-auth MCP | |
+| `COLLABMD_AGENT_CONNECTION_TTL_MS` | Managed Agent Connection lifetime in milliseconds | `2592000000` |
+| `COLLABMD_AGENT_METADATA_DB_PATH` | SQLite path for managed Agent Connections | `<vault>/.collabmd/agent-access.sqlite` |
 | `BASE_PATH` | URL path prefix for subpath deployments | |
 | `COLLABMD_HOSTED_ENABLED` | Enable single-tenant hosted workspace mode; requires `AUTH_STRATEGY=oidc` | `false` |
 | `COLLABMD_HOSTED_METADATA_DB_PATH` | SQLite database path for hosted workspace metadata | `<vault>/.collabmd/hosted.sqlite` |
