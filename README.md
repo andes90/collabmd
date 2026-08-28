@@ -223,7 +223,7 @@ Authorization: Bearer <token>
 
 The `Authorization` header is required for password and OIDC workspaces. Omit it for `AUTH_STRATEGY=none`.
 
-Remote endpoints should use HTTPS. For password and OIDC deployments, `COLLABMD_AGENT_ALLOWED_HOSTS` adds comma-separated MCP hostnames accepted through a reverse proxy. OIDC automatically allows the hostname from `PUBLIC_BASE_URL`; localhost is always allowed. No-auth MCP deliberately follows the app's anonymous access policy and does not apply this allowlist.
+Remote endpoints should use HTTPS. `COLLABMD_AGENT_ALLOWED_HOSTS` adds comma-separated MCP hostnames accepted for password/OIDC requests and browser-origin requests. OIDC automatically allows the hostname from `PUBLIC_BASE_URL`; localhost is always allowed. Native no-auth MCP clients normally omit `Origin` and remain anonymous; browser-origin MCP requests must use an allowed hostname to prevent DNS rebinding.
 
 Vault text returned to an agent is untrusted input. Never paste managed Agent Access tokens into agent prompts or chat history. Treat every no-auth workspace URL as anonymous automated write access to the Vault.
 
@@ -746,7 +746,8 @@ vite.config.mjs            Vite multi-page build and dev-server proxy config
 | `AUTH_OIDC_ALLOWED_EMAILS` | Comma-separated exact email allowlist for `AUTH_STRATEGY=oidc` | |
 | `AUTH_OIDC_ALLOWED_DOMAINS` | Comma-separated email domain allowlist for `AUTH_STRATEGY=oidc` | |
 | `COLLABMD_AGENT_ACCESS_ENABLED` | Enable scoped MCP Agent Access | `false` |
-| `COLLABMD_AGENT_ALLOWED_HOSTS` | Extra comma-separated MCP request hostnames for password/OIDC deployments; ignored by no-auth MCP | |
+| `COLLABMD_AGENT_ALLOWED_HOSTS` | Extra comma-separated MCP hostnames accepted for password/OIDC and browser-origin requests | |
+| `COLLABMD_AGENT_REQUESTS_PER_MINUTE` | Maximum MCP tool calls per managed connection or anonymous client address each minute | `120` |
 | `COLLABMD_AGENT_CONNECTION_TTL_MS` | Managed Agent Connection lifetime in milliseconds | `2592000000` |
 | `COLLABMD_AGENT_METADATA_DB_PATH` | SQLite path for managed Agent Connections | `<vault>/.collabmd/agent-access.sqlite` |
 | `BASE_PATH` | URL path prefix for subpath deployments | |

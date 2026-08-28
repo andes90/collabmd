@@ -110,3 +110,17 @@ test('agent search overlays active room content', async () => {
   assert.equal(result.files[0].file, 'notes.md');
   assert.equal(result.files[0].snippets[0].line, 3);
 });
+
+test('agent reads report the last line actually returned after character truncation', async () => {
+  const firstLine = 'x'.repeat(100_001);
+  const { service } = createService({ content: `${firstLine}\nsecond line\n` });
+  const result = await service.readDocument(actor, {
+    lineCount: 2,
+    path: 'notes.md',
+  });
+
+  assert.equal(result.content.length, 100_000);
+  assert.equal(result.endLine, 1);
+  assert.equal(result.startLine, 1);
+  assert.equal(result.truncated, true);
+});

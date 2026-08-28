@@ -108,7 +108,10 @@ export class WebMcpToolRegistry {
           inputSchema: {
             additionalProperties: false,
             properties: {
-              kind: { type: 'string' },
+              kind: {
+                description: 'Optional content kind. Omit to list all capabilities.',
+                type: 'string',
+              },
             },
             type: 'object',
           },
@@ -129,13 +132,26 @@ export class WebMcpToolRegistry {
           inputSchema: {
             additionalProperties: false,
             properties: {
-              path: { type: 'string' },
+              path: {
+                description: 'Active Vault-relative path returned by collabmd_read_active_document.',
+                maxLength: 1024,
+                minLength: 1,
+                type: 'string',
+              },
               replacements: {
+                description: 'One to 20 exact text replacements; each oldText must resolve unambiguously.',
                 items: {
                   additionalProperties: false,
                   properties: {
-                    newText: { type: 'string' },
-                    oldText: { minLength: 1, type: 'string' },
+                    newText: {
+                      description: 'Replacement text.',
+                      type: 'string',
+                    },
+                    oldText: {
+                      description: 'Exact current text to replace.',
+                      minLength: 1,
+                      type: 'string',
+                    },
                   },
                   required: ['oldText', 'newText'],
                   type: 'object',
@@ -144,7 +160,11 @@ export class WebMcpToolRegistry {
                 minItems: 1,
                 type: 'array',
               },
-              revision: { type: 'string' },
+              revision: {
+                description: 'Lowercase SHA-256 revision returned by collabmd_read_active_document.',
+                pattern: '^[a-f0-9]{64}$',
+                type: 'string',
+              },
             },
             required: ['path', 'revision', 'replacements'],
             type: 'object',

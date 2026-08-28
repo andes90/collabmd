@@ -171,11 +171,17 @@ export class AgentContentService {
     const count = clampInteger(lineCount, MAX_READ_LINES, 1, MAX_READ_LINES);
     let selected = lines.slice(start - 1, start - 1 + count).join('\n');
     let characterTruncated = false;
+    let endLine = Math.min(start + count - 1, lines.length);
     if (selected.length > MAX_READ_CHARACTERS) {
       selected = selected.slice(0, MAX_READ_CHARACTERS);
       characterTruncated = true;
+      let returnedLineCount = 1;
+      for (let index = 0; index < selected.length; index += 1) {
+        if (selected.charCodeAt(index) === 10) returnedLineCount += 1;
+      }
+      if (selected.endsWith('\n')) returnedLineCount -= 1;
+      endLine = Math.min(start + Math.max(returnedLineCount, 1) - 1, lines.length);
     }
-    const endLine = Math.min(start + count - 1, lines.length);
     return {
       content: selected,
       endLine,

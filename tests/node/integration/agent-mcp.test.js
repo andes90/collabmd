@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { request } from 'node:http';
 import { join } from 'node:path';
 import test from 'node:test';
 
@@ -7,18 +8,29 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 
 import { startTestServer } from '../helpers/test-server.js';
 
-
-test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously', async (t) => {
-  const app = await startTestServer({
-    agentAccess: { enabled: true },
-  });
+async function connectMcp(t, app, {
+  token = '',
+  url = `${app.baseUrl}/mcp`,
+} = {}) {
   const client = new Client({ name: 'collabmd-test', version: '1.0.0' });
-  const transport = new StreamableHTTPClientTransport(new URL(`${app.baseUrl}/mcp`));
+  const transport = new StreamableHTTPClientTransport(
+    new URL(url),
+    token ? { requestInit: { headers: { Authorization: `Bearer ${token}` } } } : undefined,
+  );
   t.after(async () => {
     await transport.close().catch(() => {});
     await app.close();
   });
   await client.connect(transport);
+  return client;
+}
+
+
+test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously', async (t) => {
+  const app = await startTestServer({
+    agentAccess: { enabled: true },
+  });
+  const client = await connectMcp(t, app);
 
   const tools = await client.listTools();
   assert.deepEqual(
@@ -32,6 +44,13 @@ test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously'
       'search_vault',
     ],
   );
+  for (const tool of tools.tools) {
+    assert.ok(tool.outputSchema, `${tool.name} should advertise an output schema`);
+  }
+  const editTool = tools.tools.find(({ name }) => name === 'apply_text_edits');
+  assert.equal(editTool.inputSchema.properties.revision.pattern, '^[a-f0-9]{64}$');
+  assert.match(editTool.inputSchema.properties.replacements.description, /exact text/iu);
+
 
   const search = await client.callTool({
     arguments: { query: 'Hello from test' },
@@ -55,6 +74,17 @@ test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously'
   });
   assert.equal(edit.isError, undefined);
   assert.equal(await readFile(join(app.vaultDir, 'test.md'), 'utf8'), '# Test\n\nHello from agent.\n');
+  const staleEdit = await client.callTool({
+    arguments: {
+      path: 'test.md',
+      replacements: [{ oldText: 'Hello from agent.', newText: 'Stale overwrite.' }],
+      revision: read.structuredContent.revision,
+    },
+    name: 'apply_text_edits',
+  });
+  assert.equal(staleEdit.isError, true);
+  assert.equal(staleEdit.structuredContent.code, 'AGENT_REVISION_CONFLICT');
+
 
   const syntax = await client.callTool({
     arguments: { kind: 'mermaid' },
@@ -86,6 +116,120 @@ test('password MCP endpoint requires managed bearer token', async (t) => {
   });
   assert.equal(response.status, 401);
   assert.match(response.headers.get('www-authenticate'), /^Bearer/);
+});
+
+test('no-auth MCP rejects untrusted browser origins without blocking direct clients', async (t) => {
+  const app = await startTestServer({
+    agentAccess: { enabled: true },
+  });
+  t.after(app.close);
+
+  async function initializeFromBrowser(hostname) {
+    return new Promise((resolve, reject) => {
+      const body = JSON.stringify({
+        id: 1,
+        jsonrpc: '2.0',
+        method: 'initialize',
+        params: {
+          capabilities: {},
+          clientInfo: { name: 'browser-test', version: '1.0.0' },
+          protocolVersion: '2025-11-25',
+        },
+      });
+      const req = request({
+        headers: {
+          Accept: 'application/json, text/event-stream',
+          'Content-Length': Buffer.byteLength(body),
+          'Content-Type': 'application/json',
+          Host: `${hostname}:${app.port}`,
+          Origin: `http://${hostname}:${app.port}`,
+        },
+        hostname: '127.0.0.1',
+        method: 'POST',
+        path: '/mcp',
+        port: app.port,
+      }, (res) => {
+        res.resume();
+        resolve(res.statusCode);
+      });
+      req.on('error', reject);
+      req.end(body);
+    });
+  }
+
+  assert.equal(await initializeFromBrowser('attacker.example'), 403);
+  assert.equal(await initializeFromBrowser('127.0.0.1'), 200);
+});
+
+test('MCP rate limits tool calls per anonymous client', async (t) => {
+  const app = await startTestServer({
+    agentAccess: { enabled: true, requestsPerMinute: 2 },
+  });
+  const client = await connectMcp(t, app);
+
+  for (let index = 0; index < 2; index += 1) {
+    const result = await client.callTool({ arguments: {}, name: 'list_documents' });
+    assert.equal(result.isError, undefined);
+  }
+  const limited = await client.callTool({ arguments: {}, name: 'list_documents' });
+  assert.equal(limited.isError, true);
+  assert.equal(limited.structuredContent.code, 'AGENT_RATE_LIMITED');
+  assert.ok(limited.structuredContent.retryAfterMs > 0);
+});
+
+test('MCP hides unexpected service errors from agents', async (t) => {
+  const app = await startTestServer({
+    agentAccess: { enabled: true },
+  });
+  const client = await connectMcp(t, app);
+  app.server.agentContentService.searchVault = async () => {
+    throw new Error('private path: /secret/vault');
+  };
+
+  const result = await client.callTool({
+    arguments: { query: 'secret' },
+    name: 'search_vault',
+  });
+  assert.equal(result.isError, true);
+  assert.deepEqual(result.structuredContent, {
+    code: 'AGENT_TOOL_FAILED',
+    error: 'Agent tool failed',
+  });
+  assert.doesNotMatch(result.content[0].text, /secret\/vault/u);
+});
+
+test('managed read-only MCP token limits tools and revocation takes effect immediately', async (t) => {
+  const app = await startTestServer({
+    agentAccess: { enabled: true },
+    auth: { password: 'office-secret', strategy: 'password' },
+  });
+  const created = await app.server.agentConnectionService.createConnection({
+    clientKind: 'generic',
+    label: 'Read-only integration',
+    scopes: ['vault:read'],
+    user: null,
+  });
+  const client = await connectMcp(t, app, { token: created.token });
+
+  const tools = await client.listTools();
+  assert.equal(tools.tools.some(({ name }) => name === 'apply_text_edits'), false);
+  assert.equal(tools.tools.some(({ name }) => name === 'create_document'), false);
+
+  await app.server.agentConnectionService.revokeConnection({
+    connectionId: created.connection.id,
+    user: null,
+  });
+  await assert.rejects(client.listTools(), /401|authorization|token/iu);
+});
+
+test('MCP works under configured base path', async (t) => {
+  const app = await startTestServer({
+    agentAccess: { enabled: true },
+    basePath: '/notes',
+  });
+  const client = await connectMcp(t, app, { url: `${app.appBaseUrl}/mcp` });
+  const tools = await client.listTools();
+  assert.equal(tools.tools.length, 6);
 });
 
 test('password session manages workspace-level Agent Connections', async (t) => {

@@ -433,6 +433,10 @@ function loadAgentAccessConfig(overrides = {}, { basePath, oidc, vaultDir } = {}
         ?? process.env.COLLABMD_AGENT_METADATA_DB_PATH
         ?? resolve(vaultDir, '.collabmd/agent-access.sqlite'),
     ),
+    requestsPerMinute: parsePositiveInt(
+      overrides.requestsPerMinute ?? process.env.COLLABMD_AGENT_REQUESTS_PER_MINUTE,
+      120,
+    ),
     enabled,
     endpoint: `${basePath}/mcp`,
   };
