@@ -234,18 +234,20 @@ test('browser-session WebMCP tools reuse agent content operations when remote MC
   const created = await callWebMcpTool(app, 'create_excalidraw', {
     elements: [{ height: 80, id: 'service', type: 'rectangle', width: 160, x: 20, y: 20 }],
     path: 'diagrams/webmcp.excalidraw',
+    verify: { render: true },
   });
   assert.equal(created.response.status, 200);
+  assert.equal(created.body.image, undefined);
+  assert.equal(created.body.verification.elementCount, 1);
+  assert.equal(created.body.verification.scene.type, 'excalidraw');
 
   const rendered = await callWebMcpTool(app, 'render_excalidraw', {
     path: 'diagrams/webmcp.excalidraw',
   });
   assert.equal(rendered.response.status, 200);
-  assert.equal(rendered.body.image.mimeType, 'image/png');
-  assert.equal(
-    Buffer.from(rendered.body.image.data, 'base64').subarray(0, 8).toString('hex'),
-    '89504e470d0a1a0a',
-  );
+  assert.equal(rendered.body.image, undefined);
+  assert.equal(rendered.body.elementCount, 1);
+  assert.equal(rendered.body.scene.type, 'excalidraw');
 });
 
 

@@ -170,6 +170,78 @@ test('opens a queued Excalidraw element in a ready iframe', () => {
   }
 });
 
+test('flushes active diagram writes and waits for matching paint acknowledgement', async () => {
+  const originalWindow = globalThis.window;
+  const posts = [];
+  const iframeWindow = {};
+  const entry = {
+    filePath: 'sample-excalidraw.excalidraw',
+    iframe: { contentWindow: iframeWindow },
+    isReady: true,
+    key: 'sample-excalidraw.excalidraw#file-preview',
+  };
+
+  globalThis.window = {
+    clearTimeout,
+    location: { origin: 'http://localhost:4173' },
+    setTimeout,
+  };
+
+  try {
+    const controller = {
+      agentBridgeRequestCounter: 0,
+      embedEntries: new Map([[entry.key, entry]]),
+      pendingAgentBridgeRequests: new Map(),
+      _findEntryByContentWindow: ExcalidrawEmbedController.prototype._findEntryByContentWindow,
+      _findEntryByFilePath: ExcalidrawEmbedController.prototype._findEntryByFilePath,
+      _getEntryMode: ExcalidrawEmbedController.prototype._getEntryMode,
+      _isFilePreviewEntry: ExcalidrawEmbedController.prototype._isFilePreviewEntry,
+      _postMessageToEntry: (_entry, payload) => posts.push(payload),
+      _requestAgentBridge: ExcalidrawEmbedController.prototype._requestAgentBridge,
+    };
+
+    const flush = ExcalidrawEmbedController.prototype.flushPendingAgentWrites.call(
+      controller,
+      entry.filePath,
+    );
+    const flushRequest = posts.at(-1);
+    assert.equal(flushRequest.type, 'flush-agent-writes');
+    ExcalidrawEmbedController.prototype._onMessage.call(controller, {
+      data: {
+        requestId: flushRequest.requestId,
+        source: 'excalidraw-editor',
+        type: 'agent-writes-flushed',
+      },
+      origin: 'http://localhost:4173',
+      source: iframeWindow,
+    });
+    assert.deepEqual(await flush, { status: 'flushed' });
+
+    const revision = 'a'.repeat(64);
+    const paint = ExcalidrawEmbedController.prototype.waitForAgentPaint.call(
+      controller,
+      entry.filePath,
+      revision,
+    );
+    const paintRequest = posts.at(-1);
+    assert.equal(paintRequest.type, 'wait-for-agent-revision');
+    assert.equal(paintRequest.revision, revision);
+    ExcalidrawEmbedController.prototype._onMessage.call(controller, {
+      data: {
+        requestId: paintRequest.requestId,
+        revision,
+        source: 'excalidraw-editor',
+        type: 'agent-revision-painted',
+      },
+      origin: 'http://localhost:4173',
+      source: iframeWindow,
+    });
+    assert.deepEqual(await paint, { revision, status: 'painted' });
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
 test('forwards valid Excalidraw element links but ignores external links', () => {
   const originalWindow = globalThis.window;
   const iframeWindow = {};

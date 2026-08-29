@@ -59,6 +59,8 @@ export class ExcalidrawEmbedController {
     this.followedPeerIdsByFilePath = new Map();
     this.pendingDisconnectRequests = new Map();
     this.disconnectRequestCounter = 0;
+    this.pendingAgentBridgeRequests = new Map();
+    this.agentBridgeRequestCounter = 0;
 
     this._onMessage = this._onMessage.bind(this);
     this._onKeyDown = this._onKeyDown.bind(this);
@@ -99,6 +101,10 @@ export class ExcalidrawEmbedController {
       request.resolve(false);
     });
     this.pendingDisconnectRequests.clear();
+    this.pendingAgentBridgeRequests.forEach((request) => {
+      request.resolve({ status: 'destroyed' });
+    });
+    this.pendingAgentBridgeRequests.clear();
     this.followedPeerIdsByFilePath.clear();
     this.overlayRoot?.remove();
     this.overlayRoot = null;
@@ -331,6 +337,69 @@ export class ExcalidrawEmbedController {
         source: 'collabmd-host',
         type: 'prepare-disconnect',
         requestId,
+      });
+    });
+  }
+
+  flushPendingAgentWrites(filePath, { signal = null, timeoutMs = 1500 } = {}) {
+    const entry = this._findEntryByFilePath(filePath);
+    if (
+      !entry?.isReady
+      || !entry.iframe?.contentWindow
+      || this._getEntryMode(entry) !== 'edit'
+    ) {
+      return Promise.resolve({ status: 'not-active' });
+    }
+    return this._requestAgentBridge(
+      entry,
+      'flush-agent-writes',
+      {},
+      { signal, timeoutMs },
+    );
+  }
+
+  waitForAgentPaint(filePath, revision, { signal = null, timeoutMs = 5000 } = {}) {
+    const entry = this._findEntryByFilePath(filePath);
+    if (!entry?.isReady || !entry.iframe?.contentWindow || !revision) {
+      return Promise.resolve({ status: 'not-active' });
+    }
+    return this._requestAgentBridge(
+      entry,
+      'wait-for-agent-revision',
+      { revision },
+      { signal, timeoutMs },
+    );
+  }
+
+  _requestAgentBridge(entry, type, payload, { signal, timeoutMs }) {
+    const requestId = `agent-bridge-${++this.agentBridgeRequestCounter}`;
+    return new Promise((resolve) => {
+      const finish = (value) => {
+        const request = this.pendingAgentBridgeRequests.get(requestId);
+        if (!request) return;
+        window.clearTimeout(request.timeoutId);
+        signal?.removeEventListener?.('abort', request.abort);
+        this.pendingAgentBridgeRequests.delete(requestId);
+        resolve(value);
+      };
+      const abort = () => finish({ status: 'cancelled' });
+      const timeoutId = window.setTimeout(() => finish({ status: 'timeout' }), timeoutMs);
+      this.pendingAgentBridgeRequests.set(requestId, {
+        abort,
+        entry,
+        resolve: finish,
+        timeoutId,
+      });
+      signal?.addEventListener?.('abort', abort, { once: true });
+      if (signal?.aborted) {
+        abort();
+        return;
+      }
+      this._postMessageToEntry(entry, {
+        ...payload,
+        requestId,
+        source: 'collabmd-host',
+        type,
       });
     });
   }
@@ -1304,6 +1373,23 @@ export class ExcalidrawEmbedController {
       const request = this.pendingDisconnectRequests.get(msg.requestId);
       if (request?.entry === entry) {
         request.resolve(true);
+      }
+      return;
+    }
+
+    if (
+      msg.type === 'agent-writes-flushed'
+      || msg.type === 'agent-revision-painted'
+      || msg.type === 'agent-revision-not-painted'
+    ) {
+      const request = this.pendingAgentBridgeRequests.get(msg.requestId);
+      if (request?.entry === entry) {
+        request.resolve({
+          ...(msg.revision ? { revision: msg.revision } : {}),
+          status: msg.type === 'agent-writes-flushed'
+            ? 'flushed'
+            : (msg.type === 'agent-revision-painted' ? 'painted' : 'not-painted'),
+        });
       }
       return;
     }

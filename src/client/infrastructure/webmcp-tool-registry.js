@@ -5,6 +5,8 @@ import {
 import { createExcalidrawExportOptions } from '../domain/excalidraw-scene.js';
 
 const MAX_RENDER_DIMENSION = 4096;
+const ACTIVE_CONTEXT_TOOL_NAME = 'collabmd_get_active_context';
+const EXCALIDRAW_WORKFLOW_NOTE = 'Call collabmd_get_active_context first. Use create_excalidraw only for a new path; for an existing diagram, inspect_excalidraw then edit_excalidraw with its exact revision and inline verification.';
 
 async function renderExactExcalidrawScene(scene, {
   format = 'png',
@@ -69,10 +71,13 @@ function throwIfAborted(signal) {
   }
 }
 
-async function replaceSnapshotRendering(result, renderScene) {
+async function replaceSnapshotRendering(result, renderScene, input = {}) {
   const scene = result?.verification?.scene ?? result?.scene;
   if (!scene) return result;
-  const renderOptions = result.verification?.scene ? result.verification : result;
+  const renderOptions = {
+    ...(result.verification?.scene ? input.verify : input),
+    ...(result.verification?.scene ? result.verification : result),
+  };
   try {
     const rendered = await renderScene(scene, renderOptions);
     const cleanResult = stripSceneSnapshots(result);
@@ -97,18 +102,82 @@ async function replaceSnapshotRendering(result, renderScene) {
   }
 }
 
+function addWebMcpExecution(result, execution) {
+  if (!execution || Object.keys(execution).length === 0 || !result || typeof result !== 'object') {
+    return result;
+  }
+  return { ...result, webMcp: execution };
+}
+
+function createActiveContextResult(context = {}) {
+  const activeDiagramPath = context.activeDiagramPath || null;
+  const activePath = context.activePath || null;
+  return {
+    activeDiagramPath,
+    activePath,
+    preferredDiagramPath: activeDiagramPath,
+    workflow: activeDiagramPath
+      ? `Current diagram is ${activeDiagramPath}. Inspect it, edit with the returned exact revision, request inline verification, then use the returned canvas paint acknowledgement.`
+      : 'No diagram is active. Use create_excalidraw with a new .excalidraw path and request inline verification. Inspect then revision-edit any existing path; do not retry stale edits without rereading.',
+  };
+}
+
+function getWebMcpDescription(definition) {
+  return definition.name.includes('excalidraw')
+    ? `${definition.description} ${EXCALIDRAW_WORKFLOW_NOTE}`
+    : definition.description;
+}
+
+function runOptionalHook(hook, payload) {
+  return typeof hook === 'function' ? hook(payload) : null;
+}
+
+async function runAcknowledgementHook(hook, payload) {
+  try {
+    return await runOptionalHook(hook, payload);
+  } catch (error) {
+    console.error('[webmcp] Failed to acknowledge an applied mutation:', error.message);
+    return { status: 'unavailable' };
+  }
+}
+
+function createActiveContextTool(getActiveContext) {
+  return {
+    annotations: {
+      readOnlyHint: true,
+      untrustedContentHint: false,
+    },
+    description: 'Return current CollabMD file and active-diagram context plus the safe create-or-edit workflow. Call before Excalidraw tools.',
+    execute: async () => createActiveContextResult(getActiveContext?.()),
+    inputSchema: {
+      additionalProperties: false,
+      properties: {},
+      required: [],
+      type: 'object',
+    },
+    name: ACTIVE_CONTEXT_TOOL_NAME,
+  };
+}
+
+
 export class WebMcpToolRegistry {
   constructor({
+    acknowledgeToolCall = null,
     callTool,
+    getActiveContext = null,
     getIsTabActive,
     modelContext = globalThis.document?.modelContext ?? null,
     onDidMutate = null,
+    prepareToolCall = null,
     renderExcalidrawScene = renderExactExcalidrawScene,
   }) {
+    this.acknowledgeToolCall = acknowledgeToolCall;
     this.callTool = callTool;
+    this.getActiveContext = getActiveContext;
     this.getIsTabActive = getIsTabActive;
     this.modelContext = modelContext;
     this.onDidMutate = onDidMutate;
+    this.prepareToolCall = prepareToolCall;
     this.renderExcalidrawScene = renderExcalidrawScene;
     this.registration = null;
   }
@@ -129,30 +198,56 @@ export class WebMcpToolRegistry {
     this.registration = registration;
 
     try {
-      await Promise.all(listWebMcpToolDefinitions().map((definition) => (
-        this.modelContext.registerTool({
-          annotations: {
-            readOnlyHint: definition.annotations.readOnlyHint,
-            untrustedContentHint: Boolean(definition.untrustedContentHint),
-          },
-          description: definition.description,
-          execute: async (input = {}, { signal } = {}) => {
+      const tools = listWebMcpToolDefinitions().map((definition) => ({
+        annotations: {
+          readOnlyHint: definition.annotations.readOnlyHint,
+          untrustedContentHint: Boolean(definition.untrustedContentHint),
+        },
+        description: getWebMcpDescription(definition),
+        execute: async (input = {}, { signal } = {}) => {
+          throwIfAborted(signal);
+          let preparation = null;
+          if (typeof this.prepareToolCall === 'function') {
+            preparation = await this.prepareToolCall({
+              input,
+              name: definition.name,
+              signal,
+            });
             throwIfAborted(signal);
-            const serverResult = await this.callTool(definition.name, input, { signal });
-            const result = await replaceSnapshotRendering(serverResult, this.renderExcalidrawScene);
-            throwIfAborted(signal);
-            if (!definition.annotations.readOnlyHint) {
-              try {
-                this.onDidMutate?.({ name: definition.name, result });
-              } catch (error) {
-                console.error('[webmcp] Failed to report an applied mutation:', error.message);
-              }
+          }
+          const serverResult = await this.callTool(definition.name, input, { signal });
+          let result = await replaceSnapshotRendering(
+            serverResult,
+            this.renderExcalidrawScene,
+            input,
+          );
+          throwIfAborted(signal);
+          const execution = preparation ? { preparation } : {};
+          if (!definition.annotations.readOnlyHint) {
+            const acknowledgement = await runAcknowledgementHook(this.acknowledgeToolCall, {
+              input,
+              name: definition.name,
+              result,
+              signal,
+            });
+            if (acknowledgement) execution.acknowledgement = acknowledgement;
+            result = addWebMcpExecution(result, execution);
+            try {
+              this.onDidMutate?.({ name: definition.name, result });
+            } catch (error) {
+              console.error('[webmcp] Failed to report an applied mutation:', error.message);
             }
-            return result;
-          },
-          inputSchema: definition.inputSchema,
-          name: toWebMcpToolName(definition.name),
-        }, { signal: controller.signal })
+          } else {
+            result = addWebMcpExecution(result, execution);
+          }
+          return result;
+        },
+        inputSchema: definition.inputSchema,
+        name: toWebMcpToolName(definition.name),
+      }));
+      tools.push(createActiveContextTool(this.getActiveContext));
+      await Promise.all(tools.map((tool) => (
+        this.modelContext.registerTool(tool, { signal: controller.signal })
       )));
       return true;
     } catch (error) {

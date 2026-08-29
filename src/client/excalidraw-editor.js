@@ -11,6 +11,7 @@ import {
 import { getElementBounds } from '@excalidraw/element';
 import '@excalidraw/excalidraw/index.css';
 
+import { createEditableContentRevision } from '../domain/editable-content-revision.js';
 import {
   buildRenderableCollaboratorsMap,
   findCollaboratorByPeerId,
@@ -78,6 +79,12 @@ let localAwarenessUser = resolveLocalAwarenessUser({
   storedUserName: localStorage.getItem('collabmd-user-name'),
 });
 let appliedSceneJson = '';
+let appliedSceneRevisionPromise = createEditableContentRevision(appliedSceneJson);
+
+function setAppliedSceneJson(value) {
+  appliedSceneJson = value;
+  appliedSceneRevisionPromise = createEditableContentRevision(value);
+}
 
 let collabReady = false;
 let pendingRemoteSceneJson = '';
@@ -1402,7 +1409,7 @@ function applySceneFromJson(rawJson, {
     return;
   }
 
-  appliedSceneJson = normalizedJson;
+  setAppliedSceneJson(normalizedJson);
   recordSceneDiagnostic('remote-scene-received', {}, normalizedJson);
 
   if (!getMountedExcalidrawAPI() || !collabReady) {
@@ -1478,7 +1485,7 @@ function requestEditorRemount(scene) {
   const normalizedScene = normalizeScene(scene);
   const normalizedJson = JSON.stringify(normalizedScene);
   pendingRemoteSceneJson = normalizedJson;
-  appliedSceneJson = normalizedJson;
+  setAppliedSceneJson(normalizedJson);
   pendingCollaborators = activeCollaborators;
   initialViewportFitPending = true;
   clearPreviewViewportFitTimers();
@@ -1554,7 +1561,7 @@ function applyLocalScene(scene, {
   const normalizedScene = normalizeScene(scene);
   const normalizedJson = JSON.stringify(normalizedScene);
 
-  appliedSceneJson = normalizedJson;
+  setAppliedSceneJson(normalizedJson);
 
   if (!getMountedExcalidrawAPI() || !collabReady) {
     pendingRemoteSceneJson = normalizedJson;
@@ -1900,6 +1907,31 @@ async function waitForPendingRoomWrites({
   }
 }
 
+function waitForAnimationFrame() {
+  return new Promise((resolve) => requestAnimationFrame(resolve));
+}
+
+async function waitForAppliedSceneRevision(revision, { maxWaitMs = 4500 } = {}) {
+  const startedAt = performance.now();
+  while ((performance.now() - startedAt) < maxWaitMs) {
+    if (
+      !pendingRemoteSceneJson
+      && await appliedSceneRevisionPromise === revision
+    ) {
+      await waitForAnimationFrame();
+      await waitForAnimationFrame();
+      if (
+        !pendingRemoteSceneJson
+        && await appliedSceneRevisionPromise === revision
+      ) {
+        return true;
+      }
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 16));
+  }
+  return false;
+}
+
 async function prepareRealtimeRoomDisconnect() {
   if (!roomClient) {
     return true;
@@ -2012,6 +2044,27 @@ window.addEventListener('message', (event) => {
     return;
   }
 
+  if (message.type === 'flush-agent-writes') {
+    void (async () => {
+      roomClient?.flushSceneSync();
+      await waitForPendingRoomWrites({ maxWaitMs: 1000 });
+      postToParent('agent-writes-flushed', { requestId: message.requestId || '' });
+    })();
+    return;
+  }
+
+  if (message.type === 'wait-for-agent-revision') {
+    void (async () => {
+      const revision = String(message.revision || '');
+      const painted = revision && await waitForAppliedSceneRevision(revision);
+      postToParent(painted ? 'agent-revision-painted' : 'agent-revision-not-painted', {
+        requestId: message.requestId || '',
+        revision,
+      });
+    })();
+    return;
+  }
+
   if (message.type === 'prepare-disconnect') {
     void (async () => {
       const requestId = message.requestId || '';
@@ -2113,7 +2166,7 @@ function initializeEditor(api) {
   const sceneJson = pendingRemoteSceneJson || roomClient?.getLastSceneJson?.() || '';
   const initialScene = parseSceneJson(sceneJson);
   pendingRemoteSceneJson = '';
-  appliedSceneJson = JSON.stringify(initialScene);
+  setAppliedSceneJson(JSON.stringify(initialScene));
   updateApiScene(initialScene);
 
   if (pendingCollaborators) {

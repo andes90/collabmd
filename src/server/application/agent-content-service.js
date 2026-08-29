@@ -58,21 +58,26 @@ function requireInlineExcalidrawVerificationOptions(value) {
   }
 }
 
-function createInlineExcalidrawVerification(scene, options) {
+function createInlineExcalidrawVerification(scene, options, { deferRender = false } = {}) {
   const verification = {
     inspection: inspectAgentExcalidrawScene(scene, {
       inspectOcclusion: options.inspectOcclusion ?? true,
     }),
   };
   if (options.render) {
-    Object.assign(verification, {
-      ...renderAgentExcalidrawSvg(scene, {
-        padding: options.padding ?? 32,
-        scale: options.scale ?? 1,
-      }),
-      format: options.format ?? 'png',
-      scene,
-    });
+    if (deferRender) {
+      verification.elementCount = verification.inspection.elementCount;
+      verification.scene = scene;
+    } else {
+      Object.assign(verification, {
+        ...renderAgentExcalidrawSvg(scene, {
+          padding: options.padding ?? 32,
+          scale: options.scale ?? 1,
+        }),
+        format: options.format ?? 'png',
+        scene,
+      });
+    }
   }
   return verification;
 }
@@ -179,13 +184,17 @@ export class AgentContentService {
     scale = 1,
   } = {}) {
     const current = await this.readExcalidrawScene(actor, path);
-    return {
-      ...renderAgentExcalidrawSvg(current.scene, { padding, scale }),
-      scene: current.scene,
+    const result = {
+      elementCount: current.scene.elements.filter((element) => !element.isDeleted).length,
       format,
       path: current.path,
       revision: current.revision,
+      scene: current.scene,
     };
+    if (actor.origin !== 'webmcp') {
+      Object.assign(result, renderAgentExcalidrawSvg(current.scene, { padding, scale }));
+    }
+    return result;
   }
 
   async verifyExcalidraw(actor, {
@@ -196,14 +205,19 @@ export class AgentContentService {
     scale = 1,
   } = {}) {
     const current = await this.readExcalidrawScene(actor, path);
-    return {
-      ...renderAgentExcalidrawSvg(current.scene, { padding, scale }),
-      scene: current.scene,
+    const inspection = inspectAgentExcalidrawScene(current.scene, { inspectOcclusion });
+    const result = {
+      elementCount: inspection.elementCount,
       format,
-      inspection: inspectAgentExcalidrawScene(current.scene, { inspectOcclusion }),
+      inspection,
       path: current.path,
       revision: current.revision,
+      scene: current.scene,
     };
+    if (actor.origin !== 'webmcp') {
+      Object.assign(result, renderAgentExcalidrawSvg(current.scene, { padding, scale }));
+    }
+    return result;
   }
 
   listDocuments(actor, { cursor = '', kinds = [], limit = 100, prefix = '' } = {}) {
@@ -394,7 +408,9 @@ export class AgentContentService {
         revision: await createEditableContentRevision(content),
       };
       if (verify !== null) {
-        response.verification = createInlineExcalidrawVerification(scene, verify);
+        response.verification = createInlineExcalidrawVerification(scene, verify, {
+          deferRender: actor.origin === 'webmcp',
+        });
       }
       return response;
     });
@@ -479,7 +495,9 @@ export class AgentContentService {
         updated: update.length,
       };
       if (verify !== null) {
-        result.verification = createInlineExcalidrawVerification(storedScene, verify);
+        result.verification = createInlineExcalidrawVerification(storedScene, verify, {
+          deferRender: actor.origin === 'webmcp',
+        });
       }
       return result;
     });

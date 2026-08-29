@@ -31,6 +31,10 @@ test('WebMCP exposes every shared browser tool while the workspace tab is active
     },
     getIsTabActive: () => active,
     modelContext,
+    getActiveContext: () => ({
+      activeDiagramPath: 'diagrams/current.excalidraw',
+      activePath: 'diagrams/current.excalidraw',
+    }),
     onDidMutate: (mutation) => mutations.push(mutation),
   });
 
@@ -39,7 +43,19 @@ test('WebMCP exposes every shared browser tool while the workspace tab is active
   assert.equal(await registry.refresh(), true);
   assert.deepEqual(
     [...modelContext.tools.keys()].sort(),
-    listWebMcpToolDefinitions().map(({ name }) => toWebMcpToolName(name)).sort(),
+    [
+      'collabmd_get_active_context',
+      ...listWebMcpToolDefinitions().map(({ name }) => toWebMcpToolName(name)),
+    ].sort(),
+  );
+  assert.deepEqual(
+    await modelContext.tools.get('collabmd_get_active_context').execute(),
+    {
+      activeDiagramPath: 'diagrams/current.excalidraw',
+      activePath: 'diagrams/current.excalidraw',
+      preferredDiagramPath: 'diagrams/current.excalidraw',
+      workflow: 'Current diagram is diagrams/current.excalidraw. Inspect it, edit with the returned exact revision, request inline verification, then use the returned canvas paint acknowledgement.',
+    },
   );
 
   const readTool = modelContext.tools.get('collabmd_read_document');
@@ -75,18 +91,12 @@ test('WebMCP replaces server previews with official browser snapshot rendering',
   };
   const registry = new WebMcpToolRegistry({
     callTool: async (name) => {
-      const preview = {
-        format: 'png',
-        image: { data: 'basic', encoding: 'base64', mimeType: 'image/png' },
-        scale: 1,
-      };
       if (name === 'create_excalidraw' || name === 'edit_excalidraw') {
         return {
-          image: preview.image,
-          verification: { ...preview, scene },
+          verification: { elementCount: scene.elements.length, scene },
         };
       }
-      return { ...preview, scene };
+      return { elementCount: scene.elements.length, format: 'png', scene };
     },
     getIsTabActive: () => true,
     modelContext,
@@ -105,6 +115,7 @@ test('WebMCP replaces server previews with official browser snapshot rendering',
   });
   assert.equal(rendered.renderer, 'excalidraw-official-browser');
   assert.equal(rendered.image.data, 'exact');
+  assert.equal(rendered.elementCount, 1);
   assert.equal(Object.hasOwn(rendered, 'scene'), false);
 
   const created = await modelContext.tools.get('collabmd_create_excalidraw').execute({
@@ -113,6 +124,7 @@ test('WebMCP replaces server previews with official browser snapshot rendering',
     verify: { render: true },
   });
   assert.equal(created.verification.renderer, 'excalidraw-official-browser');
+  assert.equal(created.verification.elementCount, 1);
   assert.equal(created.image.data, 'exact');
   assert.equal(Object.hasOwn(created.verification, 'scene'), false);
 
@@ -126,6 +138,44 @@ test('WebMCP replaces server previews with official browser snapshot rendering',
   assert.equal(edited.image.data, 'exact');
   assert.equal(Object.hasOwn(edited.verification, 'scene'), false);
   assert.equal(mutations.at(-1).result, edited);
+});
+
+test('WebMCP flushes an active editor and returns paint acknowledgement', async () => {
+  const events = [];
+  const modelContext = createModelContext();
+  const revision = 'b'.repeat(64);
+  const registry = new WebMcpToolRegistry({
+    acknowledgeToolCall: async ({ name, result }) => {
+      events.push(`ack:${name}:${result.revision}`);
+      return { revision: result.revision, status: 'painted' };
+    },
+    callTool: async (name) => {
+      events.push(`call:${name}`);
+      return { revision };
+    },
+    getIsTabActive: () => true,
+    modelContext,
+    prepareToolCall: async ({ name }) => {
+      events.push(`prepare:${name}`);
+      return { status: 'flushed' };
+    },
+  });
+  await registry.refresh();
+
+  const result = await modelContext.tools.get('collabmd_edit_excalidraw').execute({
+    path: 'diagram.excalidraw',
+    revision: 'a'.repeat(64),
+  });
+
+  assert.deepEqual(events, [
+    'prepare:edit_excalidraw',
+    'call:edit_excalidraw',
+    `ack:edit_excalidraw:${revision}`,
+  ]);
+  assert.deepEqual(result.webMcp, {
+    acknowledgement: { revision, status: 'painted' },
+    preparation: { status: 'flushed' },
+  });
 });
 
 test('WebMCP cleans up partial registration failures', async () => {

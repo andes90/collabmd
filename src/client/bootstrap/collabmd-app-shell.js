@@ -179,10 +179,31 @@ export class CollabMdAppShell {
       trigger: this.elements.connectAgentButton,
     });
     this.webMcpTools = new WebMcpToolRegistry({
+      acknowledgeToolCall: ({ input, name, result, signal }) => {
+        if (
+          !['create_excalidraw', 'edit_excalidraw'].includes(name)
+          || input.path !== this.currentFilePath
+        ) {
+          return null;
+        }
+        return this.excalidrawEmbed?.waitForAgentPaint(input.path, result.revision, { signal });
+      },
       callTool: (name, input, options) => this.vaultApiClient.callAgentTool(name, input, options),
+      getActiveContext: () => ({
+        activeDiagramPath: this.isExcalidrawFile(this.currentFilePath)
+          ? this.currentFilePath
+          : null,
+        activePath: this.currentFilePath,
+      }),
       getIsTabActive: () => this.isTabActive,
       onDidMutate: () => {
         this.toastController.show('Agent-assisted Vault change applied. Review it before committing.');
+      },
+      prepareToolCall: ({ input, name, signal }) => {
+        if (!name.includes('excalidraw') || input.path !== this.currentFilePath) {
+          return null;
+        }
+        return this.excalidrawEmbed?.flushPendingAgentWrites(input.path, { signal });
       },
     });
     this.fileExplorer = new FileExplorerController({
