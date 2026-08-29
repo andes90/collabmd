@@ -107,16 +107,18 @@ test('npm pack includes built public assets and runtime helper scripts required 
     const mainAssetPath = extractAssetPath(indexHtml, /src="\.\/(assets\/[^"]+\.js)"/, 'main asset');
     const mainCssPath = extractAssetPath(indexHtml, /href="\.\/(assets\/[^"]+-[A-Za-z0-9_-]{8,}\.css)"/, 'main stylesheet');
     const excalidrawJsPath = extractAssetPath(excalidrawHtml, /src="\.\/(assets\/[^"]+\.js)"/, 'Excalidraw script');
-    const excalidrawBundle = await readFile(resolve(artifact.packageRoot, 'dist/client', excalidrawJsPath), 'utf8');
-    const excalidrawCssPath = excalidrawBundle.match(/\bexcalidraw-editor-[A-Za-z0-9_-]+\.css\b/u)?.[0];
+    const excalidrawCssPath = extractAssetPath(
+      excalidrawHtml,
+      /href="\.\/(assets\/excalidrawEditor-[^"]+\.css)"/,
+      'Excalidraw stylesheet',
+    );
 
     assert.ok(packagedPaths.has('dist/client/index.html'));
     assert.ok(packagedPaths.has('dist/client/excalidraw-editor.html'));
     assert.ok(packagedPaths.has(`dist/client/${mainAssetPath}`));
     assert.ok(packagedPaths.has(`dist/client/${mainCssPath}`));
     assert.ok(packagedPaths.has(`dist/client/${excalidrawJsPath}`));
-    assert.ok(excalidrawCssPath, 'expected packaged build to include the Excalidraw stylesheet reference');
-    assert.ok(packagedPaths.has(`dist/client/assets/${excalidrawCssPath}`));
+    assert.ok(packagedPaths.has(`dist/client/${excalidrawCssPath}`));
     assert.ok(
       Array.from(packagedPaths).some((path) => /dist\/client\/assets\/github-dark\.min-[A-Za-z0-9_-]+\.css$/u.test(path)),
       'expected packaged build to include the dark highlight theme asset',

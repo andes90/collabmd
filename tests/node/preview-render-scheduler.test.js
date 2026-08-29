@@ -3,28 +3,49 @@ import assert from 'node:assert/strict';
 
 import { PreviewRenderScheduler } from '../../src/client/application/preview-render-scheduler.js';
 
-test('PreviewRenderScheduler debounces and schedules immediate frame renders', () => {
-  const timeouts = [];
+function installSchedulingHarness(t) {
+  const originalGlobals = {
+    cancelAnimationFrame: globalThis.cancelAnimationFrame,
+    cancelIdleCallback: globalThis.cancelIdleCallback,
+    clearTimeout: globalThis.clearTimeout,
+    requestAnimationFrame: globalThis.requestAnimationFrame,
+    requestIdleCallback: globalThis.requestIdleCallback,
+    setTimeout: globalThis.setTimeout,
+  };
+  const cancelled = [];
   const frames = [];
   const idle = [];
-  const calls = [];
-  const scheduler = new PreviewRenderScheduler({
-    cancelAnimationFrameFn() {},
-    cancelIdleRenderFn() {},
-    clearTimeoutFn() {},
-    getRenderProfileFn: () => ({ debounceMs: 12, deferUntilIdle: false }),
-    requestAnimationFrameFn: (callback) => {
+  const timeouts = [];
+
+  Object.assign(globalThis, {
+    cancelAnimationFrame: (id) => cancelled.push(['frame', id]),
+    cancelIdleCallback: (id) => cancelled.push(['idle', id]),
+    clearTimeout: (id) => {
+      if (id !== null) cancelled.push(['timeout', id]);
+    },
+    requestAnimationFrame: (callback) => {
       frames.push(callback);
       return frames.length;
     },
-    requestIdleRenderFn: (callback, timeout) => {
+    requestIdleCallback: (callback, { timeout } = {}) => {
       idle.push({ callback, timeout });
       return idle.length;
     },
-    setTimeoutFn: (callback, delay) => {
+    setTimeout: (callback, delay) => {
       timeouts.push({ callback, delay });
       return timeouts.length;
     },
+  });
+  t.after(() => Object.assign(globalThis, originalGlobals));
+
+  return { cancelled, frames, idle, timeouts };
+}
+
+test('PreviewRenderScheduler debounces and schedules immediate frame renders', (t) => {
+  const { frames, idle, timeouts } = installSchedulingHarness(t);
+  const calls = [];
+  const scheduler = new PreviewRenderScheduler({
+    getRenderProfileFn: () => ({ debounceMs: 12, deferUntilIdle: false }),
   });
 
   scheduler.queue({
@@ -35,40 +56,20 @@ test('PreviewRenderScheduler debounces and schedules immediate frame renders', (
     renderVersion: 4,
   });
 
-  assert.equal(timeouts.length, 1);
   assert.equal(timeouts[0].delay, 12);
   assert.equal(frames.length, 0);
-
   timeouts[0].callback();
   assert.equal(frames.length, 1);
   assert.equal(idle.length, 0);
-
   frames[0]();
   assert.deepEqual(calls, [{ markdownText: '# Preview', renderVersion: 4 }]);
 });
 
-test('PreviewRenderScheduler defers idle renders before the animation frame', () => {
-  const timeouts = [];
-  const frames = [];
-  const idle = [];
+test('PreviewRenderScheduler defers idle renders before the animation frame', (t) => {
+  const { frames, idle, timeouts } = installSchedulingHarness(t);
   const calls = [];
   const scheduler = new PreviewRenderScheduler({
-    cancelAnimationFrameFn() {},
-    cancelIdleRenderFn() {},
-    clearTimeoutFn() {},
     getRenderProfileFn: () => ({ debounceMs: 4, deferUntilIdle: true }),
-    requestAnimationFrameFn: (callback) => {
-      frames.push(callback);
-      return frames.length;
-    },
-    requestIdleRenderFn: (callback, timeout) => {
-      idle.push({ callback, timeout });
-      return idle.length;
-    },
-    setTimeoutFn: (callback, delay) => {
-      timeouts.push({ callback, delay });
-      return timeouts.length;
-    },
   });
 
   scheduler.queue({
@@ -80,42 +81,16 @@ test('PreviewRenderScheduler defers idle renders before the animation frame', ()
   });
 
   timeouts[0].callback();
-  assert.equal(idle.length, 1);
   assert.equal(idle[0].timeout > 0, true);
-
   idle[0].callback();
-  assert.equal(frames.length, 1);
   frames[0]();
-
   assert.deepEqual(calls, [{ markdownText: 'large doc', renderVersion: 9 }]);
 });
 
-test('PreviewRenderScheduler cancels timeout, idle, and frame work together', () => {
-  const cancelled = [];
-  let timeoutCallback = null;
+test('PreviewRenderScheduler cancels timeout, idle, and frame work together', (t) => {
+  const { cancelled, idle, timeouts } = installSchedulingHarness(t);
   const scheduler = new PreviewRenderScheduler({
-    cancelAnimationFrameFn: (frameId) => {
-      if (frameId !== null) {
-        cancelled.push(['frame', frameId]);
-      }
-    },
-    cancelIdleRenderFn: (idleId) => {
-      if (idleId !== null) {
-        cancelled.push(['idle', idleId]);
-      }
-    },
-    clearTimeoutFn: (timeoutId) => {
-      if (timeoutId !== null) {
-        cancelled.push(['timeout', timeoutId]);
-      }
-    },
     getRenderProfileFn: () => ({ debounceMs: 1, deferUntilIdle: true }),
-    requestAnimationFrameFn: () => 22,
-    requestIdleRenderFn: () => 11,
-    setTimeoutFn: (callback) => {
-      timeoutCallback = callback;
-      return 33;
-    },
   });
 
   scheduler.queue({
@@ -123,12 +98,12 @@ test('PreviewRenderScheduler cancels timeout, idle, and frame work together', ()
     onRenderRequested() {},
     renderVersion: 1,
   });
-
-  timeoutCallback();
+  timeouts[0].callback();
   scheduler.cancel();
 
   assert.deepEqual(cancelled, [
-    ['timeout', 33],
-    ['idle', 11],
+    ['timeout', 1],
+    ['idle', 1],
   ]);
+  assert.equal(idle.length, 1);
 });

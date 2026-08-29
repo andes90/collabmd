@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { resolve } from 'node:path';
 
 import { loadConfig } from '../../src/server/config/env.js';
 
@@ -36,6 +37,31 @@ test('loadConfig enables perf logging from COLLABMD_PERF_LOGGING', () => {
     }
   }
 });
+
+test('loadConfig accepts an isolated E2E public directory in test mode', () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousPublicDir = process.env.COLLABMD_E2E_PUBLIC_DIR;
+  process.env.NODE_ENV = 'test';
+  process.env.COLLABMD_E2E_PUBLIC_DIR = 'test-public';
+
+  try {
+    const config = loadConfig({ vaultDir: process.cwd() });
+    assert.equal(config.publicDir, resolve('test-public'));
+  } finally {
+    if (previousNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = previousNodeEnv;
+    }
+
+    if (previousPublicDir === undefined) {
+      delete process.env.COLLABMD_E2E_PUBLIC_DIR;
+    } else {
+      process.env.COLLABMD_E2E_PUBLIC_DIR = previousPublicDir;
+    }
+  }
+});
+
 
 test('loadConfig configures global text search limits', () => {
   const previousMaxFileSize = process.env.COLLABMD_SEARCH_MAX_FILE_SIZE;

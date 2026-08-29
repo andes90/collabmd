@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { VaultApiClient } from '../../src/client/infrastructure/vault-api-client.js';
+import { vaultApiClient } from '../../src/client/infrastructure/vault-api-client.js';
 
 function createWindowStub() {
   return {
@@ -31,7 +31,7 @@ test('VaultApiClient prefixes vault endpoints with the configured base path', as
     globalThis.window = originalWindow;
   });
 
-  const client = new VaultApiClient();
+  const client = vaultApiClient;
 
   await client.readTree();
   await client.readCommentOverview();
@@ -121,7 +121,7 @@ test('VaultApiClient surfaces API-provided errors', async (t) => {
     globalThis.window = originalWindow;
   });
 
-  const client = new VaultApiClient();
+  const client = vaultApiClient;
 
   await assert.rejects(
     client.createFile({ content: '', path: 'notes/today.md' }),
@@ -153,7 +153,7 @@ test('VaultApiClient includes request ids for write operations when provided', a
     globalThis.window = originalWindow;
   });
 
-  const client = new VaultApiClient();
+  const client = vaultApiClient;
 
   await client.createFile({ content: '# Today\n', path: 'notes/today.md', requestId: 'write-1' });
   await client.deleteFile('notes/today.md', { requestId: 'write-2' });

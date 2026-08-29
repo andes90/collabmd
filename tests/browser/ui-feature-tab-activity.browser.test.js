@@ -13,14 +13,14 @@ describe('uiFeature tab lock', () => {
     document.body.innerHTML = `
       <main id="workspace">
         <button id="launcher">Search</button>
-        <div id="quickSwitcher" aria-hidden="true">
+        <dialog id="quickSwitcher">
           <button data-qs-mode="files">Files</button>
           <button data-qs-mode="text">Text</button>
           <input id="quickSwitcherInput">
           <div id="quickSwitcherHint"></div>
           <div id="quickSwitcherScope"></div>
           <div id="quickSwitcherResults"></div>
-        </div>
+        </dialog>
       </main>
       <dialog id="tabLockOverlay">
         <h2 id="tabLockTitle"></h2>
@@ -48,7 +48,7 @@ describe('uiFeature tab lock', () => {
     context.showTabLockOverlay({ reason: 'taken-over' });
 
     expect(quickSwitcher.isOpen).toBe(false);
-    expect(quickSwitcher.overlay).not.toHaveClass('visible');
+    expect(quickSwitcher.overlay.open).toBe(false);
     expect(context.elements.tabLockOverlay.open).toBe(true);
     expect(document.activeElement).toBe(context.elements.tabLockTakeoverButton);
 

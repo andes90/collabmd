@@ -98,7 +98,6 @@ export class QuickSwitcherController {
     this.selectedIndex = 0;
     this.selectedTextIndex = 0;
     this.isOpen = false;
-    this.previousActiveElement = null;
     this.mode = 'files';
     this.textResults = null;
     this.textResultItems = [];
@@ -112,17 +111,7 @@ export class QuickSwitcherController {
 
   bindEvents() {
     document.addEventListener?.('collabmd:close-custom-modals', this.blockingModalHandler);
-
-    this.overlay?.addEventListener('mousedown', (e) => {
-      if (e.target === this.overlay) this.close();
-    });
-
-    this.overlay?.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        this.close();
-      }
-    });
+    this.overlay?.addEventListener('close', () => this.handleClose());
 
     this.modeTabs.forEach((tab, index) => {
       tab.addEventListener('click', () => {
@@ -176,86 +165,36 @@ export class QuickSwitcherController {
     });
   }
 
-  open() {
-    if (!this.overlay) return;
-
-    this.previousActiveElement = document.activeElement;
-    this.isOpen = true;
-    this.input.value = '';
-    this.selectedIndex = 0;
-    this.selectedTextIndex = 0;
-    this.overlay.classList.add('visible');
-    this.overlay.setAttribute('aria-hidden', 'false');
-    this.input?.setAttribute('aria-expanded', 'true');
-    this.setMode('files', { preserveInput: true });
-
-    // The overlay transitions visibility hidden→visible over 120ms.
-    // Browsers ignore .focus() while the element is still visibility:hidden,
-    // so we must wait for the transition to complete.
-    this._focusAfterTransition();
-  }
-
-  /** Focus the input once the overlay visibility transition finishes. */
-  _focusAfterTransition() {
-    this._cancelPendingFocus();
-
-    const tryFocus = () => {
-      this._focusCleanup = null;
-      this.input?.focus();
-      if (this.isOpen && this.input && document.activeElement !== this.input) {
-        setTimeout(() => this.input?.focus(), 50);
-      }
-    };
-
-    const onEnd = (e) => {
-      if (e.propertyName === 'visibility' || e.propertyName === 'opacity') {
-        this.overlay.removeEventListener('transitionend', onEnd);
-        clearTimeout(fallbackTimer);
-        tryFocus();
-      }
-    };
-    this.overlay.addEventListener('transitionend', onEnd);
-
-    const fallbackTimer = setTimeout(() => {
-      this.overlay.removeEventListener('transitionend', onEnd);
-      tryFocus();
-    }, 160);
-
-    this._focusCleanup = () => {
-      this.overlay.removeEventListener('transitionend', onEnd);
-      clearTimeout(fallbackTimer);
-    };
-  }
-
-  _cancelPendingFocus() {
-    if (this._focusCleanup) {
-      this._focusCleanup();
-      this._focusCleanup = null;
-    }
-  }
-
-  close({ restoreFocus = true } = {}) {
-    if (!this.overlay) return;
-
-    const previousActiveElement = this.previousActiveElement;
-    this._cancelPendingFocus();
+  handleClose() {
     this.abortTextSearch();
     this.isOpen = false;
-    this.overlay.classList.remove('visible');
-    this.overlay.setAttribute('aria-hidden', 'true');
     this.input?.setAttribute('aria-expanded', 'false');
     this.input.value = '';
     this.resultsList.innerHTML = '';
     this.setActiveDescendant('');
-    this.previousActiveElement = null;
+  }
 
-    if (restoreFocus) {
-      previousActiveElement?.focus?.();
+  open() {
+    if (!this.overlay || this.overlay.open) return;
+
+    this.isOpen = true;
+    this.input.value = '';
+    this.selectedIndex = 0;
+    this.selectedTextIndex = 0;
+    this.setMode('files', { preserveInput: true });
+    this.overlay.showModal();
+    this.input?.setAttribute('aria-expanded', 'true');
+  }
+
+  close() {
+    this.handleClose();
+    if (this.overlay?.open) {
+      this.overlay.close();
     }
   }
 
   toggle() {
-    if (this.isOpen) {
+    if (this.overlay?.open) {
       this.close();
     } else {
       this.open();

@@ -442,11 +442,19 @@ function loadAgentAccessConfig(overrides = {}, { basePath, oidc, vaultDir } = {}
   };
 }
 
+function resolvePublicDir(nodeEnv) {
+  if (nodeEnv === 'test' && process.env.COLLABMD_E2E_PUBLIC_DIR) {
+    return resolve(process.env.COLLABMD_E2E_PUBLIC_DIR);
+  }
+
+  return resolve(projectRoot, 'dist/client');
+}
+
 export function loadConfig(overrides = {}) {
   const nodeEnv = process.env.NODE_ENV || 'development';
   const vaultDir = resolveConfiguredVaultDir(overrides);
   const basePath = normalizeAppBasePath(process.env.BASE_PATH || '');
-  const publicDir = resolve(projectRoot, 'dist/client');
+  const publicDir = resolvePublicDir(nodeEnv);
   const authOverrides = overrides.auth ?? {};
   const authStrategy = normalizeAuthStrategy(
     authOverrides.strategy

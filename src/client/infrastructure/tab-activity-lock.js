@@ -8,11 +8,8 @@ function now() {
 }
 
 function createTabId() {
-  if (globalThis.crypto?.randomUUID) {
-    return globalThis.crypto.randomUUID();
-  }
-
-  return `tab-${now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return globalThis.crypto?.randomUUID?.()
+    ?? `tab-${now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function safeJsonParse(value) {

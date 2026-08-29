@@ -3,7 +3,7 @@ import { PlantUmlPreviewHydrator } from './plantuml-preview-hydrator.js';
 import { DiagramChrome } from './diagram-chrome.js';
 import { IDLE_RENDER_TIMEOUT_MS } from './preview-diagram-utils.js';
 import { PreviewRenderExecutor } from './preview-render-executor.js';
-import { getRenderProfile, isLargeDocumentStats } from './preview-render-profile.js';
+import { isLargeDocumentStats } from './preview-render-profile.js';
 import { PreviewRenderScheduler } from './preview-render-scheduler.js';
 import { resolveApiUrl } from '../domain/runtime-paths.js';
 
@@ -105,7 +105,7 @@ export class PreviewRenderer {
       loadFileSource,
       renderClient: plantUmlRenderClient,
     });
-    this.renderScheduler = new PreviewRenderScheduler({ getRenderProfileFn: getRenderProfile });
+    this.renderScheduler = new PreviewRenderScheduler();
     this.renderExecutor = new PreviewRenderExecutor({
       attachmentApiPath: resolveApiUrl('/attachment'),
       getFileList: () => this.getFileList?.() ?? [],

@@ -531,7 +531,8 @@ export class CollaborationRoom {
         snapshot: Y.encodeStateAsUpdate(this.doc),
       });
       if (includeContent) {
-        this.resetContentBaseline();
+        this.persistedContentBaseline = content;
+        this.refreshContentDirty();
       }
     })();
 

@@ -145,25 +145,7 @@
   }
 
   .toolbar-overflow-menu {
-    position: absolute;
-    top: calc(100% + 6px);
-    right: 0;
-    z-index: 14;
-    display: none;
     width: min(212px, calc(100vw - 20px));
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0;
-    padding: 6px;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    background: oklch(from var(--color-surface) l c h / 0.98);
-    box-shadow: var(--shadow-lg);
-    backdrop-filter: blur(12px);
-  }
-
-  .toolbar-right.is-overflow-open .toolbar-overflow-menu {
-    display: flex;
   }
 
   .toolbar-overflow-menu .ui-button--toolbar,

@@ -216,6 +216,9 @@ test('keeps the linked mentions dock reachable while preview scrolls and expands
   const scrollTopBeforeExpand = await page.locator('#previewContainer').evaluate((element) => element.scrollTop);
   await dockHeader.click();
   await expect(dock).toHaveClass(/expanded/);
+  await page.evaluate(() => new Promise((resolveFrame) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolveFrame));
+  }));
 
   const scrollTopAfterExpand = await page.locator('#previewContainer').evaluate((element) => element.scrollTop);
   expect(Math.abs(scrollTopAfterExpand - scrollTopBeforeExpand)).toBeLessThanOrEqual(1);

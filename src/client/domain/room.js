@@ -47,11 +47,7 @@ export function generatePeerId() {
 }
 
 function generateUserId() {
-  if (globalThis.crypto?.randomUUID) {
-    return globalThis.crypto.randomUUID();
-  }
-
-  return `${generatePeerId()}-${Date.now().toString(36)}`;
+  return globalThis.crypto?.randomUUID?.() ?? `${generatePeerId()}-${Date.now().toString(36)}`;
 }
 
 // A stable peer ID for this browser tab, shared across lobby and per-file sessions.

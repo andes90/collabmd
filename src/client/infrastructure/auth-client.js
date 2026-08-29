@@ -1,6 +1,7 @@
 import '../styles/features/auth-gate.css';
 
 import { getHashParamsFromRaw } from '../domain/hash-routes.js';
+import { parseApiResponse } from './api-client-utils.js';
 import { getRuntimeConfig } from './runtime-config.js';
 
 const DEFAULT_AUTH_CONFIG = {
@@ -66,12 +67,7 @@ async function fetchAuthStatus(config) {
     },
   });
 
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload.error || 'Failed to read auth status');
-  }
-
-  return payload;
+  return parseApiResponse(response, 'Failed to read auth status');
 }
 
 function syncOidcIdentityToLocalState(status) {
@@ -100,13 +96,7 @@ async function submitPassword(config, password) {
     },
     body: JSON.stringify({ password }),
   });
-  const payload = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(payload.error || 'Authentication failed');
-  }
-
-  return payload;
+  return parseApiResponse(response, 'Authentication failed');
 }
 
 function createOverlayShell() {

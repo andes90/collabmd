@@ -50,12 +50,15 @@ test('excalidraw build references the lazy Mermaid-to-Excalidraw converter', asy
     'Excalidraw script',
   );
   const excalidrawBundle = await readFile(resolve(clientDistDir, excalidrawJsPath), 'utf8');
-  const excalidrawCssReference = excalidrawBundle.match(/\bexcalidraw-editor-[A-Za-z0-9_-]+\.css\b/u)?.[0] || null;
+  const excalidrawCssPath = extractAssetPath(
+    excalidrawHtml,
+    /href="\.\/(assets\/excalidrawEditor-[^"]+\.css)"/,
+    'Excalidraw stylesheet',
+  );
 
-  assert.ok(excalidrawCssReference, 'expected Excalidraw bundle to reference emitted stylesheet');
-  await access(resolve(clientDistDir, 'assets', excalidrawCssReference), fsConstants.R_OK);
+  await access(resolve(clientDistDir, excalidrawCssPath), fsConstants.R_OK);
   assert.match(excalidrawHtml, /src="\.\/app-config\.js"/);
   assert.doesNotMatch(excalidrawHtml, /excalidraw-editor-entry\.js/);
   assert.doesNotMatch(excalidrawBundle, /excalidraw-mermaid-stub/i);
-  assert.match(excalidrawBundle, /mermaid\.core-[A-Za-z0-9_-]+\.js/u);
+  assert.match(excalidrawHtml, /mermaid\.core-[A-Za-z0-9_-]+\.js/u);
 });

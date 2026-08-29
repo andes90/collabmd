@@ -137,29 +137,42 @@
   opacity: 0.85;
 }
 
+.user-avatar-overflow-trigger,
+.toolbar-presence-count {
+  anchor-name: --presence-trigger;
+}
+
 .user-avatar-overflow-trigger {
   background: var(--color-surface-dynamic);
   color: var(--color-text-muted);
 }
 
 .collaboration-popover {
-  position: absolute;
-  top: calc(100% + var(--space-2));
-  right: 0;
+  position: fixed;
+  inset: auto;
   z-index: 30;
   width: min(360px, calc(100vw - var(--space-6)));
+  margin: 0;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
+  color: var(--color-text);
   box-shadow: var(--shadow-lg);
+  position-try-fallbacks: flip-block, flip-inline;
 }
 
 .presence-panel {
-  display: flex;
+  top: calc(anchor(--presence-trigger bottom) + var(--space-2));
+  right: anchor(--presence-trigger right);
+  display: none;
   flex-direction: column;
   gap: var(--space-2);
   max-height: min(72vh, 480px);
   padding: var(--space-3);
+}
+
+.presence-panel:popover-open {
+  display: flex;
 }
 
 .presence-panel-header {

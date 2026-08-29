@@ -1,5 +1,5 @@
 import { createReadStream } from 'fs';
-import { mkdir, readFile, readdir, rename, rm, rmdir, stat, writeFile } from 'fs/promises';
+import { copyFile, mkdir, readFile, readdir, rename, rm, rmdir, stat, writeFile } from 'fs/promises';
 import { basename, dirname, extname, join, relative, resolve } from 'path';
 import sharp from 'sharp';
 
@@ -708,7 +708,11 @@ export class VaultFileStore {
             : null;
 
           if (backupPath) {
-            await rename(operation.targetPath, backupPath);
+            if (operation.kind === 'write') {
+              await copyFile(operation.targetPath, backupPath);
+            } else {
+              await rename(operation.targetPath, backupPath);
+            }
           }
 
           try {
@@ -721,6 +725,9 @@ export class VaultFileStore {
             }
           } catch (error) {
             if (backupPath) {
+              if (operation.kind === 'write') {
+                await rm(operation.targetPath, { force: true });
+              }
               await rename(backupPath, operation.targetPath);
             }
             throw error;

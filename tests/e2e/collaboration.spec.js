@@ -1733,9 +1733,9 @@ test('shows a desktop notification for a remote chat message once alerts are ena
     'aria-label',
     'Mute desktop alerts for one hour',
   );
-  await expect(pageB.locator('#chatToggleBtn')).toHaveAttribute('aria-expanded', 'true');
+  await expect(pageB.locator('#chatPanel')).toBeVisible();
   await pageB.locator('#chatToggleBtn').click();
-  await expect(pageB.locator('#chatToggleBtn')).toHaveAttribute('aria-expanded', 'false');
+  await expect(pageB.locator('#chatPanel')).toBeHidden();
   await pageB.evaluate(() => {
     Object.defineProperty(document, 'hasFocus', {
       configurable: true,

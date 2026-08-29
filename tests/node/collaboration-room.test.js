@@ -901,6 +901,53 @@ test('CollaborationRoom keeps the latest excalidraw state available while final 
   await Promise.resolve();
 });
 
+test('CollaborationRoom persists updates that arrive during an active persist', async () => {
+  let releaseFirstPersist;
+  let signalFirstPersistStarted;
+  const firstPersistStarted = new Promise((resolve) => {
+    signalFirstPersistStarted = resolve;
+  });
+  const firstPersistBlocked = new Promise((resolve) => {
+    releaseFirstPersist = resolve;
+  });
+  const writes = [];
+  const room = new CollaborationRoom({
+    maxBufferedAmountBytes: 1024,
+    name: 'notes.md',
+    onEmpty: () => {},
+    vaultFileStore: {
+      async persistCollaborationState(_path, payload) {
+        writes.push(payload);
+        if (writes.length === 1) {
+          signalFirstPersistStarted();
+          await firstPersistBlocked;
+        }
+        return { ok: true };
+      },
+      async readEditableVaultContent() {
+        return '# persisted\n';
+      },
+    },
+  });
+
+  await room.hydrate();
+  const text = room.doc.getText('codemirror');
+  text.insert(text.length, 'first\n');
+  const firstPersist = room.persist();
+  await firstPersistStarted;
+
+  text.insert(text.length, 'second\n');
+  const secondPersist = room.persist();
+  releaseFirstPersist();
+  await Promise.all([firstPersist, secondPersist]);
+
+  assert.equal(writes.length, 2);
+  assert.equal(writes[0].includeContent, true);
+  assert.equal(writes[0].content, '# persisted\nfirst\n');
+  assert.equal(writes[1].includeContent, true);
+  assert.equal(writes[1].content, '# persisted\nfirst\nsecond\n');
+});
+
 test('CollaborationRoom serializes overlapping persists for the same room', async () => {
   let concurrentPersists = 0;
   let maxConcurrentPersists = 0;

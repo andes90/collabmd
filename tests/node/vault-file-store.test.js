@@ -163,6 +163,33 @@ test('VaultFileStore persists content, comments, and snapshot as one staged coll
   assert.deepEqual(Array.from(await store.readCollaborationSnapshot('README.md') ?? []), Array.from(snapshot));
 });
 
+test('VaultFileStore keeps live content readable while collaboration state is replaced', async (t) => {
+  const { store, cleanup } = await createVaultStore();
+  t.after(cleanup);
+
+  let keepReading = true;
+  let missingReads = 0;
+  const reader = (async () => {
+    while (keepReading) {
+      if (await store.readMarkdownFile('README.md') === null) {
+        missingReads += 1;
+      }
+    }
+  })();
+
+  for (let index = 0; index < 100; index += 1) {
+    const result = await store.persistCollaborationState('README.md', {
+      content: `# Updated ${index}\n`,
+      snapshot: Uint8Array.from([index]),
+    });
+    assert.equal(result.ok, true);
+  }
+
+  keepReading = false;
+  await reader;
+  assert.equal(missingReads, 0);
+});
+
 test('VaultFileStore persists collaboration sidecars without touching vault content', async (t) => {
   const { store, cleanup, vaultDir } = await createVaultStore();
   t.after(cleanup);

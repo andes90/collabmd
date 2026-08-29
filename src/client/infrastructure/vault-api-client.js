@@ -26,21 +26,21 @@ async function triggerDownload(url, {
   return response;
 }
 
-export class VaultApiClient {
+export const vaultApiClient = {
   async readTree() {
     const response = await fetch(resolveApiUrl('/files'));
     return parseApiResponse(response, 'Failed to load file tree');
-  }
+  },
 
   async readCommentOverview() {
     const response = await fetch(resolveApiUrl('/comments/overview'));
     return parseApiResponse(response, 'Failed to load comment overview');
-  }
+  },
 
   async readFile(path) {
     const response = await fetch(resolveApiUrl(`/file?path=${encodeURIComponent(path)}`));
     return parseApiResponse(response, 'Failed to read file');
-  }
+  },
 
   async readBacklinks(filePath, { signal } = {}) {
     const response = await fetch(
@@ -49,7 +49,7 @@ export class VaultApiClient {
     );
     const data = await parseApiResponse(response, 'Failed to load backlinks');
     return Array.isArray(data.backlinks) ? data.backlinks : [];
-  }
+  },
 
   async syncStructurizrWorkspace({ path, source }) {
     const response = await fetch(resolveApiUrl('/structurizr/sync'), {
@@ -63,7 +63,7 @@ export class VaultApiClient {
       method: 'POST',
     });
     return parseApiResponse(response, 'Failed to sync Structurizr workspace');
-  }
+  },
 
   async renderSvg(source) {
     const response = await fetch(resolveApiUrl('/plantuml/render'), {
@@ -79,7 +79,7 @@ export class VaultApiClient {
     }
 
     return data.svg;
-  }
+  },
 
   async searchText({ limit = 50, query = '', signal = null } = {}) {
     const searchParams = new URLSearchParams({
@@ -90,7 +90,7 @@ export class VaultApiClient {
       signal,
     });
     return parseApiResponse(response, 'Failed to search files');
-  }
+  },
 
   async queryBase({
     activeFilePath = '',
@@ -113,7 +113,7 @@ export class VaultApiClient {
       method: 'POST',
     });
     return parseApiResponse(response, 'Failed to query base');
-  }
+  },
 
   async exportBaseCsv({
     activeFilePath = '',
@@ -144,7 +144,7 @@ export class VaultApiClient {
       blob: await response.blob(),
       contentDisposition: response.headers.get('content-disposition') || '',
     };
-  }
+  },
 
   async queryBasePropertyValues({
     activeFilePath = '',
@@ -169,7 +169,7 @@ export class VaultApiClient {
       method: 'POST',
     });
     return parseApiResponse(response, 'Failed to load base property values');
-  }
+  },
 
   async transformBase({
     activeFilePath = '',
@@ -192,7 +192,7 @@ export class VaultApiClient {
       method: 'POST',
     });
     return parseApiResponse(response, 'Failed to transform base');
-  }
+  },
 
   async createFile({ content, path, requestId = null }) {
     const response = await fetch(resolveApiUrl('/file'), {
@@ -201,7 +201,7 @@ export class VaultApiClient {
       method: 'POST',
     });
     return parseApiResponse(response, 'Failed to create file');
-  }
+  },
 
   async writeFile({ content, path, requestId = null }) {
     const response = await fetch(resolveApiUrl('/file'), {
@@ -210,7 +210,7 @@ export class VaultApiClient {
       method: 'PUT',
     });
     return parseApiResponse(response, 'Failed to write file');
-  }
+  },
 
   async renameFile({ oldPath, newPath, requestId = null }) {
     const response = await fetch(resolveApiUrl('/file'), {
@@ -219,7 +219,7 @@ export class VaultApiClient {
       method: 'PATCH',
     });
     return parseApiResponse(response, 'Failed to rename file');
-  }
+  },
 
   async deleteFile(path, { requestId = null } = {}) {
     const response = await fetch(resolveApiUrl(`/file?path=${encodeURIComponent(path)}`), {
@@ -227,7 +227,7 @@ export class VaultApiClient {
       method: 'DELETE',
     });
     return parseApiResponse(response, 'Failed to delete file');
-  }
+  },
 
   async createDirectory(path, { requestId = null } = {}) {
     const response = await fetch(resolveApiUrl('/directory'), {
@@ -236,7 +236,7 @@ export class VaultApiClient {
       method: 'POST',
     });
     return parseApiResponse(response, 'Failed to create folder');
-  }
+  },
 
   async renameDirectory({ oldPath, newPath, requestId = null }) {
     const response = await fetch(resolveApiUrl('/directory'), {
@@ -245,7 +245,7 @@ export class VaultApiClient {
       method: 'PATCH',
     });
     return parseApiResponse(response, 'Failed to rename folder');
-  }
+  },
 
   async deleteDirectory(path, { recursive = false, requestId = null } = {}) {
     const searchParams = new URLSearchParams({
@@ -260,7 +260,7 @@ export class VaultApiClient {
       method: 'DELETE',
     });
     return parseApiResponse(response, 'Failed to delete folder');
-  }
+  },
 
   async uploadImageAttachment({ file, fileName = '', sourcePath }) {
     const response = await fetch(resolveApiUrl('/attachments'), {
@@ -273,7 +273,7 @@ export class VaultApiClient {
       method: 'POST',
     });
     return parseApiResponse(response, 'Failed to upload image');
-  }
+  },
 
   async uploadFile({ file, path, requestId = null }) {
     const response = await fetch(resolveApiUrl('/file/upload'), {
@@ -285,7 +285,7 @@ export class VaultApiClient {
       method: 'POST',
     });
     return parseApiResponse(response, 'Failed to upload file');
-  }
+  },
 
   async downloadFile(path) {
     const fallbackFileName = getVaultPathLeaf(path) || 'download';
@@ -293,7 +293,7 @@ export class VaultApiClient {
       fallbackError: 'Failed to download file',
       fallbackFileName,
     });
-  }
+  },
 
   async downloadDirectory(path) {
     const directoryName = getVaultPathLeaf(path) || 'vault';
@@ -301,7 +301,5 @@ export class VaultApiClient {
       fallbackError: 'Failed to download folder',
       fallbackFileName: `${directoryName}.zip`,
     });
-  }
-}
-
-export const vaultApiClient = new VaultApiClient();
+  },
+};

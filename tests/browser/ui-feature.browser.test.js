@@ -429,26 +429,29 @@ describe('uiFeature browser helpers', () => {
     };
 
     Object.assign(context, uiFeatureToolbarMethods);
+    context.elements.markdownToolbar.addEventListener('click', (event) => {
+      context.handleMarkdownToolbarClick(event);
+    });
     context.renderMarkdownToolbar();
 
     const toggle = context.elements.markdownToolbar.querySelector('[data-markdown-block-menu-toggle]');
-    context.handleMarkdownToolbarClick({ preventDefault() {}, target: toggle });
+    toggle.click();
     expect(context.isMarkdownBlockMenuOpen()).toBe(true);
     expect(document.querySelector('.markdown-toolbar-popover')).not.toBeNull();
 
     const headingItem = document.querySelector('.markdown-toolbar-popover [data-markdown-block-action="heading-3"]');
-    context.handleMarkdownToolbarClick({ preventDefault() {}, target: headingItem });
+    headingItem.click();
 
     expect(context.session.applyMarkdownToolbarAction).toHaveBeenCalledWith('heading-3');
     expect(context.elements.markdownToolbar.querySelector('[data-markdown-block-trigger-label]').textContent).toBe('H3');
     expect(context.isMarkdownBlockMenuOpen()).toBe(false);
   });
 
-  it('toggles the mobile toolbar overflow menu state', () => {
+  it('uses a native popover for toolbar overflow', () => {
     document.body.innerHTML = `
       <div class="toolbar-right">
-        <button id="toolbar-overflow-toggle"></button>
-        <div id="toolbar-overflow-menu"></div>
+        <button id="toolbar-overflow-toggle" popovertarget="toolbar-overflow-menu"></button>
+        <div id="toolbar-overflow-menu" popover="auto"></div>
       </div>
     `;
 
@@ -457,33 +460,27 @@ describe('uiFeature browser helpers', () => {
         toolbarOverflowMenu: document.getElementById('toolbar-overflow-menu'),
         toolbarOverflowToggle: document.getElementById('toolbar-overflow-toggle'),
       },
-      isMobileViewport: () => true,
     };
 
     Object.assign(context, uiFeatureShellMethods);
-
-    context.toggleToolbarOverflowMenu();
-    expect(context.toolbarOverflowOpen).toBe(true);
-    expect(context.elements.toolbarOverflowToggle.getAttribute('aria-expanded')).toBe('true');
-    expect(context.elements.toolbarOverflowToggle.closest('.toolbar-right').classList.contains('is-overflow-open')).toBe(true);
+    context.elements.toolbarOverflowToggle.click();
+    expect(context.elements.toolbarOverflowMenu.matches(':popover-open')).toBe(true);
 
     context.closeToolbarOverflowMenu();
-    expect(context.toolbarOverflowOpen).toBe(false);
-    expect(context.elements.toolbarOverflowToggle.getAttribute('aria-expanded')).toBe('false');
+    expect(context.elements.toolbarOverflowMenu.matches(':popover-open')).toBe(false);
   });
 
-  it('keeps the overflow menu open when toggling Vim mode', () => {
+  it('keeps the overflow popover open when toggling Vim mode', () => {
     document.body.innerHTML = `
       <div class="toolbar-right">
-        <button id="toolbar-overflow-toggle"></button>
-        <div id="toolbar-overflow-menu">
+        <button id="toolbar-overflow-toggle" popovertarget="toolbar-overflow-menu"></button>
+        <div id="toolbar-overflow-menu" popover="auto">
           <button id="vim-toggle"><span id="vim-label">Off</span></button>
         </div>
       </div>
     `;
 
     const context = {
-      toolbarOverflowOpen: true,
       elements: {
         toolbarOverflowMenu: document.getElementById('toolbar-overflow-menu'),
         toolbarOverflowToggle: document.getElementById('toolbar-overflow-toggle'),
@@ -503,15 +500,11 @@ describe('uiFeature browser helpers', () => {
 
     Object.assign(context, uiFeatureShellMethods);
     context.bindEvents();
-
+    context.elements.toolbarOverflowToggle.click();
     context.elements.toggleVimModeButton.click();
 
-    expect(context.toolbarOverflowOpen).toBe(true);
+    expect(context.elements.toolbarOverflowMenu.matches(':popover-open')).toBe(true);
     expect(context.elements.vimModeToggleLabel.textContent).toBe('On');
-
-    context.handleDocumentPointerDown({ target: document.body });
-
-    expect(context.toolbarOverflowOpen).toBe(false);
   });
 
   it('opens quick switcher from the mobile overflow search files action', () => {
@@ -701,7 +694,6 @@ describe('uiFeature browser helpers', () => {
       navigation: { getHashRoute: () => ({ type: 'empty' }) },
       openDisplayNameDialog: vi.fn(),
       setSidebarTab: vi.fn(),
-      toggleChatPanel: vi.fn(),
       toggleLineWrapping: vi.fn(),
       toggleQuickSwitcher: vi.fn(async () => {}),
       toggleSidebar: vi.fn(),
@@ -719,8 +711,6 @@ describe('uiFeature browser helpers', () => {
       scope: 'all',
     });
 
-    document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-    expect(context.closeChatPanel).toHaveBeenCalledTimes(1);
 
     document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, ctrlKey: true, key: 'k' }));
     expect(context.toggleQuickSwitcher).toHaveBeenCalledTimes(1);

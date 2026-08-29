@@ -84,12 +84,10 @@ export const presenceFeature = {
     const effectiveConnectionState = getConnectedPresenceState(this);
     const hasUsers = this.globalUsers.length > 0;
     if (effectiveConnectionState.status !== 'connected') {
-      this.presencePanelOpen = false;
+      this.closePresencePanel();
     }
 
     badge.type = 'button';
-    badge.setAttribute('aria-controls', 'presencePanel');
-    badge.setAttribute('aria-expanded', String(this.presencePanelOpen));
     badge.classList.toggle('is-active', this.presencePanelOpen);
 
     if (effectiveConnectionState.status === 'connected') {
@@ -173,12 +171,9 @@ export const presenceFeature = {
       overflow.className = 'user-avatar user-avatar-button user-avatar-overflow-trigger';
       overflow.style.backgroundColor = 'var(--color-surface-dynamic)';
       overflow.style.color = 'var(--color-text-muted)';
-      overflow.setAttribute('aria-controls', 'presencePanel');
-      overflow.setAttribute('aria-expanded', String(this.presencePanelOpen));
+      overflow.setAttribute('popovertarget', 'presencePanel');
       overflow.setAttribute('aria-label', `Show ${visibleUsers.length} online users`);
-      overflow.setAttribute('data-presence-panel-trigger', 'true');
       overflow.title = `Show ${visibleUsers.length} online users`;
-      overflow.addEventListener('click', () => this.openPresencePanel());
       const overflowLabel = document.createElement('span');
       overflowLabel.className = 'user-avatar-initial';
       overflowLabel.textContent = `+${visibleUsers.length - MAX_INLINE_AVATARS}`;
@@ -194,29 +189,19 @@ export const presenceFeature = {
     }
 
     this.presencePanelOpen = true;
-    this.closeChatPanel?.();
-    this.closeToolbarOverflowMenu?.();
+    if (!this.elements.presencePanel?.matches(':popover-open')) {
+      this.elements.presencePanel?.showPopover();
+    }
     this.renderAvatars();
     this.renderPresence();
   },
 
   closePresencePanel() {
-    if (!this.presencePanelOpen) {
-      return;
+    if (this.elements.presencePanel?.matches(':popover-open')) {
+      this.elements.presencePanel.hidePopover();
     }
-
     this.presencePanelOpen = false;
-    this.renderAvatars();
-    this.renderPresence();
-  },
-
-  togglePresencePanel() {
-    if (this.presencePanelOpen) {
-      this.closePresencePanel();
-      return;
-    }
-
-    this.openPresencePanel();
+    this.renderAvatars?.();
   },
 
   renderPresencePanel() {
@@ -225,8 +210,6 @@ export const presenceFeature = {
     const status = this.elements.presencePanelStatus;
     if (!panel || !list) return;
 
-    panel.classList.toggle('hidden', !this.presencePanelOpen);
-    panel.setAttribute('aria-hidden', String(!this.presencePanelOpen));
     if (!this.presencePanelOpen) {
       return;
     }

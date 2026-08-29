@@ -219,11 +219,9 @@ function serializeMessages(messages) {
 }
 
 export function createCommentId(prefix = 'comment') {
-  if (globalThis.crypto?.randomUUID) {
-    return `${prefix}-${globalThis.crypto.randomUUID()}`;
-  }
-
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const id = globalThis.crypto?.randomUUID?.()
+    ?? `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return `${prefix}-${id}`;
 }
 
 export function normalizeCommentAnchor(record = {}) {

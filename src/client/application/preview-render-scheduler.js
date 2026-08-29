@@ -6,24 +6,8 @@ import {
 import { getRenderProfile } from './preview-render-profile.js';
 
 export class PreviewRenderScheduler {
-  constructor({
-    cancelAnimationFrameFn = (frameId) => cancelAnimationFrame(frameId),
-    cancelIdleRenderFn = cancelIdleRender,
-    clearTimeoutFn = (timeoutId) => clearTimeout(timeoutId),
-    getRenderProfileFn = getRenderProfile,
-    idleTimeoutMs = IDLE_RENDER_TIMEOUT_MS,
-    requestAnimationFrameFn = (callback) => requestAnimationFrame(callback),
-    requestIdleRenderFn = requestIdleRender,
-    setTimeoutFn = (callback, delay) => setTimeout(callback, delay),
-  } = {}) {
-    this.cancelAnimationFrameFn = cancelAnimationFrameFn;
-    this.cancelIdleRenderFn = cancelIdleRenderFn;
-    this.clearTimeoutFn = clearTimeoutFn;
+  constructor({ getRenderProfileFn = getRenderProfile } = {}) {
     this.getRenderProfileFn = getRenderProfileFn;
-    this.idleTimeoutMs = idleTimeoutMs;
-    this.requestAnimationFrameFn = requestAnimationFrameFn;
-    this.requestIdleRenderFn = requestIdleRenderFn;
-    this.setTimeoutFn = setTimeoutFn;
     this.frameId = null;
     this.idleId = null;
     this.timeoutId = null;
@@ -34,7 +18,7 @@ export class PreviewRenderScheduler {
     this.cancel();
 
     const scheduleFrame = () => {
-      this.frameId = this.requestAnimationFrameFn(() => {
+      this.frameId = requestAnimationFrame(() => {
         this.frameId = null;
         this.timeoutId = null;
         onRenderRequested?.(markdownText, renderVersion);
@@ -43,25 +27,25 @@ export class PreviewRenderScheduler {
 
     const scheduleRender = () => {
       if (renderProfile.deferUntilIdle) {
-        this.idleId = this.requestIdleRenderFn(() => {
+        this.idleId = requestIdleRender(() => {
           this.idleId = null;
           scheduleFrame();
-        }, this.idleTimeoutMs);
+        }, IDLE_RENDER_TIMEOUT_MS);
         return;
       }
 
       scheduleFrame();
     };
 
-    this.timeoutId = this.setTimeoutFn(scheduleRender, renderProfile.debounceMs);
+    this.timeoutId = setTimeout(scheduleRender, renderProfile.debounceMs);
   }
 
   cancel() {
-    this.clearTimeoutFn(this.timeoutId);
+    clearTimeout(this.timeoutId);
     if (this.frameId) {
-      this.cancelAnimationFrameFn(this.frameId);
+      cancelAnimationFrame(this.frameId);
     }
-    this.cancelIdleRenderFn(this.idleId);
+    cancelIdleRender(this.idleId);
     this.frameId = null;
     this.idleId = null;
     this.timeoutId = null;

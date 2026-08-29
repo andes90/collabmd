@@ -359,7 +359,7 @@ test('opens the quick switcher from the top toolbar search action', async ({ pag
 
   await searchButton.click();
 
-  await expect(page.locator('#quickSwitcher')).toHaveClass(/visible/);
+  await expect(page.locator('#quickSwitcher')).toBeVisible();
   await expect(page.locator('#quickSwitcherInput')).toBeFocused();
 });
 
@@ -832,7 +832,7 @@ test('quick switcher reveals the opened file in the file tree', async ({ page })
   await expect(page.locator('#fileTree .file-tree-dir[data-path^="zz-folder-"]')).toHaveCount(40);
 
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+K' : 'Control+K');
-  await expect(page.locator('#quickSwitcher')).toHaveClass(/visible/);
+  await expect(page.locator('#quickSwitcher')).toBeVisible();
   await page.locator('#quickSwitcherInput').fill('note-39');
   await page.locator('#quickSwitcherResults .qs-result-item').first().click();
 
@@ -896,7 +896,7 @@ test('quick switcher text search opens a grouped match at the matching line', as
   expect(resetResponse.ok()).toBe(true);
 
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+K' : 'Control+K');
-  await expect(page.locator('#quickSwitcher')).toHaveClass(/visible/);
+  await expect(page.locator('#quickSwitcher')).toBeVisible();
   await page.locator('[data-qs-mode="text"]').click();
   await page.locator('#quickSwitcherInput').fill('needle-e2e');
 

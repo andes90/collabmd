@@ -1,6 +1,6 @@
 import { test as base, expect } from '@playwright/test';
 import { spawn } from 'node:child_process';
-import { readFile, rm } from 'node:fs/promises';
+import { cp, readFile, rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { resolve } from 'node:path';
 
@@ -22,14 +22,20 @@ Welcome to the test vault. This is the top-level readme.
 `;
 let lateStatePrimePending = false;
 let runtimeVaultDir = getRuntimeVaultDir();
+const clientDistDir = resolve(import.meta.dirname, '../../../dist/client');
 
 export const test = base.extend({
   e2eServer: [async ({ browserName }, use, workerInfo) => {
     const workerId = `${process.pid}-${workerInfo.project.name}-${browserName}-${workerInfo.parallelIndex}`;
     const vaultDir = getRuntimeVaultDir(workerId);
+    const publicDir = resolve(import.meta.dirname, `../../../.tmp/e2e-public-${workerId}`);
     const port = await getAvailablePort();
     const baseURL = `http://127.0.0.1:${port}`;
-    await resetE2EVaultSnapshot(vaultDir);
+    await Promise.all([
+      resetE2EVaultSnapshot(vaultDir),
+      rm(publicDir, { force: true, recursive: true }),
+    ]);
+    await cp(clientDistDir, publicDir, { recursive: true });
     const serverProcess = spawn(process.execPath, [
       'bin/collabmd.js',
       '--no-tunnel',
@@ -43,6 +49,7 @@ export const test = base.extend({
       env: {
         ...process.env,
         COLLABMD_E2E_WORKER_ID: workerId,
+        COLLABMD_E2E_PUBLIC_DIR: publicDir,
         COLLABMD_FILE_WATCHER_ENABLED: 'false',
         NODE_ENV: 'test',
         WS_ROOM_IDLE_GRACE_MS: '1',
@@ -65,7 +72,10 @@ export const test = base.extend({
       await use({ baseURL, vaultDir });
     } finally {
       await stopServerProcess(serverProcess);
-      await rm(vaultDir, { force: true, recursive: true });
+      await Promise.all([
+        rm(publicDir, { force: true, recursive: true }),
+        rm(vaultDir, { force: true, recursive: true }),
+      ]);
     }
   }, { scope: 'worker' }],
   baseURL: async ({ e2eServer }, use) => {

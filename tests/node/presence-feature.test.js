@@ -65,6 +65,7 @@ class FakeElement {
     this.style = {};
     this.textContent = '';
     this.type = '';
+    this.popoverOpen = false;
   }
 
   get className() {
@@ -111,6 +112,18 @@ class FakeElement {
     const handlers = this.listeners.get(type) ?? [];
     handlers.push(handler);
     this.listeners.set(type, handlers);
+  }
+
+  matches(selector) {
+    return selector === ':popover-open' && this.popoverOpen;
+  }
+
+  showPopover() {
+    this.popoverOpen = true;
+  }
+
+  hidePopover() {
+    this.popoverOpen = false;
   }
 
   click() {
@@ -234,7 +247,6 @@ function createPresenceContext(overrides = {}) {
     },
     openPresencePanel: presenceFeature.openPresencePanel,
     closePresencePanel: presenceFeature.closePresencePanel,
-    togglePresencePanel: presenceFeature.togglePresencePanel,
     startFollowingUser: presenceFeature.startFollowingUser,
     stopFollowingUser: presenceFeature.stopFollowingUser,
     toggleFollowUser: presenceFeature.toggleFollowUser,
@@ -448,14 +460,13 @@ test('presenceFeature clears open trigger state when presence disconnects', () =
       presencePanelOpen: true,
       session: {},
     };
+    presencePanel.showPopover();
 
     context.renderPresence();
 
     assert.equal(context.presencePanelOpen, false);
-    assert.equal(badge.getAttribute('aria-expanded'), 'false');
     assert.equal(badge.classList.contains('is-active'), false);
-    assert.equal(presencePanel.classList.contains('hidden'), true);
-    assert.equal(presencePanel.getAttribute('aria-hidden'), 'true');
+    assert.equal(presencePanel.matches(':popover-open'), false);
   });
 });
 
@@ -491,9 +502,9 @@ test('presenceFeature leaves the hidden participant list untouched', () => {
   });
 });
 
-test('presenceFeature renders an overflow trigger that opens the full participant panel', () => {
+test('presenceFeature renders an overflow trigger for the participant popover', () => {
   withFakeDocument(() => {
-    const { context, presencePanel, presencePanelList, userAvatars } = createPresenceContext({
+    const { context, userAvatars } = createPresenceContext({
       globalUsers: [
         { clientId: 'local', color: '#111111', currentFile: 'README.md', isLocal: true, name: 'Owner' },
         { clientId: 'remote-1', color: '#222222', currentFile: 'README.md', isLocal: false, name: 'Amy' },
@@ -510,13 +521,8 @@ test('presenceFeature renders an overflow trigger that opens the full participan
     assert.equal(userAvatars.children.length, 6);
     const overflowTrigger = userAvatars.children.at(-1);
     assert.equal(overflowTrigger.tagName, 'BUTTON');
+    assert.equal(overflowTrigger.getAttribute('popovertarget'), 'presencePanel');
     assert.match(getTreeText(overflowTrigger), /\+2/);
-
-    overflowTrigger.click();
-
-    assert.equal(context.presencePanelOpen, true);
-    assert.equal(presencePanel.classList.contains('hidden'), false);
-    assert.equal(presencePanelList.children.length, 7);
   });
 });
 

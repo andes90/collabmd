@@ -61,11 +61,7 @@ function parseSceneJson(rawJson, { fallbackToEmpty = true } = {}) {
 }
 
 function cloneJsonValue(value) {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  return JSON.parse(JSON.stringify(value));
+  return structuredClone(value);
 }
 
 function getRevisionKey(element) {

@@ -6,14 +6,14 @@ describe('QuickSwitcherController file results', () => {
   beforeEach(() => {
     document.body.innerHTML = `
       <button id="launcher">Search</button>
-      <div id="quickSwitcher" aria-hidden="true">
+      <dialog id="quickSwitcher">
         <button data-qs-mode="files">Files</button>
         <button data-qs-mode="text">Text</button>
-        <input id="quickSwitcherInput">
+        <input id="quickSwitcherInput" autofocus>
         <div id="quickSwitcherHint"></div>
         <div id="quickSwitcherScope"></div>
         <div id="quickSwitcherResults" aria-busy="false"></div>
-      </div>
+      </dialog>
     `;
   });
 
@@ -22,23 +22,19 @@ describe('QuickSwitcherController file results', () => {
     vi.restoreAllMocks();
   });
 
-  it('keeps search input active after mode switching and closes from a focused tab', () => {
+  it('uses the native dialog while preserving mode-switch focus', () => {
     const controller = new QuickSwitcherController({
       getFileList: () => ['README.md'],
       onFileSelect: vi.fn(),
     });
-    controller.isOpen = true;
-    controller.overlay.classList.add('visible');
+    controller.open();
 
     document.querySelector('[data-qs-mode="text"]').click();
     expect(controller.input).toHaveFocus();
 
     document.querySelector('[data-qs-mode="text"]').focus();
-    document.querySelector('[data-qs-mode="text"]').dispatchEvent(new KeyboardEvent('keydown', {
-      bubbles: true,
-      key: 'Escape',
-    }));
-    expect(controller.overlay).not.toHaveClass('visible');
+    controller.close();
+    expect(controller.overlay.open).toBe(false);
   });
 
   it('maintains accessible combobox, tab, and loading state', () => {

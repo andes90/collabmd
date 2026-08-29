@@ -87,17 +87,13 @@ function insertSortedBounded(rows, row, {
   }
 }
 
-function escapeRegExp(value = '') {
-  return String(value ?? '').replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
-}
-
 function pruneFilterNodeForProperty(filterNode, propertyId = '') {
   if (!propertyId || !filterNode) {
     return filterNode;
   }
 
   if (typeof filterNode === 'string') {
-    const escapedPropertyId = escapeRegExp(propertyId);
+    const escapedPropertyId = RegExp.escape(String(propertyId));
     const propertyFilterPattern = new RegExp(
       `^!?${escapedPropertyId}(?:\\.(?:contains|startsWith|endsWith|isEmpty)\\(.*\\)|\\s*(?:==|!=|>=|<=|>|<)\\s*.+)$`,
       'u',

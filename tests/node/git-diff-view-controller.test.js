@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { GitApiClient } from '../../src/client/infrastructure/git-api-client.js';
+import { gitApiClient } from '../../src/client/infrastructure/git-api-client.js';
 import { FileHistoryViewController } from '../../src/client/presentation/file-history-view-controller.js';
 import { GitDiffViewController } from '../../src/client/presentation/git-diff-view-controller.js';
 
@@ -288,7 +288,7 @@ test('GitDiffViewController keeps Open in editor available for an empty workspac
   }]);
   const openedFiles = [];
   const controller = new GitDiffViewController({
-    gitApiClient: new GitApiClient(),
+    gitApiClient: gitApiClient,
     onOpenFile: (filePath) => openedFiles.push(filePath),
   });
   controller.initialize();
@@ -338,7 +338,7 @@ test('GitDiffViewController opens commit diffs in stacked mode and lazy-loads ex
     },
   ]);
 
-  const controller = new GitDiffViewController({ gitApiClient: new GitApiClient() });
+  const controller = new GitDiffViewController({ gitApiClient: gitApiClient });
   controller.initialize();
 
   await controller.openCommitDiff({ hash: 'abc1234' });
@@ -395,7 +395,7 @@ test('GitDiffViewController file index switches files in focused commit mode', a
     },
   ]);
 
-  const controller = new GitDiffViewController({ gitApiClient: new GitApiClient() });
+  const controller = new GitDiffViewController({ gitApiClient: gitApiClient });
   controller.initialize();
 
   await controller.openCommitDiff({ hash: 'def5678' });
@@ -446,7 +446,7 @@ test('GitDiffViewController scrolls stacked commit view to selected file section
     },
   ]);
 
-  const controller = new GitDiffViewController({ gitApiClient: new GitApiClient() });
+  const controller = new GitDiffViewController({ gitApiClient: gitApiClient });
   controller.initialize();
 
   harness.elements.diffScroll.scrollTop = 40;
@@ -502,7 +502,7 @@ test('GitDiffViewController routes back to file history when commit diff carries
 
   const events = [];
   const controller = new GitDiffViewController({
-    gitApiClient: new GitApiClient(),
+    gitApiClient: gitApiClient,
     onBackToHistory: (payload) => events.push(payload),
   });
   controller.initialize();
@@ -553,10 +553,10 @@ test('GitDiffViewController diff mode toggle ignores inactive file history liste
     },
   ]);
 
-  const controller = new GitDiffViewController({ gitApiClient: new GitApiClient() });
+  const controller = new GitDiffViewController({ gitApiClient: gitApiClient });
   const fileHistoryView = new FileHistoryViewController({
     diffRenderer: controller,
-    gitApiClient: new GitApiClient(),
+    gitApiClient: gitApiClient,
   });
   controller.initialize();
   fileHistoryView.initialize();

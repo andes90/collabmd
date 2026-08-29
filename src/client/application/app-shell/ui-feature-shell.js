@@ -294,12 +294,23 @@ function bindEvents() {
   this.elements.emptyStateSearchBtn?.addEventListener('click', () => {
     void this.toggleQuickSwitcher();
   });
-
-  this.elements.chatToggleButton?.addEventListener('click', () => {
-    this.closePresencePanel?.();
-    this.toggleChatPanel();
-    this.closeToolbarOverflowMenu?.();
+  this.elements.presencePanel?.addEventListener('toggle', (event) => {
+    this.presencePanelOpen = event.newState === 'open';
+    this.renderAvatars?.();
+    this.renderPresence?.();
   });
+
+  this.elements.chatPanel?.addEventListener('toggle', (event) => {
+    this.chatIsOpen = event.newState === 'open';
+    if (this.chatIsOpen) {
+      this.chatUnreadCount = 0;
+    }
+    this.renderChat?.({ messagesChanged: this.chatIsOpen, stickToBottom: this.chatIsOpen });
+    if (this.chatIsOpen) {
+      requestAnimationFrame(() => this.elements.chatInput?.focus());
+    }
+  });
+
 
   this.elements.chatNotificationButton?.addEventListener('click', () => {
     void this.handleChatNotificationToggle();
@@ -309,9 +320,6 @@ function bindEvents() {
     this.toggleChatNotificationMute();
   });
 
-  this.elements.chatCloseButton?.addEventListener('click', () => {
-    this.closeChatPanel({ restoreFocus: true });
-  });
 
   this.elements.chatForm?.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -341,10 +349,6 @@ function bindEvents() {
     this.toggleVimMode();
   });
 
-  this.elements.userCount?.addEventListener('click', (event) => {
-    event.preventDefault();
-    this.togglePresencePanel?.();
-  });
 
   this.elements.editorFindButton?.addEventListener('click', () => {
     this.runEditorCommand?.('openSearch');
@@ -354,16 +358,19 @@ function bindEvents() {
     void this.formatCurrentDocument();
   });
 
-  this.elements.toolbarOverflowToggle?.addEventListener('click', (event) => {
-    event.preventDefault();
-    this.closePresencePanel?.();
-    this.toggleToolbarOverflowMenu();
-  });
 
   this.elements.toolbarOverflowMenu?.addEventListener('click', (event) => {
     const button = event.target instanceof Element ? event.target.closest('button') : null;
     if (button && button !== this.elements.toggleVimModeButton) {
       this.closeToolbarOverflowMenu();
+    }
+  });
+
+  this.elements.toolbarOverflowMenu?.addEventListener('toggle', (event) => {
+    if (event.newState === 'closed') {
+      this.elements.toolbarOverflowMenu.querySelectorAll('details[open]').forEach((detail) => {
+        detail.removeAttribute('open');
+      });
     }
   });
 
@@ -403,47 +410,12 @@ function bindEvents() {
     this.handleSidebarTabsKeydown(event);
   });
 
-  document.addEventListener('pointerdown', (event) => {
-    this.handleDocumentPointerDown(event);
-  });
 
   document.addEventListener('keydown', (event) => {
     this.handleDocumentKeydown(event);
   }, { capture: true });
 }
 
-/** @this {UiShellContext} */
-function handleDocumentPointerDown(event) {
-  this.handleMarkdownToolbarDocumentPointerDown?.(event);
-
-  const target = event.target instanceof Element ? event.target : null;
-
-  if (
-    this.toolbarOverflowOpen
-    && !this.elements.toolbarOverflowMenu?.contains(target)
-    && !this.elements.toolbarOverflowToggle?.contains(target)
-  ) {
-    this.closeToolbarOverflowMenu();
-  }
-
-  if (
-    this.presencePanelOpen
-    && !this.elements.presencePanel?.contains(target)
-    && !target?.closest?.('[data-presence-panel-trigger="true"]')
-  ) {
-    this.closePresencePanel?.();
-  }
-
-  if (!this.chatIsOpen) {
-    return;
-  }
-
-  if (this.elements.chatContainer?.contains(target)) {
-    return;
-  }
-
-  this.closeChatPanel({ restoreFocus: false });
-}
 
 /** @this {UiShellContext} */
 function handleDocumentKeydown(event) {
@@ -451,20 +423,6 @@ function handleDocumentKeydown(event) {
     this.stopFollowingUser?.();
   }
 
-  if (event.key === 'Escape' && this.toolbarOverflowOpen) {
-    this.closeToolbarOverflowMenu();
-    return;
-  }
-
-  if (event.key === 'Escape' && this.presencePanelOpen) {
-    this.closePresencePanel?.();
-    return;
-  }
-
-  if (event.key === 'Escape' && this.chatIsOpen) {
-    this.closeChatPanel({ restoreFocus: true });
-    return;
-  }
 
   if (isPlainQuickSwitcherShortcut(event)) {
     event.preventDefault();
@@ -888,20 +846,6 @@ function handlePreviewContentClick(event) {
 }
 
 /** @this {UiShellContext} */
-function setToolbarOverflowOpen(nextState) {
-  this.toolbarOverflowOpen = Boolean(nextState);
-  this.elements.toolbarOverflowToggle?.setAttribute('aria-expanded', String(this.toolbarOverflowOpen));
-  this.elements.toolbarOverflowToggle?.classList.toggle('active', this.toolbarOverflowOpen);
-  this.elements.toolbarOverflowToggle?.closest('.toolbar-right')?.classList.toggle('is-overflow-open', this.toolbarOverflowOpen);
-
-  if (!this.toolbarOverflowOpen) {
-    this.elements.toolbarOverflowMenu?.querySelectorAll('details[open]').forEach((detail) => {
-      detail.removeAttribute('open');
-    });
-  }
-}
-
-/** @this {UiShellContext} */
 function syncToolbarOverflowVisibility() {
   const toggle = this.elements.toolbarOverflowToggle;
   if (!toggle) {
@@ -915,12 +859,9 @@ function syncToolbarOverflowVisibility() {
 
 /** @this {UiShellContext} */
 function closeToolbarOverflowMenu() {
-  this.setToolbarOverflowOpen(false);
-}
-
-/** @this {UiShellContext} */
-function toggleToolbarOverflowMenu() {
-  this.setToolbarOverflowOpen(!this.toolbarOverflowOpen);
+  if (this.elements.toolbarOverflowMenu?.matches(':popover-open')) {
+    this.elements.toolbarOverflowMenu.hidePopover();
+  }
 }
 
 /** @this {UiShellContext} */
@@ -1102,7 +1043,6 @@ export const uiFeatureShellMethods = {
   getStoredVimMode,
   handleConnectionChange,
   handleDocumentKeydown,
-  handleDocumentPointerDown,
   handlePreviewContentClick,
   handleThemeChange,
   hideEditorLoading,
@@ -1114,7 +1054,6 @@ export const uiFeatureShellMethods = {
   promptForVersionReload,
   requestPreviewRouteAnchor,
   scheduleBacklinkRefresh,
-  setToolbarOverflowOpen,
   showEditorLoadError,
   showEditorLoading,
   syncPreviewCodeCopyButtons,
@@ -1124,7 +1063,6 @@ export const uiFeatureShellMethods = {
   syncToolbarOverflowVisibility,
   syncVimModeToggle,
   syncWrapToggle,
-  toggleToolbarOverflowMenu,
   toggleLineWrapping,
   unfoldPreviewHeading,
   toggleVimMode,

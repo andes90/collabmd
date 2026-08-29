@@ -72,34 +72,23 @@ export const chatFeature = {
     this.renderChat();
   },
 
-  toggleChatPanel() {
-    if (this.chatIsOpen) {
-      this.closeChatPanel({ restoreFocus: true });
-      return;
-    }
-
-    this.openChatPanel();
-  },
 
   openChatPanel() {
     this.chatIsOpen = true;
     this.chatUnreadCount = 0;
+    if (!this.elements.chatPanel?.matches(':popover-open')) {
+      this.elements.chatPanel?.showPopover();
+    }
     this.renderChat({ stickToBottom: true });
-    requestAnimationFrame(() => {
-      this.elements.chatInput?.focus();
-    });
+    requestAnimationFrame(() => this.elements.chatInput?.focus());
   },
 
-  closeChatPanel({ restoreFocus = false } = {}) {
-    if (!this.chatIsOpen) {
-      return;
+  closeChatPanel() {
+    if (this.elements.chatPanel?.matches(':popover-open')) {
+      this.elements.chatPanel.hidePopover();
     }
-
     this.chatIsOpen = false;
     this.renderChat({ messagesChanged: false });
-    if (restoreFocus) {
-      requestAnimationFrame(() => this.elements.chatToggleButton?.focus());
-    }
   },
 
   handleChatSubmit() {
@@ -129,8 +118,6 @@ export const chatFeature = {
   },
 
   renderChat({ messagesChanged = true, stickToBottom = false } = {}) {
-    this.elements.chatContainer?.classList.toggle('is-open', this.chatIsOpen);
-    this.elements.chatPanel?.classList.toggle('hidden', !this.chatIsOpen);
 
     this.syncChatToggleButton();
     this.syncChatNotificationButton();
@@ -363,8 +350,6 @@ export const chatFeature = {
 
     button.classList.toggle('is-active', this.chatIsOpen);
     button.classList.toggle('is-unread', shouldEmphasizeUnread);
-    button.setAttribute('aria-controls', 'chatPanel');
-    button.setAttribute('aria-expanded', String(this.chatIsOpen));
     button.setAttribute(
       'aria-label',
       hasUnread ? `Open team chat, ${this.chatUnreadCount} unread` : 'Open team chat',

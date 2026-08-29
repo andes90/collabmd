@@ -19,11 +19,8 @@ function normalizeChatMessage(value) {
 }
 
 function createLobbyMessageId(peerId) {
-  if (globalThis.crypto?.randomUUID) {
-    return globalThis.crypto.randomUUID();
-  }
-
-  return `${peerId || 'user'}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return globalThis.crypto?.randomUUID?.()
+    ?? `${peerId || 'user'}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function normalizeWorkspaceEvent(event) {

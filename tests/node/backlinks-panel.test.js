@@ -278,7 +278,7 @@ function installDocumentStub(t) {
   };
 }
 
-function createBacklinksPanel(t, responses, { onFileSelect } = {}) {
+function createBacklinksPanel(t, responses, { onBeforeToggle, onFileSelect } = {}) {
   const documentHarness = installDocumentStub(t);
 
   const dock = createPanelStructure({ includeDockWrapper: true });
@@ -290,6 +290,7 @@ function createBacklinksPanel(t, responses, { onFileSelect } = {}) {
     headerPanelElement: header.root,
     inlinePanelElement: inline.root,
     loadBacklinks: async (filePath) => responses[filePath] ?? [],
+    onBeforeToggle,
     onFileSelect,
     panelElement: dock.root,
   });
@@ -321,6 +322,7 @@ test('BacklinksPanel hides linked mentions when there is no current file or no b
 });
 
 test('BacklinksPanel renders the mention count and collapses again when the file changes', async (t) => {
+  let beforeToggleCalls = 0;
   const { dock, header, inline, panel } = createBacklinksPanel(t, {
     'projects/collabmd.md': [
       { file: 'README.md', contexts: ['- [[projects/collabmd]]'] },
@@ -329,6 +331,10 @@ test('BacklinksPanel renders the mention count and collapses again when the file
     'showcase.md': [
       { file: 'README.md', contexts: ['- [[showcase]]'] },
     ],
+  }, {
+    onBeforeToggle: () => {
+      beforeToggleCalls += 1;
+    },
   });
 
   await panel.load('projects/collabmd.md');
@@ -344,6 +350,7 @@ test('BacklinksPanel renders the mention count and collapses again when the file
   assert.equal(inline.list.querySelectorAll('.backlink-item').length, 2);
 
   dock.header.click();
+  assert.equal(beforeToggleCalls, 1);
   assert.equal(dock.panel.classList.contains('expanded'), true);
   assert.equal(inline.panel.classList.contains('expanded'), true);
 

@@ -820,7 +820,7 @@ test.describe('mobile markdown toolbar', () => {
 
     await page.locator('[data-markdown-block-menu-toggle]').click();
 
-    const popover = page.locator('#editorContainer .markdown-toolbar-popover');
+    const popover = page.locator('#markdownBlockMenuPopover');
     await expect(popover).toBeVisible();
     await expect(popover.locator('[data-markdown-block-menu]')).toContainText('Heading 1');
     await expect(popover.locator('[data-markdown-block-menu]')).toContainText('Heading 2');
@@ -879,7 +879,7 @@ test.describe('mobile comments and header chrome', () => {
 
     await page.locator('#searchFilesBtn').click();
 
-    await expect(page.locator('#quickSwitcher')).toHaveClass(/visible/);
+    await expect(page.locator('#quickSwitcher')).toBeVisible();
     await expect(page.locator('#quickSwitcherInput')).toBeVisible();
   });
 });

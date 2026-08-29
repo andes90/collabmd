@@ -4,24 +4,33 @@
   position: fixed;
   inset: 0;
   z-index: 9999;
-  display: flex;
+  display: none;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: min(16vh, 128px) 0 0;
+  border: 0;
   align-items: flex-start;
   justify-content: center;
-  padding-top: min(16vh, 128px);
-  background: var(--surface-scrim);
-  backdrop-filter: blur(2px);
+  background: transparent;
   opacity: 0;
-  visibility: hidden;
-  transition: opacity 120ms ease, visibility 120ms ease, display 120ms ease allow-discrete;
+  transition: opacity 120ms ease, display 120ms ease allow-discrete;
 }
 
-.qs-overlay.visible {
+.qs-overlay[open] {
+  display: flex;
   opacity: 1;
-  visibility: visible;
+}
+
+.qs-overlay::backdrop {
+  background: var(--surface-scrim);
+  backdrop-filter: blur(2px);
 }
 
 @starting-style {
-  .qs-overlay.visible {
+  .qs-overlay[open] {
     opacity: 0;
   }
 }
@@ -84,12 +93,12 @@
   opacity: 0.6;
 }
 
-.qs-overlay.visible .qs-modal {
+.qs-overlay[open] .qs-modal {
   transform: translateY(0) scale(1);
 }
 
 @starting-style {
-  .qs-overlay.visible .qs-modal {
+  .qs-overlay[open] .qs-modal {
     transform: translateY(-8px) scale(0.98);
   }
 }

@@ -13,6 +13,7 @@ export class BacklinksPanel {
     headerPanelElement = null,
     inlinePanelElement = null,
     loadBacklinks = null,
+    onBeforeToggle = null,
     onFileSelect,
     panelElement,
   }) {
@@ -21,6 +22,7 @@ export class BacklinksPanel {
     this.panelRoot = panelElement;
     this.inlinePanel = inlinePanelElement;
     this.loadBacklinks = loadBacklinks;
+    this.onBeforeToggle = onBeforeToggle;
     this.onFileSelect = onFileSelect;
 
     this._expanded = false;
@@ -102,6 +104,7 @@ export class BacklinksPanel {
     this.panels.forEach((refs) => {
       refs.header?.addEventListener('click', () => {
         if (this._backlinks.length === 0) return;
+        this.onBeforeToggle?.();
         this._expanded = !this._expanded;
         this._pendingOutsidePointer = null;
         this._applyExpandState();

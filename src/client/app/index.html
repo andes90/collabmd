@@ -239,13 +239,11 @@
                 type="button"
                 class="ui-pill-badge ui-pill-badge--muted toolbar-badge toolbar-badge-button toolbar-presence-count"
                 id="userCount"
-                aria-controls="presencePanel"
-                aria-expanded="false"
-                data-presence-panel-trigger="true"
+                popovertarget="presencePanel"
               ></button>
             </div>
 
-            <section class="collaboration-popover presence-panel hidden" id="presencePanel" aria-label="Online users" aria-hidden="true">
+            <section class="collaboration-popover presence-panel" id="presencePanel" aria-label="Online users" popover="auto">
               <div class="presence-panel-header">
                 <div>
                   <h2 class="presence-panel-title">Online now</h2>
@@ -256,7 +254,7 @@
             </section>
 
             <div class="chat-container" id="chatContainer">
-              <button type="button" class="ui-button ui-button--ghost ui-button--toolbar chat-toggle-btn" id="chatToggleBtn" aria-label="Open team chat" aria-controls="chatPanel" aria-expanded="false" title="Team chat">
+              <button type="button" class="ui-button ui-button--ghost ui-button--toolbar chat-toggle-btn" id="chatToggleBtn" aria-label="Open team chat" popovertarget="chatPanel" title="Team chat">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                 </svg>
@@ -265,7 +263,7 @@
               </button>
               <div class="toast-container chat-toast-container" id="chatToastContainer" aria-live="polite" aria-atomic="true"></div>
 
-              <section class="collaboration-popover chat-panel hidden" id="chatPanel" role="dialog" aria-labelledby="chatPanelTitle">
+              <section class="collaboration-popover chat-panel" id="chatPanel" role="dialog" aria-labelledby="chatPanelTitle" popover="auto">
                 <div class="chat-panel-header">
                   <div class="chat-panel-heading">
                     <h2 class="chat-panel-title" id="chatPanelTitle">Team chat</h2>
@@ -292,7 +290,7 @@
                         <path class="chat-notification-mute-slash" d="m4 4 16 16"></path>
                       </svg>
                     </button>
-                    <button type="button" class="ui-icon-button chat-close-btn" id="chatCloseBtn" aria-label="Close team chat" title="Close team chat">
+                    <button type="button" class="ui-icon-button chat-close-btn" id="chatCloseBtn" aria-label="Close team chat" popovertarget="chatPanel" popovertargetaction="hide" title="Close team chat">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
                         <line x1="18" y1="6" x2="6" y2="18"></line>
                         <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -327,7 +325,7 @@
               class="ui-button ui-button--ghost ui-button--toolbar toolbar-overflow-toggle"
               id="toolbarOverflowToggle"
               aria-label="Open more actions"
-              aria-expanded="false"
+              popovertarget="toolbarOverflowMenu"
               title="More actions"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
@@ -337,7 +335,7 @@
               </svg>
             </button>
 
-            <div class="toolbar-overflow-menu" id="toolbarOverflowMenu">
+            <div class="toolbar-overflow-menu" id="toolbarOverflowMenu" popover="auto">
               <button class="ui-button ui-button--ghost ui-button--toolbar hidden" id="fileHistoryBtn" aria-label="Open file history" title="View file history">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M3 12a9 9 0 1 0 3-6.7"></path>
@@ -775,7 +773,7 @@
 
     <div class="toast-container" id="toastContainer"></div>
 
-    <div class="qs-overlay" id="quickSwitcher" role="dialog" aria-modal="true" aria-labelledby="quickSwitcherTitle" aria-hidden="true">
+    <dialog class="qs-overlay" id="quickSwitcher" aria-labelledby="quickSwitcherTitle" closedby="any">
       <div class="qs-modal">
         <h2 class="sr-only" id="quickSwitcherTitle">Search files and text</h2>
         <div class="qs-mode-tabs" role="tablist" aria-label="Search mode">
@@ -787,7 +785,7 @@
             <circle cx="11" cy="11" r="8"></circle>
             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
           </svg>
-          <input type="text" class="qs-input" id="quickSwitcherInput" role="combobox" placeholder="Search files..." aria-label="Search files" aria-controls="quickSwitcherResults" aria-describedby="quickSwitcherHint quickSwitcherScope" aria-autocomplete="list" aria-expanded="false" autocomplete="off" spellcheck="false">
+          <input type="text" class="qs-input" id="quickSwitcherInput" role="combobox" placeholder="Search files..." aria-label="Search files" aria-controls="quickSwitcherResults" aria-describedby="quickSwitcherHint quickSwitcherScope" aria-autocomplete="list" aria-expanded="false" autocomplete="off" spellcheck="false" autofocus>
           <kbd class="qs-kbd">esc</kbd>
         </div>
         <div class="qs-scope hidden" id="quickSwitcherScope" role="note" aria-hidden="true">Exact, case-insensitive text in Markdown, Base, Mermaid, PlantUML, Draw.io, and Excalidraw files. Images are excluded.</div>
@@ -799,7 +797,7 @@
           <span><kbd>Tab</kbd> Switch mode</span>
         </div>
       </div>
-    </div>
+    </dialog>
   <script vite-ignore src="./app-config.js"></script>
   <script type="module" src="./main-entry.js"></script>
 </body>

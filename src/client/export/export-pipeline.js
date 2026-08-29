@@ -21,6 +21,7 @@ import { parseSceneJson, sceneToInitialData } from '../domain/excalidraw-scene.j
 import { escapeHtml } from '../domain/vault-utils.js';
 import { downloadBlob } from '../browser-utils.js';
 import { resolveApiUrl, resolveAppUrl } from '../infrastructure/runtime-config.js';
+import { parseApiResponse } from '../infrastructure/api-client-utils.js';
 
 const EXPORT_PAGE_SOURCE = 'collabmd-export-page';
 const EXPORT_HOST_SOURCE = 'collabmd-export-host';
@@ -355,11 +356,7 @@ async function fetchJson(url, init = {}) {
     },
     ...init,
   });
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(data?.error || `Request failed: ${response.status}`);
-  }
-  return data;
+  return parseApiResponse(response, `Request failed: ${response.status}`);
 }
 
 async function fetchTextFile(filePath) {

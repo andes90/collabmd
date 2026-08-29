@@ -18,7 +18,7 @@ import { uiFeatureSidebarMethods } from '../application/app-shell/ui-feature-sid
 import { uiFeatureTabActivityMethods } from '../application/app-shell/ui-feature-tab-activity.js';
 import { uiFeatureToolbarMethods } from '../application/app-shell/ui-feature-toolbar.js';
 import { workspaceFeature } from '../application/app-shell/workspace-feature.js';
-import { AgentConnectionApiClient } from '../infrastructure/agent-connection-api-client.js';
+import { agentConnectionApiClient } from '../infrastructure/agent-connection-api-client.js';
 import { LOBBY_CHAT_MESSAGE_MAX_LENGTH, LobbyPresence } from '../infrastructure/lobby-presence.js';
 import { BrowserPreferencesPort } from '../infrastructure/browser-preferences-port.js';
 import { BrowserNotificationPort } from '../infrastructure/browser-notification-port.js';
@@ -170,7 +170,7 @@ export class CollabMdAppShell {
     this.toastController = new ToastController(this.elements.toastContainer);
     this.chatToastController = new ToastController(this.elements.chatToastContainer);
     this.agentConnectionController = new AgentConnectionController({
-      apiClient: new AgentConnectionApiClient(),
+      apiClient: agentConnectionApiClient,
       closeToolbarMenu: () => this.closeToolbarOverflowMenu(),
       content: this.elements.agentConnectionContent,
       dialog: this.elements.agentConnectionDialog,
@@ -329,6 +329,7 @@ export class CollabMdAppShell {
       headerPanelElement: this.elements.backlinksHeaderPanel,
       inlinePanelElement: this.elements.backlinksInlinePanel,
       loadBacklinks: (filePath, options = {}) => this.vaultApiClient.readBacklinks(filePath, options),
+      onBeforeToggle: () => this.scrollSyncController.suspendSync(250),
       onFileSelect: (filePath) => this.workspaceRouteController.handleFileSelection(filePath, {
         closeSidebarOnMobile: true,
       }),

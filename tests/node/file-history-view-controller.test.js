@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { GitApiClient } from '../../src/client/infrastructure/git-api-client.js';
+import { gitApiClient } from '../../src/client/infrastructure/git-api-client.js';
 import { FileHistoryViewController } from '../../src/client/presentation/file-history-view-controller.js';
 
 class FakeClassList {
@@ -230,7 +230,7 @@ test('FileHistoryViewController renders local changes and commit actions', async
         return `<div class="rendered-file-header">${file.path}</div>`;
       },
     },
-    gitApiClient: new GitApiClient(),
+    gitApiClient: gitApiClient,
     onOpenCommitDiff: (hash, { historyFilePath, path }) => events.push(['commit-diff', hash, path, historyFilePath]),
     onOpenFile: (filePath) => events.push(['open-file', filePath]),
     onOpenPreview: ({ hash, path, currentFilePath }) => events.push(['preview', hash, path, currentFilePath]),
@@ -342,7 +342,7 @@ test('FileHistoryViewController preserves history list scroll position across se
         return `<div class="rendered-file-header">${file.path}</div>`;
       },
     },
-    gitApiClient: new GitApiClient(),
+    gitApiClient: gitApiClient,
   });
   controller.initialize();
 

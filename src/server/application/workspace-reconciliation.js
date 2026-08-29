@@ -16,11 +16,7 @@ import {
 } from '../domain/workspace-state.js';
 
 function createEventId() {
-  if (globalThis.crypto?.randomUUID) {
-    return globalThis.crypto.randomUUID();
-  }
-
-  return `workspace-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+  return globalThis.crypto.randomUUID();
 }
 
 function countWorkspacePaths(workspaceChange = {}) {

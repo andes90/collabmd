@@ -7,20 +7,16 @@ export function formatMatchCount(count = 0, { truncated = false } = {}) {
 }
 
 export function flattenTextResults(payload = {}) {
-  const flattened = [];
-  (payload.files ?? []).forEach((fileGroup) => {
-    (fileGroup.snippets ?? []).forEach((snippet) => {
-      flattened.push({
-        column: snippet.column,
-        file: fileGroup.file,
-        kind: fileGroup.kind,
-        line: snippet.line,
-        matchLength: Math.max((snippet.matchEnd ?? 0) - (snippet.matchStart ?? 0), 0),
-        snippet,
-      });
-    });
-  });
-  return flattened;
+  return (payload.files ?? []).flatMap((fileGroup) => (
+    (fileGroup.snippets ?? []).map((snippet) => ({
+      column: snippet.column,
+      file: fileGroup.file,
+      kind: fileGroup.kind,
+      line: snippet.line,
+      matchLength: Math.max((snippet.matchEnd ?? 0) - (snippet.matchStart ?? 0), 0),
+      snippet,
+    }))
+  ));
 }
 
 export class QuickSwitcherTextSearchRunner {

@@ -1,3 +1,5 @@
+import { escapeHtml } from '../domain/vault-utils.js';
+
 function createAgentSetup({ authRequired, endpoint }) {
   return [
     `MCP endpoint: ${endpoint}`,
@@ -8,15 +10,6 @@ function createAgentSetup({ authRequired, endpoint }) {
 
 function createAgentTokenExport(token) {
   return `export COLLABMD_ACCESS_TOKEN='${String(token).replaceAll("'", "'\\''")}'`;
-}
-
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
 }
 
 function formatDate(value) {
