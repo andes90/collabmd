@@ -1,5 +1,7 @@
 import { Doc } from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
+import * as decoding from 'lib0/decoding';
+import * as encoding from 'lib0/encoding';
 import {
   EXCALIDRAW_APP_STATE_KEY,
   EXCALIDRAW_ELEMENTS_KEY,
@@ -12,6 +14,10 @@ import {
   readLegacyExcalidrawRoomScene,
   replaceExcalidrawRoomScene,
 } from '../../domain/excalidraw-room-codec.js';
+import {
+  MSG_AGENT_FLUSH,
+  MSG_AGENT_FLUSH_ACK,
+} from '../../domain/collaboration-protocol.js';
 
 import {
   buildCollaboratorsMap,
@@ -33,6 +39,7 @@ import { stopReconnectOnControlledClose } from './yjs-provider-reset-guard.js';
 const DEFAULT_EMPTY_SCENE_GUARD_MS = 250;
 const DEFAULT_SAVE_THROTTLE_MS = 48;
 const DEFAULT_SYNC_TIMEOUT_MS = 4000;
+const DEFAULT_AGENT_FLUSH_TIMEOUT_MS = 1000;
 
 export const EXCALIDRAW_ROOM_CONNECTION_STATE = Object.freeze({
   AUTHORITATIVE: 'authoritative',
@@ -178,6 +185,8 @@ export class ExcalidrawRoomClient {
     this.lastViewportSignature = '';
     this.lastSelectedIdsSignature = '';
     this.pendingEmptySceneCandidate = null;
+    this.agentFlushRequestCounter = 0;
+    this.pendingAgentFlushRequests = new Map();
     this.structuredObserversAttached = false;
     this.canWriteToRoom = false;
     this.waitingForAuthoritativeSync = false;
@@ -248,6 +257,74 @@ export class ExcalidrawRoomClient {
 
   getConnectionState() {
     return this.connectionState;
+  }
+
+  installAgentFlushHandler() {
+    const messageHandlers = this.provider?.messageHandlers;
+    if (!messageHandlers || typeof messageHandlers !== 'object') {
+      return false;
+    }
+
+    messageHandlers[MSG_AGENT_FLUSH_ACK] = (_encoder, decoder) => {
+      let requestId;
+      try {
+        requestId = decoding.readVarString(decoder);
+      } catch {
+        return;
+      }
+
+      const request = this.pendingAgentFlushRequests.get(requestId);
+      if (!request) {
+        return;
+      }
+
+      request.resolve({ status: 'acknowledged' });
+    };
+    return true;
+  }
+
+  settleAgentFlushRequests(status) {
+    const requests = [...this.pendingAgentFlushRequests.values()];
+    requests.forEach((request) => request.resolve({ status }));
+  }
+
+  waitForServerFlush({ timeoutMs = DEFAULT_AGENT_FLUSH_TIMEOUT_MS } = {}) {
+    const ws = this.provider?.ws;
+    const openState = ws?.OPEN ?? globalThis.WebSocket?.OPEN ?? 1;
+    if (
+      !this.canWriteToRoom
+      || !ws
+      || ws.readyState !== openState
+      || !this.provider?.messageHandlers?.[MSG_AGENT_FLUSH_ACK]
+    ) {
+      return Promise.resolve({ status: 'unavailable' });
+    }
+
+    const requestId = `agent-flush-${this.ydoc?.clientID ?? 'client'}-${++this.agentFlushRequestCounter}`;
+    return new Promise((resolve) => {
+      const finish = (result) => {
+        const request = this.pendingAgentFlushRequests.get(requestId);
+        if (!request) {
+          return;
+        }
+        this.clearTimeoutFn(request.timeoutId);
+        this.pendingAgentFlushRequests.delete(requestId);
+        resolve(result);
+      };
+      this.pendingAgentFlushRequests.set(requestId, {
+        resolve: finish,
+        timeoutId: this.setTimeoutFn(() => finish({ status: 'timeout' }), timeoutMs),
+      });
+
+      try {
+        const encoder = encoding.createEncoder();
+        encoding.writeVarUint(encoder, MSG_AGENT_FLUSH);
+        encoding.writeVarString(encoder, requestId);
+        ws.send(encoding.toUint8Array(encoder));
+      } catch {
+        finish({ status: 'unavailable' });
+      }
+    });
   }
 
   hasPendingWrites() {
@@ -368,6 +445,7 @@ export class ExcalidrawRoomClient {
       disableBc: true,
       maxBackoffTime: 5000,
     });
+    this.installAgentFlushHandler();
     stopReconnectOnControlledClose(this.provider);
 
     this.awareness = this.provider.awareness;
@@ -933,6 +1011,7 @@ export class ExcalidrawRoomClient {
 
   disconnect() {
     this.flushSceneSync();
+    this.settleAgentFlushRequests('disconnected');
     this.setConnectionState(EXCALIDRAW_ROOM_CONNECTION_STATE.DISCONNECTING);
     this.clearTimeoutFn(this.sceneSyncTimer);
     this.sceneSyncTimer = null;

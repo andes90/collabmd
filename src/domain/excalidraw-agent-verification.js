@@ -115,6 +115,13 @@ function connectorThroughComponentWarning(connector, component) {
       ])
     : [];
   if (!bounds || points.length < 2) return null;
+  const isInside = ([x, y]) => (
+    x >= bounds.x
+    && x <= bounds.x + bounds.width
+    && y >= bounds.y
+    && y <= bounds.y + bounds.height
+  );
+  if (isInside(points[0]) || isInside(points.at(-1))) return null;
   for (let index = 1; index < points.length; index += 1) {
     if (segmentIntersectsBoxInterior(points[index - 1], points[index], bounds)) {
       const connectorId = String(connector.id ?? '');
@@ -174,6 +181,13 @@ function summarizeElement(element, paintOrder, activeElements) {
   if (elementInFront?.id) summary.behind = String(elementInFront.id);
   if (elementBehind?.id) summary.inFrontOf = String(elementBehind.id);
   if (element?.type === 'text') summary.text = String(element.text ?? '');
+  if (element?.type === 'text') {
+    summary.fontSize = finiteNumber(element.fontSize, 20);
+    summary.lineHeight = finiteNumber(element.lineHeight, 1.25);
+    if (element.containerId) summary.containerId = String(element.containerId);
+    if (element.textAlign) summary.textAlign = String(element.textAlign);
+    if (element.verticalAlign) summary.verticalAlign = String(element.verticalAlign);
+  }
   if (element?.startBinding?.elementId) summary.startElementId = String(element.startBinding.elementId);
   if (element?.endBinding?.elementId) summary.endElementId = String(element.endBinding.elementId);
   return summary;

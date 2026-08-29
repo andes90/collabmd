@@ -13,4 +13,5 @@ export function getRuntimeVaultDir(workerId = process.env.COLLABMD_E2E_WORKER_ID
 export async function resetE2EVaultSnapshot(vaultDir = getRuntimeVaultDir()) {
   await rm(vaultDir, { force: true, recursive: true });
   await cp(templateVaultDir, vaultDir, { recursive: true });
+  await rm(resolve(vaultDir, '.collabmd/yjs'), { force: true, recursive: true });
 }

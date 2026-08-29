@@ -4,7 +4,12 @@ import * as syncProtocol from 'y-protocols/sync';
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
 
-import { MSG_AWARENESS, MSG_SYNC } from './protocol.js';
+import {
+  MSG_AGENT_FLUSH,
+  MSG_AGENT_FLUSH_ACK,
+  MSG_AWARENESS,
+  MSG_SYNC,
+} from './protocol.js';
 import { CollaborationDocumentStore } from './collaboration-document-store.js';
 import { logPerfEvent } from '../../config/perf-logging.js';
 import { populateCommentThreads, serializeCommentThreads } from '../../../domain/comment-threads.js';
@@ -972,6 +977,19 @@ export class CollaborationRoom {
           }
 
           awarenessProtocol.applyAwarenessUpdate(this.awareness, update, ws);
+          break;
+        }
+
+        case MSG_AGENT_FLUSH: {
+          const requestId = decoding.readVarString(decoder);
+          if (!requestId || requestId.length > 128) {
+            break;
+          }
+
+          const encoder = encoding.createEncoder();
+          encoding.writeVarUint(encoder, MSG_AGENT_FLUSH_ACK);
+          encoding.writeVarString(encoder, requestId);
+          sendMessage.call(this, ws, encoding.toUint8Array(encoder), this);
           break;
         }
 

@@ -7,10 +7,16 @@ import WebSocket from 'ws';
 import * as Y from 'yjs';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import * as decoding from 'lib0/decoding';
+import * as encoding from 'lib0/encoding';
 import { WebsocketProvider } from 'y-websocket';
 
 import { replaceExcalidrawRoomScene } from '../../../src/domain/excalidraw-room-codec.js';
-import { MSG_AWARENESS, MSG_SYNC } from '../../../src/server/domain/collaboration/protocol.js';
+import {
+  MSG_AGENT_FLUSH,
+  MSG_AGENT_FLUSH_ACK,
+  MSG_AWARENESS,
+  MSG_SYNC,
+} from '../../../src/server/domain/collaboration/protocol.js';
 import { startTestServer, waitForCondition } from '../helpers/test-server.js';
 import {
   applySyncMessageToDoc,
@@ -55,6 +61,13 @@ async function loginForCookie(app, password) {
 
 async function waitForRoomRelease(app, filePath) {
   await waitForCondition(() => app.server.roomRegistry.get(filePath) === undefined);
+}
+
+function encodeRoomFlushRequest(requestId) {
+  const encoder = encoding.createEncoder();
+  encoding.writeVarUint(encoder, MSG_AGENT_FLUSH);
+  encoding.writeVarString(encoder, requestId);
+  return Buffer.from(encoding.toUint8Array(encoder));
 }
 
 test('WebSocket collaboration does not rewrite CRLF markdown on open-only sessions', async (t) => {
@@ -164,6 +177,40 @@ test('WebSocket collaboration broadcasts awareness and persists vault file', asy
   });
 
   assert.ok(diskContent.includes('# Persisted from test'));
+});
+
+test('WebSocket collaboration acknowledges after applying ordered room writes', async (t) => {
+  const app = await startTestServer();
+  t.after(() => app.close());
+
+  const filePath = 'test.md';
+  const ws = new WebSocket(app.wsUrl(filePath));
+  t.after(async () => {
+    ws.close();
+    await Promise.allSettled([waitForClose(ws)]);
+  });
+
+  await waitForOpen(ws);
+  await waitForMessage(ws, (data) => getMessageType(data) === MSG_SYNC);
+
+  const updateDoc = new Y.Doc();
+  t.after(() => updateDoc.destroy());
+  updateDoc.getText('codemirror').insert(0, '# Ordered room update');
+  const requestId = 'ordered-flush-test';
+  const ackPromise = waitForMessage(
+    ws,
+    (data) => getMessageType(data) === MSG_AGENT_FLUSH_ACK,
+    1000,
+  );
+
+  ws.send(encodeSyncUpdateMessage(Y.encodeStateAsUpdate(updateDoc)));
+  ws.send(encodeRoomFlushRequest(requestId));
+
+  const ack = await ackPromise;
+  const ackDecoder = decoding.createDecoder(ack);
+  assert.equal(decoding.readVarUint(ackDecoder), MSG_AGENT_FLUSH_ACK);
+  assert.equal(decoding.readVarString(ackDecoder), requestId);
+  assert.match(app.server.roomRegistry.get(filePath)?.getPersistedContent() || '', /Ordered room update/);
 });
 
 test('WebSocket collaboration rejects unauthorized clients when password auth is enabled', async (t) => {

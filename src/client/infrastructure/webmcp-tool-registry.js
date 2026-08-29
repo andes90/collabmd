@@ -98,7 +98,20 @@ async function replaceSnapshotRendering(result, renderScene, input = {}) {
     };
   } catch (error) {
     console.error('[webmcp] Exact Excalidraw rendering failed:', error.message);
-    return stripSceneSnapshots(result);
+    const cleanResult = stripSceneSnapshots(result);
+    if (result?.verification?.scene) {
+      return {
+        ...cleanResult,
+        verification: {
+          ...cleanResult.verification,
+          warnings: [...(cleanResult.verification?.warnings ?? []), 'exact-render-unavailable'],
+        },
+      };
+    }
+    return {
+      ...cleanResult,
+      warnings: [...(cleanResult.warnings ?? []), 'exact-render-unavailable'],
+    };
   }
 }
 
@@ -227,6 +240,7 @@ export class WebMcpToolRegistry {
             const acknowledgement = await runAcknowledgementHook(this.acknowledgeToolCall, {
               input,
               name: definition.name,
+              preparation,
               result,
               signal,
             });

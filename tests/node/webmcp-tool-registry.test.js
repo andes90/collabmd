@@ -145,8 +145,8 @@ test('WebMCP flushes an active editor and returns paint acknowledgement', async 
   const modelContext = createModelContext();
   const revision = 'b'.repeat(64);
   const registry = new WebMcpToolRegistry({
-    acknowledgeToolCall: async ({ name, result }) => {
-      events.push(`ack:${name}:${result.revision}`);
+    acknowledgeToolCall: async ({ name, preparation, result }) => {
+      events.push(`ack:${name}:${result.revision}:${preparation.revision}`);
       return { revision: result.revision, status: 'painted' };
     },
     callTool: async (name) => {
@@ -157,7 +157,7 @@ test('WebMCP flushes an active editor and returns paint acknowledgement', async 
     modelContext,
     prepareToolCall: async ({ name }) => {
       events.push(`prepare:${name}`);
-      return { status: 'flushed' };
+      return { revision: 'c'.repeat(64), status: 'flushed' };
     },
   });
   await registry.refresh();
@@ -170,12 +170,41 @@ test('WebMCP flushes an active editor and returns paint acknowledgement', async 
   assert.deepEqual(events, [
     'prepare:edit_excalidraw',
     'call:edit_excalidraw',
-    `ack:edit_excalidraw:${revision}`,
+    `ack:edit_excalidraw:${revision}:${'c'.repeat(64)}`,
   ]);
   assert.deepEqual(result.webMcp, {
     acknowledgement: { revision, status: 'painted' },
-    preparation: { status: 'flushed' },
+    preparation: { revision: 'c'.repeat(64), status: 'flushed' },
   });
+});
+
+test('WebMCP reports exact browser rendering failures to the agent', async () => {
+  const modelContext = createModelContext();
+  const registry = new WebMcpToolRegistry({
+    callTool: async () => ({
+      elementCount: 1,
+      format: 'png',
+      scene: {
+        appState: {},
+        elements: [{ height: 80, id: 'box', type: 'rectangle', width: 120, x: 0, y: 0 }],
+        files: {},
+        type: 'excalidraw',
+      },
+    }),
+    getIsTabActive: () => true,
+    modelContext,
+    renderExcalidrawScene: async () => {
+      throw new Error('renderer unavailable');
+    },
+  });
+  await registry.refresh();
+
+  const result = await modelContext.tools.get('collabmd_render_excalidraw').execute({
+    path: 'diagram.excalidraw',
+  });
+
+  assert.deepEqual(result.warnings, ['exact-render-unavailable']);
+  assert.equal(Object.hasOwn(result, 'scene'), false);
 });
 
 test('WebMCP cleans up partial registration failures', async () => {
@@ -214,4 +243,3 @@ test('WebMCP forwards tool cancellation to the browser-session request', async (
   await assert.rejects(execution, /cancelled by client/u);
   assert.equal(receivedSignal, controller.signal);
 });
-

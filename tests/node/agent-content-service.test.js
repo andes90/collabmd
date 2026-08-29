@@ -123,7 +123,7 @@ test('agent Excalidraw edits translate elements, resize standalone text, and ver
     elements: [
       { groupIds: ['service'], height: 80, id: 'box', type: 'rectangle', width: 160, x: 20, y: 30 },
       { groupIds: ['service'], id: 'label', text: 'API', type: 'text', x: 70, y: 55 },
-      { containerId: 'box', id: 'bound-label', text: 'Bound', type: 'text', x: 70, y: 80 },
+      { containerId: 'box', height: 80, id: 'bound-label', text: 'Bound', type: 'text', width: 100, x: 70, y: 80 },
       {
         autoResize: false,
         groupIds: ['service'],
@@ -144,6 +144,7 @@ test('agent Excalidraw edits translate elements, resize standalone text, and ver
     translate: { dx: 40, dy: -10, ids: ['box'] },
     update: [
       { id: 'label', set: { lineHeight: 1.5, text: 'A much longer API label' } },
+      { id: 'bound-label', set: { height: 25, x: 50, y: 57.5 } },
       { id: 'fixed-label', set: { text: 'Fixed label remains wrapped' } },
     ],
     verify: { format: 'svg', render: true },
@@ -160,8 +161,9 @@ test('agent Excalidraw edits translate elements, resize standalone text, and ver
   assert.deepEqual(box.boundElements, [{ id: 'bound-label', type: 'text' }]);
   assert.equal(label.x, 110);
   assert.equal(label.y, 45);
-  assert.equal(boundLabel.x, 110);
-  assert.equal(boundLabel.y, 70);
+  assert.equal(boundLabel.x, 90);
+  assert.equal(boundLabel.y, 47.5);
+  assert.equal(boundLabel.height, 25);
   assert.equal(label.originalText, 'A much longer API label');
   assert.ok(label.width > 80);
   assert.equal(label.height, 30);

@@ -1911,25 +1911,30 @@ function waitForAnimationFrame() {
   return new Promise((resolve) => requestAnimationFrame(resolve));
 }
 
-async function waitForAppliedSceneRevision(revision, { maxWaitMs = 4500 } = {}) {
+async function waitForAppliedSceneRevision(revision, {
+  afterRevision = '',
+  maxWaitMs = 4500,
+} = {}) {
   const startedAt = performance.now();
   while ((performance.now() - startedAt) < maxWaitMs) {
+    const appliedRevision = await appliedSceneRevisionPromise;
     if (
       !pendingRemoteSceneJson
-      && await appliedSceneRevisionPromise === revision
+      && (appliedRevision === revision || (afterRevision && appliedRevision !== afterRevision))
     ) {
       await waitForAnimationFrame();
       await waitForAnimationFrame();
+      const paintedRevision = await appliedSceneRevisionPromise;
       if (
         !pendingRemoteSceneJson
-        && await appliedSceneRevisionPromise === revision
+        && (paintedRevision === revision || (afterRevision && paintedRevision !== afterRevision))
       ) {
-        return true;
+        return paintedRevision;
       }
     }
     await new Promise((resolve) => window.setTimeout(resolve, 16));
   }
-  return false;
+  return '';
 }
 
 async function prepareRealtimeRoomDisconnect() {
@@ -2048,7 +2053,12 @@ window.addEventListener('message', (event) => {
     void (async () => {
       roomClient?.flushSceneSync();
       await waitForPendingRoomWrites({ maxWaitMs: 1000 });
-      postToParent('agent-writes-flushed', { requestId: message.requestId || '' });
+      const serverFlush = await roomClient?.waitForServerFlush?.({ timeoutMs: 1000 });
+      postToParent('agent-writes-flushed', {
+        requestId: message.requestId || '',
+        revision: await appliedSceneRevisionPromise,
+        status: serverFlush?.status || 'unavailable',
+      });
     })();
     return;
   }
@@ -2056,10 +2066,12 @@ window.addEventListener('message', (event) => {
   if (message.type === 'wait-for-agent-revision') {
     void (async () => {
       const revision = String(message.revision || '');
-      const painted = revision && await waitForAppliedSceneRevision(revision);
-      postToParent(painted ? 'agent-revision-painted' : 'agent-revision-not-painted', {
+      const paintedRevision = revision && await waitForAppliedSceneRevision(revision, {
+        afterRevision: String(message.afterRevision || ''),
+      });
+      postToParent(paintedRevision ? 'agent-revision-painted' : 'agent-revision-not-painted', {
         requestId: message.requestId || '',
-        revision,
+        revision: paintedRevision || revision,
       });
     })();
     return;

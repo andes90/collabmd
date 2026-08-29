@@ -181,7 +181,7 @@ CollabMD exposes `/mcp`, or `<BASE_PATH>/mcp` when a base path is configured, wi
 - `apply_text_edits` with exact replacements and revision conflict protection
 - `create_document`
 - `create_excalidraw` and `edit_excalidraw` for canonical element creation, updates, relationship-aware translation, standalone text auto-resizing, same-ID replacement, explicit paint-order changes, deletion, and optional same-revision verification
-- `inspect_excalidraw` for paint order, bounds, bindings, distant bound endpoints, connector/component intersections, unintended overlaps, occlusion, clipping, and validity warnings
+- `inspect_excalidraw` for paint order, bounds, bindings, text layout properties, distant bound endpoints, connector/component intersections, unintended overlaps, occlusion, clipping, and validity warnings
 - `render_excalidraw` for PNG or SVG verification previews with renderer and parity metadata
 - `verify_excalidraw` to inspect and render one exact revision
 - `get_collabmd_syntax`

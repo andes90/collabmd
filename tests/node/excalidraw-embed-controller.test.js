@@ -218,14 +218,17 @@ test('flushes active diagram writes and waits for matching paint acknowledgement
     assert.deepEqual(await flush, { status: 'flushed' });
 
     const revision = 'a'.repeat(64);
+    const afterRevision = 'b'.repeat(64);
     const paint = ExcalidrawEmbedController.prototype.waitForAgentPaint.call(
       controller,
       entry.filePath,
       revision,
+      { afterRevision },
     );
     const paintRequest = posts.at(-1);
     assert.equal(paintRequest.type, 'wait-for-agent-revision');
     assert.equal(paintRequest.revision, revision);
+    assert.equal(paintRequest.afterRevision, afterRevision);
     ExcalidrawEmbedController.prototype._onMessage.call(controller, {
       data: {
         requestId: paintRequest.requestId,

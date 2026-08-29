@@ -2,8 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import * as Y from 'yjs';
+import * as decoding from 'lib0/decoding';
+import * as encoding from 'lib0/encoding';
 
 import { buildExcalidrawRoomScene } from '../../src/domain/excalidraw-room-codec.js';
+import {
+  MSG_AGENT_FLUSH,
+  MSG_AGENT_FLUSH_ACK,
+} from '../../src/domain/collaboration-protocol.js';
 import { ExcalidrawRoomClient } from '../../src/client/infrastructure/excalidraw-room-client.js';
 
 function createFakeAwareness() {
@@ -53,7 +59,14 @@ function createFakeProvider() {
       }
       listeners.get(type).add(handler);
     },
+    messageHandlers: [],
     synced: true,
+    ws: {
+      OPEN: 1,
+      bufferedAmount: 0,
+      readyState: 1,
+      send() {},
+    },
   };
 }
 
@@ -96,6 +109,10 @@ async function createConnectedClient({
   now = () => Date.now(),
   onCommentThreadsChange = () => {},
   onRemoteSceneJson = () => {},
+  setTimeoutFn = (callback) => {
+    callback();
+    return 1;
+  },
 } = {}) {
   const provider = createFakeProvider();
   const ydoc = new Y.Doc();
@@ -107,10 +124,7 @@ async function createConnectedClient({
     onCommentThreadsChange,
     onRemoteSceneJson,
     resolveWsBaseUrlFn: () => 'ws://localhost:3000',
-    setTimeoutFn: (callback) => {
-      callback();
-      return 1;
-    },
+    setTimeoutFn,
     vaultClient: {
       async readFile() {
         return { content: JSON.stringify({ type: 'excalidraw', version: 2, source: 'collabmd', elements: [], appState: {}, files: {} }) };
@@ -126,6 +140,38 @@ async function createConnectedClient({
 
   return { client, provider, ydoc };
 }
+
+test('ExcalidrawRoomClient waits for the server to acknowledge ordered room writes', async () => {
+  const { client, provider } = await createConnectedClient({
+    setTimeoutFn: (callback, delay) => setTimeout(callback, delay),
+  });
+  const sentMessages = [];
+  provider.ws.send = (payload) => {
+    sentMessages.push(payload);
+    const requestDecoder = decoding.createDecoder(payload);
+    assert.equal(decoding.readVarUint(requestDecoder), MSG_AGENT_FLUSH);
+    const requestId = decoding.readVarString(requestDecoder);
+    const ackEncoder = encoding.createEncoder();
+    encoding.writeVarUint(ackEncoder, MSG_AGENT_FLUSH_ACK);
+    encoding.writeVarString(ackEncoder, requestId);
+    const ackDecoder = decoding.createDecoder(encoding.toUint8Array(ackEncoder));
+    decoding.readVarUint(ackDecoder);
+    provider.messageHandlers[MSG_AGENT_FLUSH_ACK]?.(
+      encoding.createEncoder(),
+      ackDecoder,
+      provider,
+    );
+  };
+
+  assert.equal(typeof provider.messageHandlers[MSG_AGENT_FLUSH_ACK], 'function');
+  const flushPromise = client.waitForServerFlush();
+  assert.equal(sentMessages.length, 1);
+  const result = await flushPromise;
+
+  assert.deepEqual(result, { status: 'acknowledged' });
+  assert.equal(sentMessages.length, 1);
+  client.disconnect();
+});
 
 test('ExcalidrawRoomClient uses an empty scene when no file path is configured', async () => {
   const client = new ExcalidrawRoomClient({ vaultClient: {} });

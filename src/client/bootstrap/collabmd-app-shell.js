@@ -179,14 +179,17 @@ export class CollabMdAppShell {
       trigger: this.elements.connectAgentButton,
     });
     this.webMcpTools = new WebMcpToolRegistry({
-      acknowledgeToolCall: ({ input, name, result, signal }) => {
+      acknowledgeToolCall: ({ input, name, preparation, result, signal }) => {
         if (
-          !['create_excalidraw', 'edit_excalidraw'].includes(name)
+          name !== 'edit_excalidraw'
           || input.path !== this.currentFilePath
         ) {
           return null;
         }
-        return this.excalidrawEmbed?.waitForAgentPaint(input.path, result.revision, { signal });
+        return this.excalidrawEmbed?.waitForAgentPaint(input.path, result.revision, {
+          afterRevision: preparation?.revision,
+          signal,
+        });
       },
       callTool: (name, input, options) => this.vaultApiClient.callAgentTool(name, input, options),
       getActiveContext: () => ({
@@ -199,11 +202,24 @@ export class CollabMdAppShell {
       onDidMutate: () => {
         this.toastController.show('Agent-assisted Vault change applied. Review it before committing.');
       },
-      prepareToolCall: ({ input, name, signal }) => {
-        if (!name.includes('excalidraw') || input.path !== this.currentFilePath) {
+      prepareToolCall: async ({ input, name, signal }) => {
+        if (
+          ![
+            'edit_excalidraw',
+            'inspect_excalidraw',
+            'read_document',
+            'render_excalidraw',
+            'verify_excalidraw',
+          ].includes(name)
+          || input.path !== this.currentFilePath
+        ) {
           return null;
         }
-        return this.excalidrawEmbed?.flushPendingAgentWrites(input.path, { signal });
+        const preparation = await this.excalidrawEmbed?.flushPendingAgentWrites(input.path, { signal });
+        if (['timeout', 'unavailable'].includes(preparation?.status)) {
+          throw new Error('The active Excalidraw editor did not confirm its latest collaboration update');
+        }
+        return preparation;
       },
     });
     this.fileExplorer = new FileExplorerController({

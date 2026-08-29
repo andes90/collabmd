@@ -358,7 +358,11 @@ export class ExcalidrawEmbedController {
     );
   }
 
-  waitForAgentPaint(filePath, revision, { signal = null, timeoutMs = 5000 } = {}) {
+  waitForAgentPaint(filePath, revision, {
+    afterRevision = '',
+    signal = null,
+    timeoutMs = 5000,
+  } = {}) {
     const entry = this._findEntryByFilePath(filePath);
     if (!entry?.isReady || !entry.iframe?.contentWindow || !revision) {
       return Promise.resolve({ status: 'not-active' });
@@ -366,7 +370,7 @@ export class ExcalidrawEmbedController {
     return this._requestAgentBridge(
       entry,
       'wait-for-agent-revision',
-      { revision },
+      { afterRevision, revision },
       { signal, timeoutMs },
     );
   }
@@ -1386,9 +1390,9 @@ export class ExcalidrawEmbedController {
       if (request?.entry === entry) {
         request.resolve({
           ...(msg.revision ? { revision: msg.revision } : {}),
-          status: msg.type === 'agent-writes-flushed'
+          status: msg.status || (msg.type === 'agent-writes-flushed'
             ? 'flushed'
-            : (msg.type === 'agent-revision-painted' ? 'painted' : 'not-painted'),
+            : (msg.type === 'agent-revision-painted' ? 'painted' : 'not-painted')),
         });
       }
       return;

@@ -157,7 +157,7 @@ test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously'
       path: 'diagrams/service.excalidraw',
       revision: editedDiagram.structuredContent.revision,
       translate: { dx: 40, dy: 10, ids: ['service'] },
-      update: [{ id: 'service-label', set: { text: 'Primary' } }],
+      update: [{ id: 'service-label', set: { height: 25, text: 'Primary', x: 58, y: 47.5 } }],
       verify: { format: 'svg', render: true },
     },
     name: 'edit_excalidraw',
@@ -169,13 +169,18 @@ test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously'
   assert.equal(verifiedEditImage.mimeType, 'image/svg+xml');
   assert.equal(updatedDiagram.elements.find(({ id }) => id === 'service').x, 60);
   assert.equal(updatedDiagram.elements.find(({ id }) => id === 'service-label').originalText, 'Primary');
-  assert.equal(updatedDiagram.elements.find(({ id }) => id === 'service-label').x, 100);
+  assert.equal(updatedDiagram.elements.find(({ id }) => id === 'service-label').x, 98);
+  assert.equal(updatedDiagram.elements.find(({ id }) => id === 'service-label').y, 57.5);
 
   const inspectedDiagram = await client.callTool({
     arguments: { path: 'diagrams/service.excalidraw' },
     name: 'inspect_excalidraw',
   });
   assert.equal(inspectedDiagram.structuredContent.elementCount, 3);
+  assert.equal(
+    inspectedDiagram.structuredContent.elements.find(({ id }) => id === 'service-label').containerId,
+    'service',
+  );
   assert.deepEqual(inspectedDiagram.structuredContent.warnings, []);
 
   const renderedDiagram = await client.callTool({

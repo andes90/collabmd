@@ -21,7 +21,20 @@ test('Excalidraw inspection reports paint order, broken bindings, and text clipp
   const result = inspectAgentExcalidrawScene(scene([
     { height: 100, id: 'left', type: 'rectangle', width: 100, x: 0, y: 0 },
     { height: 100, id: 'right', type: 'rectangle', width: 100, x: 80, y: 80 },
-    { fontSize: 20, height: 10, id: 'label', text: 'Clipped label', type: 'text', width: 20, x: 10, y: 10 },
+    {
+      containerId: 'left',
+      fontSize: 20,
+      height: 10,
+      id: 'label',
+      lineHeight: 1.5,
+      text: 'Clipped label',
+      textAlign: 'right',
+      type: 'text',
+      verticalAlign: 'top',
+      width: 20,
+      x: 10,
+      y: 10,
+    },
     {
       endBinding: { elementId: 'missing' },
       id: 'arrow',
@@ -42,6 +55,26 @@ test('Excalidraw inspection reports paint order, broken bindings, and text clipp
   assert.equal(result.elements[0].behind, 'right');
   assert.equal(result.elements[1].inFrontOf, 'left');
   assert.equal(result.elements.find(({ id }) => id === 'arrow').endElementId, 'missing');
+  assert.deepEqual(
+    result.elements.find(({ id }) => id === 'label'),
+    {
+      behind: 'arrow',
+      containerId: 'left',
+      fontSize: 20,
+      height: 10,
+      id: 'label',
+      inFrontOf: 'right',
+      lineHeight: 1.5,
+      paintOrder: 2,
+      text: 'Clipped label',
+      textAlign: 'right',
+      type: 'text',
+      verticalAlign: 'top',
+      width: 20,
+      x: 10,
+      y: 10,
+    },
+  );
 });
 
 test('Excalidraw inspection warns when bound endpoints are far from their targets', () => {
@@ -66,6 +99,7 @@ test('Excalidraw inspection warns when bound endpoints are far from their target
 
 test('Excalidraw inspection warns for connector crossings and ungrouped overlaps', () => {
   const result = inspectAgentExcalidrawScene(scene([
+    { height: 60, id: 'zone', type: 'rectangle', width: 220, x: -10, y: -10 },
     { height: 40, id: 'source', type: 'rectangle', width: 40, x: 0, y: 0 },
     { height: 40, id: 'blocked', type: 'rectangle', width: 40, x: 80, y: 0 },
     { height: 40, id: 'target', type: 'rectangle', width: 40, x: 160, y: 0 },
