@@ -103,7 +103,7 @@ export class AgentConnectionStore {
     return this.prepare(
       'listBySubject',
       `SELECT * FROM agent_connections
-       WHERE subject_type = ? AND subject_id = ?
+       WHERE subject_type = ? AND subject_id = ? AND revoked_at IS NULL
        ORDER BY created_at DESC`,
     ).all(subjectType, subjectId).map(rowToConnection);
   }

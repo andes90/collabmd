@@ -235,17 +235,18 @@ test('MCP works under configured base path', async (t) => {
 test('password session manages workspace-level Agent Connections', async (t) => {
   const app = await startTestServer({
     agentAccess: { enabled: true },
+    basePath: '/app-partnership/collabmd',
     auth: { password: 'office-secret', strategy: 'password' },
   });
   t.after(app.close);
-  const login = await fetch(`${app.baseUrl}/api/auth/session`, {
+  const login = await fetch(`${app.appBaseUrl}/api/auth/session`, {
     body: JSON.stringify({ password: 'office-secret' }),
     headers: { 'Content-Type': 'application/json' },
     method: 'POST',
   });
   assert.equal(login.status, 200);
   const cookie = login.headers.get('set-cookie').split(';')[0];
-  const createdResponse = await fetch(`${app.baseUrl}/api/agent/connections`, {
+  const createdResponse = await fetch(`${app.appBaseUrl}/api/agent/connections`, {
     body: JSON.stringify({
       clientKind: 'codex',
       label: 'Password Codex',
@@ -258,7 +259,7 @@ test('password session manages workspace-level Agent Connections', async (t) => 
   const created = await createdResponse.json();
   assert.match(created.token, /^cmd_agent_/);
 
-  const listResponse = await fetch(`${app.baseUrl}/api/agent/connections`, {
+  const listResponse = await fetch(`${app.appBaseUrl}/api/agent/connections`, {
     headers: { Cookie: cookie },
   });
   const listed = await listResponse.json();
@@ -266,10 +267,15 @@ test('password session manages workspace-level Agent Connections', async (t) => 
   assert.equal(listed.connections[0].token, undefined);
 
   const revokeResponse = await fetch(
-    `${app.baseUrl}/api/agent/connections/${created.connection.id}`,
+    `${app.appBaseUrl}/api/agent/connections/${created.connection.id}`,
     { headers: { Cookie: cookie }, method: 'DELETE' },
   );
   assert.equal(revokeResponse.status, 200);
+  const revokedListResponse = await fetch(`${app.appBaseUrl}/api/agent/connections`, {
+    headers: { Cookie: cookie },
+  });
+  assert.equal(revokedListResponse.status, 200);
+  assert.deepEqual((await revokedListResponse.json()).connections, []);
   await assert.rejects(
     app.server.agentConnectionService.authenticateToken(created.token),
     { code: 'AGENT_TOKEN_INVALID' },
