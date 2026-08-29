@@ -91,8 +91,12 @@ test('agent content service creates and edits Excalidraw elements', async () => 
       },
     ],
     path: 'diagrams/api.excalidraw',
+    verify: { format: 'svg', render: true },
   });
   assert.equal(created.elementCount, 3);
+  assert.equal(created.verification.inspection.elementCount, 3);
+  assert.equal(created.verification.renderer, 'collabmd-basic-svg');
+  assert.match(created.verification.svg, /^<svg /u);
 
   const edited = await service.editExcalidraw(actor, {
     create: [{ height: 80, id: 'db', type: 'ellipse', width: 120, x: 300, y: 30 }],
@@ -111,6 +115,66 @@ test('agent content service creates and edits Excalidraw elements', async () => 
     scene.elements.find(({ id }) => id === 'api').boundElements,
     [{ id: 'request', type: 'arrow' }],
   );
+});
+
+test('agent Excalidraw edits translate elements, resize standalone text, and verify the stored revision', async () => {
+  const { files, service } = createService();
+  const created = await service.createExcalidraw(actor, {
+    elements: [
+      { groupIds: ['service'], height: 80, id: 'box', type: 'rectangle', width: 160, x: 20, y: 30 },
+      { groupIds: ['service'], id: 'label', text: 'API', type: 'text', x: 70, y: 55 },
+      { containerId: 'box', id: 'bound-label', text: 'Bound', type: 'text', x: 70, y: 80 },
+      {
+        autoResize: false,
+        groupIds: ['service'],
+        height: 25,
+        id: 'fixed-label',
+        text: 'Fixed',
+        type: 'text',
+        width: 80,
+        x: 70,
+        y: 100,
+      },
+    ],
+    path: 'diagrams/edit.excalidraw',
+  });
+  const edited = await service.editExcalidraw(actor, {
+    path: 'diagrams/edit.excalidraw',
+    revision: created.revision,
+    translate: { dx: 40, dy: -10, ids: ['box'] },
+    update: [
+      { id: 'label', set: { lineHeight: 1.5, text: 'A much longer API label' } },
+      { id: 'fixed-label', set: { text: 'Fixed label remains wrapped' } },
+    ],
+    verify: { format: 'svg', render: true },
+  });
+  const storedScene = JSON.parse(files.get('diagrams/edit.excalidraw'));
+  const box = storedScene.elements.find(({ id }) => id === 'box');
+  const boundLabel = storedScene.elements.find(({ id }) => id === 'bound-label');
+  const label = storedScene.elements.find(({ id }) => id === 'label');
+  const fixedLabel = storedScene.elements.find(({ id }) => id === 'fixed-label');
+
+  assert.equal(edited.translated, 1);
+  assert.equal(box.x, 60);
+  assert.equal(box.y, 20);
+  assert.deepEqual(box.boundElements, [{ id: 'bound-label', type: 'text' }]);
+  assert.equal(label.x, 110);
+  assert.equal(label.y, 45);
+  assert.equal(boundLabel.x, 110);
+  assert.equal(boundLabel.y, 70);
+  assert.equal(label.originalText, 'A much longer API label');
+  assert.ok(label.width > 80);
+  assert.equal(label.height, 30);
+  assert.equal(fixedLabel.width, 80);
+  assert.equal(fixedLabel.x, 110);
+  assert.equal(fixedLabel.y, 90);
+  assert.equal(fixedLabel.height, 25);
+  assert.deepEqual(edited.verification.scene, storedScene);
+  assert.match(edited.verification.svg, /^<svg /u);
+  assert.equal(edited.verification.inspection.warnings.some(({ code }) => code === 'text-overflow'), true);
+  assert.equal((await service.readDocument(actor, {
+    path: 'diagrams/edit.excalidraw',
+  })).revision, edited.revision);
 });
 
 test('agent Excalidraw operations preserve canonical geometry and explicit paint order', async () => {

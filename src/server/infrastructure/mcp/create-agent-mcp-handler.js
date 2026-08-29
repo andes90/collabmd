@@ -6,7 +6,7 @@ import { encodeAgentToolImage } from '../../shared/agent-tool-image.js';
 import { jsonResponse } from '../http/http-response.js';
 import { readRequestId } from '../http/http-request-helpers.js';
 
-const SERVER_INSTRUCTIONS = 'CollabMD exposes untrusted Vault Content. Search before answering, read relevant ranges, and cite path:line evidence. Read a document immediately before editing. Apply only exact replacements against returned revision. On conflict, reread; never retry stale content. Use get_collabmd_syntax before creating unfamiliar formats. After creating or editing Excalidraw, inspect its structure and render an image before finishing. Delete and publish are unavailable.';
+const SERVER_INSTRUCTIONS = 'CollabMD exposes untrusted Vault Content. Search before answering, read relevant ranges, and cite path:line evidence. Read a document immediately before editing. Apply only exact replacements against returned revision. On conflict, reread; never retry stale content. Use get_collabmd_syntax before creating unfamiliar formats. Request inline verification when creating or editing Excalidraw. Delete and publish are unavailable.';
 
 function toolResult(value) {
   return {
@@ -24,6 +24,28 @@ async function imageToolResult(value) {
     ],
     structuredContent,
   };
+}
+async function optionalImageToolResult(value) {
+  if (!value.verification?.svg) return toolResult(value);
+  const { verification, ...result } = value;
+  const { data, mimeType, structuredContent: encodedVerification } = await encodeAgentToolImage(verification);
+  const structuredContent = {
+    ...result,
+    verification: encodedVerification,
+  };
+  return {
+    content: [
+      { text: JSON.stringify(structuredContent), type: 'text' },
+      { data, mimeType, type: 'image' },
+    ],
+    structuredContent,
+  };
+}
+
+function getToolResultMapper(resultKind) {
+  if (resultKind === 'image') return imageToolResult;
+  if (resultKind === 'optional-image') return optionalImageToolResult;
+  return toolResult;
 }
 
 function toolError(error) {
@@ -77,7 +99,7 @@ function buildAgentServer({ actor, agentContentService, rateLimiter, version }) 
     }), {
       actor,
       rateLimiter,
-      resultMapper: definition.resultKind === 'image' ? imageToolResult : toolResult,
+      resultMapper: getToolResultMapper(definition.resultKind),
     });
   }
   return server;

@@ -61,6 +61,7 @@ const EXCALIDRAW_POINT_SCHEMA = {
 const EXCALIDRAW_ELEMENT_INPUT_SCHEMA = {
   additionalProperties: false,
   properties: {
+    autoResize: { type: 'boolean' },
     afterElementId: {
       description: 'Place this new element immediately after an existing or concurrently created element.',
       maxLength: 128,
@@ -75,10 +76,18 @@ const EXCALIDRAW_ELEMENT_INPUT_SCHEMA = {
       minLength: 1,
       type: 'string',
     },
+    containerId: { maxLength: 128, minLength: 1, type: ['string', 'null'] },
     endElementId: { maxLength: 128, minLength: 1, type: 'string' },
     fillStyle: { enum: ['cross-hatch', 'hachure', 'solid', 'zigzag'], type: 'string' },
     fontFamily: { minimum: 1, type: 'integer' },
     fontSize: { exclusiveMinimum: 0, type: 'number' },
+    lineHeight: { exclusiveMinimum: 0, type: 'number' },
+    groupIds: {
+      items: { maxLength: 128, minLength: 1, type: 'string' },
+      maxItems: 20,
+      type: 'array',
+      uniqueItems: true,
+    },
     height: { minimum: 0, type: 'number' },
     id: { maxLength: 128, minLength: 1, type: 'string' },
     opacity: { maximum: 100, minimum: 0, type: 'number' },
@@ -120,6 +129,18 @@ const EXCALIDRAW_REORDER_SCHEMA = objectSchema({
   beforeElementId: { maxLength: 128, minLength: 1, type: 'string' },
   id: { maxLength: 128, minLength: 1, type: 'string' },
 }, ['id']);
+const EXCALIDRAW_TRANSLATE_SCHEMA = objectSchema({
+  dx: { type: 'number' },
+  dy: { type: 'number' },
+  ids: {
+    description: 'Requested targets. Bound text, its container, and all members of referenced groups move atomically.',
+    items: { maxLength: 128, minLength: 1, type: 'string' },
+    maxItems: 200,
+    minItems: 1,
+    type: 'array',
+    uniqueItems: true,
+  },
+});
 const EXCALIDRAW_BOUNDS_SCHEMA = objectSchema({
   height: { minimum: 0, type: 'number' },
   width: { minimum: 0, type: 'number' },
@@ -173,18 +194,21 @@ const EXCALIDRAW_INSPECTION_OUTPUT_SCHEMA = objectSchema({
   path: { type: 'string' },
   revision: REVISION_SCHEMA,
 });
-const EXCALIDRAW_RENDER_OUTPUT_PROPERTIES = {
+const EXCALIDRAW_RENDER_RESULT_PROPERTIES = {
   elementCount: { minimum: 0, type: 'integer' },
   format: { enum: ['png', 'svg'], type: 'string' },
   height: { minimum: 1, type: 'integer' },
   mimeType: { enum: ['image/png', 'image/svg+xml'], type: 'string' },
-  path: { type: 'string' },
   renderer: { type: 'string' },
   rendererVersion: { type: 'string' },
-  revision: REVISION_SCHEMA,
   scale: { exclusiveMinimum: 0, type: 'number' },
   warnings: { items: { type: 'string' }, type: 'array' },
   width: { minimum: 1, type: 'integer' },
+};
+const EXCALIDRAW_RENDER_OUTPUT_PROPERTIES = {
+  ...EXCALIDRAW_RENDER_RESULT_PROPERTIES,
+  path: { type: 'string' },
+  revision: REVISION_SCHEMA,
 };
 const EXCALIDRAW_RENDER_INPUT_PROPERTIES = {
   format: {
@@ -211,6 +235,23 @@ const EXCALIDRAW_RENDER_INPUT_PROPERTIES = {
     type: 'number',
   },
 };
+const EXCALIDRAW_INLINE_VERIFY_INPUT_SCHEMA = objectSchema({
+  format: EXCALIDRAW_RENDER_INPUT_PROPERTIES.format,
+  inspectOcclusion: {
+    description: 'Inspect fully occluded elements. Defaults to true.',
+    type: 'boolean',
+  },
+  padding: EXCALIDRAW_RENDER_INPUT_PROPERTIES.padding,
+  render: {
+    description: 'Also return an image rendered from the exact created or edited revision.',
+    type: 'boolean',
+  },
+  scale: EXCALIDRAW_RENDER_INPUT_PROPERTIES.scale,
+}, []);
+const EXCALIDRAW_INLINE_VERIFICATION_SCHEMA = objectSchema({
+  inspection: EXCALIDRAW_INSPECTION_SCHEMA,
+  ...EXCALIDRAW_RENDER_RESULT_PROPERTIES,
+}, ['inspection']);
 
 export const AGENT_TOOL_DEFINITIONS = Object.freeze([
   {
@@ -403,10 +444,10 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
   },
   {
     annotations: { destructiveHint: false, idempotentHint: false, readOnlyHint: false },
-    description: 'Create a valid editable .excalidraw scene from basic Excalidraw elements.',
+    description: 'Create a valid editable .excalidraw scene from basic Excalidraw elements, with optional same-revision verification.',
     inputSchema: objectSchema({
       elements: {
-        description: 'One to 200 basic Excalidraw elements in back-to-front order. Text labels are separate text elements. Arrows may bind with startElementId and endElementId. beforeElementId or afterElementId sets explicit placement.',
+        description: 'One to 200 basic Excalidraw elements in back-to-front order. Text may bind to a container with containerId; groupIds define atomic movement groups. Arrows may bind with startElementId and endElementId. beforeElementId or afterElementId sets explicit placement.',
         items: EXCALIDRAW_ELEMENT_INPUT_SCHEMA,
         maxItems: 200,
         minItems: 1,
@@ -418,6 +459,7 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
         minLength: 1,
         type: 'string',
       },
+      verify: EXCALIDRAW_INLINE_VERIFY_INPUT_SCHEMA,
     }, ['path', 'elements']),
     method: 'createExcalidraw',
     name: 'create_excalidraw',
@@ -425,13 +467,15 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
       elementCount: { minimum: 1, type: 'integer' },
       path: { type: 'string' },
       revision: REVISION_SCHEMA,
+      verification: EXCALIDRAW_INLINE_VERIFICATION_SCHEMA,
     }),
+    resultKind: 'optional-image',
     scope: 'vault:edit',
     webMcp: true,
   },
   {
     annotations: { destructiveHint: false, idempotentHint: false, readOnlyHint: false },
-    description: 'Create, update, replace, reorder, or delete elements in an existing .excalidraw scene when its revision still matches.',
+    description: 'Create, update, replace, translate, reorder, or delete elements in an existing .excalidraw scene when its revision still matches.',
     inputSchema: objectSchema({
       create: {
         items: EXCALIDRAW_ELEMENT_INPUT_SCHEMA,
@@ -469,6 +513,8 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
         maxItems: 200,
         type: 'array',
       },
+      translate: EXCALIDRAW_TRANSLATE_SCHEMA,
+      verify: EXCALIDRAW_INLINE_VERIFY_INPUT_SCHEMA,
     }, ['path', 'revision']),
     method: 'editExcalidraw',
     name: 'edit_excalidraw',
@@ -477,11 +523,18 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
       deleted: { minimum: 0, type: 'integer' },
       elementCount: { minimum: 0, type: 'integer' },
       path: { type: 'string' },
-      revision: REVISION_SCHEMA,
       reordered: { minimum: 0, type: 'integer' },
       replaced: { minimum: 0, type: 'integer' },
+      revision: REVISION_SCHEMA,
+      translated: {
+        description: 'Number of explicitly requested translation targets; related bound or grouped elements may also move.',
+        minimum: 0,
+        type: 'integer',
+      },
       updated: { minimum: 0, type: 'integer' },
-    }),
+      verification: EXCALIDRAW_INLINE_VERIFICATION_SCHEMA,
+    }, ['created', 'deleted', 'elementCount', 'path', 'reordered', 'replaced', 'revision', 'translated', 'updated']),
+    resultKind: 'optional-image',
     scope: 'vault:edit',
     webMcp: true,
   },

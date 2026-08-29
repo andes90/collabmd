@@ -95,11 +95,15 @@ function readElementGeometry(raw, id, type) {
     : raw.fontSize;
   if (type === 'text' && fontSize <= 0) throw invalid(`Element ${id} fontSize must be positive`);
   const text = type === 'text' ? String(raw.text ?? '') : raw.text;
+  const lineHeight = type === 'text'
+    ? requireNumber(raw.lineHeight ?? 1.25, `Element ${id} lineHeight`)
+    : null;
+  if (type === 'text' && lineHeight <= 0) throw invalid(`Element ${id} lineHeight must be positive`);
   const defaultWidth = type === 'text'
     ? Math.max(1, ...text.split('\n').map((line) => line.length)) * fontSize * 0.6
     : 100;
   const defaultHeight = type === 'text'
-    ? Math.max(1, text.split('\n').length) * fontSize * 1.25
+    ? Math.max(1, text.split('\n').length) * fontSize * lineHeight
     : 100;
   const width = requireNumber(raw.width ?? defaultWidth, `Element ${id} width`);
   const height = requireNumber(raw.height ?? defaultHeight, `Element ${id} height`);
@@ -292,11 +296,16 @@ function refreshArrowBindings(elements) {
   const activeById = new Map(elements.filter((element) => !element.isDeleted).map((element) => [element.id, element]));
   for (const element of activeById.values()) {
     if (Array.isArray(element.boundElements)) {
-      element.boundElements = element.boundElements.filter(({ type }) => type !== 'arrow');
+      element.boundElements = element.boundElements.filter(({ type }) => type !== 'arrow' && type !== 'text');
       if (element.boundElements.length === 0) element.boundElements = null;
     }
   }
   for (const element of activeById.values()) {
+    if (element.type === 'text' && element.containerId) {
+      const container = activeById.get(element.containerId);
+      if (!container) throw invalid(`Element ${element.id} binds to missing container ${element.containerId}`);
+      container.boundElements = [...(container.boundElements ?? []), { id: element.id, type: 'text' }];
+    }
     if (element.type !== 'arrow' && element.type !== 'line') continue;
     for (const binding of [element.startBinding, element.endBinding]) {
       if (!binding?.elementId) continue;
@@ -313,6 +322,23 @@ function validateUniqueIds(elements) {
     if (ids.has(element.id)) throw invalid(`Duplicate Excalidraw element id: ${element.id}`);
     ids.add(element.id);
   }
+}
+
+function resolveTranslationIds(elements, requestedIds) {
+  const resolved = new Set(requestedIds);
+  for (const id of resolved) {
+    const element = elements.find((candidate) => candidate.id === id && !candidate.isDeleted);
+    if (!element) throw invalid(`Excalidraw element not found: ${id}`);
+    if (element.containerId) resolved.add(element.containerId);
+    const groupIds = Array.isArray(element.groupIds) ? element.groupIds : [];
+    for (const candidate of elements) {
+      if (candidate.isDeleted) continue;
+      const sharesTranslationGroup = Array.isArray(candidate.groupIds)
+        && candidate.groupIds.some((groupId) => groupIds.includes(groupId));
+      if (candidate.containerId === id || sharesTranslationGroup) resolved.add(candidate.id);
+    }
+  }
+  return [...resolved];
 }
 
 export function createAgentExcalidrawScene(rawElements) {
@@ -356,11 +382,31 @@ export function applyAgentExcalidrawEdits(scene, edits = {}) {
   const replace = edits.replace ?? [];
   const remove = edits.delete ?? [];
   const reorder = edits.reorder ?? [];
+  const translate = edits.translate ?? null;
   const operations = [create, update, replace, remove, reorder];
-  const operationCount = operations.reduce((count, entries) => (
-    count + (Array.isArray(entries) ? entries.length : 0)
-  ), 0);
-  if (!operations.every(Array.isArray) || operationCount < 1) {
+  if (!operations.every(Array.isArray)) {
+    throw invalid('Excalidraw edit operations must be arrays');
+  }
+  let translatedIds = [];
+  let translateDx = 0;
+  let translateDy = 0;
+  if (translate !== null) {
+    const operation = requireObject(translate, 'Translate operation');
+    if (!Array.isArray(operation.ids) || operation.ids.length === 0) {
+      throw invalid('Translate operation must include at least one element id');
+    }
+    translatedIds = operation.ids.map((id) => String(id ?? '').trim());
+    if (translatedIds.some((id) => !id) || new Set(translatedIds).size !== translatedIds.length) {
+      throw invalid('Translate operation element ids must be non-empty and unique');
+    }
+    translateDx = requireNumber(operation.dx, 'Translate dx');
+    translateDy = requireNumber(operation.dy, 'Translate dy');
+    if (translateDx === 0 && translateDy === 0) {
+      throw invalid('Translate operation must move elements');
+    }
+  }
+  const operationCount = operations.reduce((count, entries) => count + entries.length, translatedIds.length);
+  if (operationCount < 1) {
     throw invalid('Excalidraw edits must include at least one operation');
   }
   if (operationCount > 200) {
@@ -394,7 +440,20 @@ export function applyAgentExcalidrawEdits(scene, edits = {}) {
     ) {
       throw invalid(`Update ${id} cannot change identity, type, deletion, version, or layer fields`);
     }
-    const next = bumpElementVersion(normalizeElement({ ...current, ...set }, now), now, 'update');
+    const raw = { ...current, ...set };
+    if (current.type === 'text' && Object.hasOwn(set, 'text') && !Object.hasOwn(set, 'originalText')) {
+      raw.originalText = String(set.text ?? '');
+    }
+    const resizesStandaloneText = current.type === 'text'
+      && !raw.containerId
+      && raw.autoResize !== false
+      && ['autoResize', 'fontFamily', 'fontSize', 'lineHeight', 'text']
+        .some((field) => Object.hasOwn(set, field));
+    if (resizesStandaloneText) {
+      delete raw.width;
+      delete raw.height;
+    }
+    const next = bumpElementVersion(normalizeElement(raw, now), now, 'update');
     elements[elements.indexOf(current)] = next;
     byId.set(id, next);
     alreadyVersionedIds.add(id);
@@ -416,6 +475,25 @@ export function applyAgentExcalidrawEdits(scene, edits = {}) {
       version: current.version,
       versionNonce: current.versionNonce,
     }, now), now, 'replace');
+    elements[elements.indexOf(current)] = next;
+    byId.set(id, next);
+    alreadyVersionedIds.add(id);
+  });
+  if (translatedIds.length > 0) {
+    translatedIds = resolveTranslationIds(elements, translatedIds);
+    const expandedOperationCount = operations.reduce((count, entries) => count + entries.length, translatedIds.length);
+    if (expandedOperationCount > 200) {
+      throw invalid('Excalidraw edits cannot exceed 200 operations including related translations');
+    }
+  }
+  translatedIds.forEach((id) => {
+    const current = byId.get(id);
+    if (!current || current.isDeleted) throw invalid(`Excalidraw element not found: ${id}`);
+    const next = bumpElementVersion({
+      ...current,
+      x: requireNumber(current.x, `Element ${id} x`) + translateDx,
+      y: requireNumber(current.y, `Element ${id} y`) + translateDy,
+    }, now, 'translate');
     elements[elements.indexOf(current)] = next;
     byId.set(id, next);
     alreadyVersionedIds.add(id);

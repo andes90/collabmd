@@ -52,6 +52,31 @@ function clampInteger(value, fallback, min, max) {
   return Number.isInteger(parsed) ? Math.min(Math.max(parsed, min), max) : fallback;
 }
 
+function requireInlineExcalidrawVerificationOptions(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw createAgentContentError('AGENT_INPUT_INVALID', 'Excalidraw verification options must be an object', 400);
+  }
+}
+
+function createInlineExcalidrawVerification(scene, options) {
+  const verification = {
+    inspection: inspectAgentExcalidrawScene(scene, {
+      inspectOcclusion: options.inspectOcclusion ?? true,
+    }),
+  };
+  if (options.render) {
+    Object.assign(verification, {
+      ...renderAgentExcalidrawSvg(scene, {
+        padding: options.padding ?? 32,
+        scale: options.scale ?? 1,
+      }),
+      format: options.format ?? 'png',
+      scene,
+    });
+  }
+  return verification;
+}
+
 function searchLiveText(content, query, maxSnippets = 5) {
   const normalizedQuery = query.toLocaleLowerCase();
   const snippets = [];
@@ -156,6 +181,7 @@ export class AgentContentService {
     const current = await this.readExcalidrawScene(actor, path);
     return {
       ...renderAgentExcalidrawSvg(current.scene, { padding, scale }),
+      scene: current.scene,
       format,
       path: current.path,
       revision: current.revision,
@@ -172,6 +198,7 @@ export class AgentContentService {
     const current = await this.readExcalidrawScene(actor, path);
     return {
       ...renderAgentExcalidrawSvg(current.scene, { padding, scale }),
+      scene: current.scene,
       format,
       inspection: inspectAgentExcalidrawScene(current.scene, { inspectOcclusion }),
       path: current.path,
@@ -332,12 +359,13 @@ export class AgentContentService {
     });
   }
 
-  async createExcalidraw(actor, { elements, path } = {}) {
+  async createExcalidraw(actor, { elements, path, verify = null } = {}) {
     requireScope(actor, 'vault:edit');
     const normalizedPath = normalizeWorkspacePath(path);
     if (getVaultFileKind(normalizedPath) !== 'excalidraw') {
       throw createAgentContentError('AGENT_UNSUPPORTED_DOCUMENT', 'Excalidraw tools require an .excalidraw path', 400);
     }
+    if (verify !== null) requireInlineExcalidrawVerificationOptions(verify);
     let scene;
     try {
       scene = createAgentExcalidrawScene(elements);
@@ -360,11 +388,15 @@ export class AgentContentService {
         sourceRef: createAgentSourceRef(actor),
       });
       if (!result.ok) throw createAgentContentError('AGENT_CREATE_FAILED', result.error, 409);
-      return {
+      const response = {
         elementCount: scene.elements.length,
         path: normalizedPath,
         revision: await createEditableContentRevision(content),
       };
+      if (verify !== null) {
+        response.verification = createInlineExcalidrawVerification(scene, verify);
+      }
+      return response;
     });
   }
 
@@ -375,13 +407,16 @@ export class AgentContentService {
     reorder = [],
     replace = [],
     revision,
+    translate = null,
     update = [],
+    verify = null,
   } = {}) {
     requireScope(actor, 'vault:edit');
     const normalizedPath = normalizeWorkspacePath(path);
     if (getVaultFileKind(normalizedPath) !== 'excalidraw') {
       throw createAgentContentError('AGENT_UNSUPPORTED_DOCUMENT', 'Excalidraw tools require an .excalidraw path', 400);
     }
+    if (verify !== null) requireInlineExcalidrawVerificationOptions(verify);
     return this.runForPath(normalizedPath, async () => {
       const content = await this.readCurrentContent(normalizedPath);
       if (content.length > MAX_DOCUMENT_CHARACTERS) {
@@ -398,6 +433,7 @@ export class AgentContentService {
           reorder,
           replace,
           update,
+          translate,
         });
       } catch (error) {
         if (error instanceof SyntaxError) {
@@ -430,16 +466,22 @@ export class AgentContentService {
         });
         if (!result.ok) throw createAgentContentError('AGENT_WRITE_FAILED', result.error, 400);
       }
-      return {
+      const storedScene = JSON.parse(nextContent);
+      const result = {
         created: create.length,
         deleted: remove.length,
-        elementCount: scene.elements.filter((element) => !element.isDeleted).length,
+        elementCount: storedScene.elements.filter((element) => !element.isDeleted).length,
         path: normalizedPath,
-        revision: await createEditableContentRevision(nextContent),
         reordered: reorder.length,
         replaced: replace.length,
+        revision: await createEditableContentRevision(nextContent),
+        translated: translate?.ids?.length ?? 0,
         updated: update.length,
       };
+      if (verify !== null) {
+        result.verification = createInlineExcalidrawVerification(storedScene, verify);
+      }
+      return result;
     });
   }
 

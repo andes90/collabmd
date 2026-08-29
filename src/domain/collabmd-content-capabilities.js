@@ -35,7 +35,7 @@ const CAPABILITIES = Object.freeze({
     agentEditable: true,
     editable: true,
     extensions: [EXCALIDRAW_FILE_EXTENSION],
-    guide: 'Excalidraw scene JSON managed by the canvas editor. Use create_excalidraw and edit_excalidraw rather than raw text edits. Element order is back-to-front; create supports beforeElementId and afterElementId, while edit supports reorder and same-ID replace operations. Line, arrow, and freedraw dimensions are derived from points. Use verify_excalidraw for same-revision structure and image verification; fallback renders report preview-not-pixel-identical. Supported agent element types: rectangle, ellipse, diamond, text, arrow, line, and freedraw. Embed with ![[drawing.excalidraw]].',
+    guide: 'Excalidraw scene JSON managed by the canvas editor. Use create_excalidraw and edit_excalidraw rather than raw text edits. Element order is back-to-front; create supports beforeElementId and afterElementId, while edit supports relationship-aware translation, reorder, same-ID replace, and same-revision verification. Container or group translation also moves bound text and grouped members. Standalone auto-resizing text recalculates its bounds when text metrics change. Line, arrow, and freedraw dimensions are derived from points. Creation and editing support inline inspection and optional rendering; remote fallback renders report preview-not-pixel-identical. Supported agent element types: rectangle, ellipse, diamond, text, arrow, line, and freedraw. Embed with ![[drawing.excalidraw]].',
     examples: ['![[drawing.excalidraw]]'],
   },
   html: {

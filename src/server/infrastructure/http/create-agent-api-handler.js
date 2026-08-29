@@ -48,12 +48,27 @@ async function createWebMcpActor({ agentConnectionService, authService, config, 
 }
 
 async function mapWebMcpResult(definition, value) {
-  if (definition.resultKind !== 'image') return value;
-  const { data, mimeType, structuredContent } = await encodeAgentToolImage(value);
-  return {
-    ...structuredContent,
-    image: { data, encoding: 'base64', mimeType },
-  };
+  if (definition.resultKind === 'image') {
+    const { data, mimeType, structuredContent } = await encodeAgentToolImage(value);
+    return {
+      ...structuredContent,
+      image: { data, encoding: 'base64', mimeType },
+      scene: value.scene,
+    };
+  }
+  if (definition.resultKind === 'optional-image' && value.verification?.svg) {
+    const { verification, ...result } = value;
+    const { data, mimeType, structuredContent } = await encodeAgentToolImage(verification);
+    return {
+      ...result,
+      image: { data, encoding: 'base64', mimeType },
+      verification: {
+        ...structuredContent,
+        scene: verification.scene,
+      },
+    };
+  }
+  return value;
 }
 
 export function createAgentApiHandler({

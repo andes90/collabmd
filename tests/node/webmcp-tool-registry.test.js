@@ -64,6 +64,70 @@ test('WebMCP exposes every shared browser tool while the workspace tab is active
   assert.equal(modelContext.tools.size, 0);
 });
 
+test('WebMCP replaces server previews with official browser snapshot rendering', async () => {
+  const modelContext = createModelContext();
+  const mutations = [];
+  const scene = {
+    appState: {},
+    elements: [{ height: 80, id: 'box', type: 'rectangle', width: 120, x: 0, y: 0 }],
+    files: {},
+    type: 'excalidraw',
+  };
+  const registry = new WebMcpToolRegistry({
+    callTool: async (name) => {
+      const preview = {
+        format: 'png',
+        image: { data: 'basic', encoding: 'base64', mimeType: 'image/png' },
+        scale: 1,
+      };
+      if (name === 'create_excalidraw' || name === 'edit_excalidraw') {
+        return {
+          image: preview.image,
+          verification: { ...preview, scene },
+        };
+      }
+      return { ...preview, scene };
+    },
+    getIsTabActive: () => true,
+    modelContext,
+    onDidMutate: (mutation) => mutations.push(mutation),
+    renderExcalidrawScene: async (_scene, options) => ({
+      format: options.format,
+      image: { data: 'exact', encoding: 'base64', mimeType: 'image/png' },
+      renderer: 'excalidraw-official-browser',
+      scale: options.scale,
+    }),
+  });
+  await registry.refresh();
+
+  const rendered = await modelContext.tools.get('collabmd_render_excalidraw').execute({
+    path: 'diagram.excalidraw',
+  });
+  assert.equal(rendered.renderer, 'excalidraw-official-browser');
+  assert.equal(rendered.image.data, 'exact');
+  assert.equal(Object.hasOwn(rendered, 'scene'), false);
+
+  const created = await modelContext.tools.get('collabmd_create_excalidraw').execute({
+    elements: scene.elements,
+    path: 'created.excalidraw',
+    verify: { render: true },
+  });
+  assert.equal(created.verification.renderer, 'excalidraw-official-browser');
+  assert.equal(created.image.data, 'exact');
+  assert.equal(Object.hasOwn(created.verification, 'scene'), false);
+
+  const edited = await modelContext.tools.get('collabmd_edit_excalidraw').execute({
+    path: 'diagram.excalidraw',
+    revision: 'a'.repeat(64),
+    translate: { dx: 10, dy: 0, ids: ['box'] },
+    verify: { render: true },
+  });
+  assert.equal(edited.verification.renderer, 'excalidraw-official-browser');
+  assert.equal(edited.image.data, 'exact');
+  assert.equal(Object.hasOwn(edited.verification, 'scene'), false);
+  assert.equal(mutations.at(-1).result, edited);
+});
+
 test('WebMCP cleans up partial registration failures', async () => {
   const modelContext = createModelContext({
     failOn: 'collabmd_get_collabmd_syntax',

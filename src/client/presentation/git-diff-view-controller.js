@@ -1,3 +1,4 @@
+import { createExcalidrawExportOptions } from '../domain/excalidraw-scene.js';
 import { escapeHtml } from '../domain/vault-utils.js';
 import { commitButtonLabel } from '../domain/git-labels.js';
 import { getVaultPathLeaf, getVaultPathParent } from '../domain/vault-paths.js';
@@ -1190,16 +1191,7 @@ export class GitDiffViewController {
       }
 
       try {
-        const svg = await exportToSvg({
-          appState: {
-            exportBackground: true,
-            exportWithDarkMode: false,
-            viewBackgroundColor: scene.appState?.viewBackgroundColor || '#ffffff',
-          },
-          elements: getVisibleSceneElements(scene),
-          exportPadding: 24,
-          files: scene.files || null,
-        });
+        const svg = await exportToSvg(createExcalidrawExportOptions(scene));
         preview.replaceChildren(svg);
         preview.classList.add('is-ready');
       } catch (error) {

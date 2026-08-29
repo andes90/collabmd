@@ -36,12 +36,66 @@ test('Excalidraw inspection reports paint order, broken bindings, and text clipp
   assert.equal(result.elementCount, 4);
   assert.deepEqual(
     new Set(result.warnings.map(({ code }) => code)),
-    new Set(['missing-binding-target', 'text-overflow']),
+    new Set(['missing-binding-target', 'text-overflow', 'unintended-overlap']),
   );
   assert.equal(result.elements[0].paintOrder, 0);
   assert.equal(result.elements[0].behind, 'right');
   assert.equal(result.elements[1].inFrontOf, 'left');
   assert.equal(result.elements.find(({ id }) => id === 'arrow').endElementId, 'missing');
+});
+
+test('Excalidraw inspection warns when bound endpoints are far from their targets', () => {
+  const result = inspectAgentExcalidrawScene(scene([
+    { height: 80, id: 'target', type: 'rectangle', width: 120, x: 300, y: 20 },
+    {
+      endBinding: { elementId: 'target' },
+      id: 'arrow',
+      points: [[0, 0], [100, 0]],
+      type: 'arrow',
+      x: 0,
+      y: 60,
+    },
+  ]));
+
+  assert.deepEqual(result.warnings, [{
+    code: 'bound-endpoint-far',
+    elementIds: ['arrow', 'target'],
+    message: 'Element arrow end endpoint is 200 diagram units from bound target target.',
+  }]);
+});
+
+test('Excalidraw inspection warns for connector crossings and ungrouped overlaps', () => {
+  const result = inspectAgentExcalidrawScene(scene([
+    { height: 40, id: 'source', type: 'rectangle', width: 40, x: 0, y: 0 },
+    { height: 40, id: 'blocked', type: 'rectangle', width: 40, x: 80, y: 0 },
+    { height: 40, id: 'target', type: 'rectangle', width: 40, x: 160, y: 0 },
+    {
+      endBinding: { elementId: 'target' },
+      id: 'connector',
+      points: [[0, 0], [120, 0]],
+      startBinding: { elementId: 'source' },
+      type: 'arrow',
+      x: 40,
+      y: 20,
+    },
+    { height: 100, id: 'overlap-a', type: 'rectangle', width: 100, x: 0, y: 100 },
+    { height: 100, id: 'overlap-b', type: 'rectangle', width: 100, x: 80, y: 180 },
+    { groupIds: ['cluster'], height: 100, id: 'group-a', type: 'rectangle', width: 100, x: 240, y: 100 },
+    { groupIds: ['cluster'], height: 100, id: 'group-b', type: 'rectangle', width: 100, x: 320, y: 180 },
+  ]));
+
+  assert.deepEqual(result.warnings, [
+    {
+      code: 'connector-through-component',
+      elementIds: ['connector', 'blocked'],
+      message: 'Connector connector passes through component blocked.',
+    },
+    {
+      code: 'unintended-overlap',
+      elementIds: ['overlap-a', 'overlap-b'],
+      message: 'Components overlap-a and overlap-b overlap without a shared group.',
+    },
+  ]);
 });
 
 test('Excalidraw inspection only warns for demonstrable full occlusion', () => {

@@ -1,5 +1,6 @@
 const BASIC_SHAPE_TYPES = new Set(['diamond', 'ellipse', 'rectangle']);
 const LINEAR_TYPES = new Set(['arrow', 'freedraw', 'line']);
+const CONNECTOR_TYPES = new Set(['arrow', 'line']);
 const RENDERED_TYPES = new Set([...BASIC_SHAPE_TYPES, ...LINEAR_TYPES, 'text']);
 const MAX_SUMMARY_ELEMENTS = 500;
 const MAX_WARNINGS = 200;
@@ -57,6 +58,106 @@ function boxContains(outer, inner) {
     && outer.y + outer.height >= inner.y + inner.height;
 }
 
+function boxesOverlap(left, right) {
+  return Math.min(left.x + left.width, right.x + right.width) - Math.max(left.x, right.x) > 1
+    && Math.min(left.y + left.height, right.y + right.height) - Math.max(left.y, right.y) > 1;
+}
+
+function sharesGroup(left, right) {
+  return Array.isArray(right?.groupIds) && left?.groupIds?.some?.((groupId) => right.groupIds.includes(groupId)) === true;
+}
+
+function segmentIntersectsBoxInterior(start, end, bounds) {
+  const inset = Math.min(1, bounds.width / 4, bounds.height / 4);
+  const ranges = [
+    [finiteNumber(start[0]), finiteNumber(end[0]) - finiteNumber(start[0]), bounds.x + inset, bounds.x + bounds.width - inset],
+    [finiteNumber(start[1]), finiteNumber(end[1]) - finiteNumber(start[1]), bounds.y + inset, bounds.y + bounds.height - inset],
+  ];
+  let entry = 0;
+  let exit = 1;
+  for (const [origin, delta, minimum, maximum] of ranges) {
+    if (delta === 0) {
+      if (origin <= minimum || origin >= maximum) return false;
+      continue;
+    }
+    const first = (minimum - origin) / delta;
+    const second = (maximum - origin) / delta;
+    entry = Math.max(entry, Math.min(first, second));
+    exit = Math.min(exit, Math.max(first, second));
+    if (entry > exit) return false;
+  }
+  return entry <= 1 && exit >= 0;
+}
+
+function connectorThroughComponentWarning(connector, component) {
+  if (
+    !CONNECTOR_TYPES.has(connector?.type)
+    || !BASIC_SHAPE_TYPES.has(component?.type)
+    || finiteNumber(component.angle) !== 0
+    || sharesGroup(connector, component)
+  ) {
+    return null;
+  }
+  const componentId = String(component.id ?? '');
+  if (
+    connector.startBinding?.elementId === componentId
+    || connector.endBinding?.elementId === componentId
+  ) {
+    return null;
+  }
+  const bounds = elementBounds(component);
+  const points = Array.isArray(connector.points)
+    ? connector.points
+      .filter((point) => Array.isArray(point) && point.length === 2)
+      .map(([x, y]) => [
+        finiteNumber(connector.x) + finiteNumber(x),
+        finiteNumber(connector.y) + finiteNumber(y),
+      ])
+    : [];
+  if (!bounds || points.length < 2) return null;
+  for (let index = 1; index < points.length; index += 1) {
+    if (segmentIntersectsBoxInterior(points[index - 1], points[index], bounds)) {
+      const connectorId = String(connector.id ?? '');
+      return warning(
+        'connector-through-component',
+        `Connector ${connectorId} passes through component ${componentId}.`,
+        [connectorId, componentId],
+      );
+    }
+  }
+  return null;
+}
+
+function unintendedOverlapWarning(left, right) {
+  if (
+    !BASIC_SHAPE_TYPES.has(left?.type)
+    || !BASIC_SHAPE_TYPES.has(right?.type)
+    || finiteNumber(left.angle) !== 0
+    || finiteNumber(right.angle) !== 0
+    || sharesGroup(left, right)
+  ) {
+    return null;
+  }
+  const leftBounds = elementBounds(left);
+  const rightBounds = elementBounds(right);
+  if (
+    !leftBounds
+    || !rightBounds
+    || !boxesOverlap(leftBounds, rightBounds)
+    || boxContains(leftBounds, rightBounds)
+    || boxContains(rightBounds, leftBounds)
+  ) {
+    return null;
+  }
+  const leftId = String(left.id ?? '');
+  const rightId = String(right.id ?? '');
+  return warning(
+    'unintended-overlap',
+    `Components ${leftId} and ${rightId} overlap without a shared group.`,
+    [leftId, rightId],
+  );
+}
+
 function summarizeElement(element, paintOrder, activeElements) {
   const bounds = elementBounds(element) ?? { height: 0, width: 0, x: 0, y: 0 };
   const summary = {
@@ -94,7 +195,31 @@ function textOverflowWarning(element, bounds, id) {
     : null;
 }
 
-function collectElementWarnings(element, activeIds, seenIds) {
+function boundEndpointWarning(element, binding, endpointName, activeById) {
+  if (!binding?.elementId || !LINEAR_TYPES.has(element?.type) || !Array.isArray(element.points)) {
+    return null;
+  }
+  const targetId = String(binding.elementId);
+  const target = activeById.get(targetId);
+  if (!target || finiteNumber(target.angle) !== 0) return null;
+  const point = endpointName === 'start' ? element.points[0] : element.points.at(-1);
+  const bounds = elementBounds(target);
+  if (!Array.isArray(point) || point.length !== 2 || !bounds) return null;
+  const pointX = finiteNumber(element.x) + finiteNumber(point[0]);
+  const pointY = finiteNumber(element.y) + finiteNumber(point[1]);
+  const dx = Math.max(bounds.x - pointX, 0, pointX - (bounds.x + bounds.width));
+  const dy = Math.max(bounds.y - pointY, 0, pointY - (bounds.y + bounds.height));
+  const distance = Math.hypot(dx, dy);
+  if (distance <= 32) return null;
+  const id = String(element.id ?? '');
+  return warning(
+    'bound-endpoint-far',
+    `Element ${id} ${endpointName} endpoint is ${Math.round(distance)} diagram units from bound target ${targetId}.`,
+    [id, targetId],
+  );
+}
+
+function collectElementWarnings(element, activeById, seenIds) {
   const warnings = [];
   const id = String(element?.id ?? '');
   if (!id) warnings.push(warning('missing-id', 'Element has no id.'));
@@ -113,10 +238,16 @@ function collectElementWarnings(element, activeIds, seenIds) {
   if (!RENDERED_TYPES.has(element?.type)) {
     warnings.push(warning('unsupported-render-type', `Element ${id || '(missing id)'} uses unsupported render type ${element?.type}.`, id ? [id] : []));
   }
-  for (const binding of [element?.startBinding, element?.endBinding]) {
-    if (binding?.elementId && !activeIds.has(binding.elementId)) {
+  for (const [endpointName, binding] of [
+    ['start', element?.startBinding],
+    ['end', element?.endBinding],
+  ]) {
+    if (binding?.elementId && !activeById.has(String(binding.elementId))) {
       warnings.push(warning('missing-binding-target', `Element ${id} binds to missing element ${binding.elementId}.`, [id, String(binding.elementId)]));
+      continue;
     }
+    const endpointWarning = boundEndpointWarning(element, binding, endpointName, activeById);
+    if (endpointWarning) warnings.push(endpointWarning);
   }
   const overflow = textOverflowWarning(element, bounds, id);
   if (overflow) warnings.push(overflow);
@@ -138,10 +269,24 @@ function collectWarnings(elements, { inspectOcclusion = true } = {}) {
   const push = (entry) => {
     if (warnings.length < MAX_WARNINGS) warnings.push(entry);
   };
-  const activeIds = new Set(elements.map(({ id }) => id));
+  const activeById = new Map(elements.map((element) => [String(element.id), element]));
   const seenIds = new Set();
   for (const element of elements) {
-    collectElementWarnings(element, activeIds, seenIds).forEach(push);
+    collectElementWarnings(element, activeById, seenIds).forEach(push);
+  }
+
+  for (const connector of elements) {
+    if (!CONNECTOR_TYPES.has(connector.type)) continue;
+    for (const component of elements) {
+      const intersection = connectorThroughComponentWarning(connector, component);
+      if (intersection) push(intersection);
+    }
+  }
+  for (let leftIndex = 0; leftIndex < elements.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < elements.length; rightIndex += 1) {
+      const overlap = unintendedOverlapWarning(elements[leftIndex], elements[rightIndex]);
+      if (overlap) push(overlap);
+    }
   }
 
   if (inspectOcclusion) {

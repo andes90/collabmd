@@ -126,13 +126,19 @@ test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously'
     arguments: {
       elements: [
         { height: 80, id: 'service', type: 'rectangle', width: 160, x: 20, y: 20 },
-        { id: 'service-label', text: 'Service', type: 'text', x: 60, y: 45 },
+        { containerId: 'service', id: 'service-label', text: 'Service', type: 'text', x: 60, y: 45 },
       ],
       path: 'diagrams/service.excalidraw',
+      verify: { format: 'svg', render: true },
     },
     name: 'create_excalidraw',
   });
   assert.equal(createdDiagram.structuredContent.elementCount, 2);
+  assert.equal(createdDiagram.structuredContent.verification.renderer, 'collabmd-basic-svg');
+  assert.equal(
+    createdDiagram.content.find(({ type }) => type === 'image').mimeType,
+    'image/svg+xml',
+  );
   const editedDiagram = await client.callTool({
     arguments: {
       create: [{ height: 80, id: 'database', type: 'ellipse', width: 120, x: 280, y: 20 }],
@@ -146,6 +152,24 @@ test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously'
   const diagram = JSON.parse(await readFile(join(app.vaultDir, 'diagrams/service.excalidraw'), 'utf8'));
   assert.deepEqual(diagram.elements.map(({ id }) => id), ['service', 'service-label', 'database']);
   assert.equal(diagram.elements[0].backgroundColor, '#a5d8ff');
+  const verifiedEdit = await client.callTool({
+    arguments: {
+      path: 'diagrams/service.excalidraw',
+      revision: editedDiagram.structuredContent.revision,
+      translate: { dx: 40, dy: 10, ids: ['service'] },
+      update: [{ id: 'service-label', set: { text: 'Primary' } }],
+      verify: { format: 'svg', render: true },
+    },
+    name: 'edit_excalidraw',
+  });
+  const verifiedEditImage = verifiedEdit.content.find(({ type }) => type === 'image');
+  const updatedDiagram = JSON.parse(await readFile(join(app.vaultDir, 'diagrams/service.excalidraw'), 'utf8'));
+  assert.equal(verifiedEdit.structuredContent.translated, 1);
+  assert.equal(verifiedEdit.structuredContent.verification.renderer, 'collabmd-basic-svg');
+  assert.equal(verifiedEditImage.mimeType, 'image/svg+xml');
+  assert.equal(updatedDiagram.elements.find(({ id }) => id === 'service').x, 60);
+  assert.equal(updatedDiagram.elements.find(({ id }) => id === 'service-label').originalText, 'Primary');
+  assert.equal(updatedDiagram.elements.find(({ id }) => id === 'service-label').x, 100);
 
   const inspectedDiagram = await client.callTool({
     arguments: { path: 'diagrams/service.excalidraw' },
@@ -180,8 +204,9 @@ test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously'
     verifiedDiagram.structuredContent.inspection.elementCount,
     verifiedDiagram.structuredContent.elementCount,
   );
-  assert.equal(verifiedDiagram.structuredContent.revision, inspectedDiagram.structuredContent.revision);
+  assert.equal(verifiedDiagram.structuredContent.revision, verifiedEdit.structuredContent.revision);
 });
+
 test('browser-session WebMCP tools reuse agent content operations when remote MCP is disabled', async (t) => {
   const app = await startTestServer();
   t.after(app.close);

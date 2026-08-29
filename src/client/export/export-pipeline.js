@@ -17,7 +17,7 @@ import { compilePreviewDocument } from '../application/preview-render-compiler.j
 import { isMarkdownFilePath, stripVaultFileExtension } from '../../domain/file-kind.js';
 import { resolveVaultRelativePath } from '../../domain/vault-paths.js';
 import { resolveWikiTargetPath } from '../../domain/wiki-link-resolver.js';
-import { parseSceneJson, sceneToInitialData } from '../domain/excalidraw-scene.js';
+import { createExcalidrawExportOptions, parseSceneJson } from '../domain/excalidraw-scene.js';
 import { escapeHtml } from '../domain/vault-utils.js';
 import { downloadBlob } from '../browser-utils.js';
 import { resolveApiUrl, resolveAppUrl } from '../infrastructure/runtime-config.js';
@@ -817,17 +817,7 @@ async function renderPlantUmlToSvgMarkup(source) {
 async function renderExcalidrawToSvgMarkup(filePath) {
   const rawScene = await fetchTextFile(filePath);
   const scene = parseSceneJson(rawScene);
-  const initialData = sceneToInitialData(scene, { theme: 'light' });
-  const svgElement = await exportExcalidrawToSvg({
-    appState: {
-      ...initialData.appState,
-      exportBackground: true,
-      exportWithDarkMode: false,
-    },
-    elements: initialData.elements.filter((element) => !element.isDeleted),
-    exportPadding: 24,
-    files: initialData.files || null,
-  });
+  const svgElement = await exportExcalidrawToSvg(createExcalidrawExportOptions(scene));
   return normalizeExportSvgMarkup(svgElement.outerHTML, { padding: 24 });
 }
 

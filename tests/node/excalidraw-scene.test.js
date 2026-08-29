@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   buildStoredScene,
   createEmptyScene,
+  createExcalidrawExportOptions,
   normalizeScene,
   parseSceneJson,
   sceneToInitialData,
@@ -21,7 +22,7 @@ test('parseSceneJson and normalizeScene fall back to an empty scene shape', () =
   assert.deepEqual(normalizeScene({ elements: 'bad', files: null }), createEmptyScene());
 });
 
-test('sceneToInitialData and buildStoredScene preserve supported excalidraw fields', () => {
+test('Excalidraw scene helpers preserve supported fields', () => {
   const scene = normalizeScene({
     appState: { gridSize: 16, viewBackgroundColor: '#123456' },
     elements: [
@@ -38,6 +39,19 @@ test('sceneToInitialData and buildStoredScene preserve supported excalidraw fiel
       viewBackgroundColor: '#123456',
     },
     elements: scene.elements,
+    files: scene.files,
+  });
+  assert.deepEqual(createExcalidrawExportOptions(scene, { padding: 12, scale: 2 }), {
+    appState: {
+      exportBackground: true,
+      exportScale: 2,
+      exportWithDarkMode: false,
+      gridSize: 16,
+      theme: 'light',
+      viewBackgroundColor: '#123456',
+    },
+    elements: [scene.elements[0]],
+    exportPadding: 12,
     files: scene.files,
   });
 
