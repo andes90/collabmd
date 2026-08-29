@@ -10,11 +10,15 @@ const actor = {
   scopes: ['vault:read', 'vault:edit'],
 };
 
-function createService({ content = '# Notes\n\nHello world\n', room = null } = {}) {
+function createService({
+  content = '# Notes\n\nHello world\n',
+  documentPath = 'notes.md',
+  room = null,
+} = {}) {
   const entries = new Map([
-    ['notes.md', { nodeType: 'file', path: 'notes.md' }],
+    [documentPath, { nodeType: 'file', path: documentPath }],
   ]);
-  const files = new Map([['notes.md', content]]);
+  const files = new Map([[documentPath, content]]);
   const events = [];
   const workspaceMutationCoordinator = {
     workspaceState: { entries, metadata: new Map() },
@@ -33,8 +37,8 @@ function createService({ content = '# Notes\n\nHello world\n', room = null } = {
   };
   const service = new AgentContentService({
     roomRegistry: {
-      get: (path) => path === 'notes.md' ? room : null,
-      getRooms: () => room ? [['notes.md', room]] : [],
+      get: (path) => path === documentPath ? room : null,
+      getRooms: () => room ? [[documentPath, room]] : [],
     },
     searchService: {
       async search({ query }) {
@@ -69,6 +73,80 @@ test('agent content service reads, edits, and creates closed documents', async (
   });
   assert.equal(created.kind, 'markdown');
   assert.equal(files.get('docs/new.md'), '# New\n');
+});
+
+test('agent content service creates and edits Excalidraw elements', async () => {
+  const { files, service } = createService();
+  const created = await service.createExcalidraw(actor, {
+    elements: [
+      { height: 80, id: 'api', type: 'rectangle', width: 160, x: 20, y: 30 },
+      { id: 'label', text: 'API', type: 'text', x: 70, y: 55 },
+      {
+        endElementId: 'api',
+        id: 'request',
+        points: [[0, 0], [80, 0]],
+        type: 'arrow',
+        x: -60,
+        y: 70,
+      },
+    ],
+    path: 'diagrams/api.excalidraw',
+  });
+  assert.equal(created.elementCount, 3);
+
+  const edited = await service.editExcalidraw(actor, {
+    create: [{ height: 80, id: 'db', type: 'ellipse', width: 120, x: 300, y: 30 }],
+    delete: ['label'],
+    path: 'diagrams/api.excalidraw',
+    revision: created.revision,
+    update: [{ id: 'api', set: { backgroundColor: '#a5d8ff', x: 40 } }],
+  });
+  const scene = JSON.parse(files.get('diagrams/api.excalidraw'));
+  assert.equal(edited.created, 1);
+  assert.equal(edited.deleted, 1);
+  assert.equal(edited.updated, 1);
+  assert.deepEqual(scene.elements.map(({ id }) => id), ['api', 'request', 'db']);
+  assert.equal(scene.elements.find(({ id }) => id === 'api').x, 40);
+  assert.deepEqual(
+    scene.elements.find(({ id }) => id === 'api').boundElements,
+    [{ id: 'request', type: 'arrow' }],
+  );
+});
+
+test('agent Excalidraw edits update an active collaboration room', async () => {
+  let liveContent = JSON.stringify({
+    appState: { gridSize: null, viewBackgroundColor: '#ffffff' },
+    elements: [{ id: 'shape', type: 'rectangle', version: 1, x: 10, y: 20 }],
+    files: {},
+    source: 'collabmd',
+    type: 'excalidraw',
+    version: 2,
+  });
+  const room = {
+    applyExcalidrawScene(scene) {
+      liveContent = JSON.stringify({
+        ...scene,
+        elements: scene.elements.filter((element) => !element.isDeleted),
+      });
+    },
+    getPersistedContent: () => liveContent,
+    isHydrated: () => true,
+    readEditableContent: () => null,
+  };
+  const { events, service } = createService({
+    content: 'stale disk content',
+    documentPath: 'live.excalidraw',
+    room,
+  });
+  const read = await service.readDocument(actor, { path: 'live.excalidraw' });
+  await service.editExcalidraw(actor, {
+    path: 'live.excalidraw',
+    revision: read.revision,
+    update: [{ id: 'shape', set: { x: 80 } }],
+  });
+
+  assert.equal(JSON.parse(liveContent).elements[0].x, 80);
+  assert.deepEqual(events, []);
 });
 
 

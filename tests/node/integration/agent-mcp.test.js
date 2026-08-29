@@ -42,9 +42,13 @@ test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously'
     [
       'apply_text_edits',
       'create_document',
+      'create_excalidraw',
+      'edit_excalidraw',
       'get_collabmd_syntax',
+      'inspect_excalidraw',
       'list_documents',
       'read_document',
+      'render_excalidraw',
       'search_vault',
     ],
   );
@@ -104,6 +108,54 @@ test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously'
     await readFile(join(app.vaultDir, 'diagrams/new.mmd'), 'utf8'),
     'flowchart LR\n  A --> B\n',
   );
+
+  const createdDiagram = await client.callTool({
+    arguments: {
+      elements: [
+        { height: 80, id: 'service', type: 'rectangle', width: 160, x: 20, y: 20 },
+        { id: 'service-label', text: 'Service', type: 'text', x: 60, y: 45 },
+      ],
+      path: 'diagrams/service.excalidraw',
+    },
+    name: 'create_excalidraw',
+  });
+  assert.equal(createdDiagram.structuredContent.elementCount, 2);
+  const editedDiagram = await client.callTool({
+    arguments: {
+      create: [{ height: 80, id: 'database', type: 'ellipse', width: 120, x: 280, y: 20 }],
+      path: 'diagrams/service.excalidraw',
+      revision: createdDiagram.structuredContent.revision,
+      update: [{ id: 'service', set: { backgroundColor: '#a5d8ff' } }],
+    },
+    name: 'edit_excalidraw',
+  });
+  assert.equal(editedDiagram.isError, undefined);
+  const diagram = JSON.parse(await readFile(join(app.vaultDir, 'diagrams/service.excalidraw'), 'utf8'));
+  assert.deepEqual(diagram.elements.map(({ id }) => id), ['service', 'service-label', 'database']);
+  assert.equal(diagram.elements[0].backgroundColor, '#a5d8ff');
+
+  const inspectedDiagram = await client.callTool({
+    arguments: { path: 'diagrams/service.excalidraw' },
+    name: 'inspect_excalidraw',
+  });
+  assert.equal(inspectedDiagram.structuredContent.elementCount, 3);
+  assert.deepEqual(inspectedDiagram.structuredContent.warnings, []);
+
+  const renderedDiagram = await client.callTool({
+    arguments: { path: 'diagrams/service.excalidraw' },
+    name: 'render_excalidraw',
+  });
+  const pngContent = renderedDiagram.content.find(({ type }) => type === 'image');
+  assert.equal(pngContent.mimeType, 'image/png');
+  assert.equal(Buffer.from(pngContent.data, 'base64').subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+
+  const renderedSvg = await client.callTool({
+    arguments: { format: 'svg', path: 'diagrams/service.excalidraw' },
+    name: 'render_excalidraw',
+  });
+  const svgContent = renderedSvg.content.find(({ type }) => type === 'image');
+  assert.equal(svgContent.mimeType, 'image/svg+xml');
+  assert.match(Buffer.from(svgContent.data, 'base64').toString('utf8'), /^<svg /u);
 });
 
 
@@ -219,6 +271,8 @@ test('managed read-only MCP token limits tools and revocation takes effect immed
   const tools = await client.listTools();
   assert.equal(tools.tools.some(({ name }) => name === 'apply_text_edits'), false);
   assert.equal(tools.tools.some(({ name }) => name === 'create_document'), false);
+  assert.equal(tools.tools.some(({ name }) => name === 'inspect_excalidraw'), true);
+  assert.equal(tools.tools.some(({ name }) => name === 'render_excalidraw'), true);
 
   await app.server.agentConnectionService.revokeConnection({
     connectionId: created.connection.id,
@@ -234,7 +288,7 @@ test('MCP works under configured base path', async (t) => {
   });
   const client = await connectMcp(t, app, { url: `${app.appBaseUrl}/mcp` });
   const tools = await client.listTools();
-  assert.equal(tools.tools.length, 6);
+  assert.equal(tools.tools.length, 10);
 });
 
 test('password session manages workspace-level Agent Connections', async (t) => {

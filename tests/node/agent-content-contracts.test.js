@@ -66,6 +66,8 @@ test('CollabMD capability registry distinguishes supported and agent-writable co
   ]);
   assert.equal(isAgentCreatablePath('docs/note.md'), true);
   assert.equal(isAgentCreatablePath('drawing.excalidraw'), false);
+  assert.equal(getCollabMdContentCapability('drawing.excalidraw').agentCreatable, true);
   assert.equal(getCollabMdContentCapability('diagram.mmd').kind, 'mermaid');
   assert.match(getCollabMdSyntaxGuide('markdown').guide, /wiki-links/);
+  assert.match(getCollabMdSyntaxGuide('excalidraw').guide, /create_excalidraw/);
 });

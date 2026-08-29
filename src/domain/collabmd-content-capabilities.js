@@ -31,11 +31,11 @@ const CAPABILITIES = Object.freeze({
     examples: ['![[architecture.drawio]]'],
   },
   excalidraw: {
-    agentCreatable: false,
-    agentEditable: false,
+    agentCreatable: true,
+    agentEditable: true,
     editable: true,
     extensions: [EXCALIDRAW_FILE_EXTENSION],
-    guide: 'Excalidraw scene JSON managed by the canvas editor. Embed with ![[drawing.excalidraw]]. Agent writes are disabled.',
+    guide: 'Excalidraw scene JSON managed by the canvas editor. Use create_excalidraw and edit_excalidraw rather than raw text edits, then inspect_excalidraw and render_excalidraw to verify the result. Supported agent element types: rectangle, ellipse, diamond, text, arrow, line, and freedraw. Embed with ![[drawing.excalidraw]].',
     examples: ['![[drawing.excalidraw]]'],
   },
   html: {
@@ -138,9 +138,11 @@ export function isAgentReadablePath(path) {
 }
 
 export function isAgentEditablePath(path) {
-  return Boolean(getCollabMdContentCapability(path)?.agentEditable);
+  const capability = getCollabMdContentCapability(path);
+  return Boolean(capability?.agentEditable && capability.kind !== 'excalidraw');
 }
 
 export function isAgentCreatablePath(path) {
-  return Boolean(getCollabMdContentCapability(path)?.agentCreatable);
+  const capability = getCollabMdContentCapability(path);
+  return Boolean(capability?.agentCreatable && capability.kind !== 'excalidraw');
 }

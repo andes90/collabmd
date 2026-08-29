@@ -2,6 +2,8 @@ import { getCollabMdSyntaxGuide, isAgentCreatablePath, isAgentEditablePath, isAg
 import { createEditableContentRevision } from '../../domain/editable-content-revision.js';
 import { normalizeEditableText } from '../../domain/editable-text.js';
 import { applyExactTextChanges, resolveExactTextChanges } from '../../domain/exact-text-edits.js';
+import { applyAgentExcalidrawEdits, createAgentExcalidrawScene } from '../../domain/excalidraw-agent-scene.js';
+import { inspectAgentExcalidrawScene, renderAgentExcalidrawSvg } from '../../domain/excalidraw-agent-verification.js';
 import { getVaultFileKind } from '../../domain/file-kind.js';
 import { compareWorkspacePaths, normalizeWorkspacePath } from '../domain/workspace-state.js';
 
@@ -94,6 +96,56 @@ export class AgentContentService {
       throw createAgentContentError('AGENT_DOCUMENT_NOT_FOUND', 'Document not found', 404);
     }
     return content;
+  }
+
+  async readExcalidrawScene(actor, path) {
+    requireScope(actor, 'vault:read');
+    const normalizedPath = normalizeWorkspacePath(path);
+    if (getVaultFileKind(normalizedPath) !== 'excalidraw') {
+      throw createAgentContentError('AGENT_UNSUPPORTED_DOCUMENT', 'Excalidraw tools require an .excalidraw path', 400);
+    }
+    const content = await this.readCurrentContent(normalizedPath);
+    if (content.length > MAX_DOCUMENT_CHARACTERS) {
+      throw createAgentContentError('AGENT_DOCUMENT_TOO_LARGE', 'Document is too large for agent inspection', 413);
+    }
+    let scene;
+    try {
+      scene = JSON.parse(content);
+    } catch {
+      throw createAgentContentError('AGENT_INVALID_EXCALIDRAW', 'Document is not valid Excalidraw JSON', 400);
+    }
+    if (scene?.type !== 'excalidraw' || !Array.isArray(scene.elements)) {
+      throw createAgentContentError('AGENT_INVALID_EXCALIDRAW', 'Document is not a valid Excalidraw scene', 400);
+    }
+    return {
+      path: normalizedPath,
+      revision: await createEditableContentRevision(content),
+      scene,
+    };
+  }
+
+  async inspectExcalidraw(actor, { path } = {}) {
+    const current = await this.readExcalidrawScene(actor, path);
+    return {
+      ...inspectAgentExcalidrawScene(current.scene),
+      path: current.path,
+      revision: current.revision,
+    };
+  }
+
+  async renderExcalidraw(actor, {
+    format = 'png',
+    padding = 32,
+    path,
+    scale = 1,
+  } = {}) {
+    const current = await this.readExcalidrawScene(actor, path);
+    return {
+      ...renderAgentExcalidrawSvg(current.scene, { padding, scale }),
+      format,
+      path: current.path,
+      revision: current.revision,
+    };
   }
 
   listDocuments(actor, { cursor = '', kinds = [], limit = 100, prefix = '' } = {}) {
@@ -250,6 +302,106 @@ export class AgentContentService {
         path: normalizedPath,
         replacementCount: changes.length,
         revision: await createEditableContentRevision(nextContent),
+      };
+    });
+  }
+
+  async createExcalidraw(actor, { elements, path } = {}) {
+    requireScope(actor, 'vault:edit');
+    const normalizedPath = normalizeWorkspacePath(path);
+    if (getVaultFileKind(normalizedPath) !== 'excalidraw') {
+      throw createAgentContentError('AGENT_UNSUPPORTED_DOCUMENT', 'Excalidraw tools require an .excalidraw path', 400);
+    }
+    let scene;
+    try {
+      scene = createAgentExcalidrawScene(elements);
+    } catch (error) {
+      if (error?.code === 'EXCALIDRAW_SCENE_INVALID') {
+        throw createAgentContentError('AGENT_INVALID_EXCALIDRAW', error.message, 400);
+      }
+      throw error;
+    }
+    const content = JSON.stringify(scene);
+    if (content.length > MAX_DOCUMENT_CHARACTERS) {
+      throw createAgentContentError('AGENT_DOCUMENT_TOO_LARGE', 'Document is too large for agent creation', 413);
+    }
+    return this.runForPath(normalizedPath, async () => {
+      const result = await this.workspaceMutationCoordinator.createFile({
+        content,
+        origin: 'agent',
+        path: normalizedPath,
+        requestId: actor.requestId,
+        sourceRef: createAgentSourceRef(actor),
+      });
+      if (!result.ok) throw createAgentContentError('AGENT_CREATE_FAILED', result.error, 409);
+      return {
+        elementCount: scene.elements.length,
+        path: normalizedPath,
+        revision: await createEditableContentRevision(content),
+      };
+    });
+  }
+
+  async editExcalidraw(actor, { create = [], delete: remove = [], path, revision, update = [] } = {}) {
+    requireScope(actor, 'vault:edit');
+    const normalizedPath = normalizeWorkspacePath(path);
+    if (getVaultFileKind(normalizedPath) !== 'excalidraw') {
+      throw createAgentContentError('AGENT_UNSUPPORTED_DOCUMENT', 'Excalidraw tools require an .excalidraw path', 400);
+    }
+    return this.runForPath(normalizedPath, async () => {
+      const content = await this.readCurrentContent(normalizedPath);
+      if (content.length > MAX_DOCUMENT_CHARACTERS) {
+        throw createAgentContentError('AGENT_DOCUMENT_TOO_LARGE', 'Document is too large for agent editing', 413);
+      }
+      if (revision !== await createEditableContentRevision(content)) {
+        throw createAgentContentError('AGENT_REVISION_CONFLICT', 'Document changed; read it again before editing', 409);
+      }
+      let scene;
+      try {
+        scene = applyAgentExcalidrawEdits(JSON.parse(content), { create, delete: remove, update });
+      } catch (error) {
+        if (error instanceof SyntaxError) {
+          throw createAgentContentError('AGENT_INVALID_EXCALIDRAW', 'Document is not valid Excalidraw JSON', 400);
+        }
+        if (error?.code === 'EXCALIDRAW_SCENE_INVALID') {
+          throw createAgentContentError('AGENT_INVALID_EXCALIDRAW', error.message, 400);
+        }
+        throw error;
+      }
+      const room = this.roomRegistry?.get?.(normalizedPath);
+      let nextContent;
+      if (room) {
+        room.applyExcalidrawScene(scene, {
+          origin: {
+            actor: actor.collaborator ?? null,
+            connectionId: actor.connectionId,
+            requestId: actor.requestId,
+            type: 'agent',
+          },
+        });
+        nextContent = room.getPersistedContent();
+      } else {
+        const storedScene = {
+          ...scene,
+          elements: scene.elements.filter((element) => !element.isDeleted),
+        };
+        nextContent = JSON.stringify(storedScene);
+        const result = await this.workspaceMutationCoordinator.writeEditableContent({
+          content: nextContent,
+          origin: 'agent',
+          path: normalizedPath,
+          requestId: actor.requestId,
+          sourceRef: createAgentSourceRef(actor),
+        });
+        if (!result.ok) throw createAgentContentError('AGENT_WRITE_FAILED', result.error, 400);
+      }
+      return {
+        created: create.length,
+        deleted: remove.length,
+        elementCount: scene.elements.filter((element) => !element.isDeleted).length,
+        path: normalizedPath,
+        revision: await createEditableContentRevision(nextContent),
+        updated: update.length,
       };
     });
   }

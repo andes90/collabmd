@@ -180,11 +180,16 @@ CollabMD exposes `/mcp`, or `<BASE_PATH>/mcp` when a base path is configured, wi
 - `list_documents`, `search_vault`, and `read_document`
 - `apply_text_edits` with exact replacements and revision conflict protection
 - `create_document`
+- `create_excalidraw` and `edit_excalidraw` for basic element creation, updates, and deletion
+- `inspect_excalidraw` for bounds, bindings, overlap, clipping, and validity warnings
+- `render_excalidraw` for basic-element PNG or SVG verification previews
 - `get_collabmd_syntax`
 
 `search_vault` uses the server's ripgrep installation. Install `rg` on source or npm deployments; the Docker image already includes it.
 
-Agent writes initially support Markdown, HTML, Mermaid, PlantUML, and Structurizr text. Base, Excalidraw, draw.io, PDF, images, delete, rename, Git, and publish are not writable through Agent Access.
+Agent text writes support Markdown, HTML, Mermaid, PlantUML, and Structurizr. Excalidraw writes use the dedicated element tools. Base, draw.io, PDF, images, delete, rename, Git, and publish are not writable through Agent Access.
+
+`render_excalidraw` renders the basic element types supported by the agent tools. It is intended for layout verification, not pixel-identical reproduction of Excalidraw's hand-drawn renderer.
 
 With password or OIDC auth, open **More actions → Connect AI Agent** after signing in. Create a named connection, choose read/edit scope, and copy the token shown once. Tokens expire after 30 days by default and can be revoked from the same dialog. OIDC connections retain Collaborator attribution; shared-password connections are workspace-level because password sessions have no individual identity.
 

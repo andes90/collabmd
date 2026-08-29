@@ -10,6 +10,7 @@ import { logPerfEvent } from '../../config/perf-logging.js';
 import { populateCommentThreads, serializeCommentThreads } from '../../../domain/comment-threads.js';
 import { getVaultFileKind } from '../../../domain/file-kind.js';
 import {
+  applySceneDiffToExcalidrawRoom,
   EXCALIDRAW_APP_STATE_KEY,
   EXCALIDRAW_ELEMENTS_KEY,
   EXCALIDRAW_FILES_KEY,
@@ -895,6 +896,17 @@ export class CollaborationRoom {
       }
     }, origin);
     return changes.length;
+  }
+
+  applyExcalidrawScene(scene, { origin = 'agent' } = {}) {
+    if (!this.hydrated || this.deleted || this.destroyed || !isExcalidrawRoom(this.name)) {
+      throw new Error('The collaborative Excalidraw document is unavailable');
+    }
+    let changed = false;
+    this.doc.transact(() => {
+      changed = applySceneDiffToExcalidrawRoom(this.doc, scene);
+    }, origin);
+    return changed;
   }
 
   getPersistedContent() {
