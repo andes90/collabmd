@@ -67,7 +67,7 @@ Prefer video? [Open the WebM demo](https://raw.githubusercontent.com/andes90/col
 - **External edit sync** — changes made from tools like Obsidian or direct file writes are reflected back into open documents and the file explorer
 - **Git review** — review an open file's changes, include them in the next commit, and commit with a message from the browser
 - **Experimental WebMCP editing** — supported browser agents can read and apply bounded exact-text edits to the active Markdown, Mermaid, PlantUML, or Structurizr document as the logged-in collaborator
-- **Remote AI agent access** — connect Codex, Pi, or another MCP client to search, cite, edit, and create supported Vault Content; protected workspaces use scoped, revocable Agent Connections
+- **Remote AI agent access** — connect any Streamable HTTP MCP client to search, cite, edit, and create supported Vault Content; protected workspaces use scoped, revocable Agent Connections
 - **File upload** — import multiple supported Markdown, HTML, Base, diagram, image, and PDF files into the vault from the file explorer
 - **Markdown with context** — live preview, wiki-links, backlinks, outline, quick switcher, and scroll sync
 - **Global text search** — search text across supported vault files with ripgrep-backed results grouped by file
@@ -188,38 +188,17 @@ Agent writes initially support Markdown, HTML, Mermaid, PlantUML, and Structuriz
 
 With password or OIDC auth, open **More actions → Connect AI Agent** after signing in. Create a named connection, choose read/edit scope, and copy the token shown once. Tokens expire after 30 days by default and can be revoked from the same dialog. OIDC connections retain Collaborator attribution; shared-password connections are workspace-level because password sessions have no individual identity.
 
-Codex with password or OIDC:
-
-```toml
-[mcp_servers.collabmd]
-url = "https://notes.example.com/mcp"
-bearer_token_env_var = "COLLABMD_ACCESS_TOKEN"
-default_tools_approval_mode = "writes"
-```
-
-```bash
-export COLLABMD_ACCESS_TOKEN='token-shown-once'
-```
-
-CollabMD currently uses preconfigured bearer credentials rather than MCP OAuth enrollment. Do not run `codex mcp login`; set `bearer_token_env_var` as shown above.
-
-Pi with password or OIDC:
-
-```bash
-pi install npm:collabmd
-export COLLABMD_MCP_URL='https://notes.example.com/mcp'
-export COLLABMD_ACCESS_TOKEN='token-shown-once'
-```
-
-For `AUTH_STRATEGY=none`, MCP uses the same anonymous access policy as the web app: anyone who can reach `/mcp` can read, edit, and create supported Vault Content. No bearer token is required. Omit `bearer_token_env_var` from Codex configuration and set only `COLLABMD_MCP_URL` for Pi.
-
-Generic MCP clients use:
+Use these connection details with any Streamable HTTP MCP client:
 
 ```text
 URL: https://notes.example.com/mcp
 Transport: Streamable HTTP
 Authorization: Bearer <token>
 ```
+
+For protected workspaces, configure the generated token as a bearer credential in the MCP client. For `AUTH_STRATEGY=none`, omit the bearer token; MCP uses the same anonymous access policy as the web app, so anyone who can reach `/mcp` can read, edit, and create supported Vault Content.
+
+CollabMD uses preconfigured bearer credentials rather than MCP OAuth enrollment.
 
 The `Authorization` header is required for password and OIDC workspaces. Omit it for `AUTH_STRATEGY=none`.
 

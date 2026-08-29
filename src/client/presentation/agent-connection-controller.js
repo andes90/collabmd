@@ -1,7 +1,14 @@
-import {
-  createAgentSetup,
-  createAgentTokenExport,
-} from '../domain/agent-connection-setup.js';
+function createAgentSetup({ authRequired, endpoint }) {
+  return [
+    `MCP endpoint: ${endpoint}`,
+    'Transport: Streamable HTTP',
+    `Authorization: ${authRequired ? 'Bearer $COLLABMD_ACCESS_TOKEN' : 'None'}`,
+  ].join('\n');
+}
+
+function createAgentTokenExport(token) {
+  return `export COLLABMD_ACCESS_TOKEN='${String(token).replaceAll("'", "'\\''")}'`;
+}
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -69,7 +76,7 @@ export class AgentConnectionController {
         <article class="agent-connection-card">
           <div>
             <strong>${escapeHtml(connection.label)}</strong>
-            <span>${escapeHtml(connection.clientKind)} · ${escapeHtml(connection.scopes.join(', '))}</span>
+            <span>${escapeHtml(connection.scopes.join(', '))}</span>
             <small>Expires ${escapeHtml(formatDate(connection.expiresAt))}</small>
           </div>
           <button class="ui-button ui-button--secondary ui-button--compact" type="button" data-agent-revoke="${escapeHtml(connection.id)}">Revoke</button>
@@ -110,7 +117,7 @@ export class AgentConnectionController {
         <p>Streamable HTTP · ${this.config.authRequired ? 'Bearer token' : 'No authentication'} · Read and edit tools</p>
       </details>
       <div class="agent-connection-actions">
-        ${this.config.managed ? management : '<button class="ui-button ui-button--primary" type="button" data-agent-copy-setup="generic">Copy connection details</button>'}
+        ${this.config.managed ? management : '<button class="ui-button ui-button--primary" type="button" data-agent-copy-setup>Copy connection details</button>'}
         <button class="ui-button ui-button--ghost" type="button" data-agent-close>Close</button>
       </div>
       <p class="agent-connection-live" role="status" aria-live="polite"></p>
@@ -122,20 +129,12 @@ export class AgentConnectionController {
       <form class="agent-connection-form" data-agent-create-form>
         <header class="agent-connection-step-header">
           <span>Step 1 of 2</span>
-          <h3>Choose an agent and its access</h3>
+          <h3>Choose access</h3>
           <p>You can revoke this connection at any time.</p>
         </header>
         <label class="app-dialog-field">
-          <span class="app-dialog-label">Agent</span>
-          <select class="ui-input" name="clientKind">
-            <option value="codex">Codex</option>
-            <option value="pi">Pi</option>
-            <option value="generic">Generic MCP</option>
-          </select>
-        </label>
-        <label class="app-dialog-field">
           <span class="app-dialog-label">Connection name</span>
-          <input class="ui-input" name="label" maxlength="80" value="My Codex" required>
+          <input class="ui-input" name="label" maxlength="80" value="My Agent" required>
         </label>
         <fieldset class="agent-connection-scopes">
           <legend>Access</legend>
@@ -152,30 +151,26 @@ export class AgentConnectionController {
     `;
   }
 
-  renderToken({ connection, token }) {
+  renderToken({ token }) {
     this.secretToken = token;
     const setup = createAgentSetup({
       authRequired: this.config.authRequired,
-      clientKind: connection.clientKind,
       endpoint: this.endpoint,
     });
-    const clientName = connection.clientKind === 'codex'
-      ? 'Codex'
-      : connection.clientKind === 'pi' ? 'Pi' : 'your MCP client';
     this.content.innerHTML = `
       <header class="agent-connection-step-header">
         <span>Step 2 of 2</span>
-        <h3>Finish setup in ${escapeHtml(clientName)}</h3>
+        <h3>Finish setup in your MCP client</h3>
         <p class="agent-connection-warning">The token is shown once. Finish these steps before closing.</p>
       </header>
       <ol class="agent-connection-steps agent-connection-steps--setup">
         <li>
-          <div><strong>Save the access token</strong><span>Run the copied command in the terminal that starts ${escapeHtml(clientName)}.</span></div>
+          <div><strong>Save the access token</strong><span>Run the copied command in the terminal that starts your MCP client.</span></div>
           <button class="ui-button ui-button--primary" type="button" data-agent-copy-token>Copy token command</button>
         </li>
         <li>
-          <div><strong>Add this workspace</strong><span>Paste the setup into ${escapeHtml(clientName)}.</span></div>
-          <button class="ui-button ui-button--secondary" type="button" data-agent-copy-setup="${escapeHtml(connection.clientKind)}">Copy ${escapeHtml(clientName)} setup</button>
+          <div><strong>Add this workspace</strong><span>Paste the setup into your MCP client.</span></div>
+          <button class="ui-button ui-button--secondary" type="button" data-agent-copy-setup>Copy MCP setup</button>
         </li>
       </ol>
       <details class="agent-connection-details">
@@ -229,9 +224,8 @@ export class AgentConnectionController {
     if (target.dataset.agentCopySetup != null) {
       await this.copy(createAgentSetup({
         authRequired: this.config.authRequired,
-        clientKind: target.dataset.agentCopySetup,
         endpoint: this.endpoint,
-      }), 'Setup copied — add it to your agent.');
+      }), 'Setup copied — add it to your MCP client.');
       return;
     }
     if (target.dataset.agentRevoke) {
@@ -255,7 +249,7 @@ export class AgentConnectionController {
     submit.disabled = true;
     try {
       const result = await this.apiClient.createConnection({
-        clientKind: data.get('clientKind'),
+        clientKind: 'generic',
         label: data.get('label'),
         scopes: data.get('edit') === 'on' ? ['vault:read', 'vault:edit'] : ['vault:read'],
       });

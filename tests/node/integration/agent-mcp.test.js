@@ -10,9 +10,13 @@ import { startTestServer } from '../helpers/test-server.js';
 
 async function connectMcp(t, app, {
   token = '',
+  modern = false,
   url = `${app.baseUrl}/mcp`,
 } = {}) {
-  const client = new Client({ name: 'collabmd-test', version: '1.0.0' });
+  const client = new Client(
+    { name: 'collabmd-test', version: '1.0.0' },
+    modern ? { versionNegotiation: { mode: { pin: '2026-07-28' } } } : undefined,
+  );
   const transport = new StreamableHTTPClientTransport(
     new URL(url),
     token ? { requestInit: { headers: { Authorization: `Bearer ${token}` } } } : undefined,
@@ -209,7 +213,8 @@ test('managed read-only MCP token limits tools and revocation takes effect immed
     scopes: ['vault:read'],
     user: null,
   });
-  const client = await connectMcp(t, app, { token: created.token });
+  const client = await connectMcp(t, app, { modern: true, token: created.token });
+  assert.equal(client.getProtocolEra(), 'modern');
 
   const tools = await client.listTools();
   assert.equal(tools.tools.some(({ name }) => name === 'apply_text_edits'), false);

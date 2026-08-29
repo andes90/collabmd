@@ -35,13 +35,13 @@ describe('AgentConnectionController', () => {
       expect(elements.content.textContent).toContain('No authentication required');
     });
     expect(elements.content.querySelector('[data-agent-create]')).toBeNull();
-    expect(elements.content.querySelector('[data-agent-copy-setup="generic"]')?.textContent).toBe('Copy connection details');
+    expect(elements.content.querySelector('[data-agent-copy-setup]')?.textContent).toBe('Copy connection details');
   });
 
   it('creates a managed connection, shows token once, and clears it on close', async () => {
     const elements = mountDialog();
     const createConnection = vi.fn(async () => ({
-      connection: { clientKind: 'codex', id: 'connection-1' },
+      connection: { clientKind: 'generic', id: 'connection-1' },
       token: 'cmd_agent_secret',
     }));
     const controller = new AgentConnectionController({
@@ -62,17 +62,20 @@ describe('AgentConnectionController', () => {
     expect(elements.content.querySelector('[data-agent-create]').textContent).toBe('Start setup');
     elements.content.querySelector('[data-agent-create]').click();
     expect(elements.content.textContent).toContain('Step 1 of 2');
+    expect(elements.content.querySelector('[name="clientKind"]')).toBeNull();
+    expect(elements.content.textContent).not.toMatch(/Codex|Pi/u);
     elements.content.querySelector('[data-agent-create-form]').requestSubmit();
 
     await vi.waitFor(() => {
       expect(elements.content.querySelector('.agent-connection-token').value).toBe('cmd_agent_secret');
     });
     expect(elements.content.textContent).toContain('Step 2 of 2');
-    expect(elements.content.textContent).toContain('Finish setup in Codex');
+    expect(elements.content.textContent).toContain('Finish setup in your MCP client');
+    expect(elements.content.querySelector('[data-agent-copy-setup]').textContent).toBe('Copy MCP setup');
     expect(controller.secretToken).toBe('cmd_agent_secret');
     expect(createConnection).toHaveBeenCalledWith({
-      clientKind: 'codex',
-      label: 'My Codex',
+      clientKind: 'generic',
+      label: 'My Agent',
       scopes: ['vault:read', 'vault:edit'],
     });
 
