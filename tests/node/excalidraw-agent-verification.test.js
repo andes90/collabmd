@@ -17,7 +17,7 @@ function scene(elements) {
   };
 }
 
-test('Excalidraw inspection reports geometry, broken bindings, overlap, and text clipping', () => {
+test('Excalidraw inspection reports paint order, broken bindings, and text clipping', () => {
   const result = inspectAgentExcalidrawScene(scene([
     { height: 100, id: 'left', type: 'rectangle', width: 100, x: 0, y: 0 },
     { height: 100, id: 'right', type: 'rectangle', width: 100, x: 80, y: 80 },
@@ -36,9 +36,25 @@ test('Excalidraw inspection reports geometry, broken bindings, overlap, and text
   assert.equal(result.elementCount, 4);
   assert.deepEqual(
     new Set(result.warnings.map(({ code }) => code)),
-    new Set(['missing-binding-target', 'shape-overlap', 'text-overflow']),
+    new Set(['missing-binding-target', 'text-overflow']),
   );
+  assert.equal(result.elements[0].paintOrder, 0);
+  assert.equal(result.elements[0].behind, 'right');
+  assert.equal(result.elements[1].inFrontOf, 'left');
   assert.equal(result.elements.find(({ id }) => id === 'arrow').endElementId, 'missing');
+});
+
+test('Excalidraw inspection only warns for demonstrable full occlusion', () => {
+  const result = inspectAgentExcalidrawScene(scene([
+    { backgroundColor: '#ffffff', fillStyle: 'solid', height: 20, id: 'detail', type: 'rectangle', width: 20, x: 10, y: 10 },
+    { backgroundColor: '#000000', fillStyle: 'solid', height: 100, id: 'cover', opacity: 100, type: 'rectangle', width: 100, x: 0, y: 0 },
+  ]));
+
+  assert.deepEqual(result.warnings, [{
+    code: 'fully-occluded',
+    elementIds: ['detail', 'cover'],
+    message: 'Element detail is fully occluded by cover.',
+  }]);
 });
 
 test('Excalidraw renderer produces bounded SVG with escaped text', () => {
@@ -53,4 +69,7 @@ test('Excalidraw renderer produces bounded SVG with escaped text', () => {
   assert.match(result.svg, /<rect /u);
   assert.match(result.svg, /API &lt;safe&gt;/u);
   assert.doesNotMatch(result.svg, /API <safe>/u);
+  assert.equal(result.renderer, 'collabmd-basic-svg');
+  assert.equal(result.rendererVersion, '1');
+  assert.deepEqual(result.warnings, ['preview-not-pixel-identical']);
 });

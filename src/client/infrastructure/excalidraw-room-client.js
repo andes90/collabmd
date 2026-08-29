@@ -636,7 +636,7 @@ export class ExcalidrawRoomClient {
   }
 
   scheduleSceneSync(elements, appState, files) {
-    if (!this.canWriteToRoom) {
+    if (!this.canWriteToRoom || this.isApplyingSharedSnapshot()) {
       return false;
     }
 

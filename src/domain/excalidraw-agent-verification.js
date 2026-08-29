@@ -23,8 +23,8 @@ function elementBounds(element) {
     const left = Math.min(...xs);
     const top = Math.min(...ys);
     return {
-      height: Math.max(1, Math.max(...ys) - top),
-      width: Math.max(1, Math.max(...xs) - left),
+      height: Math.max(...ys) - top,
+      width: Math.max(...xs) - left,
       x: left,
       y: top,
     };
@@ -49,12 +49,6 @@ function mergeBounds(boxes) {
   return { height: bottom - top, width: right - left, x: left, y: top };
 }
 
-function boxesOverlap(left, right) {
-  return left.x < right.x + right.width
-    && left.x + left.width > right.x
-    && left.y < right.y + right.height
-    && left.y + left.height > right.y;
-}
 
 function boxContains(outer, inner) {
   return outer.x <= inner.x
@@ -63,16 +57,21 @@ function boxContains(outer, inner) {
     && outer.y + outer.height >= inner.y + inner.height;
 }
 
-function summarizeElement(element) {
+function summarizeElement(element, paintOrder, activeElements) {
   const bounds = elementBounds(element) ?? { height: 0, width: 0, x: 0, y: 0 };
   const summary = {
     height: bounds.height,
     id: String(element?.id ?? ''),
+    paintOrder,
     type: String(element?.type ?? 'unknown'),
     width: bounds.width,
     x: bounds.x,
     y: bounds.y,
   };
+  const elementBehind = activeElements[paintOrder - 1];
+  const elementInFront = activeElements[paintOrder + 1];
+  if (elementInFront?.id) summary.behind = String(elementInFront.id);
+  if (elementBehind?.id) summary.inFrontOf = String(elementBehind.id);
   if (element?.type === 'text') summary.text = String(element.text ?? '');
   if (element?.startBinding?.elementId) summary.startElementId = String(element.startBinding.elementId);
   if (element?.endBinding?.elementId) summary.endElementId = String(element.endBinding.elementId);
@@ -103,7 +102,12 @@ function collectElementWarnings(element, activeIds, seenIds) {
   seenIds.add(id);
 
   const bounds = elementBounds(element);
-  if (!bounds || bounds.width <= 0 || bounds.height <= 0) {
+  const hasInvalidBounds = !bounds || (
+    LINEAR_TYPES.has(element?.type)
+      ? bounds.width <= 0 && bounds.height <= 0
+      : bounds.width <= 0 || bounds.height <= 0
+  );
+  if (hasInvalidBounds) {
     warnings.push(warning('invalid-bounds', `Element ${id || '(missing id)'} has invalid or zero-size bounds.`, id ? [id] : []));
   }
   if (!RENDERED_TYPES.has(element?.type)) {
@@ -116,10 +120,20 @@ function collectElementWarnings(element, activeIds, seenIds) {
   }
   const overflow = textOverflowWarning(element, bounds, id);
   if (overflow) warnings.push(overflow);
+  if (finiteNumber(element?.strokeWidth, 2) > 32) {
+    warnings.push(warning('large-stroke', `Element ${id} has a stroke wider than 32 diagram units.`, [id]));
+  }
   return warnings;
 }
 
-function collectWarnings(elements) {
+function isOpaqueSolidRectangle(element) {
+  return element?.type === 'rectangle'
+    && element.fillStyle === 'solid'
+    && finiteNumber(element.opacity, 100) === 100
+    && String(element.backgroundColor ?? 'transparent').toLowerCase() !== 'transparent';
+}
+
+function collectWarnings(elements, { inspectOcclusion = true } = {}) {
   const warnings = [];
   const push = (entry) => {
     if (warnings.length < MAX_WARNINGS) warnings.push(entry);
@@ -130,36 +144,45 @@ function collectWarnings(elements) {
     collectElementWarnings(element, activeIds, seenIds).forEach(push);
   }
 
-  const shapes = elements
-    .filter((element) => BASIC_SHAPE_TYPES.has(element?.type))
-    .map((element) => ({ bounds: elementBounds(element), id: String(element.id ?? '') }))
-    .filter(({ bounds }) => bounds && bounds.width > 0 && bounds.height > 0)
-    .slice(0, MAX_SUMMARY_ELEMENTS);
-  for (let leftIndex = 0; leftIndex < shapes.length; leftIndex += 1) {
-    for (let rightIndex = leftIndex + 1; rightIndex < shapes.length; rightIndex += 1) {
-      const left = shapes[leftIndex];
-      const right = shapes[rightIndex];
-      if (
-        boxesOverlap(left.bounds, right.bounds)
-        && !boxContains(left.bounds, right.bounds)
-        && !boxContains(right.bounds, left.bounds)
-      ) {
-        push(warning('shape-overlap', `Shapes ${left.id} and ${right.id} overlap.`, [left.id, right.id]));
+  if (inspectOcclusion) {
+    for (let hiddenIndex = 0; hiddenIndex < elements.length; hiddenIndex += 1) {
+      const hidden = elements[hiddenIndex];
+      const hiddenBounds = elementBounds(hidden);
+      if (!hiddenBounds) continue;
+      for (let foregroundIndex = hiddenIndex + 1; foregroundIndex < elements.length; foregroundIndex += 1) {
+        const foreground = elements[foregroundIndex];
+        const foregroundBounds = elementBounds(foreground);
+        if (
+          foregroundBounds
+          && isOpaqueSolidRectangle(foreground)
+          && boxContains(foregroundBounds, hiddenBounds)
+        ) {
+          push(warning(
+            'fully-occluded',
+            `Element ${hidden.id} is fully occluded by ${foreground.id}.`,
+            [String(hidden.id), String(foreground.id)],
+          ));
+          break;
+        }
       }
     }
   }
   return warnings;
 }
 
-export function inspectAgentExcalidrawScene(scene = {}) {
+export function inspectAgentExcalidrawScene(scene = {}, {
+  inspectOcclusion = true,
+} = {}) {
   const activeElements = (Array.isArray(scene?.elements) ? scene.elements : [])
     .filter((element) => element && !element.isDeleted);
   const boxes = activeElements.map(elementBounds).filter(Boolean);
-  const warnings = collectWarnings(activeElements);
+  const warnings = collectWarnings(activeElements, { inspectOcclusion });
   return {
     bounds: mergeBounds(boxes),
     elementCount: activeElements.length,
-    elements: activeElements.slice(0, MAX_SUMMARY_ELEMENTS).map(summarizeElement),
+    elements: activeElements
+      .slice(0, MAX_SUMMARY_ELEMENTS)
+      .map((element, paintOrder) => summarizeElement(element, paintOrder, activeElements)),
     truncated: activeElements.length > MAX_SUMMARY_ELEMENTS || warnings.length >= MAX_WARNINGS,
     warnings,
   };
@@ -266,5 +289,8 @@ export function renderAgentExcalidrawSvg(scene, {
     scale: appliedScale,
     svg,
     width,
+    renderer: 'collabmd-basic-svg',
+    rendererVersion: '1',
+    warnings: ['preview-not-pixel-identical'],
   };
 }

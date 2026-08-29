@@ -167,6 +167,20 @@ test('ExcalidrawRoomClient syncs local scene updates into the structured room st
   });
 });
 
+test('ExcalidrawRoomClient does not echo a shared scene application as a local edit', async () => {
+  const { client, ydoc } = await createConnectedClient();
+  client.beginApplyingSharedSnapshot();
+  const scheduled = client.scheduleSceneSync(
+    [{ id: 'normalized-echo', isDeleted: false }],
+    { gridSize: null, viewBackgroundColor: '#ffffff' },
+    {},
+  );
+  client.endApplyingSharedSnapshot();
+
+  assert.equal(scheduled, false);
+  assert.deepEqual(buildExcalidrawRoomScene(ydoc).elements, []);
+});
+
 test('ExcalidrawRoomClient creates, replies to, and resolves diagram comment threads', async () => {
   const commentUpdates = [];
   const { client } = await createConnectedClient({

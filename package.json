@@ -73,6 +73,7 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@excalidraw/fractional-indexing": "^0.18.0-abeeaeb",
     "@modelcontextprotocol/client": "^2.0.0",
     "@modelcontextprotocol/node": "^2.0.0",
     "@modelcontextprotocol/server": "^2.0.0",

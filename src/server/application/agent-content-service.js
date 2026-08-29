@@ -148,6 +148,23 @@ export class AgentContentService {
     };
   }
 
+  async verifyExcalidraw(actor, {
+    format = 'png',
+    inspectOcclusion = true,
+    padding = 32,
+    path,
+    scale = 1,
+  } = {}) {
+    const current = await this.readExcalidrawScene(actor, path);
+    return {
+      ...renderAgentExcalidrawSvg(current.scene, { padding, scale }),
+      format,
+      inspection: inspectAgentExcalidrawScene(current.scene, { inspectOcclusion }),
+      path: current.path,
+      revision: current.revision,
+    };
+  }
+
   listDocuments(actor, { cursor = '', kinds = [], limit = 100, prefix = '' } = {}) {
     requireScope(actor, 'vault:read');
     const normalizedPrefix = normalizeWorkspacePath(prefix);
@@ -342,7 +359,15 @@ export class AgentContentService {
     });
   }
 
-  async editExcalidraw(actor, { create = [], delete: remove = [], path, revision, update = [] } = {}) {
+  async editExcalidraw(actor, {
+    create = [],
+    delete: remove = [],
+    path,
+    reorder = [],
+    replace = [],
+    revision,
+    update = [],
+  } = {}) {
     requireScope(actor, 'vault:edit');
     const normalizedPath = normalizeWorkspacePath(path);
     if (getVaultFileKind(normalizedPath) !== 'excalidraw') {
@@ -358,7 +383,13 @@ export class AgentContentService {
       }
       let scene;
       try {
-        scene = applyAgentExcalidrawEdits(JSON.parse(content), { create, delete: remove, update });
+        scene = applyAgentExcalidrawEdits(JSON.parse(content), {
+          create,
+          delete: remove,
+          reorder,
+          replace,
+          update,
+        });
       } catch (error) {
         if (error instanceof SyntaxError) {
           throw createAgentContentError('AGENT_INVALID_EXCALIDRAW', 'Document is not valid Excalidraw JSON', 400);
@@ -401,6 +432,8 @@ export class AgentContentService {
         elementCount: scene.elements.filter((element) => !element.isDeleted).length,
         path: normalizedPath,
         revision: await createEditableContentRevision(nextContent),
+        reordered: reorder.length,
+        replaced: replace.length,
         updated: update.length,
       };
     });

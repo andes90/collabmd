@@ -81,8 +81,20 @@ const EXCALIDRAW_POINT_SCHEMA = {
 const EXCALIDRAW_ELEMENT_INPUT_SCHEMA = {
   additionalProperties: false,
   properties: {
+    afterElementId: {
+      description: 'Place this new element immediately after an existing or concurrently created element.',
+      maxLength: 128,
+      minLength: 1,
+      type: 'string',
+    },
     backgroundColor: { type: 'string' },
     endArrowhead: { type: ['string', 'null'] },
+    beforeElementId: {
+      description: 'Place this new element immediately before an existing or concurrently created element.',
+      maxLength: 128,
+      minLength: 1,
+      type: 'string',
+    },
     endElementId: { maxLength: 128, minLength: 1, type: 'string' },
     fillStyle: { enum: ['cross-hatch', 'hachure', 'solid', 'zigzag'], type: 'string' },
     fontFamily: { minimum: 1, type: 'integer' },
@@ -114,6 +126,20 @@ const EXCALIDRAW_UPDATE_SCHEMA = jsonObject({
     type: 'object',
   },
 });
+const EXCALIDRAW_REPLACEMENT_ELEMENT_INPUT_SCHEMA = {
+  ...EXCALIDRAW_ELEMENT_INPUT_SCHEMA,
+  required: ['type', 'x', 'y'],
+};
+const EXCALIDRAW_REPLACE_SCHEMA = jsonObject({
+  element: EXCALIDRAW_REPLACEMENT_ELEMENT_INPUT_SCHEMA,
+  id: { maxLength: 128, minLength: 1, type: 'string' },
+}, ['element', 'id']);
+const EXCALIDRAW_REORDER_SCHEMA = jsonObject({
+  action: { enum: ['bringToFront', 'sendToBack'], type: 'string' },
+  afterElementId: { maxLength: 128, minLength: 1, type: 'string' },
+  beforeElementId: { maxLength: 128, minLength: 1, type: 'string' },
+  id: { maxLength: 128, minLength: 1, type: 'string' },
+}, ['id']);
 
 const EXCALIDRAW_BOUNDS_SCHEMA = jsonObject({
   height: { minimum: 0, type: 'number' },
@@ -124,9 +150,22 @@ const EXCALIDRAW_BOUNDS_SCHEMA = jsonObject({
 const EXCALIDRAW_SUMMARY_ELEMENT_SCHEMA = {
   additionalProperties: false,
   properties: {
+    behind: {
+      description: 'ID of the immediately higher element that paints in front of this element.',
+      type: 'string',
+    },
     endElementId: { type: 'string' },
     height: { minimum: 0, type: 'number' },
     id: { type: 'string' },
+    inFrontOf: {
+      description: 'ID of the immediately lower element that this element paints in front of.',
+      type: 'string',
+    },
+    paintOrder: {
+      description: 'Zero-based back-to-front paint position.',
+      minimum: 0,
+      type: 'integer',
+    },
     startElementId: { type: 'string' },
     text: { type: 'string' },
     type: { type: 'string' },
@@ -134,7 +173,7 @@ const EXCALIDRAW_SUMMARY_ELEMENT_SCHEMA = {
     x: { type: 'number' },
     y: { type: 'number' },
   },
-  required: ['height', 'id', 'type', 'width', 'x', 'y'],
+  required: ['height', 'id', 'paintOrder', 'type', 'width', 'x', 'y'],
   type: 'object',
 };
 const EXCALIDRAW_WARNING_SCHEMA = jsonObject({
@@ -142,15 +181,58 @@ const EXCALIDRAW_WARNING_SCHEMA = jsonObject({
   elementIds: { items: { type: 'string' }, type: 'array' },
   message: { type: 'string' },
 });
-const EXCALIDRAW_INSPECTION_OUTPUT_SCHEMA = outputSchema({
+const EXCALIDRAW_INSPECTION_PROPERTIES = {
   bounds: EXCALIDRAW_BOUNDS_SCHEMA,
   elementCount: { minimum: 0, type: 'integer' },
   elements: { items: EXCALIDRAW_SUMMARY_ELEMENT_SCHEMA, type: 'array' },
-  path: { type: 'string' },
-  revision: REVISION_SCHEMA,
   truncated: { type: 'boolean' },
   warnings: { items: EXCALIDRAW_WARNING_SCHEMA, type: 'array' },
+};
+const EXCALIDRAW_INSPECTION_SCHEMA = jsonObject(EXCALIDRAW_INSPECTION_PROPERTIES);
+const EXCALIDRAW_INSPECTION_OUTPUT_SCHEMA = outputSchema({
+  ...EXCALIDRAW_INSPECTION_PROPERTIES,
+  path: { type: 'string' },
+  revision: REVISION_SCHEMA,
 });
+const EXCALIDRAW_RENDER_OUTPUT_PROPERTIES = {
+  elementCount: { minimum: 0, type: 'integer' },
+  format: { enum: ['png', 'svg'], type: 'string' },
+  height: { minimum: 1, type: 'integer' },
+  mimeType: { enum: ['image/png', 'image/svg+xml'], type: 'string' },
+  path: { type: 'string' },
+  renderer: { type: 'string' },
+  rendererVersion: { type: 'string' },
+  revision: REVISION_SCHEMA,
+  scale: { exclusiveMinimum: 0, type: 'number' },
+  warnings: { items: { type: 'string' }, type: 'array' },
+  width: { minimum: 1, type: 'integer' },
+};
+
+const EXCALIDRAW_RENDER_INPUT_PROPERTIES = {
+  format: {
+    description: 'Image format. PNG is most widely supported by MCP clients.',
+    enum: ['png', 'svg'],
+    type: 'string',
+  },
+  padding: {
+    description: 'Scene padding in diagram units.',
+    maximum: 100,
+    minimum: 0,
+    type: 'number',
+  },
+  path: {
+    description: 'Vault-relative .excalidraw path.',
+    maxLength: 1024,
+    minLength: 1,
+    type: 'string',
+  },
+  scale: {
+    description: 'Requested output scale; automatically reduced when needed to stay within 4096 pixels.',
+    maximum: 4,
+    minimum: 0.25,
+    type: 'number',
+  },
+};
 
 function createToolRateLimiter(requestsPerMinute) {
   const limit = Math.max(1, Number.parseInt(requestsPerMinute, 10) || 120);
@@ -180,29 +262,15 @@ function toolResult(value) {
 }
 
 async function imageToolResult(value) {
-  const {
-    elementCount,
-    format,
-    height,
-    path,
-    revision,
-    scale,
-    svg,
-    width,
-  } = value;
+  const { format, svg, ...metadata } = value;
   const mimeType = format === 'svg' ? 'image/svg+xml' : 'image/png';
   const image = format === 'svg'
     ? Buffer.from(svg)
     : await sharp(Buffer.from(svg)).png().toBuffer();
   const structuredContent = {
-    elementCount,
+    ...metadata,
     format,
-    height,
     mimeType,
-    path,
-    revision,
-    scale,
-    width,
   };
   return {
     content: [
@@ -250,7 +318,7 @@ function registerTool(server, name, config, handler, {
 function registerExcalidrawReadTools(addTool, actor, agentContentService) {
   addTool('inspect_excalidraw', {
     annotations: { idempotentHint: true, readOnlyHint: true },
-    description: 'Inspect an Excalidraw scene structurally. Returns element geometry, bindings, bounds, overlap, clipping, and validity warnings.',
+    description: 'Inspect an Excalidraw scene structurally. Returns paint order, geometry, bindings, bounds, occlusion, clipping, and validity warnings.',
     inputSchema: schema({
       path: {
         description: 'Vault-relative .excalidraw path.',
@@ -264,43 +332,26 @@ function registerExcalidrawReadTools(addTool, actor, agentContentService) {
 
   addTool('render_excalidraw', {
     annotations: { idempotentHint: true, readOnlyHint: true },
-    description: 'Render supported basic Excalidraw elements as a PNG or SVG image for visual verification.',
+    description: 'Render supported basic elements as PNG or SVG. Returns renderer metadata and warns when preview is not pixel-identical to Excalidraw.',
+    inputSchema: schema(EXCALIDRAW_RENDER_INPUT_PROPERTIES, ['path']),
+    outputSchema: outputSchema(EXCALIDRAW_RENDER_OUTPUT_PROPERTIES),
+  }, (input) => agentContentService.renderExcalidraw(actor, input), imageToolResult);
+
+  addTool('verify_excalidraw', {
+    annotations: { idempotentHint: true, readOnlyHint: true },
+    description: 'Inspect and render one Excalidraw revision in a single operation.',
     inputSchema: schema({
-      format: {
-        description: 'Image format. PNG is most widely supported by MCP clients.',
-        enum: ['png', 'svg'],
-        type: 'string',
-      },
-      padding: {
-        description: 'Scene padding in diagram units.',
-        maximum: 100,
-        minimum: 0,
-        type: 'number',
-      },
-      path: {
-        description: 'Vault-relative .excalidraw path.',
-        maxLength: 1024,
-        minLength: 1,
-        type: 'string',
-      },
-      scale: {
-        description: 'Requested output scale; automatically reduced when needed to stay within 4096 pixels.',
-        maximum: 4,
-        minimum: 0.25,
-        type: 'number',
+      ...EXCALIDRAW_RENDER_INPUT_PROPERTIES,
+      inspectOcclusion: {
+        description: 'Inspect fully occluded elements. Defaults to true.',
+        type: 'boolean',
       },
     }, ['path']),
     outputSchema: outputSchema({
-      elementCount: { minimum: 0, type: 'integer' },
-      format: { enum: ['png', 'svg'], type: 'string' },
-      height: { minimum: 1, type: 'integer' },
-      mimeType: { enum: ['image/png', 'image/svg+xml'], type: 'string' },
-      path: { type: 'string' },
-      revision: REVISION_SCHEMA,
-      scale: { exclusiveMinimum: 0, type: 'number' },
-      width: { minimum: 1, type: 'integer' },
+      ...EXCALIDRAW_RENDER_OUTPUT_PROPERTIES,
+      inspection: EXCALIDRAW_INSPECTION_SCHEMA,
     }),
-  }, (input) => agentContentService.renderExcalidraw(actor, input), imageToolResult);
+  }, (input) => agentContentService.verifyExcalidraw(actor, input), imageToolResult);
 }
 
 function buildAgentServer({ actor, agentContentService, rateLimiter, version }) {
@@ -445,7 +496,7 @@ function buildAgentServer({ actor, agentContentService, rateLimiter, version }) 
       description: 'Create a valid editable .excalidraw scene from basic Excalidraw elements.',
       inputSchema: schema({
         elements: {
-          description: 'One to 200 basic Excalidraw elements. Text labels are separate text elements. Arrows may bind with startElementId and endElementId.',
+          description: 'One to 200 basic Excalidraw elements in back-to-front order. Text labels are separate text elements. Arrows may bind with startElementId and endElementId. beforeElementId or afterElementId sets explicit placement.',
           items: EXCALIDRAW_ELEMENT_INPUT_SCHEMA,
           maxItems: 200,
           minItems: 1,
@@ -467,7 +518,7 @@ function buildAgentServer({ actor, agentContentService, rateLimiter, version }) 
 
     addTool('edit_excalidraw', {
       annotations: { destructiveHint: false, idempotentHint: false, readOnlyHint: false },
-      description: 'Create, shallow-update, or delete elements in an existing .excalidraw scene when its revision still matches.',
+      description: 'Create, update, replace, reorder, or delete elements in an existing .excalidraw scene when its revision still matches.',
       inputSchema: schema({
         create: {
           items: EXCALIDRAW_ELEMENT_INPUT_SCHEMA,
@@ -488,6 +539,18 @@ function buildAgentServer({ actor, agentContentService, rateLimiter, version }) 
           type: 'string',
         },
         revision: REVISION_SCHEMA,
+        reorder: {
+          description: 'Layer changes applied in array order. Each entry uses exactly one action, beforeElementId, or afterElementId directive.',
+          items: EXCALIDRAW_REORDER_SCHEMA,
+          maxItems: 200,
+          type: 'array',
+        },
+        replace: {
+          description: 'Atomic same-ID element replacement. Layer position is preserved by default.',
+          items: EXCALIDRAW_REPLACE_SCHEMA,
+          maxItems: 200,
+          type: 'array',
+        },
         update: {
           items: EXCALIDRAW_UPDATE_SCHEMA,
           maxItems: 200,
@@ -500,6 +563,8 @@ function buildAgentServer({ actor, agentContentService, rateLimiter, version }) 
         elementCount: { minimum: 0, type: 'integer' },
         path: { type: 'string' },
         revision: REVISION_SCHEMA,
+        reordered: { minimum: 0, type: 'integer' },
+        replaced: { minimum: 0, type: 'integer' },
         updated: { minimum: 0, type: 'integer' },
       }),
     }, (input) => agentContentService.editExcalidraw(actor, input));

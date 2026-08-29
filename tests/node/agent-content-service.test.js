@@ -113,6 +113,115 @@ test('agent content service creates and edits Excalidraw elements', async () => 
   );
 });
 
+test('agent Excalidraw operations preserve canonical geometry and explicit paint order', async () => {
+  const { files, service } = createService();
+  const elements = Array.from({ length: 12 }, (_, index) => ({
+    height: 10,
+    id: `shape-${index}`,
+    type: 'rectangle',
+    width: 10,
+    x: index * 20,
+    y: 0,
+  }));
+  elements.push({
+    afterElementId: 'shape-1',
+    height: 999,
+    id: 'stroke',
+    points: [[5, 5], [25, -5]],
+    type: 'freedraw',
+    width: 999,
+    x: 100,
+    y: 50,
+  });
+  const created = await service.createExcalidraw(actor, {
+    elements,
+    path: 'diagrams/layers.excalidraw',
+  });
+  const createdScene = JSON.parse(files.get('diagrams/layers.excalidraw'));
+  assert.deepEqual(
+    createdScene.elements.slice(0, 12).map(({ index }) => index),
+    ['a0', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'a9', 'aA', 'aB'],
+  );
+  const stroke = createdScene.elements.find(({ id }) => id === 'stroke');
+  assert.deepEqual(
+    {
+      height: stroke.height,
+      points: stroke.points,
+      simulatePressure: stroke.simulatePressure,
+      width: stroke.width,
+      x: stroke.x,
+      y: stroke.y,
+    },
+    {
+      height: 10,
+      points: [[0, 0], [20, -10]],
+      simulatePressure: true,
+      width: 20,
+      x: 105,
+      y: 55,
+    },
+  );
+
+  const edited = await service.editExcalidraw(actor, {
+    create: [{
+      afterElementId: 'shape-3',
+      height: 10,
+      id: 'inserted',
+      type: 'rectangle',
+      width: 10,
+      x: 70,
+      y: 20,
+    }],
+    path: 'diagrams/layers.excalidraw',
+    reorder: [{ afterElementId: 'shape-11', id: 'shape-0' }],
+    replace: [{
+      element: { height: 20, type: 'ellipse', width: 30, x: 20, y: 20 },
+      id: 'shape-1',
+    }],
+    revision: created.revision,
+  });
+  const editedScene = JSON.parse(files.get('diagrams/layers.excalidraw'));
+  assert.deepEqual(
+    editedScene.elements.map(({ id }) => id),
+    [
+      'shape-1',
+      'stroke',
+      'shape-2',
+      'shape-3',
+      'inserted',
+      'shape-4',
+      'shape-5',
+      'shape-6',
+      'shape-7',
+      'shape-8',
+      'shape-9',
+      'shape-10',
+      'shape-11',
+      'shape-0',
+    ],
+  );
+  assert.equal(editedScene.elements[0].type, 'ellipse');
+  assert.equal(edited.reordered, 1);
+  assert.equal(edited.replaced, 1);
+
+  const inspected = await service.inspectExcalidraw(actor, {
+    path: 'diagrams/layers.excalidraw',
+  });
+  assert.equal(inspected.revision, edited.revision);
+  assert.deepEqual(
+    inspected.elements.slice(0, 2).map(({ behind, id, inFrontOf, paintOrder }) => ({
+      behind,
+      id,
+      inFrontOf,
+      paintOrder,
+    })),
+    [
+      { behind: 'stroke', id: 'shape-1', inFrontOf: undefined, paintOrder: 0 },
+      { behind: 'shape-2', id: 'stroke', inFrontOf: 'shape-1', paintOrder: 1 },
+    ],
+  );
+});
+
 test('agent Excalidraw edits update an active collaboration room', async () => {
   let liveContent = JSON.stringify({
     appState: { gridSize: null, viewBackgroundColor: '#ffffff' },

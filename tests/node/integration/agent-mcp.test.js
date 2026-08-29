@@ -50,6 +50,7 @@ test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously'
       'read_document',
       'render_excalidraw',
       'search_vault',
+      'verify_excalidraw',
     ],
   );
   for (const tool of tools.tools) {
@@ -148,6 +149,8 @@ test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously'
   const pngContent = renderedDiagram.content.find(({ type }) => type === 'image');
   assert.equal(pngContent.mimeType, 'image/png');
   assert.equal(Buffer.from(pngContent.data, 'base64').subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+  assert.equal(renderedDiagram.structuredContent.renderer, 'collabmd-basic-svg');
+  assert.deepEqual(renderedDiagram.structuredContent.warnings, ['preview-not-pixel-identical']);
 
   const renderedSvg = await client.callTool({
     arguments: { format: 'svg', path: 'diagrams/service.excalidraw' },
@@ -156,6 +159,16 @@ test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously'
   const svgContent = renderedSvg.content.find(({ type }) => type === 'image');
   assert.equal(svgContent.mimeType, 'image/svg+xml');
   assert.match(Buffer.from(svgContent.data, 'base64').toString('utf8'), /^<svg /u);
+
+  const verifiedDiagram = await client.callTool({
+    arguments: { format: 'png', inspectOcclusion: true, path: 'diagrams/service.excalidraw' },
+    name: 'verify_excalidraw',
+  });
+  assert.equal(
+    verifiedDiagram.structuredContent.inspection.elementCount,
+    verifiedDiagram.structuredContent.elementCount,
+  );
+  assert.equal(verifiedDiagram.structuredContent.revision, inspectedDiagram.structuredContent.revision);
 });
 
 
@@ -288,7 +301,7 @@ test('MCP works under configured base path', async (t) => {
   });
   const client = await connectMcp(t, app, { url: `${app.appBaseUrl}/mcp` });
   const tools = await client.listTools();
-  assert.equal(tools.tools.length, 10);
+  assert.equal(tools.tools.length, 11);
 });
 
 test('password session manages workspace-level Agent Connections', async (t) => {
