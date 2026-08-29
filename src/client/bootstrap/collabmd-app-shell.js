@@ -179,11 +179,10 @@ export class CollabMdAppShell {
       trigger: this.elements.connectAgentButton,
     });
     this.webMcpTools = new WebMcpToolRegistry({
-      getActiveFilePath: () => this.currentFilePath,
+      callTool: (name, input, options) => this.vaultApiClient.callAgentTool(name, input, options),
       getIsTabActive: () => this.isTabActive,
-      getSession: () => this.session,
-      onDidEdit: ({ replacementCount }) => {
-        this.toastController.show(`Agent-assisted edit applied (${replacementCount} replacement${replacementCount === 1 ? '' : 's'}). Review it before committing.`);
+      onDidMutate: () => {
+        this.toastController.show('Agent-assisted Vault change applied. Review it before committing.');
       },
     });
     this.fileExplorer = new FileExplorerController({

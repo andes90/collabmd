@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { WebMcpToolRegistry } from '../../src/client/infrastructure/webmcp-tool-registry.js';
+import {
+  listWebMcpToolDefinitions,
+  toWebMcpToolName,
+} from '../../src/domain/agent-tool-definitions.js';
 
 function createModelContext({ failOn = '' } = {}) {
   const tools = new Map();
@@ -15,111 +19,85 @@ function createModelContext({ failOn = '' } = {}) {
   };
 }
 
-function createRegistry(modelContext, session, options = {}) {
-  return new WebMcpToolRegistry({
-    getActiveFilePath: () => 'notes.md',
-    getIsTabActive: () => true,
-    getSession: () => session,
-    modelContext,
-    ...options,
-  });
-}
-
-test('WebMCP tools edit only an active synchronized supported document', async () => {
+test('WebMCP exposes every shared browser tool while the workspace tab is active', async () => {
+  const calls = [];
+  const mutations = [];
   const modelContext = createModelContext();
-  let active = true;
-  let content = '# Notes\n\nHello world\n';
-  let path = 'README.md';
-  let synchronized = false;
-  const session = {
-    applyTextReplacements(replacements) {
-      for (const replacement of replacements) {
-        content = content.replace(replacement.oldText, replacement.newText);
-      }
-      return replacements.length;
+  let active = false;
+  const registry = new WebMcpToolRegistry({
+    callTool: async (name, input, options) => {
+      calls.push({ input, name, signal: options.signal });
+      return { name, ok: true };
     },
-    getText: () => content,
-    isInitialSyncComplete: () => synchronized,
-  };
-  const registry = createRegistry(modelContext, session, {
-    getActiveFilePath: () => path,
     getIsTabActive: () => active,
+    modelContext,
+    onDidMutate: (mutation) => mutations.push(mutation),
   });
 
   assert.equal(await registry.refresh(), false);
-  assert.equal(modelContext.tools.size, 0);
-
-  synchronized = true;
+  active = true;
   assert.equal(await registry.refresh(), true);
-  const readTool = modelContext.tools.get('collabmd_read_active_document');
-  const editTool = modelContext.tools.get('collabmd_apply_text_edits');
-  const snapshot = await readTool.execute({});
-
   assert.deepEqual(
-    { content: snapshot.content, kind: snapshot.kind, path: snapshot.path },
-    { content, kind: 'markdown', path },
+    [...modelContext.tools.keys()].sort(),
+    listWebMcpToolDefinitions().map(({ name }) => toWebMcpToolName(name)).sort(),
   );
-  const result = await editTool.execute({
-    path,
-    replacements: [{ newText: 'Hello agent', oldText: 'Hello world' }],
-    revision: snapshot.revision,
+
+  const readTool = modelContext.tools.get('collabmd_read_document');
+  const readResult = await readTool.execute({ path: 'notes.md' });
+  assert.deepEqual(readResult, { name: 'read_document', ok: true });
+  assert.equal(readTool.annotations.readOnlyHint, true);
+  assert.equal(readTool.annotations.untrustedContentHint, true);
+  assert.equal(mutations.length, 0);
+
+  const editTool = modelContext.tools.get('collabmd_apply_text_edits');
+  const editResult = await editTool.execute({
+    path: 'notes.md',
+    replacements: [{ newText: 'Next', oldText: 'Current' }],
+    revision: 'a'.repeat(64),
   });
-  assert.equal(content, '# Notes\n\nHello agent\n');
-  assert.equal(result.replacementCount, 1);
-  await assert.rejects(
-    editTool.execute({
-      path,
-      replacements: [{ newText: 'Stale edit', oldText: 'Hello agent' }],
-      revision: snapshot.revision,
-    }),
-    /changed; read it again/,
-  );
+  assert.deepEqual(editResult, { name: 'apply_text_edits', ok: true });
+  assert.equal(calls.at(-1).name, 'apply_text_edits');
+  assert.equal(mutations.at(-1).name, 'apply_text_edits');
 
   active = false;
   assert.equal(await registry.refresh(), false);
   assert.equal(modelContext.tools.size, 0);
-  active = true;
-  assert.equal(await registry.refresh(), true);
-
-
-  path = 'drawing.excalidraw';
-  assert.equal(await registry.refresh(), false);
-  assert.equal(modelContext.tools.size, 0);
-
 });
 
 test('WebMCP cleans up partial registration failures', async () => {
   const modelContext = createModelContext({
-    failOn: 'collabmd_get_supported_syntax',
+    failOn: 'collabmd_get_collabmd_syntax',
   });
-  const registry = createRegistry(modelContext, {
-    getText: () => '# Notes\n',
-    isInitialSyncComplete: () => true,
+  const registry = new WebMcpToolRegistry({
+    callTool: async () => ({}),
+    getIsTabActive: () => true,
+    modelContext,
   });
 
   assert.equal(await registry.refresh(), false);
   assert.equal(modelContext.tools.size, 0);
 });
 
-test('WebMCP read observes cancellation and concurrent document changes', async () => {
+test('WebMCP forwards tool cancellation to the browser-session request', async () => {
   const modelContext = createModelContext();
-  let reads = 0;
-  const registry = createRegistry(modelContext, {
-    getText() {
-      reads += 1;
-      return reads === 1 ? '# Initial\n' : '# Changed\n';
+  let receivedSignal;
+  const registry = new WebMcpToolRegistry({
+    callTool: async (_name, _input, { signal }) => {
+      receivedSignal = signal;
+      await new Promise((resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      });
     },
-    isInitialSyncComplete: () => true,
+    getIsTabActive: () => true,
+    modelContext,
   });
   await registry.refresh();
-  const readTool = modelContext.tools.get('collabmd_read_active_document');
+  const readTool = modelContext.tools.get('collabmd_read_document');
   const controller = new AbortController();
+  const execution = readTool.execute({ path: 'notes.md' }, { signal: controller.signal });
   controller.abort(new Error('cancelled by client'));
 
-  await assert.rejects(
-    readTool.execute({}, { signal: controller.signal }),
-    /cancelled by client/u,
-  );
-  await assert.rejects(readTool.execute({}), /changed while it was being read/u);
+  await assert.rejects(execution, /cancelled by client/u);
+  assert.equal(receivedSignal, controller.signal);
 });
 

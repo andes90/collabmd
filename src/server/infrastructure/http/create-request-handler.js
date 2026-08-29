@@ -1,5 +1,6 @@
 import { createAgentApiHandler } from './create-agent-api-handler.js';
 import { createAgentMcpHandler } from '../mcp/create-agent-mcp-handler.js';
+import { createAgentToolRateLimiter } from '../../shared/agent-tool-rate-limiter.js';
 import { createAuthApiHandler } from './create-auth-api-handler.js';
 import { createGitApiCommandHandler } from './create-git-api-command-handler.js';
 import { createGitApiQueryHandler } from './create-git-api-query-handler.js';
@@ -76,16 +77,20 @@ export function createRequestHandler(
     basePath: config.basePath,
     service: structurizrWorkspaceService,
   });
+  const agentToolRateLimiter = createAgentToolRateLimiter(config.agentAccess.requestsPerMinute);
   const handleAgentApi = createAgentApiHandler({
     agentConnectionService: agentIntegration?.connectionService,
+    agentContentService: agentIntegration?.contentService,
     authService,
     config,
+    rateLimiter: agentToolRateLimiter,
   });
-  const handleAgentMcp = agentIntegration
+  const handleAgentMcp = config.agentAccess.enabled && agentIntegration
     ? createAgentMcpHandler({
         agentConnectionService: agentIntegration.connectionService,
         agentContentService: agentIntegration.contentService,
         config,
+        rateLimiter: agentToolRateLimiter,
       })
     : async () => false;
 

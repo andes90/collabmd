@@ -28,6 +28,18 @@ async function connectMcp(t, app, {
   await client.connect(transport);
   return client;
 }
+async function callWebMcpTool(app, name, input) {
+  const response = await fetch(`${app.baseUrl}/api/agent/tools/${name}`, {
+    body: JSON.stringify(input),
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: new URL(app.baseUrl).origin,
+    },
+    method: 'POST',
+  });
+  return { body: await response.json(), response };
+}
+
 
 
 test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously', async (t) => {
@@ -170,6 +182,47 @@ test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously'
   );
   assert.equal(verifiedDiagram.structuredContent.revision, inspectedDiagram.structuredContent.revision);
 });
+test('browser-session WebMCP tools reuse agent content operations when remote MCP is disabled', async (t) => {
+  const app = await startTestServer();
+  t.after(app.close);
+
+  const read = await callWebMcpTool(app, 'read_document', { path: 'test.md' });
+  assert.equal(read.response.status, 200);
+  assert.equal(read.body.path, 'test.md');
+
+  const edit = await callWebMcpTool(app, 'apply_text_edits', {
+    path: 'test.md',
+    replacements: [{ oldText: 'Hello from test vault.', newText: 'Hello from WebMCP.' }],
+    revision: read.body.revision,
+  });
+  assert.equal(edit.response.status, 200);
+  assert.equal(await readFile(join(app.vaultDir, 'test.md'), 'utf8'), '# Test\n\nHello from WebMCP.\n');
+
+  const stale = await callWebMcpTool(app, 'apply_text_edits', {
+    path: 'test.md',
+    replacements: [{ oldText: 'Hello from WebMCP.', newText: 'Stale overwrite.' }],
+    revision: read.body.revision,
+  });
+  assert.equal(stale.response.status, 409);
+  assert.equal(stale.body.code, 'AGENT_REVISION_CONFLICT');
+
+  const created = await callWebMcpTool(app, 'create_excalidraw', {
+    elements: [{ height: 80, id: 'service', type: 'rectangle', width: 160, x: 20, y: 20 }],
+    path: 'diagrams/webmcp.excalidraw',
+  });
+  assert.equal(created.response.status, 200);
+
+  const rendered = await callWebMcpTool(app, 'render_excalidraw', {
+    path: 'diagrams/webmcp.excalidraw',
+  });
+  assert.equal(rendered.response.status, 200);
+  assert.equal(rendered.body.image.mimeType, 'image/png');
+  assert.equal(
+    Buffer.from(rendered.body.image.data, 'base64').subarray(0, 8).toString('hex'),
+    '89504e470d0a1a0a',
+  );
+});
+
 
 
 test('password MCP endpoint requires managed bearer token', async (t) => {

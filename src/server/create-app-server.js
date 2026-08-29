@@ -183,12 +183,10 @@ export function createAppServer(config = loadConfig()) {
     hostedWorkspaceService,
     githubSetupFlow,
     structurizrWorkspaceService,
-    config.agentAccess.enabled
-      ? {
-          connectionService: agentConnectionService,
-          contentService: agentContentService,
-        }
-      : null,
+    {
+      connectionService: agentConnectionService,
+      contentService: agentContentService,
+    },
   );
   const httpServer = createServer((req, res) => {
     requestHandler(req, res).catch((error) => {

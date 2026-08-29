@@ -31,6 +31,15 @@ export const vaultApiClient = {
     const response = await fetch(resolveApiUrl('/files'));
     return parseApiResponse(response, 'Failed to load file tree');
   },
+  async callAgentTool(name, input, { signal } = {}) {
+    const response = await fetch(resolveApiUrl(`/agent/tools/${encodeURIComponent(name)}`), {
+      body: JSON.stringify(input),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      signal,
+    });
+    return parseApiResponse(response, `Failed to execute ${name}`);
+  },
 
   async readCommentOverview() {
     const response = await fetch(resolveApiUrl('/comments/overview'));

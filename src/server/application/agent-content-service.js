@@ -28,9 +28,23 @@ function requireScope(actor, scope) {
 }
 
 function createAgentSourceRef(actor) {
+  if (actor.sourceRef) return actor.sourceRef;
   return actor.connectionId === 'anonymous'
     ? 'agent:anonymous'
     : `agent-connection:${actor.connectionId}`;
+}
+
+function createCollaborationOrigin(actor) {
+  return {
+    actor: actor.collaborator ?? null,
+    connectionId: actor.connectionId,
+    requestId: actor.requestId,
+    type: actor.origin ?? 'agent',
+  };
+}
+
+function getMutationOrigin(actor) {
+  return actor.origin ?? 'agent';
 }
 
 function clampInteger(value, fallback, min, max) {
@@ -296,19 +310,14 @@ export class AgentContentService {
       let nextContent;
       if (room) {
         room.applyExactTextChanges(changes, {
-          origin: {
-            actor: actor.collaborator ?? null,
-            connectionId: actor.connectionId,
-            requestId: actor.requestId,
-            type: 'agent',
-          },
+          origin: createCollaborationOrigin(actor),
         });
         nextContent = room.readEditableContent();
       } else {
         nextContent = applyExactTextChanges(content, changes);
         const result = await this.workspaceMutationCoordinator.writeEditableContent({
           content: nextContent,
-          origin: 'agent',
+          origin: getMutationOrigin(actor),
           path: normalizedPath,
           requestId: actor.requestId,
           sourceRef: createAgentSourceRef(actor),
@@ -345,7 +354,7 @@ export class AgentContentService {
     return this.runForPath(normalizedPath, async () => {
       const result = await this.workspaceMutationCoordinator.createFile({
         content,
-        origin: 'agent',
+        origin: getMutationOrigin(actor),
         path: normalizedPath,
         requestId: actor.requestId,
         sourceRef: createAgentSourceRef(actor),
@@ -403,12 +412,7 @@ export class AgentContentService {
       let nextContent;
       if (room) {
         room.applyExcalidrawScene(scene, {
-          origin: {
-            actor: actor.collaborator ?? null,
-            connectionId: actor.connectionId,
-            requestId: actor.requestId,
-            type: 'agent',
-          },
+          origin: createCollaborationOrigin(actor),
         });
         nextContent = room.getPersistedContent();
       } else {
@@ -419,7 +423,7 @@ export class AgentContentService {
         nextContent = JSON.stringify(storedScene);
         const result = await this.workspaceMutationCoordinator.writeEditableContent({
           content: nextContent,
-          origin: 'agent',
+          origin: getMutationOrigin(actor),
           path: normalizedPath,
           requestId: actor.requestId,
           sourceRef: createAgentSourceRef(actor),
@@ -452,7 +456,7 @@ export class AgentContentService {
     return this.runForPath(normalizedPath, async () => {
       const result = await this.workspaceMutationCoordinator.createFile({
         content: normalizedContent,
-        origin: 'agent',
+        origin: getMutationOrigin(actor),
         path: normalizedPath,
         requestId: actor.requestId,
         sourceRef: createAgentSourceRef(actor),
