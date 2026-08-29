@@ -130,6 +130,18 @@ export function createReferenceTargetAliasMap(renamedEntries = []) {
 
   return aliases;
 }
+export function collectMarkdownImageSources(markdownText = '') {
+  const sources = [];
+  String(markdownText ?? '').split('\n').forEach((line, lineIndex) => {
+    MARKDOWN_IMAGE_OPEN_RE.lastIndex = 0;
+    while (MARKDOWN_IMAGE_OPEN_RE.exec(line) !== null) {
+      const source = parseMarkdownImageDestination(line.slice(MARKDOWN_IMAGE_OPEN_RE.lastIndex));
+      if (source) sources.push({ line: lineIndex + 1, source });
+    }
+  });
+  return sources;
+}
+
 
 export function collectMarkdownReferences(markdownText = '', {
   sourceFilePath = '',
@@ -139,7 +151,7 @@ export function collectMarkdownReferences(markdownText = '', {
   const references = [];
   const lines = String(markdownText ?? '').split('\n');
 
-  for (const line of lines) {
+  for (const [lineIndex, line] of lines.entries()) {
     const context = line.trim();
 
     INTERNAL_LINK_RE.lastIndex = 0;
@@ -155,6 +167,7 @@ export function collectMarkdownReferences(markdownText = '', {
       references.push({
         context,
         isEmbed: Boolean(linkMatch[1]),
+        line: lineIndex + 1,
         rawTarget,
         rawTargetKey: normalizeReferenceTargetKey(rawTarget),
         resolvedPath,
@@ -176,6 +189,7 @@ export function collectMarkdownReferences(markdownText = '', {
       references.push({
         context,
         isEmbed: true,
+        line: lineIndex + 1,
         rawTarget,
         rawTargetKey: normalizeReferenceTargetKey(targetPath),
         resolvedPath,

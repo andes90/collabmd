@@ -14,6 +14,58 @@ const DOCUMENT_SCHEMA = objectSchema({
   path: { type: 'string' },
   size: { minimum: 0, type: 'number' },
 });
+const WORKSPACE_ENTRY_SCHEMA = objectSchema({
+  agentEditable: { type: 'boolean' },
+  embeddable: { type: 'boolean' },
+  kind: { type: ['string', 'null'] },
+  mtimeMs: { minimum: 0, type: 'number' },
+  nodeType: { enum: ['directory', 'file'], type: 'string' },
+  path: { type: 'string' },
+  readable: { type: 'boolean' },
+  size: { minimum: 0, type: 'number' },
+});
+
+const DOCUMENT_REFERENCE_SCHEMA = objectSchema({
+  exists: { type: 'boolean' },
+  kind: { type: ['string', 'null'] },
+  line: { minimum: 1, type: 'integer' },
+  rawTarget: { type: 'string' },
+  resolvedPath: { type: ['string', 'null'] },
+  targetPath: { type: 'string' },
+});
+
+const VIDEO_REFERENCE_SCHEMA = objectSchema({
+  kind: { type: ['string', 'null'] },
+  line: { minimum: 1, type: 'integer' },
+  mimeType: { type: ['string', 'null'] },
+  source: { type: 'string' },
+  supported: { type: 'boolean' },
+  url: { type: ['string', 'null'] },
+});
+
+const BACKLINK_SCHEMA = objectSchema({
+  contexts: { items: { type: 'string' }, type: 'array' },
+  file: { type: 'string' },
+});
+
+const VALIDATION_ISSUE_SCHEMA = objectSchema({
+  code: { type: 'string' },
+  line: { minimum: 1, type: 'integer' },
+  message: { type: 'string' },
+  target: { type: 'string' },
+});
+
+const DIAGRAM_RENDER_OUTPUT_PROPERTIES = {
+  endLine: { minimum: 1, type: 'integer' },
+  format: { enum: ['png', 'svg'], type: 'string' },
+  kind: { enum: ['mermaid', 'plantuml'], type: 'string' },
+  mimeType: { enum: ['image/png', 'image/svg+xml'], type: 'string' },
+  path: { type: 'string' },
+  renderer: { type: 'string' },
+  revision: REVISION_SCHEMA,
+  startLine: { minimum: 1, type: 'integer' },
+  warnings: { items: { type: 'string' }, type: 'array' },
+};
 
 const SEARCH_SNIPPET_SCHEMA = objectSchema({
   column: { minimum: 1, type: 'integer' },
@@ -297,6 +349,37 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
   },
   {
     annotations: { idempotentHint: true, readOnlyHint: true },
+    description: 'List current Vault files and directories, including binary metadata and agent capability flags.',
+    inputSchema: objectSchema({
+      cursor: {
+        description: 'Path from the previous nextCursor; omit for the first page.',
+        type: 'string',
+      },
+      limit: {
+        description: 'Maximum entries to return.',
+        maximum: 200,
+        minimum: 1,
+        type: 'integer',
+      },
+      prefix: {
+        description: 'Optional Vault directory or path prefix.',
+        type: 'string',
+      },
+    }, []),
+    method: 'listWorkspaceEntries',
+    name: 'list_workspace_entries',
+    outputSchema: objectSchema({
+      entries: { items: WORKSPACE_ENTRY_SCHEMA, type: 'array' },
+      nextCursor: { type: ['string', 'null'] },
+      truncated: { type: 'boolean' },
+    }),
+    scope: 'vault:read',
+    untrustedContentHint: true,
+    webMcp: true,
+  },
+
+  {
+    annotations: { idempotentHint: true, readOnlyHint: true },
     description: 'Search current Vault text with one fixed case-insensitive term. Returns path and line evidence.',
     inputSchema: objectSchema({
       limit: {
@@ -376,6 +459,84 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
     untrustedContentHint: true,
     webMcp: true,
   },
+  {
+    annotations: { idempotentHint: true, readOnlyHint: true },
+    description: 'Inspect resolved and missing wiki-links, embeds, public video embeds, and backlinks for one Markdown document.',
+    inputSchema: objectSchema({
+      path: {
+        description: 'Vault-relative Markdown path.',
+        maxLength: 1024,
+        minLength: 1,
+        type: 'string',
+      },
+    }, ['path']),
+    method: 'inspectDocumentReferences',
+    name: 'inspect_document_references',
+    outputSchema: objectSchema({
+      backlinks: { items: BACKLINK_SCHEMA, type: 'array' },
+      embeds: { items: DOCUMENT_REFERENCE_SCHEMA, type: 'array' },
+      path: { type: 'string' },
+      revision: REVISION_SCHEMA,
+      videos: { items: VIDEO_REFERENCE_SCHEMA, type: 'array' },
+      wikiLinks: { items: DOCUMENT_REFERENCE_SCHEMA, type: 'array' },
+    }),
+    scope: 'vault:read',
+    untrustedContentHint: true,
+    webMcp: true,
+  },
+  {
+    annotations: { idempotentHint: true, readOnlyHint: true },
+    description: 'Validate one Markdown document for missing wiki-link/embed targets and unsupported public video embeds.',
+    inputSchema: objectSchema({
+      path: {
+        description: 'Vault-relative Markdown path.',
+        maxLength: 1024,
+        minLength: 1,
+        type: 'string',
+      },
+    }, ['path']),
+    method: 'validateDocument',
+    name: 'validate_document',
+    outputSchema: objectSchema({
+      issues: { items: VALIDATION_ISSUE_SCHEMA, type: 'array' },
+      path: { type: 'string' },
+      revision: REVISION_SCHEMA,
+      valid: { type: 'boolean' },
+    }),
+    scope: 'vault:read',
+    untrustedContentHint: true,
+    webMcp: true,
+  },
+  {
+    annotations: { idempotentHint: true, readOnlyHint: true },
+    description: 'Render one standalone or fenced Mermaid/PlantUML diagram. Markdown with multiple diagrams requires the opening fence startLine. Mermaid rendering requires WebMCP.',
+    inputSchema: objectSchema({
+      format: {
+        description: 'Image format. PNG is most widely supported by MCP clients.',
+        enum: ['png', 'svg'],
+        type: 'string',
+      },
+      path: {
+        description: 'Vault-relative Markdown, Mermaid, or PlantUML path.',
+        maxLength: 1024,
+        minLength: 1,
+        type: 'string',
+      },
+      startLine: {
+        description: 'Opening fence line for a diagram embedded in Markdown.',
+        minimum: 1,
+        type: 'integer',
+      },
+    }, ['path']),
+    method: 'renderDiagram',
+    name: 'render_diagram',
+    outputSchema: objectSchema(DIAGRAM_RENDER_OUTPUT_PROPERTIES),
+    resultKind: 'image',
+    scope: 'vault:read',
+    untrustedContentHint: true,
+    webMcp: true,
+  },
+
   {
     annotations: { idempotentHint: true, readOnlyHint: true },
     description: 'Inspect an Excalidraw scene structurally. Returns paint order, geometry, bindings, bounds, occlusion, clipping, and validity warnings.',

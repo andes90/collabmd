@@ -155,6 +155,8 @@ export function createAppServer(config = loadConfig()) {
     store: agentConnectionStore,
   });
   const agentContentService = new AgentContentService({
+    backlinkIndex,
+    plantUmlRenderer,
     roomRegistry,
     searchService,
     vaultFileStore,

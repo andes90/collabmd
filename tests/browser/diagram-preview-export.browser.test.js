@@ -6,6 +6,7 @@ import {
   rasterizeSvgMarkupToPngBlob,
   renderMermaidExportSvgMarkup,
 } from '../../src/client/application/diagram-preview-export.js';
+import { renderWebMcpDiagram } from '../../src/client/application/webmcp-diagram-renderer.js';
 import { downloadBlob } from '../../src/client/browser-utils.js';
 
 describe('diagram preview export helpers', () => {
@@ -93,6 +94,37 @@ describe('diagram preview export helpers', () => {
     expect(markup).toContain('<text');
     expect(markup).not.toContain('foreignObject');
   });
+  it('renders Mermaid WebMCP results in the active browser', async () => {
+    const callTool = vi.fn(async (name) => {
+      expect(name).toBe('read_document');
+      return {
+        content: 'flowchart LR\nA-->B\n',
+        endLine: 3,
+        kind: 'mermaid',
+        path: 'flow.mmd',
+        revision: 'a'.repeat(64),
+        startLine: 1,
+        truncated: false,
+      };
+    });
+    const result = await renderWebMcpDiagram({
+      format: 'svg',
+      path: 'flow.mmd',
+    }, {
+      callTool,
+      getMermaid: async () => ({
+        initialize: vi.fn(),
+        run: async ({ nodes }) => {
+          nodes[0].innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><path d="M0 0L10 10"/></svg>';
+        },
+      }),
+    });
+
+    expect(result.renderer).toBe('mermaid-browser');
+    expect(result.mimeType).toBe('image/svg+xml');
+    expect(atob(result.image.data)).toContain('<svg');
+  });
+
 
   it('overrides existing Mermaid init directives for export safety', async () => {
     const initialize = vi.fn();

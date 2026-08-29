@@ -64,7 +64,6 @@ test('WebMCP exposes every shared browser tool while the workspace tab is active
   assert.equal(readTool.annotations.readOnlyHint, true);
   assert.equal(readTool.annotations.untrustedContentHint, true);
   assert.equal(mutations.length, 0);
-
   const editTool = modelContext.tools.get('collabmd_apply_text_edits');
   const editResult = await editTool.execute({
     path: 'notes.md',

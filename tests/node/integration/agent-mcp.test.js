@@ -57,11 +57,15 @@ test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously'
       'create_excalidraw',
       'edit_excalidraw',
       'get_collabmd_syntax',
+      'inspect_document_references',
       'inspect_excalidraw',
       'list_documents',
+      'list_workspace_entries',
       'read_document',
+      'render_diagram',
       'render_excalidraw',
       'search_vault',
+      'validate_document',
       'verify_excalidraw',
     ],
   );
@@ -84,6 +88,22 @@ test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously'
     name: 'read_document',
   });
   assert.equal(read.structuredContent.startLine, 1);
+  const workspace = await client.callTool({
+    arguments: {},
+    name: 'list_workspace_entries',
+  });
+  assert.equal(workspace.structuredContent.entries.some(({ path }) => path === 'test.md'), true);
+  const references = await client.callTool({
+    arguments: { path: 'test.md' },
+    name: 'inspect_document_references',
+  });
+  assert.deepEqual(references.structuredContent.embeds, []);
+  const validation = await client.callTool({
+    arguments: { path: 'test.md' },
+    name: 'validate_document',
+  });
+  assert.equal(validation.structuredContent.valid, true);
+
 
   const edit = await client.callTool({
     arguments: {
@@ -386,7 +406,7 @@ test('MCP works under configured base path', async (t) => {
   });
   const client = await connectMcp(t, app, { url: `${app.appBaseUrl}/mcp` });
   const tools = await client.listTools();
-  assert.equal(tools.tools.length, 11);
+  assert.equal(tools.tools.length, 15);
 });
 
 test('password session manages workspace-level Agent Connections', async (t) => {

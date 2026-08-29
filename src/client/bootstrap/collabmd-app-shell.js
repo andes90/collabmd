@@ -1,5 +1,6 @@
 import { PdfPreviewController } from '../application/pdf-preview-controller.js';
 import { PreviewRenderer } from '../application/preview-renderer.js';
+import { renderWebMcpDiagram } from '../application/webmcp-diagram-renderer.js';
 import { ensureQuickSwitcherInstance, toggleQuickSwitcherInstance } from '../application/quick-switcher-loader.js';
 import { WorkspaceRouteController } from '../application/workspace-route-controller.js';
 import { WikiLinkFileController } from '../application/wiki-link-file-controller.js';
@@ -178,6 +179,7 @@ export class CollabMdAppShell {
       toastController: this.toastController,
       trigger: this.elements.connectAgentButton,
     });
+    const callAgentTool = (...args) => this.vaultApiClient.callAgentTool(...args);
     this.webMcpTools = new WebMcpToolRegistry({
       acknowledgeToolCall: ({ input, name, preparation, result, signal }) => {
         if (
@@ -191,7 +193,13 @@ export class CollabMdAppShell {
           signal,
         });
       },
-      callTool: (name, input, options) => this.vaultApiClient.callAgentTool(name, input, options),
+      callTool: (name, input, options) => name === 'render_diagram'
+        ? renderWebMcpDiagram(input, {
+            callTool: callAgentTool,
+            getMermaid: () => this.previewRenderer.mermaidHydrator.ensureMermaid(),
+            signal: options?.signal,
+          })
+        : callAgentTool(name, input, options),
       getActiveContext: () => ({
         activeDiagramPath: this.isExcalidrawFile(this.currentFilePath)
           ? this.currentFilePath

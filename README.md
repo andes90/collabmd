@@ -177,7 +177,10 @@ COLLABMD_AGENT_ACCESS_ENABLED=true collabmd --no-tunnel
 
 CollabMD exposes `/mcp`, or `<BASE_PATH>/mcp` when a base path is configured, with these tools:
 
-- `list_documents`, `search_vault`, and `read_document`
+- `list_documents`, `list_workspace_entries`, `search_vault`, and `read_document`
+- `inspect_document_references` for resolved and missing wiki-links, embeds, public video embeds, and backlinks
+- `validate_document` for missing Markdown references and unsupported public video embeds
+- `render_diagram` for standalone or fenced PlantUML through remote MCP and Mermaid or PlantUML through WebMCP
 - `apply_text_edits` with exact replacements and revision conflict protection
 - `create_document`
 - `create_excalidraw` and `edit_excalidraw` for canonical element creation, updates, relationship-aware translation, standalone text auto-resizing, same-ID replacement, explicit paint-order changes, deletion, and optional same-revision verification
@@ -190,7 +193,7 @@ CollabMD exposes `/mcp`, or `<BASE_PATH>/mcp` when a base path is configured, wi
 
 Agent text writes support Markdown, HTML, Mermaid, PlantUML, and Structurizr. Excalidraw writes use the dedicated element tools. Base, draw.io, PDF, images, delete, rename, Git, and publish are not writable through Agent Access.
 
-Remote MCP rendering uses the basic element types supported by the agent tools. The `collabmd-basic-svg` renderer is intended for layout verification rather than pixel-identical Excalidraw reproduction and returns `preview-not-pixel-identical`. WebMCP replaces these previews with Excalidraw's official browser renderer.
+Remote MCP renders PlantUML through the configured PlantUML service; Mermaid rendering requires WebMCP because Mermaid needs a browser layout engine. Remote MCP Excalidraw rendering uses the basic element types supported by the agent tools. The `collabmd-basic-svg` renderer is intended for layout verification rather than pixel-identical Excalidraw reproduction and returns `preview-not-pixel-identical`. WebMCP replaces these previews with Excalidraw's official browser renderer.
 
 With password or OIDC auth, open **More actions → Connect AI Agent** after signing in. Create a named connection, choose read/edit scope, and copy the token shown once. Tokens expire after 30 days by default and can be revoked from the same dialog. OIDC connections retain Collaborator attribution; shared-password connections are workspace-level because password sessions have no individual identity.
 

@@ -11,14 +11,18 @@ const actor = {
 };
 
 function createService({
+  backlinks = [],
   content = '# Notes\n\nHello world\n',
   documentPath = 'notes.md',
+  extraFiles = {},
   room = null,
 } = {}) {
-  const entries = new Map([
-    [documentPath, { nodeType: 'file', path: documentPath }],
-  ]);
-  const files = new Map([[documentPath, content]]);
+  const files = new Map([[documentPath, content], ...Object.entries(extraFiles)]);
+  const entries = new Map(Array.from(files.keys(), (path) => [
+    path,
+    { nodeType: 'file', path },
+  ]));
+  const renderedSources = [];
   const events = [];
   const workspaceMutationCoordinator = {
     workspaceState: { entries, metadata: new Map() },
@@ -36,6 +40,15 @@ function createService({
     },
   };
   const service = new AgentContentService({
+    backlinkIndex: {
+      getBacklinks: async () => backlinks,
+    },
+    plantUmlRenderer: {
+      async renderSvg(source) {
+        renderedSources.push(source);
+        return '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"></svg>';
+      },
+    },
     roomRegistry: {
       get: (path) => path === documentPath ? room : null,
       getRooms: () => room ? [[documentPath, room]] : [],
@@ -50,7 +63,7 @@ function createService({
     },
     workspaceMutationCoordinator,
   });
-  return { entries, events, files, service };
+  return { entries, events, files, renderedSources, service };
 }
 
 
@@ -74,6 +87,70 @@ test('agent content service reads, edits, and creates closed documents', async (
   assert.equal(created.kind, 'markdown');
   assert.equal(files.get('docs/new.md'), '# New\n');
 });
+test('agent tools inspect and validate references, video embeds, and workspace entries', async () => {
+  const { entries, service } = createService({
+    backlinks: [{ contexts: ['Links here'], file: 'backlink.md' }],
+    content: [
+      '# Embedded content',
+      '[[Other]]',
+      '[[Missing]]',
+      '![[diagrams/system.mmd]]',
+      '![Diagram](assets/diagram.png)',
+      '![Demo](https://www.youtube.com/watch?v=dQw4w9WgXcQ)',
+      '![Demo](http://cdn.example.com/demo.mp4)',
+    ].join('\n'),
+    extraFiles: {
+      'assets/diagram.png': '',
+      'diagrams/system.mmd': 'flowchart LR\\nA-->B\\n',
+      'docs/Other.md': '# Other\\n',
+    },
+  });
+  entries.set('assets', { nodeType: 'directory', path: 'assets' });
+
+  const inspected = await service.inspectDocumentReferences(actor, { path: 'notes.md' });
+  assert.equal(inspected.backlinks[0].file, 'backlink.md');
+  assert.equal(inspected.wikiLinks.find(({ rawTarget }) => rawTarget === 'Other').resolvedPath, 'docs/Other.md');
+  assert.equal(inspected.wikiLinks.find(({ rawTarget }) => rawTarget === 'Missing').exists, false);
+  assert.equal(inspected.embeds.find(({ rawTarget }) => rawTarget === 'diagrams/system.mmd').kind, 'mermaid');
+  assert.equal(inspected.embeds.find(({ rawTarget }) => rawTarget === 'assets/diagram.png').exists, true);
+  assert.deepEqual(inspected.videos.map(({ supported }) => supported), [true, false]);
+
+  const validation = await service.validateDocument(actor, { path: 'notes.md' });
+  assert.deepEqual(
+    validation.issues.map(({ code }) => code),
+    ['REFERENCE_TARGET_NOT_FOUND', 'VIDEO_EMBED_UNSUPPORTED'],
+  );
+
+  const workspace = service.listWorkspaceEntries(actor);
+  assert.equal(workspace.entries.find(({ path }) => path === 'assets').nodeType, 'directory');
+  assert.equal(workspace.entries.find(({ path }) => path === 'assets/diagram.png').embeddable, true);
+  assert.equal(workspace.entries.find(({ path }) => path === 'assets/diagram.png').readable, false);
+  assert.match(service.getSyntax(actor, { kind: 'markdown' }).guide, /public video embeds/u);
+});
+
+test('agent diagram rendering handles PlantUML and directs Mermaid to WebMCP', async () => {
+  const plantUml = createService({
+    content: '@startuml\\nAlice -> Bob\\n@enduml\\n',
+    documentPath: 'sequence.puml',
+  });
+  const rendered = await plantUml.service.renderDiagram(actor, {
+    format: 'svg',
+    path: 'sequence.puml',
+  });
+  assert.equal(rendered.kind, 'plantuml');
+  assert.match(rendered.svg, /^<svg/u);
+  assert.equal(plantUml.renderedSources[0], '@startuml\\nAlice -> Bob\\n@enduml\\n');
+
+  const mermaid = createService({
+    content: 'flowchart LR\\nA-->B\\n',
+    documentPath: 'flow.mmd',
+  });
+  await assert.rejects(
+    mermaid.service.renderDiagram(actor, { path: 'flow.mmd' }),
+    { code: 'AGENT_BROWSER_RENDER_REQUIRED' },
+  );
+});
+
 
 test('agent content service creates and edits Excalidraw elements', async () => {
   const { files, service } = createService();

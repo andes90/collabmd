@@ -4,6 +4,7 @@ import hljs from 'highlight.js';
 import { isImageAttachmentFilePath } from '../../domain/file-kind.js';
 import { resolveVaultRelativePath } from '../../domain/vault-paths.js';
 import { resolveWikiTargetPath } from '../../domain/wiki-link-resolver.js';
+import { classifyPublicVideoEmbed } from '../../domain/video-embed.js';
 import { escapeHtml } from '../domain/vault-utils.js';
 import { extractYamlFrontmatter } from '../../domain/yaml-frontmatter.js';
 import { renderFrontmatterBlock } from './markdown-frontmatter.js';
@@ -12,21 +13,6 @@ import { analyzeMarkdownComplexity } from './preview-render-profile.js';
 hljs.registerAliases(['cql', 'mariadb', 'mssql', 'mysql', 'plsql', 'sqlite'], { languageName: 'sql' });
 hljs.registerAliases(['ecmascript', 'node'], { languageName: 'javascript' });
 
-const DIRECT_VIDEO_MIME_TYPES = Object.freeze({
-  '.mp4': 'video/mp4',
-  '.ogg': 'video/ogg',
-  '.webm': 'video/webm',
-});
-
-const YOUTUBE_HOSTS = new Set([
-  'youtube.com',
-  'www.youtube.com',
-  'm.youtube.com',
-  'youtu.be',
-  'www.youtu.be',
-  'youtube-nocookie.com',
-  'www.youtube-nocookie.com',
-]);
 
 function renderToken(renderer, tokens, index, options, env, self) {
   return renderer?.(tokens, index, options, env, self) ?? self.renderToken(tokens, index, options);
@@ -192,78 +178,6 @@ function createBaseFileEmbedPlaceholder({ embedKey, label, target, viewName = ''
   return `<span class="bases-embed-placeholder diagram-preview-shell" data-base-key="${escapeHtml(embedKey)}" data-base-path="${escapeHtml(target)}" data-base-label="${escapeHtml(label)}"${viewAttribute}${sourceFileAttribute}><span class="diagram-preview-placeholder-card"><span class="diagram-preview-placeholder-copy"><strong>${escapeHtml(label)}</strong><span>Loads query results when preview renders</span></span></span></span>`;
 }
 
-function getDirectVideoMimeType(pathname = '') {
-  const match = pathname.toLowerCase().match(/\.(mp4|ogg|webm)$/i);
-  if (!match) {
-    return null;
-  }
-
-  return DIRECT_VIDEO_MIME_TYPES[`.${match[1].toLowerCase()}`] || null;
-}
-
-function normalizeYouTubeVideoId(candidate = '') {
-  const normalized = String(candidate || '').trim();
-  return /^[A-Za-z0-9_-]{11}$/.test(normalized) ? normalized : null;
-}
-
-function getCanonicalYouTubeEmbedUrl(url) {
-  const host = url.hostname.toLowerCase();
-  let videoId = null;
-
-  if (host === 'youtu.be' || host === 'www.youtu.be') {
-    videoId = normalizeYouTubeVideoId(url.pathname.split('/').filter(Boolean)[0] || '');
-  } else if (host.includes('youtube') || host.includes('youtube-nocookie')) {
-    if (url.pathname === '/watch') {
-      videoId = normalizeYouTubeVideoId(url.searchParams.get('v') || '');
-    } else if (url.pathname.startsWith('/embed/')) {
-      videoId = normalizeYouTubeVideoId(url.pathname.split('/').filter(Boolean)[1] || '');
-    }
-  }
-
-  if (!videoId) {
-    return null;
-  }
-
-  return `https://www.youtube-nocookie.com/embed/${videoId}`;
-}
-
-function classifyPublicVideoEmbed(source = '') {
-  let url;
-
-  try {
-    url = new URL(String(source || '').trim());
-  } catch {
-    return null;
-  }
-
-  if (url.protocol !== 'https:') {
-    return null;
-  }
-
-  const host = url.hostname.toLowerCase();
-  if (YOUTUBE_HOSTS.has(host)) {
-    const embedUrl = getCanonicalYouTubeEmbedUrl(url);
-    if (!embedUrl) {
-      return null;
-    }
-
-    return {
-      embedUrl,
-      type: 'youtube',
-    };
-  }
-
-  const mimeType = getDirectVideoMimeType(url.pathname);
-  if (!mimeType) {
-    return null;
-  }
-
-  return {
-    mimeType,
-    sourceUrl: url.toString(),
-    type: 'direct-video',
-  };
-}
 
 function createVideoEmbedPlaceholder({
   embedKey,

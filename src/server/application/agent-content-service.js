@@ -1,10 +1,27 @@
-import { getCollabMdSyntaxGuide, isAgentCreatablePath, isAgentEditablePath, isAgentReadablePath, listCollabMdContentCapabilities } from '../../domain/collabmd-content-capabilities.js';
+import {
+  getCollabMdContentCapability,
+  getCollabMdSyntaxGuide,
+  isAgentCreatablePath,
+  isAgentEditablePath,
+  isAgentReadablePath,
+  listCollabMdContentCapabilities,
+} from '../../domain/collabmd-content-capabilities.js';
+import { listRenderableDiagrams, resolveRenderableDiagram } from '../../domain/diagram-source.js';
 import { createEditableContentRevision } from '../../domain/editable-content-revision.js';
 import { normalizeEditableText } from '../../domain/editable-text.js';
 import { applyExactTextChanges, resolveExactTextChanges } from '../../domain/exact-text-edits.js';
 import { applyAgentExcalidrawEdits, createAgentExcalidrawScene } from '../../domain/excalidraw-agent-scene.js';
 import { inspectAgentExcalidrawScene, renderAgentExcalidrawSvg } from '../../domain/excalidraw-agent-verification.js';
 import { getVaultFileKind } from '../../domain/file-kind.js';
+import { createWikiTargetIndex } from '../../domain/wiki-link-resolver.js';
+import {
+  classifyPublicVideoEmbed,
+  isPublicVideoEmbedCandidate,
+} from '../../domain/video-embed.js';
+import {
+  collectMarkdownImageSources,
+  collectMarkdownReferences,
+} from '../domain/markdown-reference-extractor.js';
 import { compareWorkspacePaths, normalizeWorkspacePath } from '../domain/workspace-state.js';
 
 const MAX_DOCUMENT_CHARACTERS = 200_000;
@@ -13,6 +30,7 @@ const MAX_READ_CHARACTERS = 100_000;
 const MAX_READ_LINES = 500;
 const MAX_REPLACEMENTS = 20;
 const MAX_REPLACEMENT_CHARACTERS = 50_000;
+const EMBEDDABLE_KINDS = new Set(['base', 'drawio', 'excalidraw', 'image', 'mermaid', 'plantuml']);
 
 function createAgentContentError(code, message, statusCode = 400) {
   const error = new Error(message);
@@ -109,7 +127,16 @@ function searchLiveText(content, query, maxSnippets = 5) {
 }
 
 export class AgentContentService {
-  constructor({ roomRegistry, searchService, vaultFileStore, workspaceMutationCoordinator }) {
+  constructor({
+    backlinkIndex = null,
+    plantUmlRenderer = null,
+    roomRegistry,
+    searchService,
+    vaultFileStore,
+    workspaceMutationCoordinator,
+  }) {
+    this.backlinkIndex = backlinkIndex;
+    this.plantUmlRenderer = plantUmlRenderer;
     this.roomRegistry = roomRegistry;
     this.searchService = searchService;
     this.vaultFileStore = vaultFileStore;
@@ -248,6 +275,39 @@ export class AgentContentService {
       truncated,
     };
   }
+  listWorkspaceEntries(actor, { cursor = '', limit = 100, prefix = '' } = {}) {
+    requireScope(actor, 'vault:read');
+    const normalizedPrefix = normalizeWorkspacePath(prefix);
+    const state = this.workspaceMutationCoordinator?.workspaceState;
+    const entries = Array.from(state?.entries?.values?.() ?? [])
+      .filter((entry) => !normalizedPrefix || entry.path === normalizedPrefix || entry.path.startsWith(`${normalizedPrefix}/`))
+      .sort((left, right) => compareWorkspacePaths(left.path, right.path));
+    const start = cursor ? Math.max(0, entries.findIndex((entry) => entry.path === cursor) + 1) : 0;
+    const pageSize = clampInteger(limit, 100, 1, 200);
+    const page = entries.slice(start, start + pageSize).map((entry) => {
+      const isDirectory = entry.nodeType === 'directory';
+      const kind = isDirectory ? null : getVaultFileKind(entry.path);
+      const capability = kind ? getCollabMdContentCapability(kind) : null;
+      const metadata = state?.metadata?.get?.(entry.path);
+      return {
+        agentEditable: Boolean(capability?.agentEditable),
+        embeddable: EMBEDDABLE_KINDS.has(kind),
+        kind,
+        mtimeMs: Number(metadata?.mtimeMs ?? entry.mtimeMs ?? 0),
+        nodeType: isDirectory ? 'directory' : 'file',
+        path: entry.path,
+        readable: Boolean(capability?.readable),
+        size: Number(metadata?.size ?? 0),
+      };
+    });
+    const truncated = start + page.length < entries.length;
+    return {
+      entries: page,
+      nextCursor: truncated ? page.at(-1)?.path ?? null : null,
+      truncated,
+    };
+  }
+
 
   async searchVault(actor, { limit = 50, query = '', signal = null } = {}) {
     requireScope(actor, 'vault:read');
@@ -317,6 +377,138 @@ export class AgentContentService {
       truncated: characterTruncated || endLine < lines.length,
     };
   }
+  async inspectDocumentReferences(actor, { path } = {}) {
+    requireScope(actor, 'vault:read');
+    const normalizedPath = normalizeWorkspacePath(path);
+    if (getVaultFileKind(normalizedPath) !== 'markdown') {
+      throw createAgentContentError('AGENT_UNSUPPORTED_DOCUMENT', 'Reference inspection requires a Markdown document', 400);
+    }
+    const content = await this.readCurrentContent(normalizedPath);
+    if (content.length > MAX_AGENT_READ_SOURCE_CHARACTERS) {
+      throw createAgentContentError('AGENT_DOCUMENT_TOO_LARGE', 'Document is too large for agent inspection', 413);
+    }
+    const entries = Array.from(this.workspaceMutationCoordinator?.workspaceState?.entries?.values?.() ?? []);
+    const filePaths = entries
+      .filter((entry) => entry.nodeType !== 'directory')
+      .map((entry) => entry.path);
+    const references = collectMarkdownReferences(content, {
+      sourceFilePath: normalizedPath,
+      wikiTargetIndex: createWikiTargetIndex(filePaths),
+    });
+    const toPublicReference = (reference) => ({
+      exists: Boolean(reference.resolvedPath),
+      kind: getVaultFileKind(reference.resolvedPath || reference.targetPath),
+      line: reference.line,
+      rawTarget: reference.rawTarget,
+      resolvedPath: reference.resolvedPath || null,
+      targetPath: reference.targetPath,
+    });
+    const videos = collectMarkdownImageSources(content)
+      .filter(({ source }) => isPublicVideoEmbedCandidate(source))
+      .map(({ line, source }) => {
+        const video = classifyPublicVideoEmbed(source);
+        return {
+          kind: video?.type ?? null,
+          line,
+          mimeType: video?.mimeType ?? null,
+          source,
+          supported: Boolean(video),
+          url: video?.embedUrl ?? video?.sourceUrl ?? null,
+        };
+      });
+    return {
+      backlinks: await this.backlinkIndex?.getBacklinks?.(normalizedPath) ?? [],
+      embeds: references.filter(({ isEmbed }) => isEmbed).map(toPublicReference),
+      path: normalizedPath,
+      revision: await createEditableContentRevision(content),
+      videos,
+      wikiLinks: references.filter(({ isEmbed }) => !isEmbed).map(toPublicReference),
+    };
+  }
+
+  async validateDocument(actor, { path } = {}) {
+    const inspected = await this.inspectDocumentReferences(actor, { path });
+    const issues = [];
+    inspected.wikiLinks.filter(({ exists }) => !exists).forEach((reference) => {
+      issues.push({
+        code: 'REFERENCE_TARGET_NOT_FOUND',
+        line: reference.line,
+        message: `Wiki-link target not found: ${reference.rawTarget}`,
+        target: reference.rawTarget,
+      });
+    });
+    inspected.embeds.filter(({ exists }) => !exists).forEach((reference) => {
+      issues.push({
+        code: 'EMBED_TARGET_NOT_FOUND',
+        line: reference.line,
+        message: `Embed target not found: ${reference.rawTarget}`,
+        target: reference.rawTarget,
+      });
+    });
+    inspected.videos.filter(({ supported }) => !supported).forEach((video) => {
+      issues.push({
+        code: 'VIDEO_EMBED_UNSUPPORTED',
+        line: video.line,
+        message: `Unsupported public video embed: ${video.source}`,
+        target: video.source,
+      });
+    });
+    return {
+      issues,
+      path: inspected.path,
+      revision: inspected.revision,
+      valid: issues.length === 0,
+    };
+  }
+
+  async renderDiagram(actor, { format = 'png', path, startLine } = {}) {
+    requireScope(actor, 'vault:read');
+    const normalizedPath = normalizeWorkspacePath(path);
+    const kind = getVaultFileKind(normalizedPath);
+    if (kind !== 'markdown' && kind !== 'mermaid' && kind !== 'plantuml') {
+      throw createAgentContentError('AGENT_UNSUPPORTED_DOCUMENT', 'Diagram rendering requires Markdown, Mermaid, or PlantUML content', 400);
+    }
+    const content = await this.readCurrentContent(normalizedPath);
+    if (content.length > MAX_AGENT_READ_SOURCE_CHARACTERS) {
+      throw createAgentContentError('AGENT_DOCUMENT_TOO_LARGE', 'Document is too large for diagram rendering', 413);
+    }
+    const diagram = resolveRenderableDiagram(content, normalizedPath, { startLine });
+    if (!diagram) {
+      const count = listRenderableDiagrams(content, normalizedPath).length;
+      const message = count > 1 && !startLine
+        ? 'Document contains multiple diagrams; provide the opening fence startLine'
+        : 'Renderable diagram not found at the requested path and line';
+      throw createAgentContentError('AGENT_DIAGRAM_NOT_FOUND', message, 400);
+    }
+    if (diagram.kind === 'mermaid') {
+      throw createAgentContentError(
+        'AGENT_BROWSER_RENDER_REQUIRED',
+        'Mermaid rendering requires WebMCP in an active CollabMD browser tab',
+        400,
+      );
+    }
+    if (!this.plantUmlRenderer?.renderSvg) {
+      throw createAgentContentError('AGENT_RENDER_UNAVAILABLE', 'PlantUML rendering is unavailable', 503);
+    }
+    let svg;
+    try {
+      svg = await this.plantUmlRenderer.renderSvg(diagram.source);
+    } catch {
+      throw createAgentContentError('AGENT_DIAGRAM_RENDER_FAILED', 'PlantUML rendering failed', 502);
+    }
+    return {
+      endLine: diagram.endLine,
+      format,
+      kind: diagram.kind,
+      path: normalizedPath,
+      renderer: 'plantuml-server',
+      revision: await createEditableContentRevision(content),
+      startLine: diagram.startLine,
+      svg,
+      warnings: [],
+    };
+  }
+
 
   async applyTextEdits(actor, { path, replacements, revision } = {}) {
     requireScope(actor, 'vault:edit');
