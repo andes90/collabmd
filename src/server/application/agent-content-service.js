@@ -79,6 +79,7 @@ function requireInlineExcalidrawVerificationOptions(value) {
 function createInlineExcalidrawVerification(scene, options, { deferRender = false } = {}) {
   const verification = {
     inspection: inspectAgentExcalidrawScene(scene, {
+      includeElements: false,
       inspectOcclusion: options.inspectOcclusion ?? true,
     }),
   };
@@ -169,6 +170,15 @@ export class AgentContentService {
     return content;
   }
 
+  async readMatchingContent(path, matches) {
+    try {
+      const content = await this.readCurrentContent(path);
+      return matches(content) ? content : null;
+    } catch {
+      return null;
+    }
+  }
+
   async readExcalidrawScene(actor, path) {
     requireScope(actor, 'vault:read');
     const normalizedPath = normalizeWorkspacePath(path);
@@ -232,7 +242,10 @@ export class AgentContentService {
     scale = 1,
   } = {}) {
     const current = await this.readExcalidrawScene(actor, path);
-    const inspection = inspectAgentExcalidrawScene(current.scene, { inspectOcclusion });
+    const inspection = inspectAgentExcalidrawScene(current.scene, {
+      includeElements: false,
+      inspectOcclusion,
+    });
     const result = {
       elementCount: inspection.elementCount,
       format,
@@ -581,7 +594,7 @@ export class AgentContentService {
       }
       throw error;
     }
-    const content = JSON.stringify(scene);
+    let content = JSON.stringify(scene);
     if (content.length > MAX_DOCUMENT_CHARACTERS) {
       throw createAgentContentError('AGENT_DOCUMENT_TOO_LARGE', 'Document is too large for agent creation', 413);
     }
@@ -593,7 +606,27 @@ export class AgentContentService {
         requestId: actor.requestId,
         sourceRef: createAgentSourceRef(actor),
       });
-      if (!result.ok) throw createAgentContentError('AGENT_CREATE_FAILED', result.error, 409);
+      if (!result.ok) {
+        const rawById = new Map(elements.map((element) => [String(element.id), element]));
+        const existingContent = await this.readMatchingContent(normalizedPath, (candidate) => {
+          const existingScene = JSON.parse(candidate);
+          const existingById = new Map(existingScene.elements?.map((element) => [element.id, element]) ?? []);
+          const comparableScene = {
+            ...scene,
+            elements: scene.elements.map((element) => (
+              Object.hasOwn(rawById.get(element.id) ?? {}, 'updated')
+                ? element
+                : { ...element, updated: existingById.get(element.id)?.updated }
+            )),
+          };
+          return JSON.stringify(existingScene) === JSON.stringify(comparableScene);
+        });
+        if (existingContent === null) {
+          throw createAgentContentError('AGENT_CREATE_FAILED', result.error, 409);
+        }
+        scene = JSON.parse(existingContent);
+        content = existingContent;
+      }
       const response = {
         elementCount: scene.elements.length,
         path: normalizedPath,
@@ -713,7 +746,15 @@ export class AgentContentService {
         requestId: actor.requestId,
         sourceRef: createAgentSourceRef(actor),
       });
-      if (!result.ok) throw createAgentContentError('AGENT_CREATE_FAILED', result.error, 409);
+      if (!result.ok) {
+        const existingContent = await this.readMatchingContent(
+          normalizedPath,
+          (candidate) => candidate === normalizedContent,
+        );
+        if (existingContent === null) {
+          throw createAgentContentError('AGENT_CREATE_FAILED', result.error, 409);
+        }
+      }
       return {
         kind: getVaultFileKind(normalizedPath),
         path: normalizedPath,

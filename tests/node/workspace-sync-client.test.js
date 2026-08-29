@@ -217,3 +217,17 @@ test('WorkspaceSyncClient preserves file modification times in tree nodes', () =
 
   client.ydoc.destroy();
 });
+
+test('WorkspaceSyncClient disconnect is idempotent', (context) => {
+  const client = new WorkspaceSyncClient();
+  const consoleError = context.mock.method(console, 'error');
+  client.entries.observe(client.handleEntriesChange);
+  client.events.observe(client.handleEventsChange);
+  client.provider = { destroy() {}, disconnect() {} };
+
+  client.disconnect();
+  client.disconnect();
+  client.ydoc.destroy();
+
+  assert.equal(consoleError.mock.callCount(), 0);
+});

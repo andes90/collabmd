@@ -330,6 +330,7 @@ function collectWarnings(elements, { inspectOcclusion = true } = {}) {
 }
 
 export function inspectAgentExcalidrawScene(scene = {}, {
+  includeElements = true,
   inspectOcclusion = true,
 } = {}) {
   const activeElements = (Array.isArray(scene?.elements) ? scene.elements : [])
@@ -339,10 +340,14 @@ export function inspectAgentExcalidrawScene(scene = {}, {
   return {
     bounds: mergeBounds(boxes),
     elementCount: activeElements.length,
-    elements: activeElements
-      .slice(0, MAX_SUMMARY_ELEMENTS)
-      .map((element, paintOrder) => summarizeElement(element, paintOrder, activeElements)),
-    truncated: activeElements.length > MAX_SUMMARY_ELEMENTS || warnings.length >= MAX_WARNINGS,
+    elements: includeElements
+      ? activeElements
+        .slice(0, MAX_SUMMARY_ELEMENTS)
+        .map((element, paintOrder) => summarizeElement(element, paintOrder, activeElements))
+      : [],
+    truncated: (!includeElements && activeElements.length > 0)
+      || activeElements.length > MAX_SUMMARY_ELEMENTS
+      || warnings.length >= MAX_WARNINGS,
     warnings,
   };
 }

@@ -87,6 +87,21 @@ test('agent content service reads, edits, and creates closed documents', async (
   assert.equal(created.kind, 'markdown');
   assert.equal(files.get('docs/new.md'), '# New\n');
 });
+
+test('agent document creation safely recovers an identical retry', async () => {
+  const { events, service } = createService();
+  const input = { content: '# New\r\n', path: 'docs/new.md' };
+
+  const created = await service.createDocument(actor, input);
+  const retried = await service.createDocument(actor, input);
+
+  assert.deepEqual(retried, created);
+  assert.equal(events.filter(({ action }) => action === 'create').length, 1);
+  await assert.rejects(
+    service.createDocument(actor, { ...input, content: '# Different\n' }),
+    { code: 'AGENT_CREATE_FAILED' },
+  );
+});
 test('agent tools inspect and validate references, video embeds, and workspace entries', async () => {
   const { entries, service } = createService({
     backlinks: [{ contexts: ['Links here'], file: 'backlink.md' }],
@@ -172,6 +187,8 @@ test('agent content service creates and edits Excalidraw elements', async () => 
   });
   assert.equal(created.elementCount, 3);
   assert.equal(created.verification.inspection.elementCount, 3);
+  assert.deepEqual(created.verification.inspection.elements, []);
+  assert.equal(created.verification.inspection.truncated, true);
   assert.equal(created.verification.renderer, 'collabmd-basic-svg');
   assert.match(created.verification.svg, /^<svg /u);
 
@@ -191,6 +208,27 @@ test('agent content service creates and edits Excalidraw elements', async () => 
   assert.deepEqual(
     scene.elements.find(({ id }) => id === 'api').boundElements,
     [{ id: 'request', type: 'arrow' }],
+  );
+});
+
+test('agent Excalidraw creation safely recovers an identical retry', async () => {
+  const { events, service } = createService();
+  const input = {
+    elements: [{ height: 80, id: 'api', type: 'rectangle', width: 160, x: 20, y: 30 }],
+    path: 'diagrams/retry.excalidraw',
+  };
+
+  const created = await service.createExcalidraw(actor, input);
+  const retried = await service.createExcalidraw(actor, input);
+
+  assert.deepEqual(retried, created);
+  assert.equal(events.filter(({ action }) => action === 'create').length, 1);
+  await assert.rejects(
+    service.createExcalidraw(actor, {
+      ...input,
+      elements: [{ ...input.elements[0], x: 21 }],
+    }),
+    { code: 'AGENT_CREATE_FAILED' },
   );
 });
 

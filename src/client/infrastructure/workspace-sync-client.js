@@ -342,10 +342,12 @@ export class WorkspaceSyncClient {
   }
 
   disconnect() {
-    this.entries.unobserve(this.handleEntriesChange);
-    this.events.unobserve(this.handleEventsChange);
-    this.provider?.disconnect();
-    this.provider?.destroy();
+    if (this.provider) {
+      this.entries.unobserve(this.handleEntriesChange);
+      this.events.unobserve(this.handleEventsChange);
+      this.provider.disconnect();
+      this.provider.destroy();
+    }
     this.provider = null;
     this._didInitialSync = false;
     this.seenEventIds.clear();

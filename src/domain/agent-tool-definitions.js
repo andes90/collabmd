@@ -609,7 +609,7 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
     webMcp: true,
   },
   {
-    annotations: { destructiveHint: false, idempotentHint: false, readOnlyHint: false },
+    annotations: { destructiveHint: false, idempotentHint: true, readOnlyHint: false },
     description: 'Create a valid editable .excalidraw scene from basic Excalidraw elements, with optional same-revision verification.',
     inputSchema: objectSchema({
       elements: {
@@ -749,8 +749,8 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
     webMcp: true,
   },
   {
-    annotations: { destructiveHint: false, idempotentHint: false, readOnlyHint: false },
-    description: 'Create a new supported CollabMD text document. Fails when path already exists.',
+    annotations: { destructiveHint: false, idempotentHint: true, readOnlyHint: false },
+    description: 'Create a new supported CollabMD text document. An identical retry succeeds; different content at an existing path fails.',
     inputSchema: objectSchema({
       content: {
         description: 'Initial document text, normalized to LF line endings.',
