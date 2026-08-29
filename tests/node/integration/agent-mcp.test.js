@@ -236,6 +236,14 @@ test('browser-session WebMCP tools reuse agent content operations when remote MC
   const app = await startTestServer();
   t.after(app.close);
 
+  const shortSearch = await callWebMcpTool(app, 'search_vault', { query: 'x' });
+  assert.equal(shortSearch.response.status, 400);
+  assert.equal(shortSearch.body.code, 'AGENT_INPUT_INVALID');
+
+  const unknownInput = await callWebMcpTool(app, 'list_documents', { unexpected: true });
+  assert.equal(unknownInput.response.status, 400);
+  assert.equal(unknownInput.body.code, 'AGENT_INPUT_INVALID');
+
   const read = await callWebMcpTool(app, 'read_document', { path: 'test.md' });
   assert.equal(read.response.status, 200);
   assert.equal(read.body.path, 'test.md');

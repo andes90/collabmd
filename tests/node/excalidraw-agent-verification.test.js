@@ -77,6 +77,23 @@ test('Excalidraw inspection reports paint order, broken bindings, and text clipp
   );
 });
 
+test('Excalidraw inspection trusts auto-resized text bounds', () => {
+  const result = inspectAgentExcalidrawScene(scene([{
+    autoResize: true,
+    fontSize: 30,
+    height: 37.5,
+    id: 'title',
+    lineHeight: 1.25,
+    text: 'Temporal + Kotlin Spring Boot',
+    type: 'text',
+    width: 437.63995361328125,
+    x: 0,
+    y: 0,
+  }]));
+
+  assert.deepEqual(result.warnings, []);
+});
+
 test('Excalidraw inspection warns when bound endpoints are far from their targets', () => {
   const result = inspectAgentExcalidrawScene(scene([
     { height: 80, id: 'target', type: 'rectangle', width: 120, x: 300, y: 20 },

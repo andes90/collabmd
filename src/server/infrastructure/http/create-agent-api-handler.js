@@ -1,3 +1,5 @@
+import { fromJsonSchema } from '@modelcontextprotocol/server';
+
 import { getAgentToolDefinition } from '../../../domain/agent-tool-definitions.js';
 import { encodeAgentToolImage } from '../../shared/agent-tool-image.js';
 import { readRequestId } from './http-request-helpers.js';
@@ -5,6 +7,7 @@ import { jsonResponse } from './http-response.js';
 import { parseJsonBody } from './request-body.js';
 
 const WEBMCP_TOOL_PATH = '/api/agent/tools/';
+const WEBMCP_INPUT_SCHEMAS = new Map();
 
 function createAgentError(code, message, statusCode) {
   const error = new Error(message);
@@ -21,6 +24,18 @@ function sendAgentError(req, res, error) {
     error: statusCode >= 500 ? 'Agent request failed' : error.message,
     ...(Number.isFinite(error?.retryAfterMs) ? { retryAfterMs: error.retryAfterMs } : {}),
   });
+}
+
+async function validateWebMcpInput(definition, input) {
+  let schema = WEBMCP_INPUT_SCHEMAS.get(definition.name);
+  if (!schema) {
+    schema = fromJsonSchema(definition.inputSchema);
+    WEBMCP_INPUT_SCHEMAS.set(definition.name, schema);
+  }
+  const validation = await schema['~standard'].validate(input);
+  if (validation.issues?.length) {
+    throw createAgentError('AGENT_INPUT_INVALID', 'WebMCP tool input does not match its schema', 400);
+  }
 }
 
 async function createWebMcpActor({ agentConnectionService, authService, config, req }) {
@@ -92,9 +107,7 @@ export function createAgentApiHandler({
           throw createAgentError('AGENT_TOOL_NOT_FOUND', 'WebMCP tool not found', 404);
         }
         const input = await parseJsonBody(req);
-        if (!input || typeof input !== 'object' || Array.isArray(input)) {
-          throw createAgentError('AGENT_INPUT_INVALID', 'WebMCP tool input must be an object', 400);
-        }
+        await validateWebMcpInput(definition, input);
         const actor = await createWebMcpActor({
           agentConnectionService,
           authService,

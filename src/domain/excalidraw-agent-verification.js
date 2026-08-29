@@ -198,7 +198,7 @@ function warning(code, message, elementIds = []) {
 }
 
 function textOverflowWarning(element, bounds, id) {
-  if (element?.type !== 'text' || !bounds) return null;
+  if (element?.type !== 'text' || element.autoResize === true || !bounds) return null;
   const text = String(element.text ?? '');
   const fontSize = finiteNumber(element.fontSize, 20);
   const lines = text.split('\n');
