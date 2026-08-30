@@ -79,6 +79,35 @@ test('WebMCP exposes every shared browser tool while the workspace tab is active
   assert.equal(modelContext.tools.size, 0);
 });
 
+test('WebMCP returns structured agent failures', async () => {
+  const modelContext = createModelContext();
+  const registry = new WebMcpToolRegistry({
+    callTool: async () => {
+      const error = new Error('Failed to execute search_vault');
+      error.body = {
+        code: 'AGENT_RATE_LIMITED',
+        error: 'Agent tool rate limit exceeded',
+        retryAfterMs: 250,
+      };
+      throw error;
+    },
+    getIsTabActive: () => true,
+    modelContext,
+  });
+  await registry.refresh();
+
+  const result = await modelContext.tools.get('collabmd_search_vault').execute({
+    query: 'diagram',
+  });
+
+  assert.deepEqual(result, {
+    code: 'AGENT_RATE_LIMITED',
+    error: 'Agent tool rate limit exceeded',
+    isError: true,
+    retryAfterMs: 250,
+  });
+});
+
 test('WebMCP replaces server previews with official browser snapshot rendering', async () => {
   const modelContext = createModelContext();
   const mutations = [];

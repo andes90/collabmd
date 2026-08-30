@@ -228,7 +228,17 @@ export class WebMcpToolRegistry {
             });
             throwIfAborted(signal);
           }
-          const serverResult = await this.callTool(definition.name, input, { signal });
+          let serverResult;
+          try {
+            serverResult = await this.callTool(definition.name, input, { signal });
+          } catch (error) {
+            throwIfAborted(signal);
+            const body = error?.body;
+            if (typeof body?.code === 'string' && body.code.startsWith('AGENT_')) {
+              return { ...body, isError: true };
+            }
+            throw error;
+          }
           let result = await replaceSnapshotRendering(
             serverResult,
             this.renderExcalidrawScene,

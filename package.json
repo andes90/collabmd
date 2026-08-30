@@ -19,16 +19,10 @@
     "scripts/cloudflare-tunnel.mjs",
     "scripts/local-plantuml-compose.mjs",
     "scripts/local-structurizr-compose.mjs",
-    "src/",
-    "integrations/"
+    "src/"
   ],
   "bin": {
     "collabmd": "./bin/collabmd.js"
-  },
-  "pi": {
-    "extensions": [
-      "./integrations/pi/index.ts"
-    ]
   },
   "scripts": {
     "prepack": "npm run build",
