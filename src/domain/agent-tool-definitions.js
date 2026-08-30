@@ -599,7 +599,7 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
       path: { type: 'string' },
       revision: REVISION_SCHEMA,
       verification: EXCALIDRAW_INLINE_VERIFICATION_SCHEMA,
-    }),
+    }, ['elementCount', 'path', 'revision']),
     resultKind: 'optional-image',
     scope: 'vault:edit',
     webMcp: true,

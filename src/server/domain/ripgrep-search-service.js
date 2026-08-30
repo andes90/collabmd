@@ -467,6 +467,8 @@ export class RipgrepSearchService {
       parsed.files.push(...excalidraw.files);
       parsed.matchCount += excalidraw.matchCount;
       parsed.truncated ||= excalidraw.truncated;
+    } else if (kinds.length === 0 || kinds.includes('excalidraw')) {
+      parsed.truncated = true;
     }
     parsed.search = this.getClientConfig();
     logPerfEvent(this.perfLoggingEnabled, 'search-query', {

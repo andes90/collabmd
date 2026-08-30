@@ -200,6 +200,30 @@ test('RipgrepSearchService searches with safe rg args and handles no matches', a
   assert.equal(calls[1].args.includes('!.trash/**'), true);
 });
 
+test('RipgrepSearchService marks results truncated when Excalidraw search is skipped', async () => {
+  const service = new RipgrepSearchService({
+    execFileImpl: async (_command, args) => args[0] === '--version'
+      ? { stdout: 'ripgrep 14.1.0\n' }
+      : {
+          stdout: rgMatch({
+            end: 6,
+            file: './note.md',
+            start: 0,
+            text: 'needle\n',
+          }),
+        },
+    vaultDir: '/tmp/vault',
+  });
+  await service.initialize();
+
+  assert.equal((await service.search({ limit: 1, query: 'needle' })).truncated, true);
+  assert.equal((await service.search({
+    kinds: ['markdown'],
+    limit: 1,
+    query: 'needle',
+  })).truncated, false);
+});
+
 test('RipgrepSearchService passes search limits and cancellation to rg', async () => {
   const calls = [];
   const service = new RipgrepSearchService({

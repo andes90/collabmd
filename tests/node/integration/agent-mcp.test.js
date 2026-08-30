@@ -165,6 +165,16 @@ test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously'
   );
   assert.equal(narrowedSearch.structuredContent.files[0].snippets.length, 1);
 
+  const createdWithoutVerification = await client.callTool({
+    arguments: {
+      elements: [{ height: 50, id: 'box', type: 'rectangle', width: 100, x: 0, y: 0 }],
+      path: 'diagrams/no-verification.excalidraw',
+    },
+    name: 'create_excalidraw',
+  });
+  assert.equal(createdWithoutVerification.isError, undefined);
+  assert.equal(createdWithoutVerification.structuredContent.verification, undefined);
+
   const createdDiagram = await client.callTool({
     arguments: {
       elements: [
