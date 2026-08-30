@@ -248,7 +248,12 @@ test('VaultFileStore reads comment overview from comment sidecars for supported 
     messages: [{ body: 'Please label this.', createdAt: 4, id: 'message-excalidraw', userName: 'Reviewer' }],
   }]);
 
-  const overview = await store.readCommentOverview();
+  store.scanWorkspaceState = async () => {
+    throw new Error('Comment overview should reuse Workspace State');
+  };
+  const overview = await store.readCommentOverview({
+    filePaths: ['README.md', 'diagram.drawio', 'diagram.excalidraw'],
+  });
 
   assert.equal(overview.totalThreadCount, 2);
   assert.deepEqual(overview.files.map((file) => file.filePath), ['diagram.excalidraw', 'README.md']);

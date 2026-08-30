@@ -1,9 +1,12 @@
 import markdownIt from 'markdown-it';
-import hljs from 'highlight.js';
+import hljs from 'highlight.js/lib/common';
 
 import { isImageAttachmentFilePath } from '../../domain/file-kind.js';
 import { resolveVaultRelativePath } from '../../domain/vault-paths.js';
-import { resolveWikiTargetPath } from '../../domain/wiki-link-resolver.js';
+import {
+  createWikiTargetIndex,
+  resolveWikiTargetWithIndex,
+} from '../../domain/wiki-link-resolver.js';
 import { classifyPublicVideoEmbed } from '../../domain/video-embed.js';
 import { escapeHtml } from '../domain/vault-utils.js';
 import { extractYamlFrontmatter } from '../../domain/yaml-frontmatter.js';
@@ -11,6 +14,8 @@ import { renderFrontmatterBlock } from './markdown-frontmatter.js';
 import { analyzeMarkdownComplexity } from './preview-render-profile.js';
 
 hljs.registerAliases(['cql', 'mariadb', 'mssql', 'mysql', 'plsql', 'sqlite'], { languageName: 'sql' });
+
+const AUTO_HIGHLIGHT_LANGUAGES = ['bash', 'css', 'javascript', 'json', 'markdown', 'python', 'sql', 'typescript', 'xml', 'yaml'];
 hljs.registerAliases(['ecmascript', 'node'], { languageName: 'javascript' });
 
 
@@ -260,7 +265,7 @@ function renderInlineWikiText(content, {
   baseEmbedCounts,
   drawioEmbedCounts,
   excalidrawEmbedCounts,
-  fileList,
+  wikiTargetIndex,
   mermaidEmbedCounts,
   plantUmlEmbedCounts,
   sourceFilePath = '',
@@ -327,7 +332,7 @@ function renderInlineWikiText(content, {
     } else {
       const target = match[4].trim();
       const display = (match[5] || match[4]).trim();
-      const resolved = resolveWikiTargetPath(target, fileList);
+      const resolved = resolveWikiTargetWithIndex(target, wikiTargetIndex);
       const classes = resolved ? 'wiki-link' : 'wiki-link wiki-link-new';
       const title = resolved
         ? normalizePreviewTypography(display)
@@ -363,7 +368,7 @@ function createMarkdownRenderer(fileList = [], {
           return hljs.highlight(source, { language }).value;
         }
 
-        return hljs.highlightAuto(source).value;
+        return hljs.highlightAuto(source, AUTO_HIGHLIGHT_LANGUAGES).value;
       } catch {
         return '';
       }
@@ -402,6 +407,7 @@ function createMarkdownRenderer(fileList = [], {
   const plantUmlCounts = new Map();
   const plantUmlEmbedCounts = new Map();
   const videoEmbedCounts = new Map();
+  const wikiTargetIndex = createWikiTargetIndex(fileList);
 
   const fallbackFence = markdown.renderer.rules.fence;
   const fallbackImage = markdown.renderer.rules.image;
@@ -484,7 +490,7 @@ function createMarkdownRenderer(fileList = [], {
         baseEmbedCounts: baseCounts,
         drawioEmbedCounts,
         excalidrawEmbedCounts,
-        fileList,
+        wikiTargetIndex,
         mermaidEmbedCounts,
         plantUmlEmbedCounts,
         sourceFilePath,
@@ -497,7 +503,7 @@ function createMarkdownRenderer(fileList = [], {
         baseEmbedCounts: baseCounts,
         drawioEmbedCounts,
         excalidrawEmbedCounts,
-        fileList,
+        wikiTargetIndex,
         mermaidEmbedCounts,
         plantUmlEmbedCounts,
         sourceFilePath,
@@ -509,7 +515,7 @@ function createMarkdownRenderer(fileList = [], {
       baseEmbedCounts: baseCounts,
       drawioEmbedCounts,
       excalidrawEmbedCounts,
-      fileList,
+      wikiTargetIndex,
       mermaidEmbedCounts,
       plantUmlEmbedCounts,
       sourceFilePath,

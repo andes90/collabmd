@@ -781,23 +781,6 @@ export class CollabMdAppShell {
     return this._editorSessionModulePromise;
   }
 
-  scheduleEditorSessionPrewarm({ timeout = 1500 } = {}) {
-    if (this._editorSessionModulePromise || this._editorSessionPrewarmHandle) {
-      return;
-    }
-
-    const runPrewarm = () => {
-      this._editorSessionPrewarmHandle = null;
-      void this.loadEditorSessionClass();
-    };
-
-    if (typeof window.requestIdleCallback === 'function') {
-      this._editorSessionPrewarmHandle = window.requestIdleCallback(runPrewarm, { timeout });
-      return;
-    }
-
-    this._editorSessionPrewarmHandle = window.setTimeout(runPrewarm, 0);
-  }
 
   loadQuickSwitcherController() {
     return import('../presentation/quick-switcher-controller.js')

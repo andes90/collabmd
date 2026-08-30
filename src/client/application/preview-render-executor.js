@@ -1,8 +1,3 @@
-import {
-  cancelIdleRender,
-  IDLE_RENDER_TIMEOUT_MS,
-  requestIdleRender,
-} from './preview-diagram-utils.js';
 
 function createPreviewWorker() {
   return new Worker(new URL('./preview-render-worker.js', import.meta.url), { type: 'module' });
@@ -11,28 +6,21 @@ function createPreviewWorker() {
 export class PreviewRenderExecutor {
   constructor({
     attachmentApiPath = '/api/attachment',
-    cancelIdleRenderFn = cancelIdleRender,
     compilePreviewDocumentLoader = () => import('./preview-render-compiler.js'),
     createWorkerFn = createPreviewWorker,
     getFileList,
     getSourceFilePath = null,
     getWikiLinkAutoCreate = null,
-    idleTimeoutMs = IDLE_RENDER_TIMEOUT_MS,
-    requestIdleRenderFn = requestIdleRender,
   } = {}) {
     this.attachmentApiPath = attachmentApiPath;
-    this.cancelIdleRenderFn = cancelIdleRenderFn;
     this.compilePreviewDocumentLoader = compilePreviewDocumentLoader;
     this.createWorkerFn = createWorkerFn;
     this.getFileList = getFileList;
     this.getSourceFilePath = getSourceFilePath;
     this.getWikiLinkAutoCreate = getWikiLinkAutoCreate;
-    this.idleTimeoutMs = idleTimeoutMs;
-    this.requestIdleRenderFn = requestIdleRenderFn;
     this.worker = null;
     this.workerDisabled = false;
     this.workerJob = null;
-    this.workerPrewarmId = null;
 
     this.handleWorkerMessage = (event) => {
       if (!this.workerJob || event.data?.renderVersion !== this.workerJob.renderVersion) {
@@ -68,16 +56,6 @@ export class PreviewRenderExecutor {
     return this.workerJob !== null;
   }
 
-  schedulePrewarm({ timeout = this.idleTimeoutMs } = {}) {
-    if (this.workerDisabled || this.worker || this.workerPrewarmId !== null) {
-      return;
-    }
-
-    this.workerPrewarmId = this.requestIdleRenderFn(() => {
-      this.workerPrewarmId = null;
-      this.ensureWorker();
-    }, timeout);
-  }
 
   ensureWorker() {
     if (this.workerDisabled) {
@@ -163,10 +141,6 @@ export class PreviewRenderExecutor {
   }
 
   destroy(reason = 'Preview renderer destroyed') {
-    if (this.workerPrewarmId !== null) {
-      this.cancelIdleRenderFn(this.workerPrewarmId);
-    }
-    this.workerPrewarmId = null;
     this.reset(reason);
   }
 }

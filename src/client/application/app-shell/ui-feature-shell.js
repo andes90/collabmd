@@ -54,8 +54,6 @@ function initialize() {
   this.initializeVisualViewportBinding?.();
   this.themeController.initialize();
   this.previewRenderer.applyTheme(this.themeController.getTheme());
-  this.previewRenderer.scheduleWorkerPrewarm();
-  this.scheduleEditorSessionPrewarm?.();
   this.outlineController.initialize();
   this.layoutController.initialize();
   this.scrollSyncController.initialize();
@@ -868,7 +866,8 @@ function closeToolbarOverflowMenu() {
 function handleThemeChange(theme) {
   this.previewRenderer.applyTheme(theme);
   if (
-    !this.isExcalidrawFile(this.currentFilePath)
+    this.currentFilePath
+    && !this.isExcalidrawFile(this.currentFilePath)
     && !this.isImageFile?.(this.currentFilePath)
     && !this.isPdfFile?.(this.currentFilePath)
     && !this.isStructurizrWorkspaceFile?.(this.currentFilePath)

@@ -110,26 +110,3 @@ test('PreviewRenderExecutor forwards disabled wiki-link auto-create to the worke
   await resultPromise;
 });
 
-test('PreviewRenderExecutor schedules worker prewarm and tears it down on destroy', () => {
-  const idleRequests = [];
-  const idleCancels = [];
-  const worker = createFakeWorker();
-  const executor = new PreviewRenderExecutor({
-    cancelIdleRenderFn: (idleId) => idleCancels.push(idleId),
-    createWorkerFn: () => worker,
-    requestIdleRenderFn: (callback, timeout) => {
-      idleRequests.push({ callback, timeout });
-      return 5;
-    },
-  });
-
-  executor.schedulePrewarm({ timeout: 25 });
-  assert.deepEqual(idleRequests.map(({ timeout }) => timeout), [25]);
-
-  idleRequests[0].callback();
-  assert.equal(worker.terminated, undefined);
-
-  executor.destroy();
-  assert.deepEqual(idleCancels, []);
-  assert.equal(worker.terminated, true);
-});

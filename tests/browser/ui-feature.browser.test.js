@@ -88,6 +88,31 @@ describe('uiFeature browser helpers', () => {
     expect(context.elements.toggleVimModeButton.getAttribute('aria-pressed')).toBe('true');
   });
 
+  it('defers preview rendering until a file is open', () => {
+    const queueRender = vi.fn();
+    const context = {
+      currentFilePath: '',
+      drawioEmbed: { updateTheme: vi.fn() },
+      excalidrawEmbed: { updateTheme: vi.fn() },
+      isExcalidrawFile: () => false,
+      isImageFile: () => false,
+      isPdfFile: () => false,
+      isStructurizrWorkspaceFile: () => false,
+      pdfPreview: { setTheme: vi.fn() },
+      previewRenderer: {
+        applyTheme: vi.fn(),
+        queueRender,
+      },
+      session: null,
+    };
+
+    uiFeatureShellMethods.handleThemeChange.call(context, 'dark');
+    context.currentFilePath = 'README.md';
+    uiFeatureShellMethods.handleThemeChange.call(context, 'light');
+
+    expect(queueRender).toHaveBeenCalledTimes(1);
+  });
+
   it('switches sidebar tabs and updates visibility state', () => {
     const context = createSidebarContext();
 
@@ -172,12 +197,10 @@ describe('uiFeature browser helpers', () => {
       },
       previewRenderer: {
         applyTheme: vi.fn(),
-        scheduleWorkerPrewarm: vi.fn(),
       },
       renderChat: vi.fn(),
       restoreSidebarState: vi.fn(),
       runtimeConfig: { gitEnabled: true },
-      scheduleEditorSessionPrewarm: vi.fn(),
       scrollSyncController: {
         initialize: vi.fn(),
       },

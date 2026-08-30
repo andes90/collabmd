@@ -764,9 +764,8 @@ export class VaultFileStore {
     return this.sidecarStore.readCommentThreads(filePath);
   }
 
-  async readCommentOverview() {
-    const snapshot = await this.scanWorkspaceState();
-    const commentSupportedFilePaths = snapshot.filePaths.filter((filePath) => (
+  async readCommentOverview({ filePaths }) {
+    const commentSupportedFilePaths = filePaths.filter((filePath) => (
       supportsCommentsForFilePath(filePath)
     ));
     const entries = await this.sidecarStore.listCommentThreadEntries({

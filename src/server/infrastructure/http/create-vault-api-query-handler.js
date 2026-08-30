@@ -274,14 +274,20 @@ async function handleFileTree(req, res, _requestUrl, { vaultFileStore, workspace
   }
 }
 
-async function handleCommentOverview(req, res, _requestUrl, { vaultFileStore }) {
+async function handleCommentOverview(req, res, _requestUrl, {
+  vaultFileStore,
+  workspaceMutationCoordinator,
+}) {
   try {
     if (typeof vaultFileStore.readCommentOverview !== 'function') {
       jsonResponse(req, res, 503, { error: 'Comment overview is unavailable' });
       return;
     }
 
-    const overview = await vaultFileStore.readCommentOverview();
+    const workspaceState = await workspaceMutationCoordinator.getWorkspaceStateSnapshot();
+    const overview = await vaultFileStore.readCommentOverview({
+      filePaths: workspaceState.filePaths,
+    });
     jsonResponse(req, res, 200, { overview });
   } catch (error) {
     console.error('[api] Failed to read comment overview:', error.message);

@@ -435,6 +435,27 @@ test('GitService stages and unstages all local changes', async (t) => {
   assert.equal(status.summary.untracked, 1);
 });
 
+test('ensureCollabMetadataGitExclude supports linked worktrees', async (t) => {
+  const repoDir = await mkdtemp(join(tmpdir(), 'collabmd-git-exclude-repo-'));
+  const worktreeDir = await mkdtemp(join(tmpdir(), 'collabmd-git-exclude-worktree-'));
+  await rm(worktreeDir, { recursive: true });
+  t.after(async () => {
+    await rm(repoDir, { force: true, recursive: true });
+    await rm(worktreeDir, { force: true, recursive: true });
+  });
+
+  await runGit(repoDir, ['init']);
+  await writeFile(join(repoDir, 'README.md'), '# Repo\n', 'utf8');
+  await runGit(repoDir, ['add', 'README.md']);
+  await runGit(repoDir, ['commit', '-m', 'Initial commit']);
+  await runGit(repoDir, ['worktree', 'add', '-b', 'linked-worktree', worktreeDir]);
+
+  await ensureCollabMetadataGitExclude(worktreeDir);
+
+  const excludePath = await runGitOutput(worktreeDir, ['rev-parse', '--git-path', 'info/exclude']);
+  assert.match(await readFile(excludePath, 'utf8'), /^\.collabmd\/$/mu);
+});
+
 test('GitService can commit staged changes when identity is provided through command env', async (t) => {
   const repoDir = await mkdtemp(join(tmpdir(), 'collabmd-git-service-identity-'));
   t.after(async () => {

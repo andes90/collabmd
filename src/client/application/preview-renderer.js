@@ -1,7 +1,6 @@
 import { MermaidPreviewHydrator } from './mermaid-preview-hydrator.js';
 import { PlantUmlPreviewHydrator } from './plantuml-preview-hydrator.js';
 import { DiagramChrome } from './diagram-chrome.js';
-import { IDLE_RENDER_TIMEOUT_MS } from './preview-diagram-utils.js';
 import { PreviewRenderExecutor } from './preview-render-executor.js';
 import { isLargeDocumentStats } from './preview-render-profile.js';
 import { PreviewRenderScheduler } from './preview-render-scheduler.js';
@@ -111,7 +110,6 @@ export class PreviewRenderer {
       getFileList: () => this.getFileList?.() ?? [],
       getSourceFilePath: () => this.getSourceFilePath?.() ?? '',
       getWikiLinkAutoCreate: () => this.getWikiLinkAutoCreate?.() ?? true,
-      idleTimeoutMs: IDLE_RENDER_TIMEOUT_MS,
     });
 
     this.previewElement?.addEventListener('click', this.handlePreviewClick);
@@ -291,9 +289,6 @@ export class PreviewRenderer {
     this.updateHydrationPhase();
   }
 
-  scheduleWorkerPrewarm({ timeout = IDLE_RENDER_TIMEOUT_MS } = {}) {
-    this.renderExecutor.schedulePrewarm({ timeout });
-  }
 
   commitBaseRender({ html, stats }, renderVersion) {
     this.activeRenderVersion = renderVersion;

@@ -2,9 +2,11 @@ import { dirname, join, resolve } from 'path';
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'fs/promises';
 
 import { resolveVaultFilePath, toVaultRelativePath } from './path-utils.js';
+import { mapWithConcurrency } from '../../shared/async-utils.js';
 
 const COMMENT_STORAGE_ROOT = '.collabmd/comments';
 const YJS_SNAPSHOT_STORAGE_ROOT = '.collabmd/yjs';
+const COMMENT_READ_CONCURRENCY = 8;
 
 function resolveSidecarPath(vaultDir, filePath, storageRoot, extension) {
   const { absolute: absoluteVaultPath } = resolveVaultFilePath(vaultDir, filePath);
@@ -75,7 +77,7 @@ export class SidecarStore {
   async listCommentThreadEntries({ filePaths = null } = {}) {
     const allowedPaths = filePaths ? new Set(filePaths) : null;
     const rootPath = this.getCommentStorageRootPath();
-    const entries = [];
+    const commentFilePaths = [];
 
     const visitDirectory = async (absoluteDirectoryPath, relativeDirectoryPath = '') => {
       let dirEntries;
@@ -108,14 +110,19 @@ export class SidecarStore {
           continue;
         }
 
-        const threads = await this.readCommentThreads(filePath);
-        if (threads.length > 0) {
-          entries.push({ filePath, threads });
-        }
+        commentFilePaths.push(filePath);
       }
     };
 
     await visitDirectory(rootPath);
+    const entries = (await mapWithConcurrency(
+      commentFilePaths,
+      COMMENT_READ_CONCURRENCY,
+      async (filePath) => {
+        const threads = await this.readCommentThreads(filePath);
+        return threads.length > 0 ? { filePath, threads } : null;
+      },
+    )).filter(Boolean);
     return entries.sort((left, right) => left.filePath.localeCompare(right.filePath, undefined, { sensitivity: 'base' }));
   }
 
