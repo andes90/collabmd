@@ -70,6 +70,34 @@ test('parseRipgrepJson groups matches by file and preserves line snippets', () =
   });
   assert.equal(result.files[1].kind, 'mermaid');
 });
+test('parseRipgrepJson applies path, kind, and snippet filters before file limits', () => {
+  const payload = [
+    ['./docs/guide.md', 1, 'needle\n'],
+    ['./docs/guide.md', 2, 'needle again\n'],
+    ['./docs/diagram.mmd', 1, 'needle\n'],
+    ['./other/note.md', 1, 'needle\n'],
+  ].map(([file, line, text]) => rgMatch({
+    end: 6,
+    file,
+    line,
+    start: 0,
+    text,
+  })).join('\n');
+
+  const result = parseRipgrepJson(payload, {
+    kinds: ['markdown'],
+    maxFiles: 1,
+    maxSnippetsPerFile: 1,
+    prefix: 'docs',
+    query: 'needle',
+  });
+
+  assert.deepEqual(result.files.map(({ file }) => file), ['docs/guide.md']);
+  assert.equal(result.files[0].matchCount, 2);
+  assert.equal(result.files[0].snippets.length, 1);
+  assert.equal(result.truncated, true);
+});
+
 
 test('parseRipgrepJson converts ripgrep byte offsets to UTF-16 columns', () => {
   const text = 'Prefix 😄 needle here\n';
@@ -189,10 +217,16 @@ test('RipgrepSearchService passes search limits and cancellation to rg', async (
   const controller = new AbortController();
 
   await service.initialize();
-  await service.search({ query: 'needle', signal: controller.signal });
+  await service.search({
+    maxSnippetsPerFile: 2,
+    query: 'needle',
+    signal: controller.signal,
+  });
 
   assert.equal(calls[1].options.maxBuffer, 8 * 1024 * 1024);
   assert.equal(calls[1].options.signal, controller.signal);
   const maxFileSizeIndex = calls[1].args.indexOf('--max-filesize');
   assert.equal(calls[1].args[maxFileSizeIndex + 1], '5M');
+  const maxCountIndex = calls[1].args.indexOf('--max-count');
+  assert.equal(calls[1].args[maxCountIndex + 1], '3');
 });

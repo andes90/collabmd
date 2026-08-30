@@ -216,7 +216,6 @@ export class CollabMdAppShell {
             'edit_excalidraw',
             'inspect_excalidraw',
             'read_document',
-            'render_excalidraw',
             'verify_excalidraw',
           ].includes(name)
           || input.path !== this.currentFilePath

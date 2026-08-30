@@ -177,7 +177,7 @@ COLLABMD_AGENT_ACCESS_ENABLED=true collabmd --no-tunnel
 
 CollabMD exposes `/mcp`, or `<BASE_PATH>/mcp` when a base path is configured, with these tools:
 
-- `list_documents`, `list_workspace_entries`, `search_vault`, and `read_document`
+- `list_workspace_entries` with optional path-prefix and content-kind filters, `search_vault` with optional path-prefix, content-kind, and per-file snippet filters, and `read_document`
 - `inspect_document_references` for resolved and missing wiki-links, embeds, public video embeds, and backlinks
 - `validate_document` for missing Markdown references and unsupported public video embeds
 - `render_diagram` for standalone or fenced PlantUML through remote MCP and Mermaid or PlantUML through WebMCP
@@ -185,7 +185,6 @@ CollabMD exposes `/mcp`, or `<BASE_PATH>/mcp` when a base path is configured, wi
 - `create_document`
 - `create_excalidraw` and `edit_excalidraw` for canonical element creation, updates, relationship-aware translation, standalone text auto-resizing, same-ID replacement, explicit paint-order changes, deletion, and optional same-revision verification
 - `inspect_excalidraw` for paint order, bounds, bindings, text layout properties, distant bound endpoints, connector/component intersections, unintended overlaps, occlusion, clipping, and validity warnings
-- `render_excalidraw` for PNG or SVG verification previews with renderer and parity metadata
 - `verify_excalidraw` to inspect and render one exact revision with compact inspection; use `inspect_excalidraw` for per-element summaries
 - `get_collabmd_syntax`
 

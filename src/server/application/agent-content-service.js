@@ -214,25 +214,6 @@ export class AgentContentService {
     };
   }
 
-  async renderExcalidraw(actor, {
-    format = 'png',
-    padding = 32,
-    path,
-    scale = 1,
-  } = {}) {
-    const current = await this.readExcalidrawScene(actor, path);
-    const result = {
-      elementCount: current.scene.elements.filter((element) => !element.isDeleted).length,
-      format,
-      path: current.path,
-      revision: current.revision,
-      scene: current.scene,
-    };
-    if (actor.origin !== 'webmcp') {
-      Object.assign(result, renderAgentExcalidrawSvg(current.scene, { padding, scale }));
-    }
-    return result;
-  }
 
   async verifyExcalidraw(actor, {
     format = 'png',
@@ -260,42 +241,28 @@ export class AgentContentService {
     return result;
   }
 
-  listDocuments(actor, { cursor = '', kinds = [], limit = 100, prefix = '' } = {}) {
+  listWorkspaceEntries(actor, {
+    cursor = '',
+    kinds = [],
+    limit = 100,
+    prefix = '',
+  } = {}) {
     requireScope(actor, 'vault:read');
     const normalizedPrefix = normalizeWorkspacePath(prefix);
     const kindFilter = new Set(Array.isArray(kinds) ? kinds : []);
     const state = this.workspaceMutationCoordinator?.workspaceState;
-    const documents = Array.from(state?.entries?.values?.() ?? [])
-      .filter((entry) => entry.nodeType !== 'directory' && isAgentReadablePath(entry.path))
+    const entries = Array.from(state?.entries?.values?.() ?? [])
       .filter((entry) => !normalizedPrefix || entry.path === normalizedPrefix || entry.path.startsWith(`${normalizedPrefix}/`))
       .filter((entry) => kindFilter.size === 0 || kindFilter.has(getVaultFileKind(entry.path)))
       .sort((left, right) => compareWorkspacePaths(left.path, right.path));
-    const start = cursor ? Math.max(0, documents.findIndex((entry) => entry.path === cursor) + 1) : 0;
-    const pageSize = clampInteger(limit, 100, 1, 200);
-    const page = documents.slice(start, start + pageSize).map((entry) => {
-      const metadata = state?.metadata?.get?.(entry.path);
-      return {
-        kind: getVaultFileKind(entry.path),
-        mtimeMs: Number(metadata?.mtimeMs ?? entry.mtimeMs ?? 0),
-        path: entry.path,
-        size: Number(metadata?.size ?? 0),
-      };
-    });
-    const truncated = start + page.length < documents.length;
-    return {
-      documents: page,
-      nextCursor: truncated ? page.at(-1)?.path ?? null : null,
-      truncated,
-    };
-  }
-  listWorkspaceEntries(actor, { cursor = '', limit = 100, prefix = '' } = {}) {
-    requireScope(actor, 'vault:read');
-    const normalizedPrefix = normalizeWorkspacePath(prefix);
-    const state = this.workspaceMutationCoordinator?.workspaceState;
-    const entries = Array.from(state?.entries?.values?.() ?? [])
-      .filter((entry) => !normalizedPrefix || entry.path === normalizedPrefix || entry.path.startsWith(`${normalizedPrefix}/`))
-      .sort((left, right) => compareWorkspacePaths(left.path, right.path));
-    const start = cursor ? Math.max(0, entries.findIndex((entry) => entry.path === cursor) + 1) : 0;
+    let start = 0;
+    if (cursor) {
+      const cursorIndex = entries.findIndex((entry) => entry.path === cursor);
+      if (cursorIndex < 0) {
+        throw createAgentContentError('AGENT_CURSOR_INVALID', 'Pagination cursor is no longer valid', 400);
+      }
+      start = cursorIndex + 1;
+    }
     const pageSize = clampInteger(limit, 100, 1, 200);
     const page = entries.slice(start, start + pageSize).map((entry) => {
       const isDirectory = entry.nodeType === 'directory';
@@ -322,21 +289,44 @@ export class AgentContentService {
   }
 
 
-  async searchVault(actor, { limit = 50, query = '', signal = null } = {}) {
+  async searchVault(actor, {
+    kinds = [],
+    limit = 50,
+    maxSnippetsPerFile = 5,
+    prefix = '',
+    query = '',
+    signal = null,
+  } = {}) {
     requireScope(actor, 'vault:read');
     const normalizedQuery = String(query ?? '').trim().slice(0, 500);
-    const result = await this.searchService.search({ limit, query: normalizedQuery, signal });
+    const normalizedPrefix = normalizeWorkspacePath(prefix);
+    const kindFilter = new Set(Array.isArray(kinds) ? kinds : []);
+    const snippetLimit = clampInteger(maxSnippetsPerFile, 5, 1, 10);
+    const result = await this.searchService.search({
+      kinds: [...kindFilter],
+      limit,
+      maxSnippetsPerFile: snippetLimit,
+      prefix: normalizedPrefix,
+      query: normalizedQuery,
+      signal,
+    });
     if (normalizedQuery.length < 2) return result;
 
     const liveFiles = [];
     for (const [path, room] of this.roomRegistry?.getRooms?.() ?? []) {
-      if (!isAgentReadablePath(path) || !room.isHydrated?.()) continue;
+      const kind = getVaultFileKind(path);
+      if (
+        !isAgentReadablePath(path)
+        || !room.isHydrated?.()
+        || (normalizedPrefix && path !== normalizedPrefix && !path.startsWith(`${normalizedPrefix}/`))
+        || (kindFilter.size > 0 && !kindFilter.has(kind))
+      ) continue;
       const content = room.readEditableContent?.();
       if (content === null || content === undefined) continue;
       if (content.length > MAX_AGENT_READ_SOURCE_CHARACTERS) continue;
-      const live = searchLiveText(content, normalizedQuery);
+      const live = searchLiveText(content, normalizedQuery, snippetLimit);
       if (live.matchCount > 0) {
-        liveFiles.push({ file: path, kind: getVaultFileKind(path), ...live });
+        liveFiles.push({ file: path, kind, ...live });
       }
     }
     if (liveFiles.length === 0) return result;

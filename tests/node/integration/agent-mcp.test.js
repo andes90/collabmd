@@ -59,11 +59,9 @@ test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously'
       'get_collabmd_syntax',
       'inspect_document_references',
       'inspect_excalidraw',
-      'list_documents',
       'list_workspace_entries',
       'read_document',
       'render_diagram',
-      'render_excalidraw',
       'search_vault',
       'validate_document',
       'verify_excalidraw',
@@ -93,6 +91,17 @@ test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously'
     name: 'list_workspace_entries',
   });
   assert.equal(workspace.structuredContent.entries.some(({ path }) => path === 'test.md'), true);
+  const markdownWorkspace = await client.callTool({
+    arguments: { kinds: ['markdown'] },
+    name: 'list_workspace_entries',
+  });
+  assert.equal(markdownWorkspace.structuredContent.entries.every(({ kind }) => kind === 'markdown'), true);
+  const invalidCursor = await client.callTool({
+    arguments: { cursor: 'deleted.md' },
+    name: 'list_workspace_entries',
+  });
+  assert.equal(invalidCursor.isError, true);
+  assert.equal(invalidCursor.structuredContent.code, 'AGENT_CURSOR_INVALID');
   const references = await client.callTool({
     arguments: { path: 'test.md' },
     name: 'inspect_document_references',
@@ -141,6 +150,20 @@ test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously'
     await readFile(join(app.vaultDir, 'diagrams/new.mmd'), 'utf8'),
     'flowchart LR\n  A --> B\n',
   );
+  const narrowedSearch = await client.callTool({
+    arguments: {
+      kinds: ['mermaid'],
+      maxSnippetsPerFile: 1,
+      prefix: 'diagrams',
+      query: 'flowchart',
+    },
+    name: 'search_vault',
+  });
+  assert.deepEqual(
+    narrowedSearch.structuredContent.files.map(({ file }) => file),
+    ['diagrams/new.mmd'],
+  );
+  assert.equal(narrowedSearch.structuredContent.files[0].snippets.length, 1);
 
   const createdDiagram = await client.callTool({
     arguments: {
@@ -203,33 +226,70 @@ test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously'
   );
   assert.deepEqual(inspectedDiagram.structuredContent.warnings, []);
 
-  const renderedDiagram = await client.callTool({
-    arguments: { path: 'diagrams/service.excalidraw' },
-    name: 'render_excalidraw',
-  });
-  const pngContent = renderedDiagram.content.find(({ type }) => type === 'image');
-  assert.equal(pngContent.mimeType, 'image/png');
-  assert.equal(Buffer.from(pngContent.data, 'base64').subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
-  assert.equal(renderedDiagram.structuredContent.renderer, 'collabmd-basic-svg');
-  assert.deepEqual(renderedDiagram.structuredContent.warnings, ['preview-not-pixel-identical']);
-
-  const renderedSvg = await client.callTool({
-    arguments: { format: 'svg', path: 'diagrams/service.excalidraw' },
-    name: 'render_excalidraw',
-  });
-  const svgContent = renderedSvg.content.find(({ type }) => type === 'image');
-  assert.equal(svgContent.mimeType, 'image/svg+xml');
-  assert.match(Buffer.from(svgContent.data, 'base64').toString('utf8'), /^<svg /u);
 
   const verifiedDiagram = await client.callTool({
     arguments: { format: 'png', inspectOcclusion: true, path: 'diagrams/service.excalidraw' },
     name: 'verify_excalidraw',
   });
+  const verifiedImage = verifiedDiagram.content.find(({ type }) => type === 'image');
+  assert.equal(verifiedImage.mimeType, 'image/png');
+  assert.equal(Buffer.from(verifiedImage.data, 'base64').subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
   assert.equal(
     verifiedDiagram.structuredContent.inspection.elementCount,
     verifiedDiagram.structuredContent.elementCount,
   );
   assert.equal(verifiedDiagram.structuredContent.revision, verifiedEdit.structuredContent.revision);
+});
+
+test('MCP reconciles edits through an active collaboration room', async (t) => {
+  const app = await startTestServer({
+    agentAccess: { enabled: true },
+  });
+  const room = app.server.roomRegistry.getOrCreate('test.md');
+  await room.hydrate();
+  const client = await connectMcp(t, app);
+  const initial = await client.callTool({
+    arguments: { path: 'test.md' },
+    name: 'read_document',
+  });
+
+  const oldText = 'Hello from test vault.';
+  const collaboratorText = 'Hello from collaborator.';
+  const from = room.readEditableContent().indexOf(oldText);
+  room.applyExactTextChanges([{
+    from,
+    insert: collaboratorText,
+    to: from + oldText.length,
+  }], { origin: 'test-collaborator' });
+
+  const stale = await client.callTool({
+    arguments: {
+      path: 'test.md',
+      replacements: [{ oldText: collaboratorText, newText: 'Stale overwrite.' }],
+      revision: initial.structuredContent.revision,
+    },
+    name: 'apply_text_edits',
+  });
+  assert.equal(stale.isError, true);
+  assert.equal(stale.structuredContent.code, 'AGENT_REVISION_CONFLICT');
+
+  const current = await client.callTool({
+    arguments: { path: 'test.md' },
+    name: 'read_document',
+  });
+  assert.match(current.structuredContent.content, /Hello from collaborator\./u);
+  const edited = await client.callTool({
+    arguments: {
+      path: 'test.md',
+      replacements: [{ oldText: collaboratorText, newText: 'Hello from agent room.' }],
+      revision: current.structuredContent.revision,
+    },
+    name: 'apply_text_edits',
+  });
+  assert.equal(edited.isError, undefined);
+  assert.match(room.readEditableContent(), /Hello from agent room\./u);
+  await room.persist();
+  assert.equal(await readFile(join(app.vaultDir, 'test.md'), 'utf8'), '# Test\n\nHello from agent room.\n');
 });
 
 test('browser-session WebMCP tools reuse agent content operations when remote MCP is disabled', async (t) => {
@@ -240,7 +300,7 @@ test('browser-session WebMCP tools reuse agent content operations when remote MC
   assert.equal(shortSearch.response.status, 400);
   assert.equal(shortSearch.body.code, 'AGENT_INPUT_INVALID');
 
-  const unknownInput = await callWebMcpTool(app, 'list_documents', { unexpected: true });
+  const unknownInput = await callWebMcpTool(app, 'list_workspace_entries', { unexpected: true });
   assert.equal(unknownInput.response.status, 400);
   assert.equal(unknownInput.body.code, 'AGENT_INPUT_INVALID');
 
@@ -274,7 +334,7 @@ test('browser-session WebMCP tools reuse agent content operations when remote MC
   assert.equal(created.body.verification.elementCount, 1);
   assert.equal(created.body.verification.scene.type, 'excalidraw');
 
-  const rendered = await callWebMcpTool(app, 'render_excalidraw', {
+  const rendered = await callWebMcpTool(app, 'verify_excalidraw', {
     path: 'diagrams/webmcp.excalidraw',
   });
   assert.equal(rendered.response.status, 200);
@@ -350,10 +410,10 @@ test('MCP rate limits tool calls per anonymous client', async (t) => {
   const client = await connectMcp(t, app);
 
   for (let index = 0; index < 2; index += 1) {
-    const result = await client.callTool({ arguments: {}, name: 'list_documents' });
+    const result = await client.callTool({ arguments: {}, name: 'list_workspace_entries' });
     assert.equal(result.isError, undefined);
   }
-  const limited = await client.callTool({ arguments: {}, name: 'list_documents' });
+  const limited = await client.callTool({ arguments: {}, name: 'list_workspace_entries' });
   assert.equal(limited.isError, true);
   assert.equal(limited.structuredContent.code, 'AGENT_RATE_LIMITED');
   assert.ok(limited.structuredContent.retryAfterMs > 0);
@@ -398,7 +458,6 @@ test('managed read-only MCP token limits tools and revocation takes effect immed
   assert.equal(tools.tools.some(({ name }) => name === 'apply_text_edits'), false);
   assert.equal(tools.tools.some(({ name }) => name === 'create_document'), false);
   assert.equal(tools.tools.some(({ name }) => name === 'inspect_excalidraw'), true);
-  assert.equal(tools.tools.some(({ name }) => name === 'render_excalidraw'), true);
 
   await app.server.agentConnectionService.revokeConnection({
     connectionId: created.connection.id,
@@ -414,7 +473,7 @@ test('MCP works under configured base path', async (t) => {
   });
   const client = await connectMcp(t, app, { url: `${app.appBaseUrl}/mcp` });
   const tools = await client.listTools();
-  assert.equal(tools.tools.length, 15);
+  assert.equal(tools.tools.length, 13);
 });
 
 test('password session manages workspace-level Agent Connections', async (t) => {

@@ -8,12 +8,6 @@ const REVISION_SCHEMA = {
   type: 'string',
 };
 
-const DOCUMENT_SCHEMA = objectSchema({
-  kind: { type: 'string' },
-  mtimeMs: { minimum: 0, type: 'number' },
-  path: { type: 'string' },
-  size: { minimum: 0, type: 'number' },
-});
 const WORKSPACE_ENTRY_SCHEMA = objectSchema({
   agentEditable: { type: 'boolean' },
   embeddable: { type: 'boolean' },
@@ -262,11 +256,6 @@ const EXCALIDRAW_RENDER_RESULT_PROPERTIES = {
   warnings: { items: { type: 'string' }, type: 'array' },
   width: { minimum: 1, type: 'integer' },
 };
-const EXCALIDRAW_RENDER_OUTPUT_PROPERTIES = {
-  ...EXCALIDRAW_RENDER_RESULT_PROPERTIES,
-  path: { type: 'string' },
-  revision: REVISION_SCHEMA,
-};
 const EXCALIDRAW_RENDER_INPUT_PROPERTIES = {
   format: {
     description: 'Image format. PNG is most widely supported by MCP clients.',
@@ -313,7 +302,7 @@ const EXCALIDRAW_INLINE_VERIFICATION_SCHEMA = objectSchema({
 export const AGENT_TOOL_DEFINITIONS = Object.freeze([
   {
     annotations: { idempotentHint: true, readOnlyHint: true },
-    description: 'List readable CollabMD Vault documents by path and kind.',
+    description: 'List current Vault files and directories, including binary metadata and agent capability flags.',
     inputSchema: objectSchema({
       cursor: {
         description: 'Path from the previous nextCursor; omit for the first page.',
@@ -324,36 +313,6 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
         items: { type: 'string' },
         type: 'array',
         uniqueItems: true,
-      },
-      limit: {
-        description: 'Maximum documents to return.',
-        maximum: 200,
-        minimum: 1,
-        type: 'integer',
-      },
-      prefix: {
-        description: 'Optional Vault directory or path prefix.',
-        type: 'string',
-      },
-    }, []),
-    method: 'listDocuments',
-    name: 'list_documents',
-    outputSchema: objectSchema({
-      documents: { items: DOCUMENT_SCHEMA, type: 'array' },
-      nextCursor: { type: ['string', 'null'] },
-      truncated: { type: 'boolean' },
-    }),
-    scope: 'vault:read',
-    untrustedContentHint: true,
-    webMcp: true,
-  },
-  {
-    annotations: { idempotentHint: true, readOnlyHint: true },
-    description: 'List current Vault files and directories, including binary metadata and agent capability flags.',
-    inputSchema: objectSchema({
-      cursor: {
-        description: 'Path from the previous nextCursor; omit for the first page.',
-        type: 'string',
       },
       limit: {
         description: 'Maximum entries to return.',
@@ -387,6 +346,22 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
         maximum: 50,
         minimum: 1,
         type: 'integer',
+      },
+      maxSnippetsPerFile: {
+        description: 'Maximum matching snippets returned per document.',
+        maximum: 10,
+        minimum: 1,
+        type: 'integer',
+      },
+      kinds: {
+        description: 'Optional CollabMD content kinds to include.',
+        items: { type: 'string' },
+        type: 'array',
+        uniqueItems: true,
+      },
+      prefix: {
+        description: 'Optional Vault directory or path prefix.',
+        type: 'string',
       },
       query: {
         description: 'Literal case-insensitive text to find; regular expressions are not supported.',
@@ -557,18 +532,6 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
   },
   {
     annotations: { idempotentHint: true, readOnlyHint: true },
-    description: 'Render supported basic elements as PNG or SVG. Returns renderer metadata and warns when preview is not pixel-identical to Excalidraw.',
-    inputSchema: objectSchema(EXCALIDRAW_RENDER_INPUT_PROPERTIES, ['path']),
-    method: 'renderExcalidraw',
-    name: 'render_excalidraw',
-    outputSchema: objectSchema(EXCALIDRAW_RENDER_OUTPUT_PROPERTIES),
-    resultKind: 'image',
-    scope: 'vault:read',
-    untrustedContentHint: true,
-    webMcp: true,
-  },
-  {
-    annotations: { idempotentHint: true, readOnlyHint: true },
     description: 'Inspect and render one Excalidraw revision in a single operation.',
     inputSchema: objectSchema({
       ...EXCALIDRAW_RENDER_INPUT_PROPERTIES,
@@ -580,8 +543,10 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
     method: 'verifyExcalidraw',
     name: 'verify_excalidraw',
     outputSchema: objectSchema({
-      ...EXCALIDRAW_RENDER_OUTPUT_PROPERTIES,
+      ...EXCALIDRAW_RENDER_RESULT_PROPERTIES,
       inspection: EXCALIDRAW_INSPECTION_SCHEMA,
+      path: { type: 'string' },
+      revision: REVISION_SCHEMA,
     }),
     resultKind: 'image',
     scope: 'vault:read',

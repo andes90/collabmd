@@ -160,7 +160,7 @@ test('WebMCP replaces server previews with official browser snapshot rendering',
   });
   await registry.refresh();
 
-  const rendered = await modelContext.tools.get('collabmd_render_excalidraw').execute({
+  const rendered = await modelContext.tools.get('collabmd_verify_excalidraw').execute({
     path: 'diagram.excalidraw',
   });
   assert.equal(rendered.renderer, 'excalidraw-official-browser');
@@ -249,7 +249,7 @@ test('WebMCP reports exact browser rendering failures to the agent', async () =>
   });
   await registry.refresh();
 
-  const result = await modelContext.tools.get('collabmd_render_excalidraw').execute({
+  const result = await modelContext.tools.get('collabmd_verify_excalidraw').execute({
     path: 'diagram.excalidraw',
   });
 

@@ -140,10 +140,13 @@ function createRipgrepArgs(query, {
 }
 
 export function parseRipgrepJson(stdout, {
+  kinds = [],
   maxFiles = DEFAULT_MAX_FILES,
   maxSnippetsPerFile = DEFAULT_MAX_SNIPPETS_PER_FILE,
+  prefix = '',
   query = '',
 } = {}) {
+  const kindFilter = new Set(Array.isArray(kinds) ? kinds : []);
   const files = [];
   const filesByPath = new Map();
   let matchCount = 0;
@@ -167,7 +170,12 @@ export function parseRipgrepJson(stdout, {
     }
 
     const filePath = String(event?.data?.path?.text ?? '').replace(/^\.\//u, '');
-    if (!filePath) {
+    const kind = getVaultFileKind(filePath) ?? 'text';
+    if (
+      !filePath
+      || (prefix && filePath !== prefix && !filePath.startsWith(`${prefix}/`))
+      || (kindFilter.size > 0 && !kindFilter.has(kind))
+    ) {
       continue;
     }
 
@@ -180,7 +188,7 @@ export function parseRipgrepJson(stdout, {
 
       fileGroup = {
         file: filePath,
-        kind: getVaultFileKind(filePath) ?? 'text',
+        kind,
         matchCount: 0,
         snippets: [],
         truncated: false,
@@ -226,7 +234,20 @@ export function parseRipgrepJson(stdout, {
   };
 }
 
-async function searchExcalidrawText({ maxFileSize, maxFiles, maxSnippetsPerFile, query, signal, vaultDir }) {
+async function searchExcalidrawText({
+  kinds = [],
+  maxFileSize,
+  maxFiles,
+  maxSnippetsPerFile,
+  prefix = '',
+  query,
+  signal,
+  vaultDir,
+}) {
+  const kindFilter = new Set(Array.isArray(kinds) ? kinds : []);
+  if (kindFilter.size > 0 && !kindFilter.has('excalidraw')) {
+    return { files: [], matchCount: 0, truncated: false };
+  }
   const files = [];
   let matchCount = 0;
   let truncated = false;
@@ -237,6 +258,8 @@ async function searchExcalidrawText({ maxFileSize, maxFiles, maxSnippetsPerFile,
   });
 
   for await (const filePath of paths) {
+    const normalizedPath = filePath.replaceAll('\\', '/');
+    if (prefix && normalizedPath !== prefix && !normalizedPath.startsWith(`${prefix}/`)) continue;
     signal?.throwIfAborted?.();
     const absolutePath = join(vaultDir, filePath);
     if ((await stat(absolutePath)).size > parseByteLimit(maxFileSize)) continue;
@@ -280,7 +303,7 @@ async function searchExcalidrawText({ maxFileSize, maxFiles, maxSnippetsPerFile,
         continue;
       }
       files.push({
-        file: filePath.replaceAll('\\', '/'),
+        file: normalizedPath,
         kind: 'excalidraw',
         matchCount: fileMatchCount,
         snippets,
@@ -354,11 +377,18 @@ export class RipgrepSearchService {
   }
 
   async search({
+    kinds = [],
     limit = DEFAULT_MAX_FILES,
+    maxSnippetsPerFile = DEFAULT_MAX_SNIPPETS_PER_FILE,
+    prefix = '',
     query = '',
     signal = null,
   } = {}) {
     const normalizedQuery = String(query ?? '').trim();
+    const snippetLimit = normalizePositiveInt(maxSnippetsPerFile, this.maxSnippetsPerFile, {
+      max: 10,
+      min: 1,
+    });
     const maxFiles = normalizePositiveInt(limit, this.maxFiles, {
       max: this.maxFiles,
       min: 1,
@@ -381,7 +411,7 @@ export class RipgrepSearchService {
     const startedAt = Date.now();
     const args = createRipgrepArgs(normalizedQuery, {
       maxFileSize: this.maxFileSize,
-      maxSnippetsPerFile: this.maxSnippetsPerFile,
+      maxSnippetsPerFile: snippetLimit,
     });
     let parsed;
     try {
@@ -393,8 +423,10 @@ export class RipgrepSearchService {
         timeout: this.timeoutMs,
       });
       parsed = parseRipgrepJson(result.stdout, {
+        kinds,
         maxFiles,
-        maxSnippetsPerFile: this.maxSnippetsPerFile,
+        maxSnippetsPerFile: snippetLimit,
+        prefix,
         query: normalizedQuery,
       });
     } catch (error) {
@@ -406,8 +438,10 @@ export class RipgrepSearchService {
       } else {
         const isMaxBuffer = error?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER';
         parsed = parseRipgrepJson(error?.stdout ?? '', {
+          kinds,
           maxFiles,
-          maxSnippetsPerFile: this.maxSnippetsPerFile,
+          maxSnippetsPerFile: snippetLimit,
+          prefix,
           query: normalizedQuery,
         });
         if (isMaxBuffer && parsed.files.length > 0) {
@@ -421,9 +455,11 @@ export class RipgrepSearchService {
 
     if (parsed.files.length < maxFiles) {
       const excalidraw = await searchExcalidrawText({
+        kinds,
         maxFileSize: this.maxFileSize,
         maxFiles: maxFiles - parsed.files.length,
-        maxSnippetsPerFile: this.maxSnippetsPerFile,
+        maxSnippetsPerFile: snippetLimit,
+        prefix,
         query: normalizedQuery,
         signal,
         vaultDir: this.vaultDir,

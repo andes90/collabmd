@@ -1,8 +1,15 @@
 export function createAgentToolRateLimiter(requestsPerMinute) {
   const limit = Math.max(1, Number.parseInt(requestsPerMinute, 10) || 120);
   const windows = new Map();
+  let nextSweepAt = 0;
   return (key) => {
     const timestamp = Date.now();
+    if (timestamp >= nextSweepAt) {
+      for (const [windowKey, window] of windows) {
+        if (timestamp >= window.resetAt) windows.delete(windowKey);
+      }
+      nextSweepAt = timestamp + 60_000;
+    }
     let window = windows.get(key);
     if (!window || timestamp >= window.resetAt) {
       window = { count: 0, resetAt: timestamp + 60_000 };
