@@ -12,9 +12,9 @@ test('landing reflects current features and stays usable across viewports', asyn
 
   await expect(page).toHaveTitle('CollabMD | Your folder, now multiplayer');
   await expect(page.locator('main')).toContainText('Structurizr');
-  await expect(page.locator('main')).toContainText('Readonly PDFs');
-  await expect(page.locator('main')).toContainText('Opt-in Vim keybindings');
-  await expect(page.locator('main')).toContainText('whole folders as self-contained HTML and PDF');
+  await expect(page.locator('main')).toContainText('Searchable PDFs and self-contained document exports');
+  await expect(page.locator('main')).toContainText('Connect AI agents');
+  await expect(page.locator('main')).toContainText('Open Excalidraw, draw.io, and PDFs');
   await expect(page.locator('#install')).toContainText('Requires Node.js 26');
   await expect(page.locator('#panel-docker .copy-btn')).toHaveAttribute(
     'data-copy',
