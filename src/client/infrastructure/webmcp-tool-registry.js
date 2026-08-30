@@ -213,7 +213,7 @@ export class WebMcpToolRegistry {
     try {
       const tools = listWebMcpToolDefinitions().map((definition) => ({
         annotations: {
-          readOnlyHint: definition.annotations.readOnlyHint,
+          ...definition.annotations,
           untrustedContentHint: Boolean(definition.untrustedContentHint),
         },
         description: getWebMcpDescription(definition),

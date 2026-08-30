@@ -324,6 +324,12 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
         description: 'Optional Vault directory or path prefix.',
         type: 'string',
       },
+      pathQuery: {
+        description: 'Optional case-insensitive substring to match anywhere in an entry path.',
+        maxLength: 500,
+        minLength: 1,
+        type: 'string',
+      },
     }, []),
     method: 'listWorkspaceEntries',
     name: 'list_workspace_entries',
@@ -368,6 +374,10 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
         maxLength: 500,
         minLength: 2,
         type: 'string',
+      },
+      wholeWord: {
+        description: 'Match only when the literal query is bounded by non-word characters.',
+        type: 'boolean',
       },
     }, ['query']),
     method: 'searchVault',

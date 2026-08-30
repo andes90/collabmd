@@ -177,7 +177,7 @@ COLLABMD_AGENT_ACCESS_ENABLED=true collabmd --no-tunnel
 
 CollabMD exposes `/mcp`, or `<BASE_PATH>/mcp` when a base path is configured, with these tools:
 
-- `list_workspace_entries` with optional path-prefix and content-kind filters, `search_vault` with optional path-prefix, content-kind, and per-file snippet filters, and `read_document`
+- `list_workspace_entries` with optional path-prefix, path-query, and content-kind filters, `search_vault` with optional path-prefix, content-kind, whole-word, and per-file snippet filters, and `read_document`
 - `inspect_document_references` for resolved and missing wiki-links, embeds, public video embeds, and backlinks
 - `validate_document` for missing Markdown references and unsupported public video embeds
 - `render_diagram` for standalone or fenced PlantUML through remote MCP and Mermaid or PlantUML through WebMCP

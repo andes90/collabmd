@@ -140,6 +140,10 @@ test('agent tools inspect and validate references, video embeds, and workspace e
   assert.equal(workspace.entries.find(({ path }) => path === 'assets').nodeType, 'directory');
   assert.equal(workspace.entries.find(({ path }) => path === 'assets/diagram.png').embeddable, true);
   assert.equal(workspace.entries.find(({ path }) => path === 'assets/diagram.png').readable, false);
+  assert.deepEqual(
+    service.listWorkspaceEntries(actor, { pathQuery: 'OTHER' }).entries.map(({ path }) => path),
+    ['docs/Other.md'],
+  );
   assert.match(service.getSyntax(actor, { kind: 'markdown' }).guide, /public video embeds/u);
 });
 
@@ -468,14 +472,15 @@ test('agent content service uses current room text and rejects stale revisions',
 });
 
 
-test('agent search overlays active room content', async () => {
+test('agent whole-word search overlays only matching active room text', async () => {
   const room = {
     isHydrated: () => true,
-    readEditableContent: () => '# Live\n\nUnique live phrase\n',
+    readEditableContent: () => '# Live\n\nMCP and memcpy\n',
   };
   const { service } = createService({ room });
-  const result = await service.searchVault(actor, { query: 'live phrase' });
+  const result = await service.searchVault(actor, { query: 'mcp', wholeWord: true });
   assert.equal(result.files[0].file, 'notes.md');
+  assert.equal(result.files[0].matchCount, 1);
   assert.equal(result.files[0].snippets[0].line, 3);
 });
 

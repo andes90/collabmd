@@ -13,6 +13,7 @@ import { applyExactTextChanges, resolveExactTextChanges } from '../../domain/exa
 import { applyAgentExcalidrawEdits, createAgentExcalidrawScene } from '../../domain/excalidraw-agent-scene.js';
 import { inspectAgentExcalidrawScene, renderAgentExcalidrawSvg } from '../../domain/excalidraw-agent-verification.js';
 import { getVaultFileKind } from '../../domain/file-kind.js';
+import { isWholeWordMatch } from '../../domain/literal-text-search.js';
 import { createWikiTargetIndex } from '../../domain/wiki-link-resolver.js';
 import {
   classifyPublicVideoEmbed,
@@ -101,7 +102,7 @@ function createInlineExcalidrawVerification(scene, options, { deferRender = fals
   return verification;
 }
 
-function searchLiveText(content, query, maxSnippets = 5) {
+function searchLiveText(content, query, maxSnippets = 5, wholeWord = false) {
   const normalizedQuery = query.toLocaleLowerCase();
   const snippets = [];
   let matchCount = 0;
@@ -109,17 +110,19 @@ function searchLiveText(content, query, maxSnippets = 5) {
     const normalizedLine = lineText.toLocaleLowerCase();
     let start = normalizedLine.indexOf(normalizedQuery);
     while (start >= 0) {
-      matchCount += 1;
-      if (snippets.length < maxSnippets) {
-        const snippetStart = Math.max(0, start - 90);
-        const snippetEnd = Math.min(lineText.length, start + query.length + 90);
-        snippets.push({
-          column: start + 1,
-          line: lineIndex + 1,
-          matchEnd: start - snippetStart + query.length + (snippetStart > 0 ? 3 : 0),
-          matchStart: start - snippetStart + (snippetStart > 0 ? 3 : 0),
-          text: `${snippetStart > 0 ? '...' : ''}${lineText.slice(snippetStart, snippetEnd)}${snippetEnd < lineText.length ? '...' : ''}`,
-        });
+      if (!wholeWord || isWholeWordMatch(normalizedLine, start, start + normalizedQuery.length)) {
+        matchCount += 1;
+        if (snippets.length < maxSnippets) {
+          const snippetStart = Math.max(0, start - 90);
+          const snippetEnd = Math.min(lineText.length, start + query.length + 90);
+          snippets.push({
+            column: start + 1,
+            line: lineIndex + 1,
+            matchEnd: start - snippetStart + query.length + (snippetStart > 0 ? 3 : 0),
+            matchStart: start - snippetStart + (snippetStart > 0 ? 3 : 0),
+            text: `${snippetStart > 0 ? '...' : ''}${lineText.slice(snippetStart, snippetEnd)}${snippetEnd < lineText.length ? '...' : ''}`,
+          });
+        }
       }
       start = normalizedLine.indexOf(normalizedQuery, start + Math.max(query.length, 1));
     }
@@ -246,14 +249,17 @@ export class AgentContentService {
     kinds = [],
     limit = 100,
     prefix = '',
+    pathQuery = '',
   } = {}) {
     requireScope(actor, 'vault:read');
     const normalizedPrefix = normalizeWorkspacePath(prefix);
+    const normalizedPathQuery = String(pathQuery).trim().toLocaleLowerCase();
     const kindFilter = new Set(Array.isArray(kinds) ? kinds : []);
     const state = this.workspaceMutationCoordinator?.workspaceState;
     const entries = Array.from(state?.entries?.values?.() ?? [])
       .filter((entry) => !normalizedPrefix || entry.path === normalizedPrefix || entry.path.startsWith(`${normalizedPrefix}/`))
       .filter((entry) => kindFilter.size === 0 || kindFilter.has(getVaultFileKind(entry.path)))
+      .filter((entry) => !normalizedPathQuery || entry.path.toLocaleLowerCase().includes(normalizedPathQuery))
       .sort((left, right) => compareWorkspacePaths(left.path, right.path));
     let start = 0;
     if (cursor) {
@@ -295,6 +301,7 @@ export class AgentContentService {
     maxSnippetsPerFile = 5,
     prefix = '',
     query = '',
+    wholeWord = false,
     signal = null,
   } = {}) {
     requireScope(actor, 'vault:read');
@@ -308,6 +315,7 @@ export class AgentContentService {
       maxSnippetsPerFile: snippetLimit,
       prefix: normalizedPrefix,
       query: normalizedQuery,
+      wholeWord,
       signal,
     });
     if (normalizedQuery.length < 2) return result;
@@ -324,7 +332,7 @@ export class AgentContentService {
       const content = room.readEditableContent?.();
       if (content === null || content === undefined) continue;
       if (content.length > MAX_AGENT_READ_SOURCE_CHARACTERS) continue;
-      const live = searchLiveText(content, normalizedQuery, snippetLimit);
+      const live = searchLiveText(content, normalizedQuery, snippetLimit, wholeWord);
       if (live.matchCount > 0) {
         liveFiles.push({ file: path, kind, ...live });
       }

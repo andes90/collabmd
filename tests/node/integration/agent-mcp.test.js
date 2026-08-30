@@ -73,6 +73,10 @@ test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously'
   const editTool = tools.tools.find(({ name }) => name === 'apply_text_edits');
   assert.equal(editTool.inputSchema.properties.revision.pattern, '^[a-f0-9]{64}$');
   assert.match(editTool.inputSchema.properties.replacements.description, /exact text/iu);
+  const listTool = tools.tools.find(({ name }) => name === 'list_workspace_entries');
+  const searchTool = tools.tools.find(({ name }) => name === 'search_vault');
+  assert.equal(listTool.inputSchema.properties.pathQuery.type, 'string');
+  assert.equal(searchTool.inputSchema.properties.wholeWord.type, 'boolean');
 
 
   const search = await client.callTool({
@@ -96,6 +100,11 @@ test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously'
     name: 'list_workspace_entries',
   });
   assert.equal(markdownWorkspace.structuredContent.entries.every(({ kind }) => kind === 'markdown'), true);
+  const pathWorkspace = await client.callTool({
+    arguments: { pathQuery: 'TEST.MD' },
+    name: 'list_workspace_entries',
+  });
+  assert.deepEqual(pathWorkspace.structuredContent.entries.map(({ path }) => path), ['test.md']);
   const invalidCursor = await client.callTool({
     arguments: { cursor: 'deleted.md' },
     name: 'list_workspace_entries',
@@ -112,6 +121,11 @@ test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously'
     name: 'validate_document',
   });
   assert.equal(validation.structuredContent.valid, true);
+  const wholeWordMiss = await client.callTool({
+    arguments: { query: 'est', wholeWord: true },
+    name: 'search_vault',
+  });
+  assert.deepEqual(wholeWordMiss.structuredContent.files, []);
 
 
   const edit = await client.callTool({

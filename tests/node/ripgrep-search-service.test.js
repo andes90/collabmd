@@ -198,6 +198,9 @@ test('RipgrepSearchService searches with safe rg args and handles no matches', a
   assert.equal(calls[1].args.includes('!node_modules/**'), true);
   assert.equal(calls[1].args.includes('!.obsidian/**'), true);
   assert.equal(calls[1].args.includes('!.trash/**'), true);
+  assert.equal(calls[1].args.includes('--word-regexp'), false);
+  await service.search({ query: 'needle', wholeWord: true });
+  assert.equal(calls[2].args.includes('--word-regexp'), true);
 });
 
 test('RipgrepSearchService marks results truncated when Excalidraw search is skipped', async () => {

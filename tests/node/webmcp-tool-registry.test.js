@@ -63,6 +63,7 @@ test('WebMCP exposes every shared browser tool while the workspace tab is active
   assert.deepEqual(readResult, { name: 'read_document', ok: true });
   assert.equal(readTool.annotations.readOnlyHint, true);
   assert.equal(readTool.annotations.untrustedContentHint, true);
+  assert.equal(readTool.annotations.idempotentHint, true);
   assert.equal(mutations.length, 0);
   const editTool = modelContext.tools.get('collabmd_apply_text_edits');
   const editResult = await editTool.execute({
@@ -71,6 +72,8 @@ test('WebMCP exposes every shared browser tool while the workspace tab is active
     revision: 'a'.repeat(64),
   });
   assert.deepEqual(editResult, { name: 'apply_text_edits', ok: true });
+  assert.equal(editTool.annotations.destructiveHint, false);
+  assert.equal(editTool.annotations.idempotentHint, false);
   assert.equal(calls.at(-1).name, 'apply_text_edits');
   assert.equal(mutations.at(-1).name, 'apply_text_edits');
 

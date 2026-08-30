@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { getVaultFileKind } from '../../domain/file-kind.js';
+import { isWholeWordMatch } from '../../domain/literal-text-search.js';
 import { logPerfEvent } from '../config/perf-logging.js';
 
 const execFile = promisify(execFileCallback);
@@ -108,6 +109,7 @@ function createSnippet(lineText = '', matchStart = 0, matchEnd = matchStart) {
 function createRipgrepArgs(query, {
   maxFileSize = DEFAULT_MAX_FILE_SIZE,
   maxSnippetsPerFile = DEFAULT_MAX_SNIPPETS_PER_FILE,
+  wholeWord = false,
 } = {}) {
   const args = [
     '--json',
@@ -130,6 +132,7 @@ function createRipgrepArgs(query, {
     '--glob',
     '!.trash/**',
   ];
+  if (wholeWord) args.push('--word-regexp');
 
   TEXT_SEARCH_GLOBS.forEach((glob) => {
     args.push('--glob', glob);
@@ -241,6 +244,7 @@ async function searchExcalidrawText({
   maxSnippetsPerFile,
   prefix = '',
   query,
+  wholeWord = false,
   signal,
   vaultDir,
 }) {
@@ -279,19 +283,21 @@ async function searchExcalidrawText({
       const normalizedText = text.toLocaleLowerCase();
       let matchStart = normalizedText.indexOf(normalizedQuery);
       while (matchStart >= 0) {
-        fileMatchCount += 1;
-        matchCount += 1;
-        if (snippets.length < maxSnippetsPerFile) {
-          const snippet = createSnippet(text, matchStart, matchStart + query.length);
-          snippets.push({
-            column: matchStart + 1,
-            line: 1,
-            matchEnd: snippet.matchEnd,
-            matchStart: snippet.matchStart,
-            text: snippet.text,
-          });
-        } else {
-          truncated = true;
+        if (!wholeWord || isWholeWordMatch(normalizedText, matchStart, matchStart + normalizedQuery.length)) {
+          fileMatchCount += 1;
+          matchCount += 1;
+          if (snippets.length < maxSnippetsPerFile) {
+            const snippet = createSnippet(text, matchStart, matchStart + query.length);
+            snippets.push({
+              column: matchStart + 1,
+              line: 1,
+              matchEnd: snippet.matchEnd,
+              matchStart: snippet.matchStart,
+              text: snippet.text,
+            });
+          } else {
+            truncated = true;
+          }
         }
         matchStart = normalizedText.indexOf(normalizedQuery, matchStart + Math.max(query.length, 1));
       }
@@ -383,6 +389,7 @@ export class RipgrepSearchService {
     prefix = '',
     query = '',
     signal = null,
+    wholeWord = false,
   } = {}) {
     const normalizedQuery = String(query ?? '').trim();
     const snippetLimit = normalizePositiveInt(maxSnippetsPerFile, this.maxSnippetsPerFile, {
@@ -412,6 +419,7 @@ export class RipgrepSearchService {
     const args = createRipgrepArgs(normalizedQuery, {
       maxFileSize: this.maxFileSize,
       maxSnippetsPerFile: snippetLimit,
+      wholeWord,
     });
     let parsed;
     try {
@@ -461,6 +469,7 @@ export class RipgrepSearchService {
         maxSnippetsPerFile: snippetLimit,
         prefix,
         query: normalizedQuery,
+        wholeWord,
         signal,
         vaultDir: this.vaultDir,
       });
