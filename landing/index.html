@@ -6,13 +6,13 @@
   <meta name="theme-color" content="#0b0f14">
   <meta name="color-scheme" content="dark">
   <title>CollabMD | Your folder, now multiplayer</title>
-  <meta name="description" content="Turn any Markdown-and-diagram folder into a realtime workspace with C4 diagrams, PDF previews, and git-backed review. Your files stay on disk.">
+  <meta name="description" content="Turn any Markdown-and-diagram folder into a realtime workspace for people and AI agents. Your filesystem stays the source of truth.">
   <link rel="canonical" href="https://collabmd.app/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="CollabMD">
   <meta property="og:url" content="https://collabmd.app/">
   <meta property="og:title" content="CollabMD | Your folder, now multiplayer">
-  <meta property="og:description" content="Realtime collaboration for Markdown, C4 diagrams, PDFs, and git-backed docs. Your filesystem stays the source of truth.">
+  <meta property="og:description" content="Realtime collaboration for Markdown folders and diagram workspaces. Work with people and AI agents while your filesystem stays the source of truth.">
   <meta property="og:image" content="https://collabmd.app/assets/collabmd-hero.png">
   <meta property="og:image:secure_url" content="https://collabmd.app/assets/collabmd-hero.png">
   <meta property="og:image:width" content="1200">
@@ -20,7 +20,7 @@
   <meta property="og:image:alt" content="CollabMD editing Markdown and diagrams in a shared browser workspace.">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="CollabMD | Your folder, now multiplayer">
-  <meta name="twitter:description" content="Realtime collaboration for Markdown, C4 diagrams, PDFs, and git-backed docs. Your files stay on disk.">
+  <meta name="twitter:description" content="Realtime collaboration for Markdown folders and diagram workspaces. Work with people and AI agents while your files stay on disk.">
   <meta name="twitter:image" content="https://collabmd.app/assets/collabmd-hero.png">
   <meta name="twitter:image:alt" content="CollabMD editing Markdown and diagrams in a shared browser workspace.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='2' y='4' width='18' height='24' rx='3' fill='%2360a5fa'/><rect x='12' y='4' width='18' height='24' rx='3' fill='%232563eb' opacity='0.8'/><path d='M18 12h6M18 16h6M18 20h4' stroke='white' stroke-width='1.5' stroke-linecap='round'/></svg>">
@@ -69,7 +69,7 @@
       <div class="wrap hero-inner">
         <p class="eyebrow reveal">plain files / live collaboration</p>
         <h1 class="hero-title reveal">Your folder,<br>now <em class="grad">multiplayer</em>.</h1>
-        <p class="hero-sub reveal">Turn any Obsidian vault, docs repo, or Markdown folder into a realtime workspace without moving a single file.</p>
+        <p class="hero-sub reveal">Bring people and AI agents into any Obsidian vault, docs repo, or Markdown folder without moving your files.</p>
 
         <div class="hero-actions reveal">
           <a class="btn btn-primary" href="https://demo.collabmd.app/#file=README.md" target="_blank" rel="noopener">
@@ -163,14 +163,13 @@
           <div class="feat-copy">
             <h3 class="feat-title">Everyone on the same line, live.</h3>
             <p class="feat-body">
-              Yjs merges concurrent edits without locks or conflict dialogs. See who's
-              online, follow a collaborator's cursor across files, and hash things out
-              in room chat without leaving the workspace.
+              Edit together in realtime, see where collaborators are working, and discuss
+              changes without leaving the workspace.
             </p>
             <ul class="feat-list">
-              <li>Presence, follow mode, and room chat built in</li>
-              <li>Edits stream over WebSocket and persist continuously</li>
-              <li>Opt-in Vim keybindings for keyboard-first editing</li>
+              <li>Presence and follow mode show where collaborators are working</li>
+              <li>Room chat keeps decisions beside the work</li>
+              <li>Yjs merges concurrent edits without locks or conflict dialogs</li>
             </ul>
           </div>
           <div class="feat-visual" aria-hidden="true">
@@ -216,20 +215,20 @@
               <div class="eline"><span class="eln">21</span><span class="elt">## Rollout</span></div>
               <div class="eline eline-marked">
                 <span class="eln">22</span>
-                <span class="elt">Publish goes <span class="emark">straight to the configured branch</span>.</span>
+                <span class="elt">Start the rollout with <span class="emark">the API service and its runbook</span>.</span>
                 <span class="emarker">2</span>
               </div>
-              <div class="eline"><span class="eln">23</span><span class="elt elt-dim">No PR gate in v1. This is intentional.</span></div>
+              <div class="eline"><span class="eln">23</span><span class="elt elt-dim">Move the remaining docs after validation.</span></div>
               <div class="thread-card">
                 <div class="thread-head">
                   <span class="thread-avatar thread-avatar-john">M</span>
                   <span class="thread-name">Mara</span>
                   <span class="thread-time">2m</span>
                 </div>
-                <p class="thread-text">Should we flag this for the security review before publishing?</p>
+                <p class="thread-text">Can we link the rollout checklist here so the owner is clear?</p>
                 <div class="thread-reply">
                   <span class="thread-avatar thread-avatar-kim">N</span>
-                  <p class="thread-text">Added a note. It's covered by the audit trail.</p>
+                  <p class="thread-text">Linked it and added the owner.</p>
                 </div>
                 <button class="thread-resolve" type="button" tabindex="-1">Resolve thread</button>
               </div>
@@ -242,14 +241,13 @@
           <div class="feat-copy">
             <h3 class="feat-title">Rich files stay in context.</h3>
             <p class="feat-body">
-              Edit Mermaid, PlantUML, and Structurizr DSL beside their previews. Preview
-              HTML safely, open Excalidraw and draw.io canvases, or read PDFs without leaving the vault.
+              Edit Markdown and diagrams beside live previews. Open Excalidraw, draw.io,
+              and PDFs without converting files or leaving the vault.
             </p>
             <ul class="feat-list">
-              <li>Interactive Structurizr C4 navigation from context to component</li>
-              <li>Excalidraw frame presentations and visual git diffs for diagrams</li>
-              <li>Readonly PDFs with search, outline, links, zoom, and password support</li>
-              <li>Export notes or whole folders as self-contained HTML and PDF</li>
+              <li>Live previews for Mermaid, PlantUML, and Structurizr C4</li>
+              <li>Native canvases with visual git diffs for diagram review</li>
+              <li>Searchable PDFs and self-contained document exports</li>
             </ul>
           </div>
           <div class="feat-visual" aria-hidden="true">
@@ -304,19 +302,19 @@
         <!-- Secondary product capabilities -->
         <div class="capability-rail" aria-label="More built-in capabilities">
           <article class="capability reveal">
-            <p class="capability-kicker">upload --multiple</p>
-            <h3 class="capability-title">Bring the whole vault</h3>
-            <p class="capability-body">Import Markdown, Base, diagram, image, and PDF files in one pass.</p>
+            <p class="capability-kicker">mcp / agent access</p>
+            <h3 class="capability-title">Connect AI agents</h3>
+            <p class="capability-body">Search, read, exact-edit, validate, and create supported Vault Content. Protected workspaces use scoped, revocable connections.</p>
+          </article>
+          <article class="capability reveal">
+            <p class="capability-kicker">git diff / stage</p>
+            <h3 class="capability-title">Review before commit</h3>
+            <p class="capability-body">Stage files in bulk and compare text, images, Excalidraw, and draw.io changes from the browser.</p>
           </article>
           <article class="capability reveal">
             <p class="capability-kicker">rg / pdf</p>
-            <h3 class="capability-title">Find anything faster</h3>
-            <p class="capability-body">Search text files with ripgrep. PDFs appear in file search and have in-document search.</p>
-          </article>
-          <article class="capability reveal">
-            <p class="capability-kicker">git diff</p>
-            <h3 class="capability-title">Review visual changes</h3>
-            <p class="capability-body">Compare images, Excalidraw, and draw.io before committing or publishing.</p>
+            <h3 class="capability-title">Search the whole vault</h3>
+            <p class="capability-body">Find text across supported files, then search inside PDFs without leaving the workspace.</p>
           </article>
         </div>
       </div>
@@ -435,23 +433,6 @@ collabmd ~/my-vault --no-tunnel</code></pre>
           </div>
         </div>
 
-        <div class="capability-rail capability-rail-operations" aria-label="Access and deployment options">
-          <article class="capability reveal">
-            <p class="capability-kicker">--auth</p>
-            <h3 class="capability-title">Control access</h3>
-            <p class="capability-body">Use a LAN, shared password, or Google OIDC with per-user identity.</p>
-          </article>
-          <article class="capability reveal">
-            <p class="capability-kicker">docker run</p>
-            <h3 class="capability-title">Deploy your way</h3>
-            <p class="capability-body">Run the published image, Compose stack, or Helm chart.</p>
-          </article>
-          <article class="capability reveal">
-            <p class="capability-kicker">cloudflared</p>
-            <h3 class="capability-title">Share a link</h3>
-            <p class="capability-body">An optional quick tunnel exposes HTTP and WebSocket together.</p>
-          </article>
-        </div>
       </div>
     </section>
 
