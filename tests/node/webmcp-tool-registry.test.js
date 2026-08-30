@@ -108,6 +108,28 @@ test('WebMCP returns structured agent failures', async () => {
   });
 });
 
+test('WebMCP rethrows unexpected agent request failures', async () => {
+  const modelContext = createModelContext();
+  const serverError = new Error('Agent request failed');
+  serverError.body = {
+    code: 'AGENT_REQUEST_FAILED',
+    error: 'Agent request failed',
+  };
+  const registry = new WebMcpToolRegistry({
+    callTool: async () => {
+      throw serverError;
+    },
+    getIsTabActive: () => true,
+    modelContext,
+  });
+  await registry.refresh();
+
+  await assert.rejects(
+    modelContext.tools.get('collabmd_search_vault').execute({ query: 'diagram' }),
+    (error) => error === serverError,
+  );
+});
+
 test('WebMCP replaces server previews with official browser snapshot rendering', async () => {
   const modelContext = createModelContext();
   const mutations = [];

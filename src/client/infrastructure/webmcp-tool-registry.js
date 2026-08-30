@@ -234,7 +234,11 @@ export class WebMcpToolRegistry {
           } catch (error) {
             throwIfAborted(signal);
             const body = error?.body;
-            if (typeof body?.code === 'string' && body.code.startsWith('AGENT_')) {
+            if (
+              typeof body?.code === 'string'
+              && body.code.startsWith('AGENT_')
+              && body.code !== 'AGENT_REQUEST_FAILED'
+            ) {
               return { ...body, isError: true };
             }
             throw error;
