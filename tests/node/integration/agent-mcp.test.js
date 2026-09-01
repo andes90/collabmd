@@ -60,6 +60,7 @@ test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously'
       'inspect_document_references',
       'inspect_excalidraw',
       'list_workspace_entries',
+      'query_base',
       'read_document',
       'render_diagram',
       'search_vault',
@@ -482,7 +483,7 @@ test('managed read-only MCP token limits tools and revocation takes effect immed
   assert.equal(tools.tools.some(({ name }) => name === 'apply_text_edits'), false);
   assert.equal(tools.tools.some(({ name }) => name === 'create_document'), false);
   assert.equal(tools.tools.some(({ name }) => name === 'inspect_excalidraw'), true);
-
+  assert.equal(tools.tools.some(({ name }) => name === 'query_base'), true);
   await app.server.agentConnectionService.revokeConnection({
     connectionId: created.connection.id,
     user: null,
@@ -497,7 +498,8 @@ test('MCP works under configured base path', async (t) => {
   });
   const client = await connectMcp(t, app, { url: `${app.appBaseUrl}/mcp` });
   const tools = await client.listTools();
-  assert.equal(tools.tools.length, 13);
+  assert.equal(tools.tools.length, 14);
+  assert.equal(tools.tools.some(({ name }) => name === 'query_base'), true);
 });
 
 test('password session manages workspace-level Agent Connections', async (t) => {
@@ -548,4 +550,79 @@ test('password session manages workspace-level Agent Connections', async (t) => 
     app.server.agentConnectionService.authenticateToken(created.token),
     { code: 'AGENT_TOKEN_INVALID' },
   );
+});
+
+
+test('MCP creates, updates, and queries Base files', async (t) => {
+  const app = await startTestServer({
+    agentAccess: { enabled: true },
+  });
+  const client = await connectMcp(t, app);
+
+  await client.callTool({
+    arguments: {
+      content: ['---', 'status: open', '---', '', '# Task A', '', '#task', ''].join('\n'),
+      path: 'notes/task-a.md',
+    },
+    name: 'create_document',
+  });
+  await client.callTool({
+    arguments: {
+      content: ['---', 'status: done', '---', '', '# Task B', '', '#task', ''].join('\n'),
+      path: 'notes/task-b.md',
+    },
+    name: 'create_document',
+  });
+
+  const created = await client.callTool({
+    arguments: {
+      content: [
+        'filters: file.ext == "md" && file.hasTag("task") && note.status == "open"',
+        'properties:',
+        '  note.status: {}',
+        'views:',
+        '  - type: table',
+        '    name: Board',
+        '    order: [file.name, note.status]',
+      ].join('\n'),
+      path: 'views/tasks.base',
+    },
+    name: 'create_document',
+  });
+  assert.equal(created.structuredContent.kind, 'base');
+
+  const queried = await client.callTool({
+    arguments: { path: 'views/tasks.base', view: 'Board' },
+    name: 'query_base',
+  });
+  assert.equal(queried.isError, undefined);
+  assert.deepEqual(queried.structuredContent.rows.map(({ path }) => path), ['notes/task-a.md']);
+  assert.equal(queried.structuredContent.rows[0].cells['note.status'], 'open');
+
+  const read = await client.callTool({
+    arguments: { path: 'views/tasks.base' },
+    name: 'read_document',
+  });
+  const edited = await client.callTool({
+    arguments: {
+      path: 'views/tasks.base',
+      replacements: [{ oldText: 'note.status == "open"', newText: 'note.status == "done"' }],
+      revision: read.structuredContent.revision,
+    },
+    name: 'apply_text_edits',
+  });
+  assert.equal(edited.isError, undefined);
+
+  const requery = await client.callTool({
+    arguments: { path: 'views/tasks.base', view: 'Board' },
+    name: 'query_base',
+  });
+  assert.deepEqual(requery.structuredContent.rows.map(({ path }) => path), ['notes/task-b.md']);
+
+  const invalid = await client.callTool({
+    arguments: { content: '- not an object\n', path: 'views/broken.base' },
+    name: 'create_document',
+  });
+  assert.equal(invalid.isError, true);
+  assert.equal(invalid.structuredContent.code, 'AGENT_INVALID_BASE');
 });

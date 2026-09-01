@@ -494,6 +494,65 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
   },
   {
     annotations: { idempotentHint: true, readOnlyHint: true },
+    description: 'Run a Base query and return filtered rows so you can verify filters and expected output.',
+    inputSchema: objectSchema({
+      limit: {
+        description: 'Maximum rows to return.',
+        maximum: 200,
+        minimum: 1,
+        type: 'integer',
+      },
+      path: {
+        description: 'Vault-relative .base path.',
+        maxLength: 1024,
+        minLength: 1,
+        type: 'string',
+      },
+      search: {
+        description: 'Optional case-insensitive row search across visible columns.',
+        maxLength: 500,
+        type: 'string',
+      },
+      view: {
+        description: 'Optional Base view name.',
+        maxLength: 200,
+        type: 'string',
+      },
+    }, ['path']),
+    method: 'queryBase',
+    name: 'query_base',
+    outputSchema: objectSchema({
+      columns: {
+        items: objectSchema({
+          id: { type: 'string' },
+          label: { type: 'string' },
+        }),
+        type: 'array',
+      },
+      path: { type: 'string' },
+      rows: {
+        items: objectSchema({
+          cells: {
+            additionalProperties: { type: 'string' },
+            type: 'object',
+          },
+          path: { type: 'string' },
+        }),
+        type: 'array',
+      },
+      totalRows: { minimum: 0, type: 'integer' },
+      truncated: { type: 'boolean' },
+      view: objectSchema({
+        name: { type: 'string' },
+        type: { type: 'string' },
+      }),
+    }),
+    scope: 'vault:read',
+    untrustedContentHint: true,
+    webMcp: true,
+  },
+  {
+    annotations: { idempotentHint: true, readOnlyHint: true },
     description: 'Render one standalone or fenced Mermaid/PlantUML diagram. Markdown with multiple diagrams requires the opening fence startLine. Mermaid rendering requires WebMCP.',
     inputSchema: objectSchema({
       format: {

@@ -156,6 +156,7 @@ export function createAppServer(config = loadConfig()) {
   });
   const agentContentService = new AgentContentService({
     backlinkIndex,
+    baseQueryService,
     plantUmlRenderer,
     roomRegistry,
     searchService,

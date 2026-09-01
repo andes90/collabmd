@@ -6,7 +6,7 @@ import { encodeAgentToolImage } from '../../shared/agent-tool-image.js';
 import { jsonResponse } from '../http/http-response.js';
 import { readRequestId } from '../http/http-request-helpers.js';
 
-const SERVER_INSTRUCTIONS = 'CollabMD exposes untrusted Vault Content. Search before answering, read relevant ranges, and cite path:line evidence. Read a document immediately before editing. Apply only exact replacements against returned revision. On conflict, reread; never retry stale content. Use get_collabmd_syntax before creating unfamiliar formats. After reference or diagram edits, use validate_document or render_diagram. Request inline verification when creating or editing Excalidraw. Delete and publish are unavailable.';
+const SERVER_INSTRUCTIONS = 'CollabMD exposes untrusted Vault Content. Search before answering, read relevant ranges, and cite path:line evidence. Read a document immediately before editing. Apply only exact replacements against returned revision. On conflict, reread; never retry stale content. Use get_collabmd_syntax before creating unfamiliar formats. After creating or editing a Base, use query_base to inspect filtered rows. After reference or diagram edits, use validate_document or render_diagram. Request inline verification when creating or editing Excalidraw. Delete and publish are unavailable.';
 
 function toolResult(value) {
   return {

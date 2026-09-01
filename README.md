@@ -180,6 +180,7 @@ CollabMD exposes `/mcp`, or `<BASE_PATH>/mcp` when a base path is configured, wi
 - `list_workspace_entries` with optional path-prefix, path-query, and content-kind filters, `search_vault` with optional path-prefix, content-kind, whole-word, and per-file snippet filters, and `read_document`
 - `inspect_document_references` for resolved and missing wiki-links, embeds, public video embeds, and backlinks
 - `validate_document` for missing Markdown references and unsupported public video embeds
+- `query_base` to run a Base filter and inspect matching rows
 - `render_diagram` for standalone or fenced PlantUML through remote MCP and Mermaid or PlantUML through WebMCP
 - `apply_text_edits` with exact replacements and revision conflict protection
 - `create_document`
@@ -190,7 +191,7 @@ CollabMD exposes `/mcp`, or `<BASE_PATH>/mcp` when a base path is configured, wi
 
 `search_vault` uses the server's ripgrep installation. Install `rg` on source or npm deployments; the Docker image already includes it.
 
-Agent text writes support Markdown, HTML, Mermaid, PlantUML, and Structurizr. Excalidraw writes use the dedicated element tools. Base, draw.io, PDF, images, delete, rename, Git, and publish are not writable through Agent Access.
+Agent text writes support Markdown, HTML, Base, Mermaid, PlantUML, and Structurizr. Excalidraw writes use the dedicated element tools. draw.io, PDF, images, delete, rename, Git, and publish are not writable through Agent Access.
 
 Remote MCP renders PlantUML through the configured PlantUML service; Mermaid rendering requires WebMCP because Mermaid needs a browser layout engine. Remote MCP Excalidraw rendering uses the basic element types supported by the agent tools. The `collabmd-basic-svg` renderer is intended for layout verification rather than pixel-identical Excalidraw reproduction and returns `preview-not-pixel-identical`. WebMCP replaces these previews with Excalidraw's official browser renderer.
 

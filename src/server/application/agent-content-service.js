@@ -12,13 +12,14 @@ import { normalizeEditableText } from '../../domain/editable-text.js';
 import { applyExactTextChanges, resolveExactTextChanges } from '../../domain/exact-text-edits.js';
 import { applyAgentExcalidrawEdits, createAgentExcalidrawScene } from '../../domain/excalidraw-agent-scene.js';
 import { inspectAgentExcalidrawScene, renderAgentExcalidrawSvg } from '../../domain/excalidraw-agent-verification.js';
-import { getVaultFileKind } from '../../domain/file-kind.js';
+import { getVaultFileKind, isBaseFilePath } from '../../domain/file-kind.js';
 import { isWholeWordMatch } from '../../domain/literal-text-search.js';
 import { createWikiTargetIndex } from '../../domain/wiki-link-resolver.js';
 import {
   classifyPublicVideoEmbed,
   isPublicVideoEmbedCandidate,
 } from '../../domain/video-embed.js';
+import { isPlainObject, parseBaseSource } from '../domain/bases/base-definition.js';
 import {
   collectMarkdownImageSources,
   collectMarkdownReferences,
@@ -32,6 +33,35 @@ const MAX_READ_LINES = 500;
 const MAX_REPLACEMENTS = 20;
 const MAX_REPLACEMENT_CHARACTERS = 50_000;
 const EMBEDDABLE_KINDS = new Set(['base', 'drawio', 'excalidraw', 'image', 'mermaid', 'plantuml']);
+
+function assertValidAgentBaseContent(path, content) {
+  if (!isBaseFilePath(path)) return;
+  try {
+    const raw = parseBaseSource(content);
+    if (raw != null && !isPlainObject(raw)) {
+      throw new Error('Base source must be a YAML object');
+    }
+  } catch (error) {
+    throw createAgentContentError('AGENT_INVALID_BASE', error.message || 'Base source is invalid', 400);
+  }
+}
+
+function toAgentBaseQueryResult(path, { columns, rows, view }, limit) {
+  return {
+    columns: columns.map(({ id, label }) => ({ id, label })),
+    path,
+    rows: rows.slice(0, limit).map((row) => ({
+      cells: Object.fromEntries(columns.map(({ id }) => [id, String(row.cells[id]?.text ?? '')])),
+      path: row.path,
+    })),
+    totalRows: rows.length,
+    truncated: rows.length > limit,
+    view: {
+      name: view.name,
+      type: view.type,
+    },
+  };
+}
 
 function createAgentContentError(code, message, statusCode = 400) {
   const error = new Error(message);
@@ -133,6 +163,7 @@ function searchLiveText(content, query, maxSnippets = 5, wholeWord = false) {
 export class AgentContentService {
   constructor({
     backlinkIndex = null,
+    baseQueryService = null,
     plantUmlRenderer = null,
     roomRegistry,
     searchService,
@@ -140,6 +171,7 @@ export class AgentContentService {
     workspaceMutationCoordinator,
   }) {
     this.backlinkIndex = backlinkIndex;
+    this.baseQueryService = baseQueryService;
     this.plantUmlRenderer = plantUmlRenderer;
     this.roomRegistry = roomRegistry;
     this.searchService = searchService;
@@ -472,6 +504,32 @@ export class AgentContentService {
     };
   }
 
+  async queryBase(actor, { limit = 50, path, search = '', view = '' } = {}) {
+    requireScope(actor, 'vault:read');
+    const normalizedPath = normalizeWorkspacePath(path);
+    if (!isBaseFilePath(normalizedPath)) {
+      throw createAgentContentError('AGENT_UNSUPPORTED_DOCUMENT', 'Base queries require a .base path', 400);
+    }
+    const content = await this.readCurrentContent(normalizedPath);
+    if (!this.baseQueryService?.query) {
+      throw createAgentContentError('AGENT_BASE_QUERY_UNAVAILABLE', 'Bases query service is unavailable', 503);
+    }
+    const pageSize = clampInteger(limit, 50, 1, 200);
+    try {
+      const result = await this.baseQueryService.query({
+        basePath: normalizedPath,
+        search,
+        source: content,
+        sourcePath: normalizedPath,
+        view,
+      });
+      return toAgentBaseQueryResult(normalizedPath, result, pageSize);
+    } catch (error) {
+      if (error?.code?.startsWith('AGENT_')) throw error;
+      throw createAgentContentError('AGENT_BASE_QUERY_FAILED', error.message || 'Failed to query base', 400);
+    }
+  }
+
   async renderDiagram(actor, { format = 'png', path, startLine } = {}) {
     requireScope(actor, 'vault:read');
     const normalizedPath = normalizeWorkspacePath(path);
@@ -550,15 +608,14 @@ export class AgentContentService {
         error.code = error.code?.startsWith('EXACT_EDIT_') ? 'AGENT_REPLACEMENT_MISMATCH' : error.code;
         throw error;
       }
+      const nextContent = applyExactTextChanges(content, changes);
+      assertValidAgentBaseContent(normalizedPath, nextContent);
       const room = this.roomRegistry?.get?.(normalizedPath);
-      let nextContent;
       if (room) {
         room.applyExactTextChanges(changes, {
           origin: createCollaborationOrigin(actor),
         });
-        nextContent = room.readEditableContent();
       } else {
-        nextContent = applyExactTextChanges(content, changes);
         const result = await this.workspaceMutationCoordinator.writeEditableContent({
           content: nextContent,
           origin: getMutationOrigin(actor),
@@ -571,7 +628,7 @@ export class AgentContentService {
       return {
         path: normalizedPath,
         replacementCount: changes.length,
-        revision: await createEditableContentRevision(nextContent),
+        revision: await createEditableContentRevision(room ? room.readEditableContent() : nextContent),
       };
     });
   }
@@ -736,6 +793,7 @@ export class AgentContentService {
     if (normalizedContent.length > MAX_DOCUMENT_CHARACTERS) {
       throw createAgentContentError('AGENT_DOCUMENT_TOO_LARGE', 'Document is too large for agent creation', 413);
     }
+    assertValidAgentBaseContent(normalizedPath, normalizedContent);
     return this.runForPath(normalizedPath, async () => {
       const result = await this.workspaceMutationCoordinator.createFile({
         content: normalizedContent,

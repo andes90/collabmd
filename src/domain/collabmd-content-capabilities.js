@@ -15,11 +15,11 @@ import {
 
 const CAPABILITIES = Object.freeze({
   base: {
-    agentCreatable: false,
-    agentEditable: false,
+    agentCreatable: true,
+    agentEditable: true,
     editable: true,
     extensions: [BASE_FILE_EXTENSION],
-    guide: 'YAML Base definition. Embed a file with ![[query.base]] or an inline query with a fenced base block. Agent writes are disabled until Base validation is shared.',
+    guide: 'YAML Base definition. Embed a file with ![[query.base]] or an inline query with a fenced base block. Create and edit with create_document and apply_text_edits. After writing, use query_base to inspect filtered rows.',
     examples: ['```base\nfilters:\n  and: []\n```', '![[tasks.base]]'],
   },
   drawio: {

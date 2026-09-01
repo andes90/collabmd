@@ -12,6 +12,7 @@ const actor = {
 
 function createService({
   backlinks = [],
+  baseQueryService = null,
   content = '# Notes\n\nHello world\n',
   documentPath = 'notes.md',
   extraFiles = {},
@@ -43,6 +44,7 @@ function createService({
     backlinkIndex: {
       getBacklinks: async () => backlinks,
     },
+    baseQueryService,
     plantUmlRenderer: {
       async renderSvg(source) {
         renderedSources.push(source);
@@ -496,4 +498,79 @@ test('agent reads report the last line actually returned after character truncat
   assert.equal(result.endLine, 1);
   assert.equal(result.startLine, 1);
   assert.equal(result.truncated, true);
+});
+
+
+test('agent content service creates, edits, and queries Base files', async () => {
+  const queries = [];
+  const { files, service } = createService({
+    baseQueryService: {
+      async query(input) {
+        queries.push(input);
+        return {
+          columns: [{ id: 'file.name', label: 'name' }, { id: 'note.status', label: 'status' }],
+          rows: [{
+            cells: {
+              'file.name': { text: 'task-a.md' },
+              'note.status': { text: 'open' },
+            },
+            path: 'notes/task-a.md',
+          }],
+          totalRows: 1,
+          view: { name: 'Board', type: 'table' },
+        };
+      },
+    },
+  });
+
+  const created = await service.createDocument(actor, {
+    content: 'filters: note.status == "open"\nviews:\n  - type: table\n    name: Board\n',
+    path: 'views/tasks.base',
+  });
+  assert.equal(created.kind, 'base');
+  assert.match(files.get('views/tasks.base'), /note\.status/u);
+
+  await assert.rejects(
+    service.createDocument(actor, { content: '- not an object\n', path: 'views/bad.base' }),
+    { code: 'AGENT_INVALID_BASE' },
+  );
+
+  const queried = await service.queryBase(actor, { path: 'views/tasks.base', view: 'Board' });
+  assert.deepEqual(queried.rows.map(({ path }) => path), ['notes/task-a.md']);
+  assert.equal(queried.rows[0].cells['note.status'], 'open');
+  assert.equal(queried.view.name, 'Board');
+  assert.match(queries[0].source, /note\.status/u);
+
+  const read = await service.readDocument(actor, { path: 'views/tasks.base' });
+  const edited = await service.applyTextEdits(actor, {
+    path: 'views/tasks.base',
+    replacements: [{ oldText: 'open', newText: 'done' }],
+    revision: read.revision,
+  });
+  assert.match(files.get('views/tasks.base'), /done/u);
+  assert.notEqual(edited.revision, read.revision);
+
+  await assert.rejects(
+    service.applyTextEdits(actor, {
+      path: 'views/tasks.base',
+      replacements: [{ oldText: 'filters:', newText: '- item:' }],
+      revision: edited.revision,
+    }),
+    { code: 'AGENT_INVALID_BASE' },
+  );
+
+  await assert.rejects(
+    service.queryBase(actor, { path: 'notes.md' }),
+    { code: 'AGENT_UNSUPPORTED_DOCUMENT' },
+  );
+  await assert.rejects(
+    createService().service.queryBase(actor, { path: 'views/tasks.base' }),
+    { code: 'AGENT_DOCUMENT_NOT_FOUND' },
+  );
+  await assert.rejects(
+    createService({ extraFiles: { 'views/empty.base': 'filters: []\n' } }).service.queryBase(actor, {
+      path: 'views/empty.base',
+    }),
+    { code: 'AGENT_BASE_QUERY_UNAVAILABLE' },
+  );
 });
