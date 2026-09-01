@@ -13,7 +13,7 @@ test('renders fenced code blocks with pre and code tags', () => {
   const html = renderCommentMarkdownToHtml('```js\nconst value = 1;\n```');
 
   assert.match(html, /<pre><code class="language-js">/);
-  assert.match(html, /value = <span class="hljs-number">1<\/span>;/);
+  assert.match(html, /const value = 1;/);
   assert.match(html, /<\/code><\/pre>/);
 });
 

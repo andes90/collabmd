@@ -1,9 +1,6 @@
 import markdownIt from 'markdown-it';
-import hljs from 'highlight.js/lib/common';
 
 import { escapeHtml } from '../domain/vault-utils.js';
-
-const AUTO_HIGHLIGHT_LANGUAGES = ['bash', 'css', 'javascript', 'json', 'markdown', 'python', 'sql', 'typescript', 'xml', 'yaml'];
 
 function renderToken(renderer, tokens, index, options, env, self) {
   return renderer?.(tokens, index, options, env, self) ?? self.renderToken(tokens, index, options);
@@ -17,19 +14,8 @@ function renderPlainTextCommentHtml(text = '') {
 function createCommentMarkdownRenderer() {
   const markdown = markdownIt({
     breaks: true,
-    highlight(source, language) {
-      try {
-        if (language && hljs.getLanguage(language)) {
-          return hljs.highlight(source, {
-            ignoreIllegals: true,
-            language,
-          }).value;
-        }
-
-        return hljs.highlightAuto(source, AUTO_HIGHLIGHT_LANGUAGES).value;
-      } catch {
-        return escapeHtml(source);
-      }
+    highlight(source) {
+      return escapeHtml(source);
     },
     html: false,
     linkify: true,

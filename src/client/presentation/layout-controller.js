@@ -2,12 +2,19 @@ export class LayoutController {
   constructor({
     mobileBreakpointQuery = window.matchMedia('(max-width: 768px)'),
     onMeasureEditor,
+    onPreferredViewChange = null,
+    onViewChange = null,
     onViewRequest = null,
+    preferredView = 'split',
   }) {
     this.mobileBreakpointQuery = mobileBreakpointQuery;
     this.onMeasureEditor = onMeasureEditor;
+    this.onPreferredViewChange = onPreferredViewChange;
+    this.onViewChange = onViewChange;
     this.onViewRequest = onViewRequest;
-    this.preferredView = 'split';
+    this.preferredView = preferredView === 'editor' || preferredView === 'preview' || preferredView === 'split'
+      ? preferredView
+      : 'split';
     this.mobileShowsEditor = !this.isMobileViewport();
     this.currentView = this.mobileShowsEditor ? this.preferredView : 'preview';
     this.editorLayout = document.getElementById('editorLayout');
@@ -78,6 +85,7 @@ export class LayoutController {
     this.currentView = view;
     this.editorLayout?.setAttribute('data-view', view);
     this.syncViewButtons();
+    this.onViewChange?.(view);
   }
 
   setView(view, { persist = true } = {}) {
@@ -87,6 +95,7 @@ export class LayoutController {
 
     if (persist) {
       this.preferredView = view;
+      this.onPreferredViewChange?.(view);
     }
 
     this.applyView(view);

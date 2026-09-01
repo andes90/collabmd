@@ -10,10 +10,12 @@ const sharedGlobals = {
 export default [
   {
     ignores: [
+      '.tmp/**',
       'dist/**',
       'docs/assets/**',
       'node_modules/**',
       'packaging/homebrew-tap/**',
+      'test-results/**',
       'test-vault/**',
     ],
   },

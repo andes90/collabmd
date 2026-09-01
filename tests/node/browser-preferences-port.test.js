@@ -26,6 +26,19 @@ test('BrowserPreferencesPort defaults Vim mode to disabled and persists the opt-
   assert.equal(preferences.getVimModeEnabled(), true);
 });
 
+test('BrowserPreferencesPort stores editor view mode only for known values', () => {
+  const storage = createStorage();
+  const preferences = new BrowserPreferencesPort({ storage });
+
+  assert.equal(preferences.getViewMode(), null);
+
+  preferences.setViewMode('editor');
+  assert.equal(preferences.getViewMode(), 'editor');
+
+  preferences.setViewMode('tabs');
+  assert.equal(preferences.getViewMode(), 'editor');
+});
+
 test('BrowserPreferencesPort keeps recent files newest-first and bounded', () => {
   const storage = createStorage();
   const preferences = new BrowserPreferencesPort({ storage });

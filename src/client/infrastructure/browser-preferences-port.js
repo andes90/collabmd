@@ -23,6 +23,7 @@ export class BrowserPreferencesPort {
     lineWrappingKey,
     recentFilesKey = 'collabmd-recent-files',
     vimModeKey = 'collabmd-editor-vim-mode',
+    viewModeKey = 'collabmd-editor-view-mode',
     sidebarVisibleKey,
     userNameKey,
     storage = globalThis.localStorage,
@@ -33,6 +34,7 @@ export class BrowserPreferencesPort {
     this.sidebarVisibleKey = sidebarVisibleKey;
     this.storage = storage;
     this.userNameKey = userNameKey;
+    this.viewModeKey = viewModeKey;
     this.vimModeKey = vimModeKey;
   }
 
@@ -66,6 +68,20 @@ export class BrowserPreferencesPort {
 
   setVimModeEnabled(enabled) {
     writeStorage(this.storage, this.vimModeKey, String(enabled));
+  }
+
+  getViewMode() {
+    const value = readStorage(this.storage, this.viewModeKey, null);
+    if (value === 'editor' || value === 'preview' || value === 'split') {
+      return value;
+    }
+    return null;
+  }
+
+  setViewMode(view) {
+    if (view === 'editor' || view === 'preview' || view === 'split') {
+      writeStorage(this.storage, this.viewModeKey, view);
+    }
   }
 
   getRecentFiles() {

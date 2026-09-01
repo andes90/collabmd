@@ -28,6 +28,7 @@ function findNodeByPath(nodes = [], pathValue = '') {
 const MOBILE_LONG_PRESS_DELAY_MS = 420;
 const MOBILE_LONG_PRESS_MOVE_TOLERANCE_PX = 10;
 const DRAG_AUTO_EXPAND_DELAY_MS = 700;
+const SEARCH_RESULT_LIMIT = 80;
 
 export class FileExplorerView {
   constructor({
@@ -377,7 +378,8 @@ export class FileExplorerView {
     }
 
     const fragment = document.createDocumentFragment();
-    for (const match of matches) {
+    const visibleMatches = matches.slice(0, SEARCH_RESULT_LIMIT);
+    for (const match of visibleMatches) {
       fragment.appendChild(this.createFileItem({
         activeFilePath,
         depth: 0,
@@ -386,6 +388,12 @@ export class FileExplorerView {
         name: match.name || getVaultPathLeaf(match.path),
         searchResult: true,
       }));
+    }
+    if (matches.length > SEARCH_RESULT_LIMIT) {
+      const more = document.createElement('div');
+      more.className = 'file-tree-empty';
+      more.textContent = `${matches.length - SEARCH_RESULT_LIMIT} more matches. Refine the search.`;
+      fragment.appendChild(more);
     }
     this.treeContainer.appendChild(fragment);
   }

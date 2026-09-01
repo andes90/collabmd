@@ -41,9 +41,7 @@ function handleTabActivated({ takeover = false } = {}) {
   if (!this.lobby.provider) {
     this.lobby.connect();
   }
-  if (!this.workspaceSync.provider) {
-    this.workspaceSync.connect();
-  }
+  this.connectWorkspaceSync();
 
   if (wasInactive) {
     if (this.fileExplorerReady) {
@@ -54,6 +52,12 @@ function handleTabActivated({ takeover = false } = {}) {
 
   if (takeover) {
     this.toastController.show('This tab is now active');
+  }
+}
+
+function connectWorkspaceSync() {
+  if (!this.workspaceSync.provider) {
+    this.workspaceSync.connect();
   }
 }
 
@@ -134,6 +138,7 @@ function hideTabLockOverlay() {
 }
 
 export const uiFeatureTabActivityMethods = {
+  connectWorkspaceSync,
   handleTabActivated,
   handleTabBlocked,
   handleTabTakeover,

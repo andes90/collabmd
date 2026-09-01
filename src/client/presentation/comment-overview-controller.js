@@ -105,12 +105,11 @@ export class CommentOverviewController {
   }
 
   render() {
-    if (!this.panel) {
+    if (!this.panel || this.panel.classList.contains('hidden')) {
       return;
     }
 
     this.panel.replaceChildren();
-
     if (this.errorMessage) {
       const error = createOverviewState({
         copy: this.errorMessage,

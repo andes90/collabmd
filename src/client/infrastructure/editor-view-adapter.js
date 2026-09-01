@@ -1,4 +1,3 @@
-import { vim } from '@replit/codemirror-vim';
 import { autocompletion, closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import {
   defaultKeymap,
@@ -60,8 +59,20 @@ import { plantUmlLanguage, plantUmlLanguageDescription } from '../domain/plantum
 import { structurizrLanguage, structurizrLanguageDescription } from '../domain/structurizr-language.js';
 import { handleImagePasteEvent } from './editor-paste-utils.js';
 
+const MARKDOWN_CODE_LANGUAGE_ALIASES = new Set([
+  'bash', 'c', 'c++', 'cpp', 'css', 'diff', 'html', 'java', 'javascript', 'js',
+  'json', 'jsx', 'markdown', 'md', 'python', 'py', 'rust', 'sh', 'shell', 'sql',
+  'ts', 'tsx', 'typescript', 'xml', 'yaml', 'yml',
+]);
+
+function isMarkdownCodeLanguage(language) {
+  const names = [language.name, ...(language.alias || [])]
+    .map((value) => String(value).toLowerCase());
+  return names.some((name) => MARKDOWN_CODE_LANGUAGE_ALIASES.has(name));
+}
+
 const markdownCodeLanguages = [
-  ...languages,
+  ...languages.filter(isMarkdownCodeLanguage),
   mermaidLanguageDescription,
   plantUmlLanguageDescription,
   structurizrLanguageDescription,
@@ -501,7 +512,7 @@ export class EditorViewAdapter {
       highlightActiveLine(),
       highlightSelectionMatches(),
       createSearchNavigationListener(),
-      this.vimModeCompartment.of(!readOnly && this.vimModeEnabled ? vim({ status: true }) : []),
+      this.vimModeCompartment.of([]),
       keymap.of([
         ...closeBracketsKeymap,
         ...defaultKeymap,
@@ -584,6 +595,10 @@ export class EditorViewAdapter {
     this.updateCursorInfo(this.editorView.state);
     this.onSelectionChanged?.(this.editorView.state);
     this.emitViewportChange();
+
+    if (this.vimModeEnabled && editorMode !== 'provisional') {
+      void this.applyVimExtension();
+    }
 
     if (preserveScrollTop > 0) {
       requestAnimationFrame(() => {
@@ -676,6 +691,21 @@ export class EditorViewAdapter {
     return this.vimModeEnabled;
   }
 
+  async applyVimExtension() {
+    if (!this.vimModeEnabled || !this.editorView || this.editorView.state.readOnly) {
+      return;
+    }
+
+    const { vim } = await import('@replit/codemirror-vim');
+    if (!this.vimModeEnabled || !this.editorView || this.editorView.state.readOnly) {
+      return;
+    }
+
+    this.editorView.dispatch({
+      effects: this.vimModeCompartment.reconfigure(vim({ status: true })),
+    });
+  }
+
   setVimMode(enabled) {
     const nextEnabled = Boolean(enabled);
     if (nextEnabled === this.vimModeEnabled) {
@@ -687,12 +717,17 @@ export class EditorViewAdapter {
       return nextEnabled;
     }
 
-    this.editorView.dispatch({
-      effects: this.vimModeCompartment.reconfigure(
-        nextEnabled ? vim({ status: true }) : [],
-      ),
+    if (!nextEnabled) {
+      this.editorView.dispatch({
+        effects: this.vimModeCompartment.reconfigure([]),
+      });
+      this.editorView.focus();
+      return nextEnabled;
+    }
+
+    void this.applyVimExtension().then(() => {
+      this.editorView?.focus();
     });
-    this.editorView.focus();
     return nextEnabled;
   }
 

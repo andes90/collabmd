@@ -211,3 +211,22 @@ test('LayoutController primes preferred view without applying it immediately', (
     assert.equal(editorLayout.getAttribute('data-view'), 'editor');
   });
 });
+
+test('LayoutController restores a stored desktop view and persists later changes', () => {
+  withDom({ isMobile: false }, ({ editorLayout, viewButtons }) => {
+    const persisted = [];
+    const controller = new LayoutController({
+      mobileBreakpointQuery: { matches: false },
+      onMeasureEditor: () => {},
+      onPreferredViewChange: (view) => persisted.push(view),
+      preferredView: 'editor',
+    });
+
+    controller.initialize();
+    assert.equal(editorLayout.getAttribute('data-view'), 'editor');
+
+    viewButtons.find((button) => button.dataset.view === 'preview')?.click();
+    assert.equal(editorLayout.getAttribute('data-view'), 'preview');
+    assert.deepEqual(persisted, ['preview']);
+  });
+});

@@ -5,12 +5,13 @@ import { PreviewRenderExecutor } from './preview-render-executor.js';
 import { isLargeDocumentStats } from './preview-render-profile.js';
 import { PreviewRenderScheduler } from './preview-render-scheduler.js';
 import { resolveApiUrl } from '../domain/runtime-paths.js';
-
 export class PreviewRenderer {
   constructor({
     getContent,
     getFileList,
+    getPreviewVisible = null,
     getSourceFilePath,
+    getTheme = null,
     getWikiLinkAutoCreate = null,
     loadFileSource = null,
     onAfterRenderCommit,
@@ -25,7 +26,9 @@ export class PreviewRenderer {
   }) {
     this.getContent = getContent;
     this.getFileList = getFileList;
+    this.getPreviewVisible = getPreviewVisible;
     this.getSourceFilePath = getSourceFilePath;
+    this.getTheme = getTheme;
     this.getWikiLinkAutoCreate = getWikiLinkAutoCreate;
     this.loadFileSource = loadFileSource;
     this.onAfterRenderCommit = onAfterRenderCommit;
@@ -46,6 +49,7 @@ export class PreviewRenderer {
     this.isLargeDocument = false;
     this.hydrationPaused = false;
     this.frontmatterCollapsed = false;
+    this.previewRenderStale = false;
 
     this.handlePreviewClick = (event) => {
       const frontmatterToggle = event.target.closest('.frontmatter-toggle');
@@ -202,9 +206,25 @@ export class PreviewRenderer {
     }
     this.mermaidHydrator.applyTheme(theme);
   }
+  markStale() {
+    this.previewRenderStale = true;
+    this.renderScheduler.cancel();
+  }
 
   queueRender() {
-    this._deferredPreviewStylesPromise ??= import('../styles/deferred-preview.css');
+    if (!(this.getPreviewVisible?.() ?? true)) {
+      this.markStale();
+      return;
+    }
+
+    this.previewRenderStale = false;
+    this._deferredPreviewStylesPromise ??= Promise.all([
+      import('./highlight-theme.js').then(({ ensureHighlightThemeStylesheet }) => {
+        ensureHighlightThemeStylesheet();
+        this.applyTheme(this.getTheme?.() ?? 'dark');
+      }),
+      import('../styles/deferred-preview.css'),
+    ]);
     const markdownText = this.getContent();
     this.renderScheduler.cancel();
     this.mermaidHydrator.markPending();

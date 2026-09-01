@@ -1,4 +1,5 @@
 import { PdfPreviewController } from '../application/pdf-preview-controller.js';
+import { analyzeMarkdownComplexity, isLargeDocumentStats } from '../application/preview-render-profile.js';
 import { PreviewRenderer } from '../application/preview-renderer.js';
 import { renderWebMcpDiagram } from '../application/webmcp-diagram-renderer.js';
 import { ensureQuickSwitcherInstance, toggleQuickSwitcherInstance } from '../application/quick-switcher-loader.js';
@@ -307,6 +308,11 @@ export class CollabMdAppShell {
     this.previewRenderer = new PreviewRenderer({
       getContent: () => this.getPreviewSource(),
       getFileList: () => this.fileExplorer.flatDocumentFiles,
+      getPreviewVisible: () => (
+        Boolean(this._staticPreviewDocument)
+        || this.layoutController?.currentView !== 'editor'
+      ),
+      getTheme: () => this.themeController?.getTheme?.() ?? 'dark',
       getWikiLinkAutoCreate: () => this.runtimeConfig.wikiLinkAutoCreate !== false,
       loadFileSource: async (filePath) => {
         const payload = await this.vaultApiClient.readFile(filePath);
@@ -341,11 +347,6 @@ export class CollabMdAppShell {
         this.schedulePreviewLayoutSync({ delayMs: 0 });
         this.refreshCommentUiLayout();
       },
-      onRenderComplete: () => {
-        this.applyPendingPreviewRouteAnchor({ allowExpired: true, behavior: 'auto', clearMissing: true });
-        this.schedulePreviewLayoutSync({ delayMs: 0 });
-        this.refreshCommentUiLayout();
-      },
       outlineController: this.outlineController,
       plantUmlRenderClient: this.vaultApiClient,
       previewContainer: this.elements.previewContainer,
@@ -354,8 +355,16 @@ export class CollabMdAppShell {
     });
     this.themeController = new ThemeController({ onChange: (theme) => this.handleThemeChange(theme) });
     this.layoutController = new LayoutController({
+      preferredView: this.preferences.getViewMode() || 'split',
       mobileBreakpointQuery: this.mobileBreakpointQuery,
       onMeasureEditor: () => this.session?.requestMeasure(),
+      onPreferredViewChange: (view) => this.preferences.setViewMode(view),
+      onViewChange: () => {
+        if (!this.currentFilePath && !this._staticPreviewDocument) {
+          return;
+        }
+        this.previewRenderer.queueRender();
+      },
       onViewRequest: (view) => this.handleLayoutViewRequest(view),
     });
     this.scrollSyncController = new ScrollSyncController({
@@ -415,7 +424,10 @@ export class CollabMdAppShell {
       commentsDrawerList: this.elements.commentsDrawerList,
       commentsToggleButton: this.elements.commentsToggleButton,
       editorContainer: this.elements.editorContainer,
-      onWillOpenDrawer: () => this.outlineController.close(),
+      onWillOpenDrawer: () => {
+        this._deferredCollabStylesPromise ??= import('../styles/deferred-collab.css');
+        this.outlineController.close();
+      },
       previewContainer: this.elements.previewContainer,
       previewElement: this.elements.previewContent,
       onCreateThread: ({ anchor, body }) => this.createCommentThread({ anchor, body }),
@@ -568,6 +580,7 @@ export class CollabMdAppShell {
       onBeforeFileOpen: () => {
         clearTimeout(this._basePreviewRenderTimer);
         this._basePreviewRenderTimer = null;
+        this.connectWorkspaceSync?.();
         this.session = null;
         this.commentUi.attachSession(null);
         this.layoutController.reset();
@@ -578,7 +591,7 @@ export class CollabMdAppShell {
         this.clearInitialFileBootstrap();
       },
       onConnectionChange: (state) => this.handleConnectionChange(state),
-      onContentChange: ({ isBase, isHtml, isMermaid, isPlantUml, isStructurizrWorkspace }) => {
+      onContentChange: ({ isBase, isHtml, isStructurizrWorkspace }) => {
         void this.webMcpTools.refresh();
         this.handleCommentEditorContentChange();
         if (isHtml) {
@@ -603,10 +616,16 @@ export class CollabMdAppShell {
           return;
         }
 
-        this.previewRenderer.queueRender();
-        if (!isMermaid && !isPlantUml) {
-          this.scheduleBacklinkRefresh();
+        const markdownText = this.session?.getText?.() ?? '';
+        if (
+          !this.preferences.getViewMode()
+          && this.layoutController.currentView === 'split'
+          && isLargeDocumentStats(analyzeMarkdownComplexity(markdownText))
+        ) {
+          this.layoutController.setView('editor', { persist: false });
         }
+
+        this.previewRenderer.queueRender();
       },
       onCommentsChange: (threads) => this.handleCommentThreadsChange(threads),
       onFileAwarenessChange: (users) => this.updateFileAwareness(users),

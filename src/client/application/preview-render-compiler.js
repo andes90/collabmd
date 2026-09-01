@@ -1,5 +1,4 @@
 import markdownIt from 'markdown-it';
-import hljs from 'highlight.js/lib/common';
 
 import { isImageAttachmentFilePath } from '../../domain/file-kind.js';
 import { resolveVaultRelativePath } from '../../domain/vault-paths.js';
@@ -8,15 +7,11 @@ import {
   resolveWikiTargetWithIndex,
 } from '../../domain/wiki-link-resolver.js';
 import { classifyPublicVideoEmbed } from '../../domain/video-embed.js';
+import { highlightFence } from '../domain/highlight-runtime.js';
 import { escapeHtml } from '../domain/vault-utils.js';
 import { extractYamlFrontmatter } from '../../domain/yaml-frontmatter.js';
 import { renderFrontmatterBlock } from './markdown-frontmatter.js';
 import { analyzeMarkdownComplexity } from './preview-render-profile.js';
-
-hljs.registerAliases(['cql', 'mariadb', 'mssql', 'mysql', 'plsql', 'sqlite'], { languageName: 'sql' });
-
-const AUTO_HIGHLIGHT_LANGUAGES = ['bash', 'css', 'javascript', 'json', 'markdown', 'python', 'sql', 'typescript', 'xml', 'yaml'];
-hljs.registerAliases(['ecmascript', 'node'], { languageName: 'javascript' });
 
 
 function renderToken(renderer, tokens, index, options, env, self) {
@@ -254,6 +249,20 @@ function resolveLocalAttachmentUrl(source = '', {
   return `${attachmentApiPath}?path=${encodeURIComponent(resolvedPath)}`;
 }
 
+function resolveWikiImageAttachmentPath(target = '', sourceFilePath = '') {
+  const trimmed = String(target ?? '').trim().replace(/^\/+/u, '');
+  if (!trimmed) {
+    return '';
+  }
+
+  if (trimmed.startsWith('../') || trimmed.startsWith('./')) {
+    const resolved = resolveVaultRelativePath(sourceFilePath, trimmed);
+    return isImageAttachmentFilePath(resolved) ? resolved : '';
+  }
+
+  return isImageAttachmentFilePath(trimmed) ? trimmed : '';
+}
+
 function removeTokenAttr(token, name) {
   const attributeIndex = token.attrIndex(name);
   if (attributeIndex >= 0) {
@@ -262,6 +271,7 @@ function removeTokenAttr(token, name) {
 }
 
 function renderInlineWikiText(content, {
+  attachmentApiPath = '/api/attachment',
   baseEmbedCounts,
   drawioEmbedCounts,
   excalidrawEmbedCounts,
@@ -271,7 +281,7 @@ function renderInlineWikiText(content, {
   sourceFilePath = '',
   wikiLinkAutoCreate = true,
 }) {
-  const regex = /!\[\[([^\]|#]+\.(?:base|excalidraw|drawio|mmd|mermaid|puml|plantuml))(?:#([^\]|]+))?(?:\|([^\]]+))?\]\]|\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/gi;
+  const regex = /!\[\[([^\]|#]+\.(?:base|excalidraw|drawio|mmd|mermaid|puml|plantuml|png|jpe?g|webp|gif|svg))(?:#([^\]|]+))?(?:\|([^\]]+))?\]\]|\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/gi;
   let lastIndex = 0;
   let html = '';
   let match;
@@ -320,6 +330,12 @@ function renderInlineWikiText(content, {
           label: normalizePreviewTypography(label.replace(/\.(?:mmd|mermaid)$/i, '')),
           target,
         });
+      } else if (isImageAttachmentFilePath(target)) {
+        const resolvedPath = resolveWikiImageAttachmentPath(target, sourceFilePath);
+        const alt = normalizePreviewTypography(label.replace(/\.(?:png|jpe?g|webp|gif|svg)$/i, ''));
+        html += resolvedPath
+          ? `<img src="${escapeHtml(`${attachmentApiPath}?path=${encodeURIComponent(resolvedPath)}`)}" alt="${escapeHtml(alt)}" loading="lazy" decoding="async">`
+          : `<a class="wiki-link wiki-link-new" href="#" data-wiki-target="${escapeHtml(target)}" title="${escapeHtml(`Missing "${target}"`)}">${escapePreviewText(label)}</a>`;
       } else {
         const occurrenceIndex = plantUmlEmbedCounts.get(target) ?? 0;
         plantUmlEmbedCounts.set(target, occurrenceIndex + 1);
@@ -364,11 +380,7 @@ function createMarkdownRenderer(fileList = [], {
       }
 
       try {
-        if (language && hljs.getLanguage(language)) {
-          return hljs.highlight(source, { language }).value;
-        }
-
-        return hljs.highlightAuto(source, AUTO_HIGHLIGHT_LANGUAGES).value;
+        return highlightFence(source, language);
       } catch {
         return '';
       }
@@ -487,6 +499,7 @@ function createMarkdownRenderer(fileList = [], {
 
     if (content.startsWith('[x] ') || content.startsWith('[X] ')) {
       return `<input type="checkbox" checked data-task-checkbox="true"> ${renderInlineWikiText(content.slice(4), {
+        attachmentApiPath,
         baseEmbedCounts: baseCounts,
         drawioEmbedCounts,
         excalidrawEmbedCounts,
@@ -500,6 +513,7 @@ function createMarkdownRenderer(fileList = [], {
 
     if (content.startsWith('[ ] ')) {
       return `<input type="checkbox" data-task-checkbox="true"> ${renderInlineWikiText(content.slice(4), {
+        attachmentApiPath,
         baseEmbedCounts: baseCounts,
         drawioEmbedCounts,
         excalidrawEmbedCounts,
@@ -512,6 +526,7 @@ function createMarkdownRenderer(fileList = [], {
     }
 
     return renderInlineWikiText(content, {
+      attachmentApiPath,
       baseEmbedCounts: baseCounts,
       drawioEmbedCounts,
       excalidrawEmbedCounts,
@@ -551,6 +566,8 @@ function createMarkdownRenderer(fileList = [], {
       return renderedVideo;
     }
 
+    token.attrSet('loading', 'lazy');
+    token.attrSet('decoding', 'async');
     return renderToken(fallbackImage, tokens, index, options, env, self);
   };
 

@@ -18,6 +18,11 @@
   contain-intrinsic-size: auto 4rem;
 }
 
+.preview-content img {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 240px;
+}
+
 .preview-content > pre,
 .preview-content > table,
 .preview-content > .table-wrapper {

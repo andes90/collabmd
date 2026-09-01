@@ -34,6 +34,9 @@ export const commentsFeature = {
 
   syncCommentChrome(filePath = this.currentFilePath) {
     const supported = supportsCommentsForFilePath(filePath) && !this.isExcalidrawFile(filePath);
+    if (supported && globalThis.document) {
+      this._deferredCollabStylesPromise ??= import('../../styles/deferred-collab.css');
+    }
     this.commentUi.setCurrentFile(filePath, {
       fileKind: this.getCommentFileKind(filePath),
       supported,
@@ -77,6 +80,9 @@ export const commentsFeature = {
 
   refreshCommentOverviewForSidebarOpen() {
     this._commentOverviewStale = false;
+    if (globalThis.document) {
+      this._deferredCollabStylesPromise ??= import('../../styles/deferred-collab.css');
+    }
     void this.commentsOverview?.refresh?.();
   },
 

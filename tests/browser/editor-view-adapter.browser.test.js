@@ -12,11 +12,10 @@ describe('EditorViewAdapter Vim mode', () => {
     document.body.innerHTML = '';
   });
 
-  it('defaults to insert editing and enables Vim mode only when opted in', () => {
+  it('defaults to insert editing and enables Vim mode only when opted in', async () => {
     document.body.innerHTML = '<div id="editor"></div><span id="line-info"></span>';
     const adapter = new EditorViewAdapter({
       editorContainer: document.getElementById('editor'),
-      initialTheme: 'dark',
       lineInfoElement: document.getElementById('line-info'),
     });
     const ydoc = new Y.Doc();
@@ -24,8 +23,8 @@ describe('EditorViewAdapter Vim mode', () => {
 
     adapter.initialize({
       awareness: null,
-      filePath: 'README.md',
-      undoManager: new Y.UndoManager(ytext),
+      filePath: 'note.md',
+      undoManager: null,
       ytext,
     });
 
@@ -34,7 +33,7 @@ describe('EditorViewAdapter Vim mode', () => {
 
     expect(adapter.setVimMode(true)).toBe(true);
     expect(adapter.isVimModeEnabled()).toBe(true);
-    expect(document.querySelector('.cm-vimMode')).not.toBeNull();
+    await expect.poll(() => document.querySelector('.cm-vimMode')).not.toBeNull();
 
     expect(adapter.setVimMode(false)).toBe(false);
     expect(adapter.isVimModeEnabled()).toBe(false);

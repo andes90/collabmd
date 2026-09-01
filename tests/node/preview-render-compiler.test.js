@@ -471,7 +471,7 @@ test('compilePreviewDocument keeps unsupported image urls as images', () => {
 
   const { html } = compilePreviewDocument({ markdownText: markdown });
 
-  assert.match(html, /<img src="https:\/\/cdn\.example\.com\/screenshot\.png" alt="Screenshot">/);
+  assert.match(html, /<img src="https:\/\/cdn\.example\.com\/screenshot\.png" alt="Screenshot" loading="lazy" decoding="async">/);
   assert.doesNotMatch(html, /video-embed/);
 });
 
@@ -486,10 +486,36 @@ test('compilePreviewDocument rewrites relative vault image attachments through t
 
   assert.match(
     html,
-    /<img src="\/app\/api\/attachment\?path=README\.assets%2Fscreenshot\.png" alt="Screenshot">/,
+    /<img src="\/app\/api\/attachment\?path=README\.assets%2Fscreenshot\.png" alt="Screenshot" loading="lazy" decoding="async">/,
   );
 });
 
+test('compilePreviewDocument renders vault-root wiki image embeds through the attachment API', () => {
+  const { html } = compilePreviewDocument({
+    attachmentApiPath: '/api/attachment',
+    markdownText: '- Image: ![[assets/image-20260528-091012.webp]]',
+    sourceFilePath: 'webmcp-full-matrix-20260829/index.md',
+  });
+
+  assert.match(
+    html,
+    /<img src="\/api\/attachment\?path=assets%2Fimage-20260528-091012\.webp" alt="assets\/image-20260528-091012" loading="lazy" decoding="async">/,
+  );
+  assert.doesNotMatch(html, /wiki-link-new/);
+});
+
+test('compilePreviewDocument resolves relative wiki image embeds from the source file', () => {
+  const { html } = compilePreviewDocument({
+    attachmentApiPath: '/api/attachment',
+    markdownText: '![[./cover.png|Cover]]',
+    sourceFilePath: 'notes/welcome.md',
+  });
+
+  assert.match(
+    html,
+    /<img src="\/api\/attachment\?path=notes%2Fcover\.png" alt="Cover" loading="lazy" decoding="async">/,
+  );
+});
 test('compilePreviewDocument does not turn markdown links into video embeds', () => {
   const markdown = '[Watch](https://www.youtube.com/watch?v=dQw4w9WgXcQ)';
 
@@ -513,7 +539,7 @@ test('compilePreviewDocument does not embed Google Drive public links', () => {
 
   const { html } = compilePreviewDocument({ markdownText: markdown });
 
-  assert.match(html, /<img src="https:\/\/drive\.google\.com\/file\/d\/abc123\/view\?usp=sharing" alt="Drive video">/);
+  assert.match(html, /<img src="https:\/\/drive\.google\.com\/file\/d\/abc123\/view\?usp=sharing" alt="Drive video" loading="lazy" decoding="async">/);
   assert.doesNotMatch(html, /video-embed/);
 });
 
