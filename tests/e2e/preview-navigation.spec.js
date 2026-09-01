@@ -164,6 +164,7 @@ test('keeps the linked mentions dock reachable while preview scrolls and expands
   await openFile(page, 'README.md', { waitFor: 'preview' });
   await createLinkedMentionFiles(page, { count: 12 });
   await openFile(page, 'projects/collabmd.md', { waitFor: 'preview' });
+  await expect(page.locator('#previewContent')).toHaveAttribute('data-render-phase', 'ready', { timeout: 60000 });
 
   const dock = page.locator('#backlinksPanel .backlinks-panel-dock');
   const dockHeader = dock.locator('.backlinks-header');
