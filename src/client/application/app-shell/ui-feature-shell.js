@@ -1,6 +1,6 @@
 import { getVaultFileKind, supportsBacklinksForFilePath } from '../../../domain/file-kind.js';
 import { isPlainQuickSwitcherShortcut } from '../../domain/keyboard-shortcuts.js';
-import { createFileRouteHash, isCollabMdHashRoute } from '../../domain/hash-routes.js';
+import { createFileRouteHash, isCollabMdHashRoute, isGitHashRouteType } from '../../domain/hash-routes.js';
 
 const VERSION_RELOAD_TOAST_DURATION_MS = 0;
 const PREVIEW_ROUTE_ANCHOR_STABILIZE_MS = 2000;
@@ -85,17 +85,24 @@ function initialize() {
     this.syncToolbarOverflowVisibility?.();
   });
 
+  if (this.runtimeConfig?.gitEnabled !== false) {
+    this.gitRepoAvailable = true;
+    this.elements.gitSidebarTab?.classList.remove('hidden');
+    this.elements.sidebarTabs?.classList.remove('hidden');
+  }
+
   this.fileExplorerReadyPromise = this.fileExplorer.refresh().then(() => {
     this.fileExplorerReady = true;
     void this.commentsOverview?.refresh?.();
-    if (this.runtimeConfig?.gitEnabled !== false) {
-      void this.gitPanel.refresh({ force: true });
+    if (isGitHashRouteType(this.navigation.getHashRoute().type)) {
+      void this.gitPanel.refresh({ force: false });
     }
     if (this.isTabActive) {
       return this.workspaceRouteController.handleHashChange();
     }
     return undefined;
   });
+
 }
 
 /** @this {UiShellContext} */
@@ -375,6 +382,12 @@ function bindEvents() {
   this.elements.previewContent?.addEventListener('click', (event) => {
     this.handlePreviewContentClick?.(event);
   });
+  this.elements.previewContent?.addEventListener('pointerover', (event) => {
+    this.handlePreviewContentPointerOver?.(event);
+  });
+  this.elements.previewContent?.addEventListener('focusin', (event) => {
+    this.handlePreviewContentPointerOver?.(event);
+  });
 
   this.elements.sidebarToggle?.addEventListener('click', () => {
     this.closeToolbarOverflowMenu();
@@ -519,6 +532,7 @@ function navigatePreviewHeading(target, headingId, { behavior = 'auto' } = {}) {
 
   this.scrollSyncController?.suspendSync?.(250);
   scrollPreviewToTarget(previewContainer, target, { behavior });
+  this.attachPreviewHeadingControls?.(target);
 
   const sourceLine = Number.parseInt(target.getAttribute('data-source-line') || '', 10);
   if (Number.isFinite(sourceLine)) {
@@ -561,7 +575,7 @@ async function copyPreviewHeadingLink(anchorId) {
 
 /** @this {UiShellContext} */
 async function copyPreviewCodeBlock(button) {
-  const code = button?.closest('.preview-code-block')?.querySelector(':scope > pre > code');
+  const code = button?.closest('pre')?.querySelector(':scope > code');
   if (!(code instanceof HTMLElement)) {
     return;
   }
@@ -574,27 +588,107 @@ async function copyPreviewCodeBlock(button) {
   }
 }
 
-/** @this {UiShellContext} */
-function syncPreviewCodeCopyButtons() {
-  this.elements.previewContent?.querySelectorAll('pre > code').forEach((code) => {
-    const pre = code.parentElement;
-    const wrapper = document.createElement('div');
-    wrapper.className = 'preview-code-block';
-    // pi-lens-ignore: no-inner-html-js
-    wrapper.innerHTML = `
-      <div class="preview-code-actions">
-        <button type="button" class="ui-button ui-button--secondary ui-button--compact preview-code-copy-button" aria-label="Copy code" title="Copy code">
-          ${PREVIEW_CODE_COPY_ICON}<span data-preview-code-copy-label>Copy</span>
-        </button>
-      </div>`;
-    pre.replaceWith(wrapper);
-    wrapper.append(pre);
-  });
+
+function syncHeadingFoldButtonState(heading, button) {
+  if (!(heading instanceof HTMLElement) || !(button instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  const headingLabel = getHeadingLinkLabel(heading);
+  const collapsed = heading.dataset.previewHeadingCollapsed === 'true';
+  heading.setAttribute('aria-expanded', String(!collapsed));
+  button.setAttribute('aria-expanded', String(!collapsed));
+  button.setAttribute('aria-label', `${collapsed ? 'Expand' : 'Collapse'} ${headingLabel}`);
+  button.setAttribute('title', `${collapsed ? 'Expand' : 'Collapse'} section`);
 }
 
+/** @this {UiShellContext} */
+function attachPreviewHeadingControls(heading) {
+  if (!(heading instanceof HTMLElement) || !/^H[1-6]$/.test(heading.tagName)) {
+    return;
+  }
+
+  if (!this._previewHeadingFoldButton) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'ui-icon-button preview-heading-fold-button';
+    this._previewHeadingFoldButton = button;
+  }
+  if (!this._previewHeadingLinkButton) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'ui-icon-button preview-heading-link-button';
+    // pi-lens-ignore: no-inner-html-js
+    button.innerHTML = PREVIEW_HEADING_LINK_ICON;
+    this._previewHeadingLinkButton = button;
+  }
+
+  const foldButton = this._previewHeadingFoldButton;
+  const linkButton = this._previewHeadingLinkButton;
+
+  if (foldButton.parentElement !== heading) {
+    heading.prepend(foldButton);
+  }
+  syncHeadingFoldButtonState(heading, foldButton);
+
+  if (!heading.id) {
+    linkButton.remove();
+    return;
+  }
+
+  const headingLabel = getHeadingLinkLabel(heading);
+  linkButton.dataset.previewHeadingAnchor = heading.id;
+  linkButton.setAttribute('aria-label', `Copy link to ${headingLabel}`);
+  linkButton.setAttribute('title', 'Copy link to this section');
+  if (linkButton.parentElement !== heading) {
+    heading.append(linkButton);
+  }
+}
+
+/** @this {UiShellContext} */
+function attachPreviewCodeCopyButton(pre) {
+  if (!(pre instanceof HTMLElement) || pre.tagName !== 'PRE' || !pre.querySelector(':scope > code')) {
+    return;
+  }
+
+  if (!this._previewCodeCopyButton) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'ui-button ui-button--secondary ui-button--compact preview-code-copy-button';
+    button.setAttribute('aria-label', 'Copy code');
+    button.title = 'Copy code';
+    // pi-lens-ignore: no-inner-html-js
+    button.innerHTML = `${PREVIEW_CODE_COPY_ICON}<span data-preview-code-copy-label>Copy</span>`;
+    this._previewCodeCopyButton = button;
+  }
+
+  const button = this._previewCodeCopyButton;
+  if (button.parentElement !== pre) {
+    pre.append(button);
+  }
+}
+
+/** @this {UiShellContext} */
+function handlePreviewContentPointerOver(event) {
+  if (!(event.target instanceof Element) || !this.elements.previewContent) {
+    return;
+  }
+
+  const heading = event.target.closest('h1, h2, h3, h4, h5, h6');
+  if (heading instanceof HTMLElement && this.elements.previewContent.contains(heading)) {
+    this.attachPreviewHeadingControls(heading);
+  }
+
+  const pre = event.target.closest('pre');
+  if (pre instanceof HTMLElement && this.elements.previewContent.contains(pre)) {
+    this.attachPreviewCodeCopyButton(pre);
+  }
+}
+
+
 function applyPreviewHeadingFolds(previewContent) {
-  const parents = new Set(Array.from(previewContent?.querySelectorAll?.('.preview-heading-fold-button') ?? [])
-    .map((button) => button.closest('h1, h2, h3, h4, h5, h6')?.parentElement)
+  const parents = new Set(Array.from(previewContent?.querySelectorAll?.('h1, h2, h3, h4, h5, h6') ?? [])
+    .map((heading) => heading.parentElement)
     .filter(Boolean));
 
   parents.forEach((parent) => {
@@ -658,19 +752,12 @@ function syncPreviewHeadingFoldButtons() {
       return;
     }
 
-    const headingLabel = getHeadingLinkLabel(heading);
-    let button = heading.querySelector(':scope > .preview-heading-fold-button');
-    if (!(button instanceof HTMLButtonElement)) {
-      button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'ui-icon-button preview-heading-fold-button';
-      heading.prepend(button);
-    }
-
     const collapsed = heading.dataset.previewHeadingCollapsed === 'true';
-    button.setAttribute('aria-expanded', String(!collapsed));
-    button.setAttribute('aria-label', `${collapsed ? 'Expand' : 'Collapse'} ${headingLabel}`);
-    button.setAttribute('title', `${collapsed ? 'Expand' : 'Collapse'} section`);
+    heading.setAttribute('aria-expanded', String(!collapsed));
+    const button = heading.querySelector(':scope > .preview-heading-fold-button');
+    if (button instanceof HTMLButtonElement) {
+      syncHeadingFoldButtonState(heading, button);
+    }
   });
 
   applyPreviewHeadingFolds(this.elements.previewContent);
@@ -678,29 +765,18 @@ function syncPreviewHeadingFoldButtons() {
 
 /** @this {UiShellContext} */
 function syncPreviewHeadingLinkButtons() {
-  const headings = this.elements.previewContent?.querySelectorAll?.('h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]') ?? [];
+  const linkButton = this._previewHeadingLinkButton;
+  const heading = linkButton?.parentElement;
+  if (!(heading instanceof HTMLElement) || !heading.id) {
+    return;
+  }
 
-  Array.from(headings).forEach((heading) => {
-    if (!(heading instanceof HTMLElement) || !heading.id) {
-      return;
-    }
-
-    const headingLabel = getHeadingLinkLabel(heading);
-    let button = heading.querySelector(':scope > .preview-heading-link-button');
-    if (!(button instanceof HTMLButtonElement)) {
-      button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'ui-icon-button preview-heading-link-button';
-      // pi-lens-ignore: no-inner-html-js
-      button.innerHTML = PREVIEW_HEADING_LINK_ICON;
-      heading.appendChild(button);
-    }
-
-    button.dataset.previewHeadingAnchor = heading.id;
-    button.setAttribute('aria-label', `Copy link to ${headingLabel}`);
-    button.setAttribute('title', 'Copy link to this section');
-  });
+  const headingLabel = getHeadingLinkLabel(heading);
+  linkButton.dataset.previewHeadingAnchor = heading.id;
+  linkButton.setAttribute('aria-label', `Copy link to ${headingLabel}`);
+  linkButton.setAttribute('title', 'Copy link to this section');
 }
+
 
 /** @this {UiShellContext} */
 function requestPreviewRouteAnchor(anchorId, filePath = this.currentFilePath) {
@@ -1030,6 +1106,8 @@ function clearInitialFileBootstrap() {
 
 export const uiFeatureShellMethods = {
   applyPendingPreviewRouteAnchor,
+  attachPreviewCodeCopyButton,
+  attachPreviewHeadingControls,
   bindEvents,
   clearInitialFileBootstrap,
   closeToolbarOverflowMenu,
@@ -1043,6 +1121,7 @@ export const uiFeatureShellMethods = {
   handleConnectionChange,
   handleDocumentKeydown,
   handlePreviewContentClick,
+  handlePreviewContentPointerOver,
   handleThemeChange,
   hideEditorLoading,
   initialize,
@@ -1055,7 +1134,6 @@ export const uiFeatureShellMethods = {
   scheduleBacklinkRefresh,
   showEditorLoadError,
   showEditorLoading,
-  syncPreviewCodeCopyButtons,
   syncPreviewHeadingFoldButtons,
   syncPreviewHeadingLinkButtons,
   syncVisualViewportBounds,

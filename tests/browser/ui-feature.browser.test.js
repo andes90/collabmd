@@ -141,7 +141,7 @@ describe('uiFeature browser helpers', () => {
     expect(context.refreshCommentOverviewForSidebarOpen).toHaveBeenCalledTimes(1);
   });
 
-  it('refreshes Git status during startup so the Git menu can be revealed', async () => {
+  it('reveals the Git tab on startup without forcing a status refresh', async () => {
     document.body.innerHTML = `
       <div id="sidebar-tabs" class="hidden"></div>
       <button id="git-tab" class="hidden"></button>
@@ -228,7 +228,8 @@ describe('uiFeature browser helpers', () => {
 
     expect(context.fileExplorer.refresh).toHaveBeenCalledTimes(1);
     expect(context.gitPanel.initialize).toHaveBeenCalledTimes(1);
-    expect(context.gitPanel.refresh).toHaveBeenCalledWith({ force: true });
+    expect(context.gitPanel.refresh).not.toHaveBeenCalled();
+    expect(context.gitRepoAvailable).toBe(true);
     expect(context.gitDiffView.initialize).toHaveBeenCalledTimes(1);
     expect(context.fileHistoryView.initialize).toHaveBeenCalledTimes(1);
     expect(context.elements.sidebarTabs.classList.contains('hidden')).toBe(false);
@@ -980,11 +981,12 @@ describe('uiFeature browser helpers', () => {
     };
     Object.assign(context, uiFeatureShellMethods);
 
-    context.syncPreviewCodeCopyButtons();
+    context.attachPreviewCodeCopyButton(previewContent.querySelector('pre'));
 
     const button = previewContent.querySelector('.preview-code-copy-button');
     expect(previewContent.querySelectorAll('.preview-code-copy-button')).toHaveLength(1);
     expect(button.getAttribute('aria-label')).toBe('Copy code');
+
 
     const clickEvent = { preventDefault: vi.fn(), target: button };
     context.handlePreviewContentClick(clickEvent);
@@ -1018,14 +1020,20 @@ describe('uiFeature browser helpers', () => {
     };
     Object.assign(context, uiFeatureShellMethods);
     context.syncPreviewHeadingFoldButtons();
+    expect(previewContent.querySelectorAll('.preview-heading-fold-button')).toHaveLength(0);
 
     const [sectionA, sectionB, sectionC] = previewContent.querySelectorAll('h2, h3');
-    const clickFold = (heading) => context.handlePreviewContentClick({
-      preventDefault: vi.fn(),
-      target: heading.querySelector('.preview-heading-fold-button'),
-    });
-    const sectionBButton = sectionB.querySelector('.preview-heading-fold-button');
+
+    const clickFold = (heading) => {
+      context.attachPreviewHeadingControls(heading);
+      context.handlePreviewContentClick({
+        preventDefault: vi.fn(),
+        target: heading.querySelector('.preview-heading-fold-button'),
+      });
+    };
     clickFold(sectionB);
+    const sectionBButton = context._previewHeadingFoldButton;
+
 
     expect(sectionBButton.getAttribute('aria-expanded')).toBe('false');
     expect(sectionBButton.getAttribute('aria-label')).toBe('Expand Section B');
@@ -1100,18 +1108,21 @@ describe('uiFeature browser helpers', () => {
     Object.assign(context, uiFeatureShellMethods);
     window.location.hash = 'file=MongoDB%2Fmigration-plan.md';
 
-    context.syncPreviewHeadingLinkButtons();
+    context.attachPreviewHeadingControls(document.getElementById('section-a'));
     const button = previewContent.querySelector('#section-a .preview-heading-link-button');
     expect(button).not.toBeNull();
     expect(button.getAttribute('aria-label')).toBe('Copy link to Section A');
 
+    context.attachPreviewHeadingControls(document.getElementById('section-b'));
     const complexHeadingButton = previewContent.querySelector('#section-b .preview-heading-link-button');
     expect(complexHeadingButton).not.toBeNull();
     expect(complexHeadingButton.getAttribute('aria-label')).toBe('Copy link to Approach E: Push MongoDB to enable Live Migration Service on Jakarta cluster');
 
+    context.attachPreviewHeadingControls(document.getElementById('section-a'));
+    const sectionAButton = previewContent.querySelector('#section-a .preview-heading-link-button');
     const clickEvent = {
       preventDefault: vi.fn(),
-      target: button,
+      target: sectionAButton,
     };
     context.handlePreviewContentClick(clickEvent);
 

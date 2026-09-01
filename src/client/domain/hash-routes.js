@@ -9,6 +9,11 @@ export const HASH_ROUTE_KEYS = Object.freeze({
   gitHistory: 'git-history',
 });
 
+export function isGitHashRouteType(type) {
+  return String(type ?? '').startsWith('git-');
+}
+
+
 export function getHashParamsFromRaw(hash = '') {
   const rawHash = String(hash ?? '');
   const normalizedHash = rawHash.startsWith('#')

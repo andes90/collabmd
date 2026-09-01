@@ -12,7 +12,7 @@ function createView(overrides = {}) {
     <nav id="fileTree"></nav>
   `;
 
-  return new FileExplorerView({
+  const view = new FileExplorerView({
     mobileBreakpointQuery: { matches: true },
     onEntryDrop: vi.fn(),
     onDirectoryToggle: vi.fn(),
@@ -23,6 +23,9 @@ function createView(overrides = {}) {
     onValidateDrop: vi.fn(() => true),
     ...overrides,
   });
+  view.initialize();
+  return view;
+
 }
 
 describe('FileExplorerView mobile interactions', () => {

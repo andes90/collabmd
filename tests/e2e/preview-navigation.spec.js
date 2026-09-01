@@ -344,9 +344,12 @@ test('copies and restores file-plus-anchor deep links from preview headings', as
   await openFile(page, 'README.md');
   await replaceEditorContent(page, FRAGMENT_LINK_DOCUMENT);
 
-  const headingLinkButton = page.locator('#previewContent h2#section-a .preview-heading-link-button');
+  const heading = page.locator('#previewContent h2#section-a');
+  await heading.hover();
+  const headingLinkButton = heading.locator('.preview-heading-link-button');
   await expect(headingLinkButton).toBeVisible();
   await headingLinkButton.click();
+
 
   await expect.poll(async () => (
     page.evaluate(() => navigator.clipboard.readText())
@@ -404,9 +407,12 @@ test('copies and restores duplicate nested heading links using contextual anchor
   await openFile(page, 'README.md');
   await replaceEditorContent(page, DUPLICATE_SUBHEADING_DOCUMENT);
 
-  const headingLinkButton = page.locator('#previewContent h4#approach-b-pros .preview-heading-link-button');
+  const heading = page.locator('#previewContent h4#approach-b-pros');
+  await heading.hover();
+  const headingLinkButton = heading.locator('.preview-heading-link-button');
   await expect(headingLinkButton).toBeVisible();
   await headingLinkButton.click();
+
 
   await expect.poll(async () => (
     page.evaluate(() => navigator.clipboard.readText())

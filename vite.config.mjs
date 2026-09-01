@@ -11,6 +11,12 @@ export default defineConfig(({ command }) => ({
   base: command === 'build' ? './' : '/',
   build: {
     emptyOutDir: true,
+    modulePreload: {
+      resolveDependencies: (_filename, deps) => deps.filter((dep) => (
+        !/\/yjs-[^/]+\.js$/.test(dep)
+        && !/lobby-presence|workspace-sync-client|deferred-git|deferred-preview/.test(dep)
+      )),
+    },
     outDir: clientDistRoot,
     rollupOptions: {
       input: {

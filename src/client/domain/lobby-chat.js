@@ -1,0 +1,2 @@
+export const LOBBY_CHAT_MESSAGE_MAX_LENGTH = 280;
+export const LOBBY_CHAT_MAX_MESSAGES = 40;

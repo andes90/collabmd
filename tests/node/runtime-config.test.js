@@ -11,6 +11,8 @@ import {
   navigateToGitFilePreview,
   navigateToFile,
 } from '../../src/client/infrastructure/runtime-config.js';
+import { isGitHashRouteType } from '../../src/client/domain/hash-routes.js';
+
 
 function createWindowStub(hash = '') {
   return {
@@ -218,4 +220,8 @@ test('runtime-config distinguishes app-owned hash routes from document fragments
   assert.equal(isCollabMdHashRoute('#git-history'), false);
   assert.equal(isCollabMdHashRoute('#section-a'), false);
   assert.equal(isCollabMdHashRoute('#approach-b-pros'), false);
+  assert.equal(isGitHashRouteType('git-diff'), true);
+  assert.equal(isGitHashRouteType('git-history'), true);
+  assert.equal(isGitHashRouteType('file'), false);
 });
+

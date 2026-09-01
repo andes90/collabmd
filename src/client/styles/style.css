@@ -11,20 +11,11 @@
 @import './components/states.css';
 @import './components/surfaces.css';
 @import './components/scrollbars.css';
-@import './features/git-branch.css';
-@import './features/git-files.css';
-@import './features/git-history.css';
-@import './features/diff-toolbar.css';
-@import './features/diff-commit.css';
-@import './features/diff-lines.css';
-@import './features/diff-special.css';
 @import './features/collaboration-presence.css';
 @import './features/collaboration-chat.css';
 @import './features/collaboration-dialogs.css';
 @import './features/agent-connection.css';
 @import './features/preview-markdown.css';
-@import './features/media-lightbox.css';
-@import './features/embedded-preview.css';
 @import './features/comments-drawer.css';
 @import './features/comment-overview.css';
 @import './features/comment-overlays.css';
@@ -37,5 +28,3 @@
 @import './layout/responsive.css';
 @import './overrides/highlightjs.css';
 @import './overrides/codemirror.css';
-@import './features/quick-switcher.css';
-@import './features/diagram-preview.css';

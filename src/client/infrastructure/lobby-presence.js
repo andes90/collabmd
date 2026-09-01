@@ -2,12 +2,12 @@ import { WebsocketProvider } from 'y-websocket';
 import * as Y from 'yjs';
 
 import { createRandomUser } from '../domain/room.js';
+import { LOBBY_CHAT_MAX_MESSAGES, LOBBY_CHAT_MESSAGE_MAX_LENGTH } from '../domain/lobby-chat.js';
 import { resolveWsBaseUrl } from './runtime-config.js';
 import { stopReconnectOnControlledClose } from './yjs-provider-reset-guard.js';
 
 const LOBBY_ROOM_NAME = '__lobby__';
-export const LOBBY_CHAT_MESSAGE_MAX_LENGTH = 280;
-export const LOBBY_CHAT_MAX_MESSAGES = 40;
+
 
 function normalizeChatMessage(value) {
   const normalized = String(value ?? '')

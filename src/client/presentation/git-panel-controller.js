@@ -296,8 +296,8 @@ export class GitPanelController {
       this.stopStatusPolling();
       return;
     }
-
     this.syncSearchUi();
+    void import('../styles/deferred-git.css');
     void this.refresh({ force: false, includeHistory: this.panelMode === 'history' });
     if (this.panelMode === 'changes') {
       this.ensureStatusPolling();

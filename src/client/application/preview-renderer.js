@@ -204,6 +204,7 @@ export class PreviewRenderer {
   }
 
   queueRender() {
+    this._deferredPreviewStylesPromise ??= import('../styles/deferred-preview.css');
     const markdownText = this.getContent();
     this.renderScheduler.cancel();
     this.mermaidHydrator.markPending();
@@ -213,11 +214,12 @@ export class PreviewRenderer {
     this.renderScheduler.queue({
       markdownText,
       onRenderRequested: (queuedText, renderVersion) => {
-        void this.render(queuedText, renderVersion);
+        void this._deferredPreviewStylesPromise.then(() => this.render(queuedText, renderVersion));
       },
       renderVersion: scheduledVersion,
     });
   }
+
 
   async render(markdownText = this.getContent(), renderVersion = this.pendingRenderVersion) {
     if (!this.previewElement) {

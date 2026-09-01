@@ -1,11 +1,12 @@
 import {
+  getVaultFileKind,
   getVaultTreeNodeType,
   stripVaultFileExtension,
 } from '../../domain/file-kind.js';
 import { escapeHtml } from '../domain/vault-utils.js';
 import { getVaultPathLeaf, getVaultPathParent } from '../domain/vault-paths.js';
 import { buttonClassNames } from './components/ui/button.js';
-import { getVaultFileIconSvg } from './file-icon-svg.js';
+
 
 function findNodeByPath(nodes = [], pathValue = '') {
   for (const node of nodes) {
@@ -78,28 +79,14 @@ export class FileExplorerView {
       this.onSearchChange?.(event.target.value);
     });
 
-    this.treeContainer?.addEventListener('contextmenu', (event) => {
-      if (event.target.closest('.file-tree-item')) {
-        return;
-      }
-
-      event.preventDefault();
-      this.onTreeContextMenu?.(event);
+    this.treeContainer?.addEventListener('click', (event) => {
+      this.handleTreeClick(event);
     });
-
+    this.treeContainer?.addEventListener('contextmenu', (event) => {
+      this.handleTreeContextMenu(event);
+    });
     this.treeContainer?.addEventListener('pointerdown', (event) => {
-      if (event.target.closest('.file-tree-item')) {
-        return;
-      }
-
-      this.startLongPress(event, () => {
-        this.onTreeContextMenu?.({
-          clientX: Number(event.clientX || 0),
-          clientY: Number(event.clientY || 0),
-          preventDefault() {},
-          target: this.treeContainer,
-        });
-      }, this.treeContainer);
+      this.handleTreePointerDown(event);
     });
     this.treeContainer?.addEventListener('pointermove', (event) => {
       this.handleLongPressPointerMove(event);
@@ -113,6 +100,15 @@ export class FileExplorerView {
     this.treeContainer?.addEventListener('scroll', () => {
       this.cancelLongPress();
     }, { passive: true });
+    this.treeContainer?.addEventListener('dragstart', (event) => {
+      this.handleTreeDragStart(event);
+    });
+    this.treeContainer?.addEventListener('dragend', (event) => {
+      this.handleTreeDragEnd(event);
+    });
+    this.treeContainer?.addEventListener('dragenter', (event) => {
+      this.handleTreeDragEnter(event);
+    });
     this.treeContainer?.addEventListener('dragover', (event) => {
       this.handleTreeDragOver(event);
     });
@@ -123,6 +119,123 @@ export class FileExplorerView {
       this.handleTreeDragLeave(event);
     });
   }
+
+  getTreeItem(event) {
+    const item = event.target instanceof Element
+      ? event.target.closest('.file-tree-item')
+      : null;
+    if (!item || !this.treeContainer?.contains(item)) {
+      return null;
+    }
+    return item;
+  }
+
+  handleTreeClick(event) {
+    const item = this.getTreeItem(event);
+    if (!item) {
+      return;
+    }
+    if (this.consumeSuppressedActivation(item, event)) {
+      return;
+    }
+    if (item.classList.contains('file-tree-dir')) {
+      this.onDirectoryToggle?.(item.dataset.path);
+      return;
+    }
+    this.onFileSelect?.(item.dataset.path);
+  }
+
+  handleTreeContextMenu(event) {
+    const item = this.getTreeItem(event);
+    if (item) {
+      event.preventDefault();
+      if (item.classList.contains('file-tree-dir')) {
+        this.onFileContextMenu?.(event, { directoryPath: item.dataset.path, type: 'directory' });
+        return;
+      }
+      this.onFileContextMenu?.(event, { filePath: item.dataset.path, type: 'file' });
+      return;
+    }
+
+    event.preventDefault();
+    this.onTreeContextMenu?.(event);
+  }
+
+  handleTreePointerDown(event) {
+    const item = this.getTreeItem(event);
+    if (item) {
+      this.startLongPress(event, () => {
+        if (item.classList.contains('file-tree-dir')) {
+          this.onFileContextMenu?.(this.createLongPressEvent(item), {
+            directoryPath: item.dataset.path,
+            type: 'directory',
+          });
+          return;
+        }
+        this.onFileContextMenu?.(this.createLongPressEvent(item), {
+          filePath: item.dataset.path,
+          type: 'file',
+        });
+      }, item);
+      return;
+    }
+
+    this.startLongPress(event, () => {
+      this.onTreeContextMenu?.({
+        clientX: Number(event.clientX || 0),
+        clientY: Number(event.clientY || 0),
+        preventDefault() {},
+        target: this.treeContainer,
+      });
+    }, this.treeContainer);
+  }
+
+  handleTreeDragStart(event) {
+    const item = this.getTreeItem(event);
+    if (!item || !this.isDragAndDropEnabled()) {
+      return;
+    }
+
+    this.dragSource = {
+      path: item.dataset.path,
+      type: item.dataset.entryType,
+    };
+    document.body?.classList.add('is-file-tree-dragging');
+    if (this.treeContainer) {
+      this.treeContainer.dataset.dragActive = 'true';
+    }
+    item.classList.add('is-dragging');
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', item.dataset.path);
+    }
+  }
+
+  handleTreeDragEnd(event) {
+    const item = this.getTreeItem(event) ?? this.treeContainer?.querySelector('.file-tree-item.is-dragging');
+    item?.classList.remove('is-dragging');
+    const dragSource = this.dragSource;
+    if (this.invalidDropAttempt && dragSource) {
+      void this.onEntryDrop?.(this.invalidDropAttempt);
+    }
+    this.dragSource = null;
+    this.invalidDropAttempt = null;
+    this.clearDragFeedback();
+  }
+
+  handleTreeDragEnter(event) {
+    const directory = event.target instanceof Element
+      ? event.target.closest('.file-tree-dir')
+      : null;
+    if (directory && this.treeContainer?.contains(directory)) {
+      this.handleDirectoryDragEnter(event, directory, directory.dataset.path);
+      return;
+    }
+    if (event.target instanceof Element && event.target.closest('.file-tree-root-drop-zone')) {
+      this.handleRootZoneDragEnter(event);
+    }
+  }
+
 
   updateSearchStatus(query, matchCount = null) {
     if (!this.searchStatus) {
@@ -342,26 +455,12 @@ export class FileExplorerView {
     // Dynamic labels are escaped and icons are application-owned markup.
     // pi-lens-ignore: no-inner-html-js
     button.innerHTML = `
-      <svg class="file-tree-chevron${isExpanded ? ' expanded' : ''}" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-      <svg class="file-tree-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      <span class="file-tree-chevron${isExpanded ? ' expanded' : ''}" aria-hidden="true"></span>
+      <span class="file-tree-icon" aria-hidden="true"></span>
       <span class="file-tree-name">${escapeHtml(node.name)}</span>
     `;
-    this.configureDragSource(button, { path: node.path, type: 'directory' });
-    this.bindDirectoryDropTarget(button, node.path);
+    this.configureDragSource(button);
 
-    button.addEventListener('click', (event) => {
-      if (this.consumeSuppressedActivation(button, event)) {
-        return;
-      }
-      this.onDirectoryToggle?.(node.path);
-    });
-    button.addEventListener('contextmenu', (event) => {
-      event.preventDefault();
-      this.onFileContextMenu?.(event, { directoryPath: node.path, type: 'directory' });
-    });
-    this.bindLongPress(button, () => {
-      this.onFileContextMenu?.(this.createLongPressEvent(button), { directoryPath: node.path, type: 'directory' });
-    });
 
     wrapper.appendChild(button);
     this.renderedDirectoryWrappers.set(node.path, wrapper);
@@ -453,39 +552,6 @@ export class FileExplorerView {
       'aria-label',
       `${filePath}${threadCount > 0 ? `, ${threadCount} open comment thread${threadCount === 1 ? '' : 's'}` : ''}`,
     );
-    const isDrawio = fileType === 'drawio';
-    const isExcalidraw = fileType === 'excalidraw';
-    const isBase = fileType === 'base';
-    const isImage = fileType === 'image';
-    const isPdf = fileType === 'pdf';
-    const isMermaid = fileType === 'mermaid';
-    const isPlantUml = fileType === 'plantuml';
-    const isStructurizr = fileType === 'structurizr';
-
-    if (isBase) {
-      button.classList.add('is-base');
-    }
-    if (isDrawio) {
-      button.classList.add('is-drawio');
-    }
-    if (isExcalidraw) {
-      button.classList.add('is-excalidraw');
-    }
-    if (isImage) {
-      button.classList.add('is-image');
-    }
-    if (isPdf) {
-      button.classList.add('is-pdf');
-    }
-    if (isMermaid) {
-      button.classList.add('is-mermaid');
-    }
-    if (isPlantUml) {
-      button.classList.add('is-plantuml');
-    }
-    if (isStructurizr) {
-      button.classList.add('is-structurizr');
-    }
     if (filePath === activeFilePath) {
       button.classList.add('active');
     }
@@ -497,6 +563,7 @@ export class FileExplorerView {
     button.dataset.depth = depth;
     button.dataset.path = filePath;
     button.dataset.entryType = 'file';
+    button.dataset.kind = getVaultFileKind(filePath) ?? fileType ?? 'file';
     if (threadCount > 0) {
       button.dataset.threadCount = String(threadCount);
     }
@@ -510,25 +577,12 @@ export class FileExplorerView {
     // Dynamic labels are escaped and icons are application-owned markup.
     // pi-lens-ignore: no-inner-html-js
     button.innerHTML = `
-      ${getVaultFileIconSvg(filePath)}
+      <span class="file-tree-icon" aria-hidden="true"></span>
       ${nameMarkup}
       ${threadCount > 0 ? `<span class="file-tree-comment-count" aria-hidden="true">${threadCount}</span>` : ''}
     `;
-    this.configureDragSource(button, { path: filePath, type: 'file' });
+    this.configureDragSource(button);
 
-    button.addEventListener('click', (event) => {
-      if (this.consumeSuppressedActivation(button, event)) {
-        return;
-      }
-      this.onFileSelect?.(filePath);
-    });
-    button.addEventListener('contextmenu', (event) => {
-      event.preventDefault();
-      this.onFileContextMenu?.(event, { filePath, type: 'file' });
-    });
-    this.bindLongPress(button, () => {
-      this.onFileContextMenu?.(this.createLongPressEvent(button), { filePath, type: 'file' });
-    });
 
     this.renderedFileItems.set(filePath, button);
     return button;
@@ -542,68 +596,14 @@ export class FileExplorerView {
     return !this.isMobileViewport() && !this.currentSearchQuery;
   }
 
-  configureDragSource(element, payload) {
+  configureDragSource(element) {
     if (!(element instanceof HTMLElement)) {
       return;
     }
 
-    const isEnabled = this.isDragAndDropEnabled();
-    element.draggable = isEnabled;
-    if (!isEnabled) {
-      return;
-    }
-
-    element.addEventListener('dragstart', (event) => {
-      this.dragSource = {
-        path: payload.path,
-        type: payload.type,
-      };
-      document.body?.classList.add('is-file-tree-dragging');
-      if (this.treeContainer) {
-        this.treeContainer.dataset.dragActive = 'true';
-      }
-      element.classList.add('is-dragging');
-      if (event.dataTransfer) {
-        event.dataTransfer.effectAllowed = 'move';
-        event.dataTransfer.setData('text/plain', payload.path);
-      }
-    });
-    element.addEventListener('dragend', () => {
-      element.classList.remove('is-dragging');
-      const dragSource = this.dragSource;
-      if (this.invalidDropAttempt && dragSource) {
-        void this.onEntryDrop?.(this.invalidDropAttempt);
-      }
-      this.dragSource = null;
-      this.invalidDropAttempt = null;
-      this.clearDragFeedback();
-    });
-
-    if (payload.type === 'file') {
-      element.addEventListener('dragenter', (event) => {
-        this.handleNonDropTargetDragOver(event);
-      });
-      element.addEventListener('dragover', (event) => {
-        this.handleNonDropTargetDragOver(event);
-      });
-    }
+    element.draggable = this.isDragAndDropEnabled();
   }
 
-  bindDirectoryDropTarget(element, directoryPath) {
-    if (!(element instanceof HTMLElement) || this.isMobileViewport()) {
-      return;
-    }
-
-    element.addEventListener('dragenter', (event) => {
-      this.handleDirectoryDragEnter(event, element, directoryPath);
-    });
-    element.addEventListener('dragover', (event) => {
-      this.handleDirectoryDragOver(event, element, directoryPath);
-    });
-    element.addEventListener('drop', (event) => {
-      this.handleDirectoryDrop(event, directoryPath);
-    });
-  }
 
   createRootDropZone() {
     const zone = document.createElement('div');
@@ -767,7 +767,24 @@ export class FileExplorerView {
       return;
     }
 
-    if (event.target.closest('.file-tree-dir') || event.target.closest('.file-tree-item')) {
+    const directory = event.target instanceof Element
+      ? event.target.closest('.file-tree-dir')
+      : null;
+    if (directory && this.treeContainer.contains(directory)) {
+      this.handleDirectoryDragOver(event, directory, directory.dataset.path);
+      return;
+    }
+
+    const file = event.target instanceof Element
+      ? event.target.closest('.file-tree-file')
+      : null;
+    if (file && this.treeContainer.contains(file)) {
+      this.handleNonDropTargetDragOver(event);
+      return;
+    }
+
+    if (event.target instanceof Element && event.target.closest('.file-tree-root-drop-zone')) {
+      this.handleRootZoneDragOver(event);
       return;
     }
 
@@ -785,7 +802,20 @@ export class FileExplorerView {
       return;
     }
 
-    if (event.target.closest('.file-tree-dir') || event.target.closest('.file-tree-item')) {
+    const directory = event.target instanceof Element
+      ? event.target.closest('.file-tree-dir')
+      : null;
+    if (directory && this.treeContainer.contains(directory)) {
+      this.handleDirectoryDrop(event, directory.dataset.path);
+      return;
+    }
+
+    if (event.target instanceof Element && event.target.closest('.file-tree-root-drop-zone')) {
+      this.handleRootZoneDrop(event);
+      return;
+    }
+
+    if (event.target instanceof Element && event.target.closest('.file-tree-file')) {
       return;
     }
 
@@ -798,6 +828,7 @@ export class FileExplorerView {
     this.clearDragFeedback();
     void this.onEntryDrop?.(payload);
   }
+
 
   handleTreeDragLeave(event) {
     if (!this.dragSource || !this.treeContainer) {
@@ -868,27 +899,6 @@ export class FileExplorerView {
     this.clearDragFeedback();
   }
 
-  bindLongPress(element, callback) {
-    if (!(element instanceof HTMLElement) || typeof callback !== 'function') {
-      return;
-    }
-
-    element.addEventListener('pointerdown', (event) => {
-      this.startLongPress(event, callback, element);
-    });
-    element.addEventListener('pointermove', (event) => {
-      this.handleLongPressPointerMove(event);
-    }, { passive: true });
-    element.addEventListener('pointerup', () => {
-      this.cancelLongPress();
-    });
-    element.addEventListener('pointercancel', () => {
-      this.cancelLongPress();
-    });
-    element.addEventListener('pointerleave', () => {
-      this.cancelLongPress();
-    });
-  }
 
   startLongPress(event, callback, target = null) {
     if (!this.isMobileViewport()) {

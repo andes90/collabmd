@@ -19,8 +19,8 @@ import { uiFeatureSidebarMethods } from '../application/app-shell/ui-feature-sid
 import { uiFeatureTabActivityMethods } from '../application/app-shell/ui-feature-tab-activity.js';
 import { uiFeatureToolbarMethods } from '../application/app-shell/ui-feature-toolbar.js';
 import { workspaceFeature } from '../application/app-shell/workspace-feature.js';
+import { LOBBY_CHAT_MESSAGE_MAX_LENGTH } from '../domain/lobby-chat.js';
 import { agentConnectionApiClient } from '../infrastructure/agent-connection-api-client.js';
-import { LOBBY_CHAT_MESSAGE_MAX_LENGTH, LobbyPresence } from '../infrastructure/lobby-presence.js';
 import { BrowserPreferencesPort } from '../infrastructure/browser-preferences-port.js';
 import { BrowserNotificationPort } from '../infrastructure/browser-notification-port.js';
 import { AppVersionMonitor } from '../infrastructure/app-version-monitor.js';
@@ -38,7 +38,7 @@ import {
 import { TabActivityLock } from '../infrastructure/tab-activity-lock.js';
 import { vaultApiClient } from '../infrastructure/vault-api-client.js';
 import { WebMcpToolRegistry } from '../infrastructure/webmcp-tool-registry.js';
-import { WorkspaceSyncClient } from '../infrastructure/workspace-sync-client.js';
+import { createLazyLobbyPresence, createLazyWorkspaceSyncClient } from './lazy-collab-clients.js';
 import { AgentConnectionController } from '../presentation/agent-connection-controller.js';
 import { BacklinksPanel } from '../presentation/backlinks-panel.js';
 import { CommentOverviewController } from '../presentation/comment-overview-controller.js';
@@ -152,12 +152,12 @@ export class CollabMdAppShell {
       runtimeConfig: this.runtimeConfig,
     });
 
-    this.lobby = new LobbyPresence({
+    this.lobby = createLazyLobbyPresence({
       preferredUserName: this.getStoredUserName(),
       onChange: (users) => this.updateGlobalUsers(users),
       onChatChange: (messages, meta) => this.updateChatMessages(messages, meta),
     });
-    this.workspaceSync = new WorkspaceSyncClient({
+    this.workspaceSync = createLazyWorkspaceSyncClient({
       onTreeChange: (tree, metadata = {}) => {
         this.fileExplorer.setTree(tree, metadata);
         this.handleCommentOverviewWorkspaceTreeChange?.();
@@ -323,10 +323,10 @@ export class CollabMdAppShell {
         this.drawioEmbed.reconcileEmbeds(this.elements.previewContent);
         this.excalidrawEmbed.reconcileEmbeds(this.elements.previewContent, { isLargeDocument: stats.isLargeDocument });
         this.scrollSyncController.setLargeDocumentMode(stats.isLargeDocument);
-        this.syncPreviewCodeCopyButtons();
         this.syncPreviewHeadingFoldButtons();
         this.syncPreviewHeadingLinkButtons();
         this.applyPendingPreviewRouteAnchor({ behavior: 'auto', clearMissing: true });
+
         this.schedulePreviewLayoutSync({ delayMs: 0 });
         this.refreshCommentUiLayout();
       },
@@ -783,9 +783,12 @@ export class CollabMdAppShell {
 
 
   loadQuickSwitcherController() {
-    return import('../presentation/quick-switcher-controller.js')
-      .then((module) => module.QuickSwitcherController);
+    return Promise.all([
+      import('../presentation/quick-switcher-controller.js'),
+      import('../styles/features/quick-switcher.css'),
+    ]).then(([module]) => module.QuickSwitcherController);
   }
+
 
   async ensureQuickSwitcher() {
     return ensureQuickSwitcherInstance(this);
