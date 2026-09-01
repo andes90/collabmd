@@ -88,6 +88,7 @@ function setAppliedSceneJson(value) {
 
 let collabReady = false;
 let pendingRemoteSceneJson = '';
+let pendingRemoteSceneAuthoritative = false;
 let pendingCollaborators = null;
 let activeCollaborators = new Map();
 let followedSocketId = null;
@@ -432,12 +433,12 @@ function createRoomClient(filePath) {
 
       handleRoomConnectionStateChange(event);
     },
-    onRemoteSceneJson: (sceneJson) => {
+    onRemoteSceneJson: (sceneJson, { authoritative = false } = {}) => {
       if (generation !== roomClientGeneration) {
         return;
       }
 
-      applySceneFromJson(sceneJson);
+      applySceneFromJson(sceneJson, { authoritative });
     },
     syncTimeoutMs: Number.isFinite(syncTimeoutMs) ? syncTimeoutMs : undefined,
     vaultClient: vaultApiClient,
@@ -1393,14 +1394,18 @@ function flushPendingRemoteScene() {
   }
 
   const sceneJson = pendingRemoteSceneJson;
+  const authoritative = pendingRemoteSceneAuthoritative;
   pendingRemoteSceneJson = '';
+  pendingRemoteSceneAuthoritative = false;
   applySceneFromJson(sceneJson, {
+    authoritative,
     force: true,
   });
   return true;
 }
 
 function applySceneFromJson(rawJson, {
+  authoritative = false,
   force = false,
 } = {}) {
   const scene = parseSceneJson(rawJson);
@@ -1414,15 +1419,18 @@ function applySceneFromJson(rawJson, {
 
   if (!getMountedExcalidrawAPI() || !collabReady) {
     pendingRemoteSceneJson = normalizedJson;
+    pendingRemoteSceneAuthoritative ||= authoritative;
     return;
   }
 
   if (!force && isEditingTextElement()) {
     pendingRemoteSceneJson = normalizedJson;
+    pendingRemoteSceneAuthoritative ||= authoritative;
     return;
   }
 
-  updateApiScene(scene);
+  pendingRemoteSceneAuthoritative = false;
+  updateApiScene(scene, { authoritative });
 }
 
 function releaseViewportBroadcastSuppressionAfterPaint() {
@@ -1440,6 +1448,7 @@ function releaseViewportBroadcastSuppressionAfterPaint() {
 function buildApiSceneUpdate(scene, {
   appStateOverrides = {},
   api = getMountedExcalidrawAPI(),
+  authoritative = false,
 } = {}) {
   if (!api) {
     return null;
@@ -1450,6 +1459,7 @@ function buildApiSceneUpdate(scene, {
 
   return buildReconciledExcalidrawSceneUpdate({
     appStateOverrides,
+    authoritative,
     currentAppState,
     currentElements,
     documentViewState: getDocumentViewState(),
@@ -1500,6 +1510,7 @@ function requestEditorRemount(scene) {
 
 function applySceneToMountedApi(scene, {
   appStateOverrides = {},
+  authoritative = false,
   captureUpdate = CaptureUpdateAction.NEVER,
   trackedSharedSnapshot = false,
 } = {}) {
@@ -1511,6 +1522,7 @@ function applySceneToMountedApi(scene, {
   const nextSceneUpdate = buildApiSceneUpdate(scene, {
     appStateOverrides,
     api,
+    authoritative,
   });
   let applyResult;
 
@@ -1545,11 +1557,13 @@ function applySceneToMountedApi(scene, {
 
 function updateApiScene(scene, {
   appStateOverrides = {},
+  authoritative = false,
   captureUpdate = CaptureUpdateAction.NEVER,
   trackedSharedSnapshot = true,
 } = {}) {
   applySceneToMountedApi(scene, {
     appStateOverrides,
+    authoritative,
     captureUpdate,
     trackedSharedSnapshot,
   });
@@ -2176,10 +2190,12 @@ function initializeEditor(api) {
   }));
 
   const sceneJson = pendingRemoteSceneJson || roomClient?.getLastSceneJson?.() || '';
+  const authoritative = pendingRemoteSceneAuthoritative;
   const initialScene = parseSceneJson(sceneJson);
   pendingRemoteSceneJson = '';
+  pendingRemoteSceneAuthoritative = false;
   setAppliedSceneJson(JSON.stringify(initialScene));
-  updateApiScene(initialScene);
+  updateApiScene(initialScene, { authoritative });
 
   if (pendingCollaborators) {
     const renderableCollaborators = buildRenderableCollaboratorsMap(pendingCollaborators);

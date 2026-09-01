@@ -1,5 +1,6 @@
 export function buildReconciledExcalidrawSceneUpdate({
   appStateOverrides = {},
+  authoritative = false,
   currentAppState,
   currentElements = [],
   documentViewState = {},
@@ -10,7 +11,7 @@ export function buildReconciledExcalidrawSceneUpdate({
   scene,
   theme = 'dark',
 } = {}) {
-  const restoredElements = restoreElementsFn(scene?.elements || [], currentElements, {
+  const restoredElements = restoreElementsFn(scene?.elements || [], authoritative ? [] : currentElements, {
     repairBindings: true,
   });
   const restoredAppState = restoreAppStateFn(scene?.appState || {}, currentAppState);
@@ -27,7 +28,9 @@ export function buildReconciledExcalidrawSceneUpdate({
     )),
   );
   const update = {
-    elements: reconcileElementsFn(currentElements, restoredElements, currentAppState),
+    elements: authoritative
+      ? restoredElements
+      : reconcileElementsFn(currentElements, restoredElements, currentAppState),
   };
 
   if (Object.keys(appStateUpdate).length > 0) {

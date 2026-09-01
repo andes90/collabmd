@@ -207,3 +207,31 @@ test('buildReconciledExcalidrawSceneUpdate can include full app state when reque
     zenModeEnabled: false,
   });
 });
+
+test('authoritative remote scene replaces higher-version local elements', () => {
+  const result = buildReconciledExcalidrawSceneUpdate({
+    authoritative: true,
+    currentAppState: {
+      gridSize: null,
+      viewBackgroundColor: '#ffffff',
+    },
+    currentElements: [
+      createElement('shared-shape', { version: 9, versionNonce: 1, x: 20 }),
+    ],
+    reconcileElementsFn,
+    restoreAppStateFn,
+    restoreElementsFn,
+    scene: {
+      appState: { gridSize: null, viewBackgroundColor: '#ffffff' },
+      elements: [
+        createElement('shared-shape', { version: 1, versionNonce: 9, x: 45 }),
+        createElement('label', { version: 1, x: 10 }),
+      ],
+    },
+  });
+
+  assert.deepEqual(result.elements.map((element) => [element.id, element.x]), [
+    ['shared-shape', 45],
+    ['label', 10],
+  ]);
+});

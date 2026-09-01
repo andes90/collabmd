@@ -11,6 +11,7 @@ export const EXCALIDRAW_META_KEY = 'excalidraw-meta';
 export const EXCALIDRAW_ROOM_SCHEMA_VERSION = 1;
 export const EXCALIDRAW_ROOM_TEXT_KEY = 'codemirror';
 export const EXCALIDRAW_SCHEMA_VERSION_KEY = 'schemaVersion';
+export const EXCALIDRAW_REPLACE_GENERATION_KEY = 'replaceGeneration';
 
 function createEmptyScene() {
   return {
@@ -222,6 +223,15 @@ export function isExcalidrawRoomDocStructured(ydoc) {
   return Number(meta.get(EXCALIDRAW_SCHEMA_VERSION_KEY)) === EXCALIDRAW_ROOM_SCHEMA_VERSION;
 }
 
+export function readExcalidrawReplaceGeneration(ydoc) {
+  if (!ydoc) {
+    return 0;
+  }
+
+  const value = Number(ydoc.getMap(EXCALIDRAW_META_KEY).get(EXCALIDRAW_REPLACE_GENERATION_KEY));
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
 export function ensureExcalidrawRoomSchema(ydoc) {
   const meta = ydoc.getMap(EXCALIDRAW_META_KEY);
   if (Number(meta.get(EXCALIDRAW_SCHEMA_VERSION_KEY)) !== EXCALIDRAW_ROOM_SCHEMA_VERSION) {
@@ -295,7 +305,7 @@ export function replaceExcalidrawRoomScene(ydoc, rawScene, {
   }
 
   const scene = normalizeScene(rawScene);
-  ensureExcalidrawRoomSchema(ydoc);
+  const meta = ensureExcalidrawRoomSchema(ydoc);
 
   const elementsMap = ydoc.getMap(EXCALIDRAW_ELEMENTS_KEY);
   const filesMap = ydoc.getMap(EXCALIDRAW_FILES_KEY);
@@ -321,6 +331,7 @@ export function replaceExcalidrawRoomScene(ydoc, rawScene, {
   const nextAppState = normalizeAppState(scene.appState);
   appStateMap.set('gridSize', nextAppState.gridSize);
   appStateMap.set('viewBackgroundColor', nextAppState.viewBackgroundColor);
+  meta.set(EXCALIDRAW_REPLACE_GENERATION_KEY, readExcalidrawReplaceGeneration(ydoc) + 1);
 
   return scene;
 }

@@ -10,6 +10,7 @@ import {
   buildExcalidrawRoomScene,
   isExcalidrawRoomDocStructured,
   migrateLegacyExcalidrawRoomData,
+  readExcalidrawReplaceGeneration,
   readLegacyExcalidrawRoomScene,
   replaceExcalidrawRoomScene,
   serializeExcalidrawRoomScene,
@@ -288,4 +289,21 @@ test('explicit deleted-element tombstones win live diffs and stay out of persist
 
   const persistedScene = JSON.parse(serializeExcalidrawRoomScene(doc));
   assert.deepEqual(persistedScene.elements.map((element) => element.id), ['shape-a']);
+});
+
+test('full scene replace stamps a generation that live diffs do not', () => {
+  const doc = new Y.Doc();
+  assert.equal(readExcalidrawReplaceGeneration(doc), 0);
+
+  replaceExcalidrawRoomScene(doc, createScene([createElement('shape-a')]));
+  assert.equal(readExcalidrawReplaceGeneration(doc), 1);
+
+  applySceneDiffToExcalidrawRoom(doc, createScene([
+    createElement('shape-a', { version: 2, x: 40 }),
+  ]));
+  assert.equal(readExcalidrawReplaceGeneration(doc), 1);
+
+  replaceExcalidrawRoomScene(doc, createScene([createElement('shape-b')]));
+  assert.equal(readExcalidrawReplaceGeneration(doc), 2);
+  assert.deepEqual(buildExcalidrawRoomScene(doc).elements.map((element) => element.id), ['shape-b']);
 });

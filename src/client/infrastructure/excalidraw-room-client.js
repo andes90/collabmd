@@ -11,6 +11,7 @@ import {
   buildExcalidrawRoomScene,
   ensureExcalidrawRoomSchema,
   isExcalidrawRoomDocStructured,
+  readExcalidrawReplaceGeneration,
   readLegacyExcalidrawRoomScene,
   replaceExcalidrawRoomScene,
 } from '../../domain/excalidraw-room-codec.js';
@@ -174,6 +175,7 @@ export class ExcalidrawRoomClient {
     this.handleProviderSync = null;
     this.handleProviderStatus = null;
     this.lastSceneJson = '';
+    this.lastReplaceGeneration = null;
     this.sceneSyncTimer = null;
     this.sceneSyncDueAt = 0;
     this.lastSceneSyncAt = 0;
@@ -217,6 +219,11 @@ export class ExcalidrawRoomClient {
         return;
       }
 
+      const prevReplaceGeneration = this.lastReplaceGeneration;
+      this.lastReplaceGeneration = readExcalidrawReplaceGeneration(this.ydoc);
+      const authoritative = prevReplaceGeneration !== null
+        && this.lastReplaceGeneration > prevReplaceGeneration;
+
       const remoteJson = this.getStructuredSceneJson();
       if (!remoteJson || remoteJson === this.lastSceneJson) {
         return;
@@ -224,7 +231,7 @@ export class ExcalidrawRoomClient {
 
       this.pendingEmptySceneCandidate = null;
       this.lastSceneJson = JSON.stringify(parseSceneJson(remoteJson));
-      this.onRemoteSceneJson(this.lastSceneJson);
+      this.onRemoteSceneJson(this.lastSceneJson, { authoritative });
     };
   }
 
@@ -1071,5 +1078,6 @@ export class ExcalidrawRoomClient {
     this.setConnectionState(EXCALIDRAW_ROOM_CONNECTION_STATE.CLOSED);
     this.applyingSharedSnapshotDepth = 0;
     this.suppressStructuredSceneUpdateDepth = 0;
+    this.lastReplaceGeneration = null;
   }
 }

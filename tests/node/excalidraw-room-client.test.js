@@ -5,7 +5,7 @@ import * as Y from 'yjs';
 import * as decoding from 'lib0/decoding';
 import * as encoding from 'lib0/encoding';
 
-import { buildExcalidrawRoomScene } from '../../src/domain/excalidraw-room-codec.js';
+import { buildExcalidrawRoomScene, replaceExcalidrawRoomScene } from '../../src/domain/excalidraw-room-codec.js';
 import {
   MSG_AGENT_FLUSH,
   MSG_AGENT_FLUSH_ACK,
@@ -188,6 +188,28 @@ test('ExcalidrawRoomClient uses an empty scene when no file path is configured',
     head: null,
     length: null,
   });
+});
+
+test('ExcalidrawRoomClient marks disk/agent scene replaces as authoritative', async () => {
+  const remoteCalls = [];
+  const { client, ydoc } = await createConnectedClient({
+    onRemoteSceneJson: (sceneJson, meta = {}) => {
+      remoteCalls.push({
+        authoritative: Boolean(meta.authoritative),
+        ids: parseElements(sceneJson),
+      });
+    },
+  });
+
+  remoteCalls.length = 0;
+  ydoc.transact(() => {
+    replaceExcalidrawRoomScene(ydoc, JSON.parse(createScene('agent-shape')));
+  }, 'workspace-reconcile');
+
+  assert.equal(remoteCalls.length, 1);
+  assert.equal(remoteCalls[0].authoritative, true);
+  assert.deepEqual(remoteCalls[0].ids, ['agent-shape']);
+  client.disconnect();
 });
 
 test('ExcalidrawRoomClient syncs local scene updates into the structured room state', async () => {
