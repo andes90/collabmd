@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 
 import { getUserAvatarTextColor } from '../../src/client/domain/room.js';
 import { LobbyPresence } from '../../src/client/infrastructure/lobby-presence.js';
+import { createLazyLobbyPresence } from '../../src/client/bootstrap/lazy-collab-clients.js';
+
 
 function installWindowStub(t) {
   const originalWindow = globalThis.window;
@@ -82,4 +84,9 @@ test('LobbyPresence emits remote workspace events once and ignores local echoes'
 test('avatar text color keeps room color labels readable', () => {
   assert.equal(getUserAvatarTextColor('#eab308'), '#000');
   assert.equal(getUserAvatarTextColor('#1e40af'), '#fff');
+});
+
+test('lazy lobby presence exposes connection state before the client loads', () => {
+  const lobby = createLazyLobbyPresence({ preferredUserName: 'Andes' });
+  assert.deepEqual(lobby.getConnectionState(), { status: 'connecting', unreachable: false });
 });

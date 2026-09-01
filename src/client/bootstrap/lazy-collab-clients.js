@@ -55,6 +55,10 @@ export function createLazyLobbyPresence(options = {}) {
     connect: () => client.connect(),
     disconnect: () => client.disconnect(),
     destroy: () => client.destroy(),
+    getConnectionState() {
+      return client.getImpl()?.getConnectionState?.()
+        ?? { status: 'connecting', unreachable: false };
+    },
     setCurrentFile(filePath) {
       currentFile = filePath;
       client.getImpl()?.setCurrentFile(filePath);
