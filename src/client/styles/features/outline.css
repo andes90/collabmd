@@ -28,8 +28,10 @@
   flex-shrink: 0;
 }
 
-.outline-close-btn {
-  display: none;
+@media (min-width: 769px) {
+  .outline-close-btn {
+    display: none;
+  }
 }
 
 .outline-title {

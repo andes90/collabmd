@@ -1,2 +1,5 @@
 @import './features/comments-drawer.css';
 @import './features/comment-overview.css';
+@import './features/comment-overlays.css';
+@import './features/comment-card.css';
+@import './features/comment-markdown.css';

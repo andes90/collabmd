@@ -1,6 +1,5 @@
 import { CollabMdAppShell } from '../bootstrap/collabmd-app-shell.js';
 import { ensureClientAuthenticated } from '../infrastructure/auth-client.js';
-import '../styles/base.css';
 import '../styles/style.css';
 
 async function start() {

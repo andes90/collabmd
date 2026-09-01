@@ -37,7 +37,13 @@ test('client build emits hashed entry assets and bundled preview runtimes', asyn
   await access(resolve(clientDistDir, 'assets', workerReference), fsConstants.R_OK);
   await access(resolve(clientDistDir, 'assets', pdfiumWasmReference), fsConstants.R_OK);
   await access(resolve(clientDistDir, mainStylesheetPath), fsConstants.R_OK);
-  assert.match(indexHtml, /src="\.\/app-config\.js"/);
+  assert.match(indexHtml, /defer[^>]*src="\.\/app-config\.js"|src="\.\/app-config\.js"[^>]*defer/);
+  assert.doesNotMatch(indexHtml, /markdown-it-[^"]+\.js/);
+  assert.equal(
+    [...indexHtml.matchAll(/href="\.\/assets\/[^"]+\.css"/g)].length,
+    1,
+    'expected a single render-blocking stylesheet',
+  );
   assert.doesNotMatch(indexHtml, /assets\/vendor\/highlight\/github-dark\.min\.css/);
   assert.doesNotMatch(indexHtml, /main-entry\.js/);
 });

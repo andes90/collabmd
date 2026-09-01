@@ -1,5 +1,3 @@
-import '../styles/features/auth-gate.css';
-
 import { getHashParamsFromRaw } from '../domain/hash-routes.js';
 import { parseApiResponse } from './api-client-utils.js';
 import { getRuntimeConfig } from './runtime-config.js';
@@ -255,6 +253,7 @@ export async function ensureClientAuthenticated() {
     return { authenticated: true, auth: config };
   }
 
+  await import('../styles/features/auth-gate.css');
   const { card, overlay } = createOverlayShell();
   document.body.append(overlay);
   let pendingOidcError = consumeHashParam('auth_error');

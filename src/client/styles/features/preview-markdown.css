@@ -1066,6 +1066,10 @@
   position: relative;
 }
 
+.preview-content .task-list-label {
+  cursor: pointer;
+}
+
 .preview-content .task-list-item input[type='checkbox'] {
   position: absolute;
   top: 0.5em;

@@ -12,18 +12,24 @@ export default defineConfig(({ command }) => ({
   build: {
     emptyOutDir: true,
     modulePreload: {
-      resolveDependencies: (filename, deps) => deps.filter((dep) => {
-        if (/\/yjs-[^/]+\.js$/.test(dep)) {
-          return false;
+      polyfill: false,
+      resolveDependencies: (filename, deps) => {
+        if (!/excalidraw|drawio|export/i.test(filename)) {
+          return [];
         }
-        if (/lobby-presence|workspace-sync-client|deferred-git|deferred-preview|deferred-collab/.test(dep)) {
-          return false;
-        }
-        if (!filename.includes('excalidraw') && /mermaid|editor-session|quick-switcher|prettier|embedpdf|preview-render-|highlight-runtime/.test(dep)) {
-          return false;
-        }
-        return true;
-      }),
+        return deps.filter((dep) => {
+          if (/\/yjs-[^/]+\.js$/.test(dep)) {
+            return false;
+          }
+          if (/lobby-presence|workspace-sync-client|deferred-git|deferred-preview|deferred-collab/.test(dep)) {
+            return false;
+          }
+          if (!filename.includes('excalidraw') && /mermaid|editor-session|quick-switcher|prettier|embedpdf|preview-render-|highlight-runtime/.test(dep)) {
+            return false;
+          }
+          return true;
+        });
+      },
     },
     outDir: clientDistRoot,
     rollupOptions: {

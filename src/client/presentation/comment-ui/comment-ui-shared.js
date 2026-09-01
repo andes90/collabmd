@@ -4,7 +4,6 @@ import {
   normalizeCommentQuoteForComparison,
 } from '../../../domain/comment-threads.js';
 import { clamp } from '../../domain/vault-utils.js';
-import { renderCommentMarkdownToHtml } from '../comment-markdown-renderer.js';
 
 export { COMMENT_BODY_MAX_LENGTH, clamp };
 
@@ -112,7 +111,11 @@ export function getLatestGroupMessage(group) {
 export function createRenderedCommentBody(body, className = 'comment-markdown') {
   const container = document.createElement('div');
   container.className = className;
-  container.innerHTML = renderCommentMarkdownToHtml(body);
+  const markdownText = String(body ?? '');
+  container.textContent = markdownText;
+  void import('../comment-markdown-renderer.js').then(({ renderCommentMarkdownToHtml }) => {
+    container.innerHTML = renderCommentMarkdownToHtml(markdownText);
+  });
   return container;
 }
 

@@ -498,7 +498,7 @@ function createMarkdownRenderer(fileList = [], {
     const content = tokens[index].content;
 
     if (content.startsWith('[x] ') || content.startsWith('[X] ')) {
-      return `<input type="checkbox" checked data-task-checkbox="true"> ${renderInlineWikiText(content.slice(4), {
+      return `<label class="task-list-label"><input type="checkbox" checked data-task-checkbox="true"> ${renderInlineWikiText(content.slice(4), {
         attachmentApiPath,
         baseEmbedCounts: baseCounts,
         drawioEmbedCounts,
@@ -508,11 +508,11 @@ function createMarkdownRenderer(fileList = [], {
         plantUmlEmbedCounts,
         sourceFilePath,
         wikiLinkAutoCreate,
-      })}`;
+      })}</label>`;
     }
 
     if (content.startsWith('[ ] ')) {
-      return `<input type="checkbox" data-task-checkbox="true"> ${renderInlineWikiText(content.slice(4), {
+      return `<label class="task-list-label"><input type="checkbox" data-task-checkbox="true"> ${renderInlineWikiText(content.slice(4), {
         attachmentApiPath,
         baseEmbedCounts: baseCounts,
         drawioEmbedCounts,
@@ -522,7 +522,7 @@ function createMarkdownRenderer(fileList = [], {
         plantUmlEmbedCounts,
         sourceFilePath,
         wikiLinkAutoCreate,
-      })}`;
+      })}</label>`;
     }
 
     return renderInlineWikiText(content, {

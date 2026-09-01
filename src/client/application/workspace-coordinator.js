@@ -269,6 +269,26 @@ export class WorkspaceCoordinator {
       });
       return true;
     }
+    let fileOpenReady = false;
+    let liveSyncComplete = false;
+    const bootstrapPromise = this.loadBootstrapContent
+      ? (async () => {
+        this.reportFileOpenMetric('bootstrap_fetch_started', loadToken);
+        try {
+          const content = await this.loadBootstrapContent(filePath);
+          this.reportFileOpenMetric('bootstrap_fetch_completed', loadToken, {
+            found: content !== null,
+          });
+          return content;
+        } catch (error) {
+          this.reportFileOpenMetric('bootstrap_fetch_completed', loadToken, {
+            error: error.message,
+            found: false,
+          });
+          return null;
+        }
+      })()
+      : Promise.resolve(null);
 
     const EditorSession = await this.loadEditorSessionClass();
     const session = this.createEditorSession(EditorSession, {
@@ -303,10 +323,7 @@ export class WorkspaceCoordinator {
     this.onSessionAssigned?.(session);
 
     try {
-      let fileOpenReady = false;
       let fileOpenFinalized = false;
-      let liveSyncComplete = false;
-
       const readySession = async (reason) => {
         if (fileOpenReady || loadToken !== this.stateStore.sessionLoadToken) {
           return;
@@ -335,24 +352,6 @@ export class WorkspaceCoordinator {
         });
       };
 
-      const bootstrapPromise = this.loadBootstrapContent
-        ? (async () => {
-          this.reportFileOpenMetric('bootstrap_fetch_started', loadToken);
-          try {
-            const content = await this.loadBootstrapContent(filePath);
-            this.reportFileOpenMetric('bootstrap_fetch_completed', loadToken, {
-              found: content !== null,
-            });
-            return content;
-          } catch (error) {
-            this.reportFileOpenMetric('bootstrap_fetch_completed', loadToken, {
-              error: error.message,
-              found: false,
-            });
-            return null;
-          }
-        })()
-        : Promise.resolve(null);
 
       const initializePromise = session.initialize(filePath);
       const liveSyncPromise = (async () => {

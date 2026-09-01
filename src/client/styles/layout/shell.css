@@ -67,7 +67,7 @@
 }
 
 .pane-label {
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: var(--text-meta);

@@ -420,6 +420,7 @@ test('compilePreviewDocument preserves nested task list structure', () => {
     html,
     /<li[^>]*class="task-list-item"[^>]*>[\s\S]*<ul[^>]*>[\s\S]*<li[^>]*class="task-list-item"[^>]*>/,
   );
+  assert.match(html, /<label class="task-list-label"><input type="checkbox" data-task-checkbox="true">/);
 });
 
 test('compilePreviewDocument renders YouTube markdown images as no-cookie embeds', () => {
