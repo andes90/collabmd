@@ -10,7 +10,10 @@ import { listRenderableDiagrams, resolveRenderableDiagram } from '../../domain/d
 import { createEditableContentRevision } from '../../domain/editable-content-revision.js';
 import { normalizeEditableText } from '../../domain/editable-text.js';
 import { applyExactTextChanges, resolveExactTextChanges } from '../../domain/exact-text-edits.js';
-import { applyAgentExcalidrawEdits, createAgentExcalidrawScene } from '../../domain/excalidraw-agent-scene.js';
+import {
+  applyAgentExcalidrawEditsWithSummary,
+  createAgentExcalidrawScene,
+} from '../../domain/excalidraw-agent-scene.js';
 import { inspectAgentExcalidrawScene, renderAgentExcalidrawSvg } from '../../domain/excalidraw-agent-verification.js';
 import { getVaultFileKind, isBaseFilePath } from '../../domain/file-kind.js';
 import { isWholeWordMatch } from '../../domain/literal-text-search.js';
@@ -255,6 +258,7 @@ export class AgentContentService {
     inspectOcclusion = true,
     padding = 32,
     path,
+    render = true,
     scale = 1,
   } = {}) {
     const current = await this.readExcalidrawScene(actor, path);
@@ -266,10 +270,14 @@ export class AgentContentService {
       elementCount: inspection.elementCount,
       format,
       inspection,
+      layout: inspection.layout,
       path: current.path,
       revision: current.revision,
-      scene: current.scene,
+      valid: inspection.valid,
     };
+    if (!render) return result;
+
+    result.scene = current.scene;
     if (actor.origin !== 'webmcp') {
       Object.assign(result, renderAgentExcalidrawSvg(current.scene, { padding, scale }));
     }
@@ -699,6 +707,7 @@ export class AgentContentService {
   async editExcalidraw(actor, {
     create = [],
     delete: remove = [],
+    normalizeTextPlacement,
     path,
     reorder = [],
     replace = [],
@@ -721,11 +730,12 @@ export class AgentContentService {
       if (revision !== await createEditableContentRevision(content)) {
         throw createAgentContentError('AGENT_REVISION_CONFLICT', 'Document changed; read it again before editing', 409);
       }
-      let scene;
+      let edit;
       try {
-        scene = applyAgentExcalidrawEdits(JSON.parse(content), {
+        edit = applyAgentExcalidrawEditsWithSummary(JSON.parse(content), {
           create,
           delete: remove,
+          normalizeTextPlacement,
           reorder,
           replace,
           update,
@@ -740,6 +750,7 @@ export class AgentContentService {
         }
         throw error;
       }
+      const { reflowed, scene } = edit;
       const room = this.roomRegistry?.get?.(normalizedPath);
       let nextContent;
       if (room) {
@@ -769,6 +780,7 @@ export class AgentContentService {
         elementCount: storedScene.elements.filter((element) => !element.isDeleted).length,
         path: normalizedPath,
         reordered: reorder.length,
+        reflowed,
         replaced: replace.length,
         revision: await createEditableContentRevision(nextContent),
         translated: translate?.ids?.length ?? 0,

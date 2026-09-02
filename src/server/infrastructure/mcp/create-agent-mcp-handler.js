@@ -26,6 +26,7 @@ async function imageToolResult(value) {
   };
 }
 async function optionalImageToolResult(value) {
+  if (value.svg) return imageToolResult(value);
   if (!value.verification?.svg) return toolResult(value);
   const { verification, ...result } = value;
   const { data, mimeType, structuredContent: encodedVerification } = await encodeAgentToolImage(verification);

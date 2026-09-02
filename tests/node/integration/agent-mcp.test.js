@@ -264,6 +264,14 @@ test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously'
     verifiedDiagram.structuredContent.elementCount,
   );
   assert.equal(verifiedDiagram.structuredContent.revision, verifiedEdit.structuredContent.revision);
+
+  const compactVerification = await client.callTool({
+    arguments: { path: 'diagrams/service.excalidraw', render: false },
+    name: 'verify_excalidraw',
+  });
+  assert.equal(compactVerification.content.some(({ type }) => type === 'image'), false);
+  assert.equal(Object.hasOwn(compactVerification.structuredContent, 'scene'), false);
+  assert.equal(compactVerification.structuredContent.layout.boundText.misaligned, 0);
 });
 
 test('MCP reconciles edits through an active collaboration room', async (t) => {
@@ -366,6 +374,15 @@ test('browser-session WebMCP tools reuse agent content operations when remote MC
   assert.equal(rendered.body.image, undefined);
   assert.equal(rendered.body.elementCount, 1);
   assert.equal(rendered.body.scene.type, 'excalidraw');
+
+  const compactVerification = await callWebMcpTool(app, 'verify_excalidraw', {
+    path: 'diagrams/webmcp.excalidraw',
+    render: false,
+  });
+  assert.equal(compactVerification.response.status, 200);
+  assert.equal(compactVerification.body.image, undefined);
+  assert.equal(compactVerification.body.scene, undefined);
+  assert.equal(compactVerification.body.layout.boundText.total, 0);
 });
 
 

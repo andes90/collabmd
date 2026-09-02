@@ -63,7 +63,7 @@ async function createWebMcpActor({ agentConnectionService, authService, config, 
 }
 
 async function mapWebMcpResult(definition, value) {
-  if (definition.resultKind === 'image' && value.svg) {
+  if (value.svg && ['image', 'optional-image'].includes(definition.resultKind)) {
     const { data, mimeType, structuredContent } = await encodeAgentToolImage(value);
     return {
       ...structuredContent,

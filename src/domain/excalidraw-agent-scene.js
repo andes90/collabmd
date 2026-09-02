@@ -14,6 +14,18 @@ const ELEMENT_TYPES = new Set([
 ]);
 
 const LINEAR_TYPES = new Set(['arrow', 'freedraw', 'line']);
+// Matches Excalidraw's DEFAULT_FONT_FAMILY (Excalifont).
+const DEFAULT_TEXT_FONT_FAMILY = 5;
+const TEXT_LAYOUT_CONTAINER_TYPES = new Set(['diamond', 'ellipse', 'rectangle']);
+const TEXT_METRIC_FIELDS = new Set([
+  'autoResize',
+  'containerId',
+  'fontFamily',
+  'fontSize',
+  'lineHeight',
+  'text',
+]);
+const TEXT_GEOMETRY_FIELDS = new Set(['height', 'width', 'x', 'y']);
 
 function invalid(message) {
   const error = new Error(message);
@@ -186,7 +198,7 @@ function addFreeDrawElementFields(element, raw) {
 function addTextElementFields(element, raw, { fontSize, text }) {
   element.autoResize = raw.autoResize ?? true;
   element.containerId = raw.containerId ?? null;
-  element.fontFamily = raw.fontFamily ?? 1;
+  element.fontFamily = raw.fontFamily ?? DEFAULT_TEXT_FONT_FAMILY;
   element.fontSize = fontSize;
   element.lineHeight = raw.lineHeight ?? 1.25;
   element.originalText = raw.originalText ?? text;
@@ -341,6 +353,66 @@ function resolveTranslationIds(elements, requestedIds) {
   return [...resolved];
 }
 
+function textHeight(element) {
+  const text = String(element.text ?? '');
+  const lineCount = Math.max(1, text.split('\n').length);
+  const fontSize = requireNumber(element.fontSize ?? 20, `Element ${element.id} fontSize`);
+  const lineHeight = requireNumber(element.lineHeight ?? 1.25, `Element ${element.id} lineHeight`);
+  return lineCount * fontSize * lineHeight;
+}
+
+function sameNumber(left, right) {
+  return Math.abs(left - right) < 0.001;
+}
+
+function reflowBoundText(elements, ids, now, alreadyVersionedIds) {
+  const activeById = new Map(
+    elements.filter((element) => !element.isDeleted).map((element) => [element.id, element]),
+  );
+  let reflowed = 0;
+
+  ids.forEach((id) => {
+    const text = activeById.get(id);
+    if (text?.type !== 'text' || !text.containerId) return;
+
+    const container = activeById.get(text.containerId);
+    if (
+      !container
+      || !TEXT_LAYOUT_CONTAINER_TYPES.has(container.type)
+      || Number(container.angle ?? 0) !== 0
+    ) {
+      return;
+    }
+
+    const width = requireNumber(text.width, `Element ${id} width`);
+    const height = textHeight(text);
+    const x = requireNumber(container.x, `Element ${text.containerId} x`)
+      + ((requireNumber(container.width, `Element ${text.containerId} width`) - width) / 2);
+    const y = requireNumber(container.y, `Element ${text.containerId} y`)
+      + ((requireNumber(container.height, `Element ${text.containerId} height`) - height) / 2);
+
+    if (
+      sameNumber(text.x, x)
+      && sameNumber(text.y, y)
+      && sameNumber(text.height, height)
+    ) {
+      return;
+    }
+
+    const positioned = { ...text, height, x, y };
+    const next = alreadyVersionedIds.has(id)
+      ? positioned
+      : bumpElementVersion(positioned, now, 'bound-text-layout');
+    const elementIndex = elements.indexOf(text);
+    elements[elementIndex] = next;
+    activeById.set(id, next);
+    alreadyVersionedIds.add(id);
+    reflowed += 1;
+  });
+
+  return reflowed;
+}
+
 export function createAgentExcalidrawScene(rawElements) {
   if (!Array.isArray(rawElements) || rawElements.length < 1 || rawElements.length > 200) {
     throw invalid('Excalidraw scene must contain 1 to 200 elements');
@@ -372,6 +444,10 @@ export function createAgentExcalidrawScene(rawElements) {
 }
 
 export function applyAgentExcalidrawEdits(scene, edits = {}) {
+  return applyAgentExcalidrawEditsWithSummary(scene, edits).scene;
+}
+
+export function applyAgentExcalidrawEditsWithSummary(scene, edits = {}) {
   requireObject(scene, 'Excalidraw scene');
   if (scene.type !== 'excalidraw' || !Array.isArray(scene.elements)) {
     throw invalid('Document is not a valid Excalidraw scene');
@@ -383,9 +459,13 @@ export function applyAgentExcalidrawEdits(scene, edits = {}) {
   const remove = edits.delete ?? [];
   const reorder = edits.reorder ?? [];
   const translate = edits.translate ?? null;
+  const normalizeTextPlacement = edits.normalizeTextPlacement;
   const operations = [create, update, replace, remove, reorder];
   if (!operations.every(Array.isArray)) {
     throw invalid('Excalidraw edit operations must be arrays');
+  }
+  if (normalizeTextPlacement !== undefined && normalizeTextPlacement !== true) {
+    throw invalid('normalizeTextPlacement must be true when provided');
   }
   let translatedIds = [];
   let translateDx = 0;
@@ -405,7 +485,11 @@ export function applyAgentExcalidrawEdits(scene, edits = {}) {
       throw invalid('Translate operation must move elements');
     }
   }
-  const operationCount = operations.reduce((count, entries) => count + entries.length, translatedIds.length);
+  const normalizationOperationCount = normalizeTextPlacement ? 1 : 0;
+  const operationCount = operations.reduce(
+    (count, entries) => count + entries.length,
+    translatedIds.length + normalizationOperationCount,
+  );
   if (operationCount < 1) {
     throw invalid('Excalidraw edits must include at least one operation');
   }
@@ -417,6 +501,7 @@ export function applyAgentExcalidrawEdits(scene, edits = {}) {
   let elements = scene.elements.map((element) => ({ ...element }));
   const byId = new Map(elements.map((element) => [element.id, element]));
   const alreadyVersionedIds = new Set();
+  const autoReflowIds = new Set();
   const createdElements = create.map((raw) => {
     const element = normalizeElement(raw, now);
     if (byId.has(element.id)) throw invalid(`Excalidraw element already exists: ${element.id}`);
@@ -447,8 +532,7 @@ export function applyAgentExcalidrawEdits(scene, edits = {}) {
     const resizesStandaloneText = current.type === 'text'
       && !raw.containerId
       && raw.autoResize !== false
-      && ['autoResize', 'fontFamily', 'fontSize', 'lineHeight', 'text']
-        .some((field) => Object.hasOwn(set, field));
+      && [...TEXT_METRIC_FIELDS].some((field) => Object.hasOwn(set, field));
     if (resizesStandaloneText) {
       delete raw.width;
       delete raw.height;
@@ -457,6 +541,12 @@ export function applyAgentExcalidrawEdits(scene, edits = {}) {
     elements[elements.indexOf(current)] = next;
     byId.set(id, next);
     alreadyVersionedIds.add(id);
+    const changesTextMetrics = current.type === 'text'
+      && [...TEXT_METRIC_FIELDS].some((field) => Object.hasOwn(set, field));
+    const changesTextGeometry = [...TEXT_GEOMETRY_FIELDS].some((field) => Object.hasOwn(set, field));
+    if (changesTextMetrics && !changesTextGeometry) {
+      autoReflowIds.add(id);
+    }
   });
   replace.forEach((operation) => {
     requireObject(operation, 'Replace operation');
@@ -481,7 +571,10 @@ export function applyAgentExcalidrawEdits(scene, edits = {}) {
   });
   if (translatedIds.length > 0) {
     translatedIds = resolveTranslationIds(elements, translatedIds);
-    const expandedOperationCount = operations.reduce((count, entries) => count + entries.length, translatedIds.length);
+    const expandedOperationCount = operations.reduce(
+      (count, entries) => count + entries.length,
+      translatedIds.length + normalizationOperationCount,
+    );
     if (expandedOperationCount > 200) {
       throw invalid('Excalidraw edits cannot exceed 200 operations including related translations');
     }
@@ -515,8 +608,17 @@ export function applyAgentExcalidrawEdits(scene, edits = {}) {
     const id = String(operation.id ?? '').trim();
     moveElement(elements, id, operation, `Reorder ${id}`);
   });
+  const reflowIds = normalizeTextPlacement
+    ? elements
+      .filter((element) => element.type === 'text' && !element.isDeleted && element.containerId)
+      .map((element) => element.id)
+    : [...autoReflowIds];
+  const reflowed = reflowBoundText(elements, reflowIds, now, alreadyVersionedIds);
   validateUniqueIds(elements);
   elements = normalizeElementOrder(elements, now, alreadyVersionedIds);
   refreshArrowBindings(elements);
-  return { ...scene, elements };
+  return {
+    reflowed,
+    scene: { ...scene, elements },
+  };
 }

@@ -5,6 +5,19 @@ const RENDERED_TYPES = new Set([...BASIC_SHAPE_TYPES, ...LINEAR_TYPES, 'text']);
 const MAX_SUMMARY_ELEMENTS = 500;
 const MAX_WARNINGS = 200;
 const MAX_RENDER_DIMENSION = 4096;
+const BOUND_TEXT_CENTER_TOLERANCE = 2;
+
+const FONT_FAMILY_NAMES = new Map([
+  [1, 'Virgil'],
+  [2, 'Helvetica'],
+  [3, 'Cascadia'],
+  [5, 'Excalifont'],
+  [6, 'Nunito'],
+  [7, 'Lilita One'],
+  [8, 'Comic Shanns'],
+  [9, 'Liberation Sans'],
+  [10, 'Assistant'],
+]);
 
 function finiteNumber(value, fallback = 0) {
   const number = Number(value);
@@ -182,6 +195,9 @@ function summarizeElement(element, paintOrder, activeElements) {
   if (elementBehind?.id) summary.inFrontOf = String(elementBehind.id);
   if (element?.type === 'text') summary.text = String(element.text ?? '');
   if (element?.type === 'text') {
+    const fontFamily = finiteNumber(element.fontFamily, 5);
+    summary.fontFamily = fontFamily;
+    summary.fontName = FONT_FAMILY_NAMES.get(fontFamily) ?? `Unknown (${fontFamily})`;
     summary.fontSize = finiteNumber(element.fontSize, 20);
     summary.lineHeight = finiteNumber(element.lineHeight, 1.25);
     if (element.containerId) summary.containerId = String(element.containerId);
@@ -207,6 +223,78 @@ function textOverflowWarning(element, bounds, id) {
   return bounds.width + 1 < expectedWidth || bounds.height + 1 < expectedHeight
     ? warning('text-overflow', `Text element ${id} may be clipped by its bounds.`, [id])
     : null;
+}
+
+function expectedTextHeight(element) {
+  const lines = String(element?.text ?? '').split('\n');
+  return Math.max(1, lines.length)
+    * finiteNumber(element?.fontSize, 20)
+    * finiteNumber(element?.lineHeight, 1.25);
+}
+
+function collectBoundTextLayout(elements) {
+  const activeById = new Map(elements.map((element) => [String(element.id), element]));
+  const layout = {
+    boundText: {
+      misaligned: 0,
+      outsideContainer: 0,
+      staleHeight: 0,
+      total: 0,
+    },
+  };
+  const warnings = [];
+
+  elements.forEach((element) => {
+    if (element?.type !== 'text' || !element.containerId) return;
+    const container = activeById.get(String(element.containerId));
+    if (!container || !BASIC_SHAPE_TYPES.has(container.type) || finiteNumber(container.angle) !== 0) {
+      return;
+    }
+    const textBounds = elementBounds(element);
+    const containerBounds = elementBounds(container);
+    if (!textBounds || !containerBounds) return;
+
+    const id = String(element.id ?? '');
+    const containerId = String(container.id ?? '');
+    const textCenterX = textBounds.x + (textBounds.width / 2);
+    const textCenterY = textBounds.y + (textBounds.height / 2);
+    const containerCenterX = containerBounds.x + (containerBounds.width / 2);
+    const containerCenterY = containerBounds.y + (containerBounds.height / 2);
+    const offsetX = textCenterX - containerCenterX;
+    const offsetY = textCenterY - containerCenterY;
+    const centered = Math.abs(offsetX) <= BOUND_TEXT_CENTER_TOLERANCE
+      && Math.abs(offsetY) <= BOUND_TEXT_CENTER_TOLERANCE;
+
+    layout.boundText.total += 1;
+    if (!centered) {
+      layout.boundText.misaligned += 1;
+      warnings.push(warning(
+        'bound-text-not-centered',
+        `Bound text ${id} is offset ${Math.round(offsetX)} horizontally and ${Math.round(offsetY)} vertically from container ${containerId}.`,
+        [id, containerId],
+      ));
+    }
+
+    if (!boxContains(containerBounds, textBounds)) {
+      layout.boundText.outsideContainer += 1;
+      warnings.push(warning(
+        'bound-text-outside-container',
+        `Bound text ${id} extends outside container ${containerId}.`,
+        [id, containerId],
+      ));
+    }
+
+    if (Math.abs(textBounds.height - expectedTextHeight(element)) > BOUND_TEXT_CENTER_TOLERANCE) {
+      layout.boundText.staleHeight += 1;
+      warnings.push(warning(
+        'bound-text-height-stale',
+        `Bound text ${id} has height ${Math.round(textBounds.height)} but its current text metrics require ${Math.round(expectedTextHeight(element))}.`,
+        [id, containerId],
+      ));
+    }
+  });
+
+  return { layout, warnings };
 }
 
 function boundEndpointWarning(element, binding, endpointName, activeById) {
@@ -336,7 +424,11 @@ export function inspectAgentExcalidrawScene(scene = {}, {
   const activeElements = (Array.isArray(scene?.elements) ? scene.elements : [])
     .filter((element) => element && !element.isDeleted);
   const boxes = activeElements.map(elementBounds).filter(Boolean);
-  const warnings = collectWarnings(activeElements, { inspectOcclusion });
+  const boundTextLayout = collectBoundTextLayout(activeElements);
+  const warnings = [
+    ...collectWarnings(activeElements, { inspectOcclusion }),
+    ...boundTextLayout.warnings,
+  ].slice(0, MAX_WARNINGS);
   return {
     bounds: mergeBounds(boxes),
     elementCount: activeElements.length,
@@ -348,6 +440,8 @@ export function inspectAgentExcalidrawScene(scene = {}, {
     truncated: (!includeElements && activeElements.length > 0)
       || activeElements.length > MAX_SUMMARY_ELEMENTS
       || warnings.length >= MAX_WARNINGS,
+    layout: boundTextLayout.layout,
+    valid: warnings.length === 0,
     warnings,
   };
 }

@@ -300,6 +300,100 @@ test('agent Excalidraw edits translate elements, resize standalone text, and ver
   })).revision, edited.revision);
 });
 
+test('agent Excalidraw font edits reflow bound text and compact verification reports layout', async () => {
+  const { files, service } = createService();
+  const created = await service.createExcalidraw(actor, {
+    elements: [
+      { height: 120, id: 'request', type: 'rectangle', width: 300, x: 150, y: 250 },
+      {
+        containerId: 'request',
+        fontFamily: 1,
+        fontSize: 15,
+        height: 105,
+        id: 'request-label',
+        lineHeight: 1.2,
+        text: 'Build request\ninstructions · history\ntools · user',
+        type: 'text',
+        width: 260,
+        x: 170,
+        y: 255,
+      },
+    ],
+    path: 'diagrams/reflow.excalidraw',
+  });
+
+  const edited = await service.editExcalidraw(actor, {
+    path: 'diagrams/reflow.excalidraw',
+    revision: created.revision,
+    update: [{ id: 'request-label', set: { fontFamily: 5 } }],
+  });
+  const label = JSON.parse(files.get('diagrams/reflow.excalidraw')).elements
+    .find(({ id }) => id === 'request-label');
+
+  assert.equal(edited.reflowed, 1);
+  assert.equal(label.fontFamily, 5);
+  assert.equal(label.height, 54);
+  assert.equal(label.x, 170);
+  assert.equal(label.y, 283);
+
+  const verified = await service.verifyExcalidraw(actor, {
+    path: 'diagrams/reflow.excalidraw',
+    render: false,
+  });
+  assert.equal(verified.valid, true);
+  assert.deepEqual(verified.layout.boundText, {
+    misaligned: 0,
+    outsideContainer: 0,
+    staleHeight: 0,
+    total: 1,
+  });
+  assert.equal(Object.hasOwn(verified, 'scene'), false);
+  assert.equal(Object.hasOwn(verified, 'svg'), false);
+
+  const manuallyPositioned = await service.editExcalidraw(actor, {
+    path: 'diagrams/reflow.excalidraw',
+    revision: edited.revision,
+    update: [{
+      id: 'request-label',
+      set: { fontSize: 16, height: 54, x: 170, y: 283 },
+    }],
+  });
+  assert.equal(manuallyPositioned.reflowed, 0);
+  const staleLayout = await service.verifyExcalidraw(actor, {
+    path: 'diagrams/reflow.excalidraw',
+    render: false,
+  });
+  assert.equal(staleLayout.valid, false);
+  assert.equal(staleLayout.layout.boundText.staleHeight, 1);
+  assert.equal(
+    staleLayout.inspection.warnings.some(({ code }) => code === 'bound-text-height-stale'),
+    true,
+  );
+
+  const normalized = await service.editExcalidraw(actor, {
+    normalizeTextPlacement: true,
+    path: 'diagrams/reflow.excalidraw',
+    revision: manuallyPositioned.revision,
+  });
+  assert.equal(normalized.reflowed, 1);
+  const repairedLayout = await service.verifyExcalidraw(actor, {
+    path: 'diagrams/reflow.excalidraw',
+    render: false,
+  });
+  assert.equal(repairedLayout.valid, true);
+});
+
+test('agent-created Excalidraw text uses the current Excalidraw font default', async () => {
+  const { files, service } = createService();
+  await service.createExcalidraw(actor, {
+    elements: [{ id: 'label', text: 'Default label', type: 'text', x: 20, y: 20 }],
+    path: 'diagrams/default-font.excalidraw',
+  });
+
+  const label = JSON.parse(files.get('diagrams/default-font.excalidraw')).elements[0];
+  assert.equal(label.fontFamily, 5);
+});
+
 test('agent Excalidraw operations preserve canonical geometry and explicit paint order', async () => {
   const { files, service } = createService();
   const elements = Array.from({ length: 12 }, (_, index) => ({

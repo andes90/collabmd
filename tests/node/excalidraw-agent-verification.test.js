@@ -49,8 +49,21 @@ test('Excalidraw inspection reports paint order, broken bindings, and text clipp
   assert.equal(result.elementCount, 4);
   assert.deepEqual(
     new Set(result.warnings.map(({ code }) => code)),
-    new Set(['missing-binding-target', 'text-overflow', 'unintended-overlap']),
+    new Set([
+      'bound-text-height-stale',
+      'bound-text-not-centered',
+      'missing-binding-target',
+      'text-overflow',
+      'unintended-overlap',
+    ]),
   );
+  assert.equal(result.valid, false);
+  assert.deepEqual(result.layout.boundText, {
+    misaligned: 1,
+    outsideContainer: 0,
+    staleHeight: 1,
+    total: 1,
+  });
   assert.equal(result.elements[0].paintOrder, 0);
   assert.equal(result.elements[0].behind, 'right');
   assert.equal(result.elements[1].inFrontOf, 'left');
@@ -60,6 +73,8 @@ test('Excalidraw inspection reports paint order, broken bindings, and text clipp
     {
       behind: 'arrow',
       containerId: 'left',
+      fontFamily: 5,
+      fontName: 'Excalifont',
       fontSize: 20,
       height: 10,
       id: 'label',

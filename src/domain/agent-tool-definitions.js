@@ -202,6 +202,12 @@ const EXCALIDRAW_SUMMARY_ELEMENT_SCHEMA = {
     },
     endElementId: { type: 'string' },
     containerId: { type: 'string' },
+    fontFamily: {
+      description: 'Excalidraw font-family identifier. Standard Excalifont is 5; legacy Virgil is 1.',
+      minimum: 1,
+      type: 'integer',
+    },
+    fontName: { type: 'string' },
     fontSize: { exclusiveMinimum: 0, type: 'number' },
     height: { minimum: 0, type: 'number' },
     id: { type: 'string' },
@@ -236,7 +242,16 @@ const EXCALIDRAW_INSPECTION_PROPERTIES = {
   bounds: EXCALIDRAW_BOUNDS_SCHEMA,
   elementCount: { minimum: 0, type: 'integer' },
   elements: { items: EXCALIDRAW_SUMMARY_ELEMENT_SCHEMA, type: 'array' },
+  layout: objectSchema({
+    boundText: objectSchema({
+      misaligned: { minimum: 0, type: 'integer' },
+      outsideContainer: { minimum: 0, type: 'integer' },
+      staleHeight: { minimum: 0, type: 'integer' },
+      total: { minimum: 0, type: 'integer' },
+    }),
+  }),
   truncated: { type: 'boolean' },
+  valid: { type: 'boolean' },
   warnings: { items: EXCALIDRAW_WARNING_SCHEMA, type: 'array' },
 };
 const EXCALIDRAW_INSPECTION_SCHEMA = objectSchema(EXCALIDRAW_INSPECTION_PROPERTIES);
@@ -274,6 +289,10 @@ const EXCALIDRAW_RENDER_INPUT_PROPERTIES = {
     minLength: 1,
     type: 'string',
   },
+  render: {
+    description: 'Return an image render. Set false for a compact structural and layout verification response.',
+    type: 'boolean',
+  },
   scale: {
     description: 'Requested output scale; automatically reduced when needed to stay within 4096 pixels.',
     maximum: 4,
@@ -298,6 +317,24 @@ const EXCALIDRAW_INLINE_VERIFICATION_SCHEMA = objectSchema({
   inspection: EXCALIDRAW_INSPECTION_SCHEMA,
   ...EXCALIDRAW_RENDER_RESULT_PROPERTIES,
 }, ['inspection']);
+const EXCALIDRAW_COMPACT_VERIFICATION_PROPERTIES = {
+  elementCount: { minimum: 0, type: 'integer' },
+  format: { enum: ['png', 'svg'], type: 'string' },
+  inspection: EXCALIDRAW_INSPECTION_SCHEMA,
+  layout: EXCALIDRAW_INSPECTION_PROPERTIES.layout,
+  path: { type: 'string' },
+  revision: REVISION_SCHEMA,
+  valid: { type: 'boolean' },
+};
+const EXCALIDRAW_VERIFY_OUTPUT_SCHEMA = {
+  oneOf: [
+    objectSchema(EXCALIDRAW_COMPACT_VERIFICATION_PROPERTIES),
+    objectSchema({
+      ...EXCALIDRAW_COMPACT_VERIFICATION_PROPERTIES,
+      ...EXCALIDRAW_RENDER_RESULT_PROPERTIES,
+    }),
+  ],
+};
 
 export const AGENT_TOOL_DEFINITIONS = Object.freeze([
   {
@@ -583,7 +620,7 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
 
   {
     annotations: { idempotentHint: true, readOnlyHint: true },
-    description: 'Inspect an Excalidraw scene structurally. Returns paint order, geometry, bindings, bounds, occlusion, clipping, and validity warnings.',
+    description: 'Inspect an Excalidraw scene structurally. Returns paint order, geometry, text style, bindings, bounds, layout diagnostics, occlusion, clipping, and validity warnings.',
     inputSchema: objectSchema({
       path: {
         description: 'Vault-relative .excalidraw path.',
@@ -601,7 +638,7 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
   },
   {
     annotations: { idempotentHint: true, readOnlyHint: true },
-    description: 'Inspect and render one Excalidraw revision in a single operation.',
+    description: 'Verify one Excalidraw revision with compact structural and layout diagnostics; render is optional.',
     inputSchema: objectSchema({
       ...EXCALIDRAW_RENDER_INPUT_PROPERTIES,
       inspectOcclusion: {
@@ -611,13 +648,8 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
     }, ['path']),
     method: 'verifyExcalidraw',
     name: 'verify_excalidraw',
-    outputSchema: objectSchema({
-      ...EXCALIDRAW_RENDER_RESULT_PROPERTIES,
-      inspection: EXCALIDRAW_INSPECTION_SCHEMA,
-      path: { type: 'string' },
-      revision: REVISION_SCHEMA,
-    }),
-    resultKind: 'image',
+    outputSchema: EXCALIDRAW_VERIFY_OUTPUT_SCHEMA,
+    resultKind: 'optional-image',
     scope: 'vault:read',
     untrustedContentHint: true,
     webMcp: true,
@@ -675,7 +707,7 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
   },
   {
     annotations: { destructiveHint: false, idempotentHint: false, readOnlyHint: false },
-    description: 'Create, update, replace, translate, reorder, or delete elements in an existing .excalidraw scene when its revision still matches.',
+    description: 'Create, update, replace, translate, reorder, or delete elements in an existing .excalidraw scene when its revision still matches. Bound text whose font, size, line height, or content changes reflows automatically.',
     inputSchema: objectSchema({
       create: {
         items: EXCALIDRAW_ELEMENT_INPUT_SCHEMA,
@@ -688,6 +720,11 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
         maxItems: 200,
         type: 'array',
         uniqueItems: true,
+      },
+      normalizeTextPlacement: {
+        description: 'Normalize every bound text label to its container center and current line-height metrics. This can be the only edit operation.',
+        enum: [true],
+        type: 'boolean',
       },
       path: {
         description: 'Vault-relative .excalidraw path returned by read_document.',
@@ -724,6 +761,11 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
       elementCount: { minimum: 0, type: 'integer' },
       path: { type: 'string' },
       reordered: { minimum: 0, type: 'integer' },
+      reflowed: {
+        description: 'Number of bound text labels whose position or height was normalized.',
+        minimum: 0,
+        type: 'integer',
+      },
       replaced: { minimum: 0, type: 'integer' },
       revision: REVISION_SCHEMA,
       translated: {
@@ -733,7 +775,7 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
       },
       updated: { minimum: 0, type: 'integer' },
       verification: EXCALIDRAW_INLINE_VERIFICATION_SCHEMA,
-    }, ['created', 'deleted', 'elementCount', 'path', 'reordered', 'replaced', 'revision', 'translated', 'updated']),
+    }, ['created', 'deleted', 'elementCount', 'path', 'reordered', 'reflowed', 'replaced', 'revision', 'translated', 'updated']),
     resultKind: 'optional-image',
     scope: 'vault:edit',
     webMcp: true,

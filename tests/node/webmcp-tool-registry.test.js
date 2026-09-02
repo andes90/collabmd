@@ -193,6 +193,61 @@ test('WebMCP replaces server previews with official browser snapshot rendering',
   assert.equal(mutations.at(-1).result, edited);
 });
 
+test('WebMCP keeps no-render Excalidraw verification compact', async () => {
+  const modelContext = createModelContext();
+  let renderCalls = 0;
+  const registry = new WebMcpToolRegistry({
+    callTool: async () => ({
+      elementCount: 2,
+      format: 'png',
+      inspection: {
+        bounds: { height: 80, width: 160, x: 0, y: 0 },
+        elementCount: 2,
+        elements: [],
+        layout: {
+          boundText: {
+            misaligned: 0,
+            outsideContainer: 0,
+            staleHeight: 0,
+            total: 1,
+          },
+        },
+        truncated: true,
+        valid: true,
+        warnings: [],
+      },
+      layout: {
+        boundText: {
+          misaligned: 0,
+          outsideContainer: 0,
+          staleHeight: 0,
+          total: 1,
+        },
+      },
+      path: 'diagram.excalidraw',
+      revision: 'a'.repeat(64),
+      valid: true,
+    }),
+    getIsTabActive: () => true,
+    modelContext,
+    renderExcalidrawScene: async () => {
+      renderCalls += 1;
+      return {};
+    },
+  });
+  await registry.refresh();
+
+  const result = await modelContext.tools.get('collabmd_verify_excalidraw').execute({
+    path: 'diagram.excalidraw',
+    render: false,
+  });
+
+  assert.equal(renderCalls, 0);
+  assert.equal(result.valid, true);
+  assert.equal(result.layout.boundText.misaligned, 0);
+  assert.equal(Object.hasOwn(result, 'image'), false);
+});
+
 test('WebMCP flushes an active editor and returns paint acknowledgement', async () => {
   const events = [];
   const modelContext = createModelContext();
