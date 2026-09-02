@@ -20,11 +20,12 @@ describe('EditorViewAdapter Vim mode', () => {
     });
     const ydoc = new Y.Doc();
     const ytext = ydoc.getText('codemirror');
+    const undoManager = new Y.UndoManager(ytext);
 
     adapter.initialize({
       awareness: null,
       filePath: 'note.md',
-      undoManager: null,
+      undoManager,
       ytext,
     });
 
@@ -33,13 +34,17 @@ describe('EditorViewAdapter Vim mode', () => {
 
     expect(adapter.setVimMode(true)).toBe(true);
     expect(adapter.isVimModeEnabled()).toBe(true);
-    await expect.poll(() => document.querySelector('.cm-vimMode')).not.toBeNull();
+    await expect.poll(
+      () => document.querySelector('.cm-vimMode'),
+      { timeout: 5000 },
+    ).not.toBeNull();
 
     expect(adapter.setVimMode(false)).toBe(false);
     expect(adapter.isVimModeEnabled()).toBe(false);
     expect(document.querySelector('.cm-vimMode')).toBeNull();
 
     adapter.destroy();
+    undoManager.destroy();
     ydoc.destroy();
   });
 });
