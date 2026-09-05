@@ -89,7 +89,7 @@ describe('CreateMenuPresenter', () => {
     expect(sheet).toBeInstanceOf(HTMLDialogElement);
     expect(sheet.open).toBe(true);
     expect(sheet?.textContent).toContain('draw.io diagram');
-    expect(document.activeElement).toHaveTextContent('Markdown note');
+    expect(document.activeElement?.textContent).toContain('Markdown note');
     expect(document.querySelector('.create-action-sheet-option')).not.toBeNull();
     expect(document.querySelector('.create-action-sheet-cancel')).not.toBeNull();
 
