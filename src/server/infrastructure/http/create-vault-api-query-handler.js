@@ -492,6 +492,12 @@ async function handleSearch(req, res, requestUrl, { searchService }) {
   }
 }
 
+async function handleVaultList(req, res, _requestUrl, { config }) {
+  // ponytail: ids only — absolute vault dirs are operator internals
+  const vaults = (config?.vaults ?? []).map(({ id }) => ({ id }));
+  jsonResponse(req, res, 200, { activeVault: vaults[0]?.id ?? null, vaults });
+}
+
 // --- Route table ---
 
 function createRouteTable(context) {
@@ -500,6 +506,7 @@ function createRouteTable(context) {
     { method: 'POST', path: '/api/base/property-values', handler: handleBasePropertyValues },
     { method: 'POST', path: '/api/base/transform', handler: handleBaseTransform },
     { method: 'POST', path: '/api/base/export', handler: handleBaseExport },
+    { method: 'GET', path: '/api/vaults', handler: handleVaultList },
     { method: 'GET', path: '/api/files', handler: handleFileTree },
     { method: 'GET', path: '/api/comments/overview', handler: handleCommentOverview },
     { method: 'GET', path: '/api/file', handler: handleFileRead },

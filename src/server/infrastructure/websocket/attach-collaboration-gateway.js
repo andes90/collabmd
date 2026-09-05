@@ -24,9 +24,22 @@ function rejectUpgrade(socket, statusCode, statusMessage, {
   socket.destroy();
 }
 
-function extractRoomName(pathname, wsBasePath) {
-  const roomSegment = pathname.slice(wsBasePath.length + 1);
-  return decodeURIComponent(roomSegment || 'default');
+// ponytail: /ws/v/:knownId/:room scopes to a vault; anything else stays a legacy primary room.
+// A primary-vault file literally at v/<vaultId>/... is shadowed by design.
+function extractVaultAndRoom(pathname, wsBasePath, isKnownVaultId) {
+  const rest = pathname.slice(wsBasePath.length + 1);
+  if (rest === 'v' || rest.startsWith('v/')) {
+    const after = rest === 'v' ? '' : rest.slice('v/'.length);
+    const slashIndex = after.indexOf('/');
+    if (slashIndex > 0) {
+      const candidate = after.slice(0, slashIndex);
+      const roomPart = after.slice(slashIndex + 1);
+      if (roomPart && isKnownVaultId?.(candidate)) {
+        return { roomName: decodeURIComponent(roomPart) || 'default', vaultId: candidate };
+      }
+    }
+  }
+  return { roomName: decodeURIComponent(rest || 'default'), vaultId: null };
 }
 
 export function attachCollaborationGateway({
@@ -37,6 +50,7 @@ export function attachCollaborationGateway({
   httpServer,
   maxPayload,
   roomRegistry,
+  vaultRegistry = null,
   wsBasePath,
 }) {
   const websocketServer = new WebSocketServer({
@@ -99,26 +113,38 @@ export function attachCollaborationGateway({
   }) ?? (() => {});
 
   websocketServer.on('connection', (ws, req, requestUrl, user = null) => {
-    const roomName = extractRoomName(requestUrl.pathname, wsBasePath);
-    const room = roomRegistry.getOrCreate(roomName);
-    const session = new ClientSocketSession({
-      onDisconnected: (disconnectedRoomName) => {
-        socketSessions.delete(ws);
-        const remaining = roomRegistry.rooms.get(disconnectedRoomName)?.clients.size ?? 0;
-        console.log(`[ws] "${disconnectedRoomName}" disconnected (${remaining} active client(s))`);
-      },
-      onFailed: () => {
-        socketSessions.delete(ws);
-      },
-      room,
-      roomName,
-      ws,
+    const { roomName, vaultId } = extractVaultAndRoom(requestUrl.pathname, wsBasePath, vaultRegistry?.isKnownVaultId?.bind(vaultRegistry));
+    const registryPromise = vaultId && vaultRegistry
+      ? vaultRegistry.getOrCreateContextAsync(vaultId).then((context) => context.roomRegistry)
+      : Promise.resolve(roomRegistry);
+    registryPromise.then((targetRegistry) => {
+      const room = targetRegistry.getOrCreate(roomName);
+      const session = new ClientSocketSession({
+        onDisconnected: (disconnectedRoomName) => {
+          socketSessions.delete(ws);
+          const remaining = targetRegistry.rooms.get(disconnectedRoomName)?.clients.size ?? 0;
+          console.log(`[ws] "${disconnectedRoomName}" disconnected (${remaining} active client(s))`);
+        },
+        onFailed: () => {
+          socketSessions.delete(ws);
+        },
+        room,
+        roomName,
+        ws,
+      });
+      socketSessions.set(ws, {
+        session,
+        userEmail: normalizeHostedEmail(user?.email),
+      });
+      void session.initialize();
+    }).catch((error) => {
+      console.error(`[ws] Failed to open room "${roomName}":`, error.message);
+      try {
+        ws.close(1011, 'Vault unavailable');
+      } catch {
+        try { ws.terminate(); } catch { /* ignore */ }
+      }
     });
-    socketSessions.set(ws, {
-      session,
-      userEmail: normalizeHostedEmail(user?.email),
-    });
-    void session.initialize();
   });
 
   httpServer.on('upgrade', (req, socket, head) => {

@@ -42,6 +42,7 @@ export function createRequestHandler(
   githubSetupFlow = null,
   structurizrWorkspaceService = null,
   agentIntegration = null,
+  vaultRegistry = null,
 ) {
   const handleStaticRequest = createStaticHandler(config, authService, searchService);
   const handleAuthApi = createAuthApiHandler({ authService });
@@ -50,28 +51,43 @@ export function createRequestHandler(
     githubSetupFlow,
     hostedWorkspaceService,
   });
-  const handleGitApiQuery = createGitApiQueryHandler({ gitService });
-  const handleGitApiCommand = createGitApiCommandHandler({
-    authService,
-    gitService,
-    workspaceMutationCoordinator,
-  });
-  const handleVaultApiQuery = createVaultApiQueryHandler({
-    baseQueryService,
-    backlinkIndex,
-    config,
-    searchService,
-    vaultFileStore,
-    workspaceMutationCoordinator,
-  });
-  const handleVaultApiCommand = createVaultApiCommandHandler({
-    backlinkIndex,
-    maxPdfUploadBytes: config.maxPdfUploadBytes,
-    renderDocx,
-    roomRegistry,
-    vaultFileStore,
-    workspaceMutationCoordinator,
-  });
+  // ponytail: one builder for legacy primary paths and scoped vaults; only the parts differ
+  const vaultHandlerCache = new Map();
+  function getVaultHandlers(id, parts) {
+    let handlers = vaultHandlerCache.get(id);
+    if (!handlers) {
+      handlers = {
+        command: createVaultApiCommandHandler({
+          backlinkIndex: parts.backlinkIndex,
+          maxPdfUploadBytes: config.maxPdfUploadBytes,
+          renderDocx,
+          roomRegistry: parts.roomRegistry,
+          vaultFileStore: parts.vaultFileStore,
+          workspaceMutationCoordinator: parts.workspaceMutationCoordinator,
+        }),
+        gitCommand: createGitApiCommandHandler({
+          authService,
+          gitService: parts.gitService,
+          workspaceMutationCoordinator: parts.workspaceMutationCoordinator,
+        }),
+        gitQuery: createGitApiQueryHandler({ gitService: parts.gitService }),
+        query: createVaultApiQueryHandler({
+          baseQueryService: parts.baseQueryService,
+          backlinkIndex: parts.backlinkIndex,
+          config,
+          searchService: parts.searchService,
+          vaultFileStore: parts.vaultFileStore,
+          workspaceMutationCoordinator: parts.workspaceMutationCoordinator,
+        }),
+      };
+      vaultHandlerCache.set(id, handlers);
+    }
+    return handlers;
+  }
+  const primaryHandlers = getVaultHandlers(
+    vaultRegistry?.getPrimaryContext?.()?.def.id ?? '__primary__',
+    { backlinkIndex, baseQueryService, gitService, roomRegistry, searchService, vaultFileStore, workspaceMutationCoordinator },
+  );
   const handlePlantUmlApi = createPlantUmlApiHandler({ plantUmlRenderer });
   const handleStructurizrApi = createStructurizrApiHandler({
     basePath: config.basePath,
@@ -93,6 +109,56 @@ export function createRequestHandler(
         rateLimiter: agentToolRateLimiter,
       })
     : async () => false;
+
+  function parseVaultScope(pathname) {
+    if (!pathname.startsWith('/api/v/')) {
+      return null;
+    }
+    const rest = pathname.slice('/api/v/'.length);
+    const slashIndex = rest.indexOf('/');
+    if (slashIndex === -1) {
+      return null;
+    }
+    const vaultId = rest.slice(0, slashIndex);
+    if (!vaultId) {
+      return null;
+    }
+    return { subPath: `/api${rest.slice(slashIndex)}`, vaultId };
+  }
+
+  async function handleVaultScopedApi(req, res, requestUrl) {
+    const scope = parseVaultScope(requestUrl.pathname);
+    if (!scope || !vaultRegistry) {
+      return false;
+    }
+    let context;
+    try {
+      context = await vaultRegistry.getOrCreateContextAsync(scope.vaultId);
+    } catch (error) {
+      jsonResponse(req, res, error?.statusCode || 500, { error: error?.message || 'Vault unavailable' });
+      return true;
+    }
+    const subUrl = new URL(requestUrl.toString());
+    subUrl.pathname = scope.subPath;
+    const handlers = getVaultHandlers(context.def.id, context);
+    if (await handlers.query(req, res, subUrl)) {
+      return true;
+    }
+    if (await handlers.command(req, res, subUrl)) {
+      return true;
+    }
+    if (subUrl.pathname.startsWith('/api/git')) {
+      if (await handlers.gitQuery(req, res, subUrl)) {
+        return true;
+      }
+      if (await handlers.gitCommand(req, res, subUrl)) {
+        return true;
+      }
+      jsonResponse(req, res, 404, { error: 'Git API endpoint not found' });
+      return true;
+    }
+    return false;
+  }
 
   function handleBasePathRedirect(req, res, originalRequestUrl) {
     if (
@@ -231,10 +297,13 @@ export function createRequestHandler(
     }
 
     if (requestUrl.pathname.startsWith('/api/')) {
-      if (await handleVaultApiQuery(req, res, requestUrl)) {
+      if (await handleVaultScopedApi(req, res, requestUrl)) {
         return;
       }
-      if (await handleVaultApiCommand(req, res, requestUrl)) {
+      if (await primaryHandlers.query(req, res, requestUrl)) {
+        return;
+      }
+      if (await primaryHandlers.command(req, res, requestUrl)) {
         return;
       }
       if (await handlePlantUmlApi(req, res, requestUrl)) {
@@ -247,10 +316,10 @@ export function createRequestHandler(
         jsonResponse(req, res, 503, { error: 'Git integration is not configured' });
         return;
       }
-      if (await handleGitApiQuery(req, res, requestUrl)) {
+      if (await primaryHandlers.gitQuery(req, res, requestUrl)) {
         return;
       }
-      if (await handleGitApiCommand(req, res, requestUrl)) {
+      if (await primaryHandlers.gitCommand(req, res, requestUrl)) {
         return;
       }
       jsonResponse(req, res, 404, { error: 'Git API endpoint not found' });

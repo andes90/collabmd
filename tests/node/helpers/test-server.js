@@ -30,20 +30,32 @@ export async function startTestServer(overrides = {}) {
   // Seed a default test file
   await writeFile(join(vaultDir, 'test.md'), '# Test\n\nHello from test vault.\n', 'utf-8');
 
+  // ponytail: multi-vault tests pass vaults:[{id, seed}]; dirs live under tempRoot
+  const { vaults: vaultOverrides, ...restOverrides } = overrides;
+  let vaultsOverride;
+  if (Array.isArray(vaultOverrides)) {
+    vaultsOverride = [];
+    for (const entry of vaultOverrides) {
+      const dir = join(tempRoot, entry.id);
+      await mkdir(dir, { recursive: true });
+      await writeFile(join(dir, 'test.md'), entry.seed ?? `# ${entry.id}\n`, 'utf-8');
+      vaultsOverride.push({ dir, id: entry.id });
+    }
+  }
   const baseConfig = loadConfig({
     agentAccess: overrides.agentAccess,
     auth: overrides.auth,
-    vaultDir,
+    ...(vaultsOverride ? { vaults: vaultsOverride } : { vaultDir }),
   });
   const config = {
     ...baseConfig,
     fileWatcherEnabled: overrides.fileWatcherEnabled ?? false,
     host,
     nodeEnv: 'test',
-    vaultDir,
+    ...(vaultsOverride ? { vaultDir: vaultsOverride[0].dir, vaults: vaultsOverride } : { vaultDir }),
     port: 0,
     wsRoomIdleGraceMs: 0,
-    ...overrides,
+    ...restOverrides,
     auth: {
       ...baseConfig.auth,
       ...(overrides.auth ?? {}),

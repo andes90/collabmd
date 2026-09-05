@@ -58,8 +58,10 @@ function buildRuntimeConfig({
   structurizr,
   wikiLinkAutoCreate,
   wsBasePath,
+  vaults,
 }) {
   return `window.__COLLABMD_CONFIG__ = ${JSON.stringify({
+    activeVault: vaults?.[0]?.id ?? '',
     agentAccess: {
       enabled: Boolean(agentAccess?.enabled),
       endpoint: agentAccess?.endpoint || '',
@@ -79,6 +81,7 @@ function buildRuntimeConfig({
     structurizrEnabled: Boolean(structurizr?.enabled ?? structurizr?.serverUrl),
     wikiLinkAutoCreate,
     wsBasePath,
+    vaults: (vaults ?? []).map(({ id }) => ({ id })),
   })};\n`;
 }
 
