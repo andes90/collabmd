@@ -104,8 +104,6 @@ function parseElements(sceneJson) {
 }
 
 async function createConnectedClient({
-  historyLimit,
-  historyCaptureWindowMs,
   now = () => Date.now(),
   onCommentThreadsChange = () => {},
   onRemoteSceneJson = () => {},
@@ -118,8 +116,6 @@ async function createConnectedClient({
   const ydoc = new Y.Doc();
   const client = new ExcalidrawRoomClient({
     filePath: 'diagram.excalidraw',
-    historyCaptureWindowMs,
-    historyLimit,
     now,
     onCommentThreadsChange,
     onRemoteSceneJson,
@@ -182,12 +178,6 @@ test('ExcalidrawRoomClient uses an empty scene when no file path is configured',
 
   assert.equal(scene.type, 'excalidraw');
   assert.match(client.getLastSceneJson(), /"type":"excalidraw"/);
-  assert.deepEqual(client.getHistoryState(), {
-    canRedo: false,
-    canUndo: false,
-    head: null,
-    length: null,
-  });
 });
 
 test('ExcalidrawRoomClient marks disk/agent scene replaces as authoritative', async () => {
@@ -227,12 +217,6 @@ test('ExcalidrawRoomClient syncs local scene updates into the structured room st
   assert.deepEqual(buildExcalidrawRoomScene(ydoc).elements.map((element) => element.id), ['shape-1']);
   assert.match(client.getLastSceneJson(), /shape-1/);
   assert.deepEqual(remoteScenes, []);
-  assert.deepEqual(client.getHistoryState(), {
-    canRedo: false,
-    canUndo: false,
-    head: null,
-    length: null,
-  });
 });
 
 test('ExcalidrawRoomClient does not echo a shared scene application as a local edit', async () => {
@@ -622,7 +606,7 @@ test('ExcalidrawRoomClient reschedules delayed empty-scene commits when newer lo
   assert.equal(buildExcalidrawRoomScene(ydoc).elements.find((element) => element.id === 'shape-1').x, 10);
 });
 
-test('ExcalidrawRoomClient commitSceneJson live-merges scenes without tracking room history', async () => {
+test('ExcalidrawRoomClient commitSceneJson merges successive local scenes into the room', async () => {
   const { client, ydoc } = await createConnectedClient();
 
   assert.equal(client.commitSceneJson(createScene('shape-1', { color: '#111111' }), { origin: 'test-1' }), true);
@@ -630,12 +614,6 @@ test('ExcalidrawRoomClient commitSceneJson live-merges scenes without tracking r
 
   assert.deepEqual(parseElements(client.getLastSceneJson()), ['shape-1', 'shape-2']);
   assert.deepEqual(buildExcalidrawRoomScene(ydoc).elements.map((element) => element.id), ['shape-1', 'shape-2']);
-  assert.deepEqual(client.getHistoryState(), {
-    canRedo: false,
-    canUndo: false,
-    head: null,
-    length: null,
-  });
 });
 
 test('ExcalidrawRoomClient avoids rewriting the room when the scene is unchanged', async () => {
@@ -680,7 +658,11 @@ test('ExcalidrawRoomClient updates awareness fields for local user, pointer, and
   client.setLocalUser({ name: 'Updated Name' });
   client.syncLocalSelectionAwareness({ selectedElementIds: { shapeA: true } });
   client.scheduleLocalPointerAwareness({ button: 'down', pointer: { tool: 'laser', x: 10, y: 20 } });
-  client.scheduleLocalViewportAwareness({ scrollX: 12, scrollY: 34, zoom: 1.5 });
+  client.scheduleLocalViewportAwareness({ scrollX: '12', scrollY: 34, zoom: '1.5' });
+  for (const viewport of [null, {}, { scrollX: 0, scrollY: 0, zoom: 0 }, { scrollX: Infinity, scrollY: 0, zoom: 1 }]) {
+    client.scheduleLocalViewportAwareness(viewport);
+  }
+  assert.equal(rafCallbacks.length, 2);
   rafCallbacks[0]();
   rafCallbacks[1]();
 

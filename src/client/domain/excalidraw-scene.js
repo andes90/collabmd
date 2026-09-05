@@ -84,17 +84,6 @@ export function createExcalidrawExportOptions(scene, {
   };
 }
 
-export function buildStoredScene(elements, appState, files) {
-  return normalizeScene({
-    elements: elements.filter((element) => !element.isDeleted),
-    appState: {
-      gridSize: appState.gridSize ?? null,
-      viewBackgroundColor: appState.viewBackgroundColor ?? '#ffffff',
-    },
-    files: files || {},
-  });
-}
-
 export function buildLiveCollaborationScene(elements, appState, files) {
   return normalizeScene({
     elements: Array.isArray(elements) ? elements : [],

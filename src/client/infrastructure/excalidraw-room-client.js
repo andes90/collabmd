@@ -23,6 +23,7 @@ import {
 import {
   buildCollaboratorsMap,
   mergeAwarenessUserPatch,
+  normalizeCollaboratorViewport,
 } from '../domain/excalidraw-collaboration.js';
 import {
   buildLiveCollaborationScene,
@@ -370,23 +371,6 @@ export class ExcalidrawRoomClient {
     });
   }
 
-  getHistoryState() {
-    return {
-      canRedo: false,
-      canUndo: false,
-      head: null,
-      length: null,
-    };
-  }
-
-  canRedo() {
-    return this.getHistoryState().canRedo;
-  }
-
-  canUndo() {
-    return this.getHistoryState().canUndo;
-  }
-
   isApplyingSharedSnapshot() {
     return this.applyingSharedSnapshotDepth > 0;
   }
@@ -397,14 +381,6 @@ export class ExcalidrawRoomClient {
 
   endApplyingSharedSnapshot() {
     this.applyingSharedSnapshotDepth = Math.max(0, this.applyingSharedSnapshotDepth - 1);
-  }
-
-  subscribeHistoryState(listener) {
-    if (typeof listener === 'function') {
-      listener(this.getHistoryState());
-    }
-
-    return () => {};
   }
 
   setLocalUser(nextUser = {}) {
@@ -892,25 +868,6 @@ export class ExcalidrawRoomClient {
     this.pendingPointerPayload = null;
   }
 
-  normalizeViewportAwareness(viewport) {
-    if (!viewport || typeof viewport !== 'object') {
-      return null;
-    }
-
-    const scrollX = Number(viewport.scrollX);
-    const scrollY = Number(viewport.scrollY);
-    const zoom = Number(viewport.zoom);
-    if (!Number.isFinite(scrollX) || !Number.isFinite(scrollY) || !Number.isFinite(zoom) || zoom <= 0) {
-      return null;
-    }
-
-    return {
-      scrollX,
-      scrollY,
-      zoom,
-    };
-  }
-
   scheduleLocalPointerAwareness(payload) {
     if (!this.awareness || !payload?.pointer) {
       return;
@@ -948,7 +905,7 @@ export class ExcalidrawRoomClient {
       return;
     }
 
-    const normalizedViewport = this.normalizeViewportAwareness(viewport);
+    const normalizedViewport = normalizeCollaboratorViewport(viewport);
     if (!normalizedViewport) {
       return;
     }

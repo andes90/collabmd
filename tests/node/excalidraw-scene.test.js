@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  buildStoredScene,
+  buildLiveCollaborationScene,
   createEmptyScene,
   createExcalidrawExportOptions,
   normalizeScene,
@@ -55,15 +55,5 @@ test('Excalidraw scene helpers preserve supported fields', () => {
     files: scene.files,
   });
 
-  assert.deepEqual(buildStoredScene(scene.elements, scene.appState, scene.files), {
-    appState: {
-      gridSize: 16,
-      viewBackgroundColor: '#123456',
-    },
-    elements: [{ id: 'a', isDeleted: false }],
-    files: { fileA: { mimeType: 'image/png' } },
-    source: 'collabmd',
-    type: 'excalidraw',
-    version: 2,
-  });
+  assert.deepEqual(buildLiveCollaborationScene(scene.elements, scene.appState, scene.files), scene);
 });
