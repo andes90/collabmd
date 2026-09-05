@@ -60,7 +60,7 @@ test('VaultFileStore reads and writes markdown files', async (t) => {
   const content = await store.readMarkdownFile('README.md');
   assert.equal(content, '# Readme\n');
 
-  await store.writeMarkdownFile('README.md', '# Updated\n');
+  await store.writeEditableVaultContent('README.md', '# Updated\n');
   const updated = await store.readMarkdownFile('README.md');
   assert.equal(updated, '# Updated\n');
 });
@@ -79,7 +79,7 @@ test('VaultFileStore reads and writes base files', async (t) => {
   const content = await store.readBaseFile('views/tasks.base');
   assert.match(content ?? '', /filters: file\.ext == "md"/);
 
-  const writeResult = await store.writeBaseFile('views/tasks.base', [
+  const writeResult = await store.writeEditableVaultContent('views/tasks.base', [
     'filters: file.ext == "md"',
     'views:',
     '  - type: list',
@@ -98,7 +98,7 @@ test('VaultFileStore can preserve the current collaboration snapshot during room
   const snapshotWrite = await store.writeCollaborationSnapshot('README.md', snapshot);
   assert.equal(snapshotWrite.ok, true);
 
-  const writeResult = await store.writeMarkdownFile('README.md', '# Updated via room\n', {
+  const writeResult = await store.writeEditableVaultContent('README.md', '# Updated via room\n', {
     invalidateCollaborationSnapshot: false,
   });
   assert.equal(writeResult.ok, true);
@@ -106,7 +106,7 @@ test('VaultFileStore can preserve the current collaboration snapshot during room
   const preservedSnapshot = await store.readCollaborationSnapshot('README.md');
   assert.deepEqual(Array.from(preservedSnapshot ?? []), Array.from(snapshot));
 
-  const invalidatingWrite = await store.writeMarkdownFile('README.md', '# Updated via API\n');
+  const invalidatingWrite = await store.writeEditableVaultContent('README.md', '# Updated via API\n');
   assert.equal(invalidatingWrite.ok, true);
   assert.equal(await store.readCollaborationSnapshot('README.md'), null);
 });
@@ -756,35 +756,27 @@ test('VaultFileStore rejects raster uploads whose dimensions exceed the configur
   assert.equal(result.error, 'Image dimensions exceed limit');
 });
 
-test('VaultFileStore exposes download metadata for files and directory archive entries', async (t) => {
+test('VaultFileStore streams downloads and counts directory archive entries', async (t) => {
   const { store, cleanup } = await createVaultStore();
   t.after(cleanup);
 
   await store.createDirectory('notes/empty');
   await store.createFile('notes/reference.base', 'views:\n  - type: table\n');
 
-  const fileDownload = await store.readDownloadFile('notes/reference.base');
+  const fileDownload = await store.openDownloadFileStream('notes/reference.base');
   assert.equal(fileDownload?.mimeType, 'text/yaml; charset=utf-8');
-  assert.match(fileDownload?.content?.toString('utf8') ?? '', /type: table/);
+  assert.equal(Buffer.concat(await fileDownload.stream.toArray()).toString('utf8'), 'views:\n  - type: table\n');
 
-  const directoryEntries = await store.listDirectoryEntriesForDownload('notes');
-  assert.equal(directoryEntries.ok, true);
-  assert.deepEqual(directoryEntries.entries, [
-    {
-      path: 'empty',
-      type: 'directory',
-    },
-    {
-      absolutePath: join(store.vaultDir, 'notes', 'daily.md'),
-      path: 'daily.md',
-      type: 'file',
-    },
-    {
-      absolutePath: join(store.vaultDir, 'notes', 'reference.base'),
-      path: 'reference.base',
-      type: 'file',
-    },
-  ]);
+  const directoryRoot = await store.resolveDirectoryDownloadRoot('notes');
+  assert.deepEqual(directoryRoot, {
+    absolute: join(store.vaultDir, 'notes'),
+    ok: true,
+    rootName: 'notes',
+  });
+  assert.deepEqual(await store.countDirectoryDownloadEntries(directoryRoot.absolute), {
+    count: 3,
+    withinLimit: true,
+  });
 });
 
 test('VaultFileStore rejects non-markdown delete and rename source paths', async (t) => {
@@ -839,10 +831,10 @@ test('VaultFileStore rejects path traversal even when the target uses a vault ex
   assert.equal(directoryResult.error, 'Invalid directory path');
 });
 
-test('VaultFileStore counts vault files', async (t) => {
+test('VaultFileStore includes the file count in workspace state scans', async (t) => {
   const { store, cleanup } = await createVaultStore();
   t.after(cleanup);
 
-  const count = await store.countVaultFiles();
-  assert.equal(count, 2);
+  const snapshot = await store.scanWorkspaceState();
+  assert.equal(snapshot.vaultFileCount, 2);
 });

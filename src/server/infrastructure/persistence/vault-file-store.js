@@ -417,7 +417,15 @@ export class VaultFileStore {
     return this.readContentFile(filePath);
   }
 
-  async writeResolvedContentFile(resolved, filePath, content, { invalidateCollaborationSnapshot = true } = {}) {
+  async writeEditableVaultContent(filePath, content, { invalidateCollaborationSnapshot = true } = {}) {
+    const resolved = this.resolveAdapter(filePath);
+    if (!resolved) {
+      return {
+        ok: false,
+        error: getEditableVaultContentKind(filePath)?.invalidPathError ?? INVALID_VAULT_FILE_PATH_ERROR,
+      };
+    }
+
     try {
       await this.runManagedWrite([filePath], async () => {
         await mkdir(dirname(resolved.absolute), { recursive: true });
@@ -430,22 +438,6 @@ export class VaultFileStore {
     } catch (error) {
       return { ok: false, error: error.message };
     }
-  }
-
-  async writeContentFile(filePath, content, expectedKind = null, { invalidateCollaborationSnapshot = true } = {}) {
-    const resolved = this.resolveAdapter(filePath);
-    if (!resolved || (expectedKind && resolved.adapter.kind !== expectedKind)) {
-      return {
-        ok: false,
-        error: resolved?.adapter?.invalidPathError ?? getEditableVaultContentKind(filePath)?.invalidPathError ?? INVALID_VAULT_FILE_PATH_ERROR,
-      };
-    }
-
-    return this.writeResolvedContentFile(resolved, filePath, content, { invalidateCollaborationSnapshot });
-  }
-
-  async writeEditableVaultContent(filePath, content, { invalidateCollaborationSnapshot = true } = {}) {
-    return this.writeContentFile(filePath, content, null, { invalidateCollaborationSnapshot });
   }
 
   async readMarkdownFile(filePath) {
@@ -506,14 +498,6 @@ export class VaultFileStore {
 
       throw error;
     }
-  }
-
-  async writeMarkdownFile(filePath, content, options = {}) {
-    return this.writeContentFile(filePath, content, 'markdown', options);
-  }
-
-  async writeBaseFile(filePath, content, options = {}) {
-    return this.writeContentFile(filePath, content, 'base', options);
   }
 
   async writeImageAttachmentForDocument(sourceDocumentPath, {
@@ -579,36 +563,6 @@ export class VaultFileStore {
       }),
       path: storedPath,
     };
-  }
-
-  async readDownloadFile(filePath) {
-    const normalizedPath = String(filePath ?? '').replace(/\\/g, '/').trim();
-    if (!normalizedPath || !isVaultFilePath(normalizedPath)) {
-      return null;
-    }
-
-    if (isImageAttachmentFilePath(normalizedPath)) {
-      return this.readImageAttachmentFile(normalizedPath);
-    }
-
-    const absolute = this.resolveContentPath(normalizedPath, { requireVaultFile: false });
-    if (!absolute) {
-      return null;
-    }
-
-    try {
-      return {
-        content: await readFile(absolute),
-        mimeType: getDownloadMimeType(normalizedPath),
-        path: normalizedPath,
-      };
-    } catch (error) {
-      if (error.code === 'ENOENT') {
-        return null;
-      }
-
-      throw error;
-    }
   }
 
   async openDownloadFileStream(filePath, { maxBytes = Infinity } = {}) {
@@ -865,68 +819,6 @@ export class VaultFileStore {
     return sortWorkspacePaths(paths);
   }
 
-  async listDirectoryEntriesForDownload(dirPath) {
-    const normalizedPath = String(dirPath ?? '').replace(/\\/g, '/').trim();
-    const { absolute, error } = resolveVaultDirectoryPath(this.vaultDir, normalizedPath);
-    if (!absolute) {
-      return { ok: false, error };
-    }
-
-    try {
-      const info = await stat(absolute);
-      if (!info.isDirectory()) {
-        return { ok: false, error: 'Directory not found' };
-      }
-    } catch (statError) {
-      if (statError.code === 'ENOENT') {
-        return { ok: false, error: 'Directory not found' };
-      }
-
-      throw statError;
-    }
-
-    const entries = [];
-    const visitDirectory = async (directoryAbsolutePath, relativeDirectoryPath = '') => {
-      const dirEntries = sortDirectoryEntries(await readdir(directoryAbsolutePath, { withFileTypes: true }))
-        .filter((entry) => !isIgnoredVaultEntry(entry.name));
-
-      if (dirEntries.length === 0) {
-        entries.push({
-          path: relativeDirectoryPath,
-          type: 'directory',
-        });
-        return;
-      }
-
-      for (const entry of dirEntries) {
-        const childAbsolutePath = join(directoryAbsolutePath, entry.name);
-        const childRelativePath = relativeDirectoryPath
-          ? `${relativeDirectoryPath}/${entry.name}`
-          : entry.name;
-
-        if (entry.isDirectory()) {
-          await visitDirectory(childAbsolutePath, childRelativePath);
-          continue;
-        }
-
-        if (isVaultFilePath(entry.name)) {
-          entries.push({
-            absolutePath: childAbsolutePath,
-            path: childRelativePath,
-            type: 'file',
-          });
-        }
-      }
-    };
-
-    await visitDirectory(absolute);
-    return {
-      entries,
-      ok: true,
-      rootName: basename(normalizedPath),
-    };
-  }
-
   async resolveDirectoryDownloadRoot(dirPath) {
     const normalizedPath = String(dirPath ?? '').replace(/\\/g, '/').trim();
     const { absolute, error } = resolveVaultDirectoryPath(this.vaultDir, normalizedPath);
@@ -1126,11 +1018,6 @@ export class VaultFileStore {
     }
   }
 
-  async countVaultFiles() {
-    const snapshot = await this.scanWorkspaceState();
-    return snapshot.vaultFileCount;
-  }
-
   async reconcileSidecars({
     deletedPaths = [],
     renamedPaths = [],
@@ -1160,42 +1047,6 @@ export class VaultFileStore {
     await Promise.allSettled(
       Array.from(affectedPaths, (filePath) => this.deleteCollaborationSnapshot(filePath)),
     );
-  }
-
-  async countFilesInDir(dirPath) {
-    let count = 0;
-
-    let entries;
-    try {
-      entries = await readdir(dirPath, { withFileTypes: true });
-    } catch {
-      return 0;
-    }
-
-    for (const entry of entries) {
-      if (isIgnoredVaultEntry(entry.name)) {
-        continue;
-      }
-
-      const fullPath = join(dirPath, entry.name);
-      if (entry.isDirectory()) {
-        count += await this.countFilesInDir(fullPath);
-      } else if (isVaultFilePath(entry.name)) {
-        count += 1;
-      }
-    }
-
-    return count;
-  }
-
-  resolveWikiLink(linkTarget) {
-    const normalized = linkTarget.endsWith('.md') ? linkTarget : `${linkTarget}.md`;
-    const absolute = this.resolveContentPath(normalized, { requireVaultFile: false });
-    if (!absolute) {
-      return null;
-    }
-
-    return toVaultRelativePath(this.vaultDir, absolute);
   }
 
   async scanWorkspaceState() {
