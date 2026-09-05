@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile as execFileCallback } from 'node:child_process';
 import { request } from 'node:http';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -250,4 +250,64 @@ test('server can start against a freshly bootstrapped vault and serve cloned fil
 
   assert.equal(response.statusCode, 200);
   assert.match(response.body, /Hello from remote/);
+});
+
+test('prepareConfigForStartup bootstraps each mapped vault independently', async (t) => {
+  const { remoteDir: remoteA } = await createBareRemoteFixture(t);
+  const tempRoot = await mkdtemp(join(tmpdir(), 'collabmd-bootstrap-multi-'));
+  const vaultADir = join(tempRoot, 'a');
+  const vaultBDir = join(tempRoot, 'b');
+  await mkdir(vaultBDir, { recursive: true });
+  await writeFile(join(vaultBDir, 'local.md'), '# Local only\n', 'utf8');
+  const config = loadConfig({
+    git: {
+      remote: {
+        sshPrivateKeyBase64: Buffer.from('dummy-private-key', 'utf8').toString('base64'),
+      },
+    },
+    vaults: [
+      { dir: vaultADir, id: 'a', repoUrl: remoteA },
+      { dir: vaultBDir, id: 'b' },
+    ],
+  });
+
+  t.after(async () => {
+    await config.git?.cleanup?.();
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  await prepareConfigForStartup(config);
+
+  assert.match(await readFile(join(vaultADir, 'test.md'), 'utf8'), /Hello from remote/);
+  assert.equal(await readFile(join(vaultBDir, 'local.md'), 'utf8'), '# Local only\n');
+  await assert.rejects(() => readFile(join(vaultBDir, '.git', 'HEAD'), 'utf8'), /ENOENT/);
+});
+
+test('prepareConfigForStartup tags origin-mismatch errors with the vault id', async (t) => {
+  const { remoteDir } = await createBareRemoteFixture(t);
+  const { remoteDir: otherRemoteDir } = await createBareRemoteFixture(t, {
+    initialContent: '# Other\n',
+  });
+  const tempRoot = await mkdtemp(join(tmpdir(), 'collabmd-bootstrap-multi-mismatch-'));
+  const vaultADir = join(tempRoot, 'a');
+  const config = loadConfig({
+    git: {
+      remote: {
+        sshPrivateKeyBase64: Buffer.from('dummy-private-key', 'utf8').toString('base64'),
+      },
+    },
+    vaults: [{ dir: vaultADir, id: 'a', repoUrl: remoteDir }],
+  });
+
+  t.after(async () => {
+    await config.git?.cleanup?.();
+    await rm(tempRoot, { force: true, recursive: true });
+  });
+
+  await runGit(tempRoot, ['clone', otherRemoteDir, vaultADir]);
+
+  await assert.rejects(
+    () => prepareConfigForStartup(config),
+    /Vault "a": .*does not match configured repo/,
+  );
 });

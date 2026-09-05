@@ -316,6 +316,47 @@ async function ensureRepositoryIdentity(vaultDir, config, options = {}) {
   });
 }
 
+async function prepareVaultCheckout({ gitConfig, options = {}, repoUrl, vaultDir }) {
+  const commandEnv = gitConfig.commandEnv;
+  if (await pathExists(vaultDir)) {
+    if (!(await isDirectory(vaultDir))) {
+      throw new Error(`Vault path "${vaultDir}" exists but is not a directory.`);
+    }
+
+    if (await isGitRepository(vaultDir, options)) {
+      const checkoutState = await updateExistingCheckout(vaultDir, repoUrl, {
+        ...options,
+        commandEnv,
+      });
+      await ensureCollabMetadataGitExclude(vaultDir);
+      await ensureRepositoryIdentity(vaultDir, gitConfig, {
+        ...options,
+        commandEnv,
+      });
+
+      if (checkoutState?.syncSkipped) {
+        console.warn(`Skipping git sync for "${vaultDir}" because the existing checkout has uncommitted changes.`);
+      }
+
+      return;
+    }
+
+    if (await isDirectoryEmpty(vaultDir)) {
+      await cloneIntoVault(vaultDir, repoUrl, { ...options, commandEnv });
+      await ensureCollabMetadataGitExclude(vaultDir);
+      await ensureRepositoryIdentity(vaultDir, gitConfig, { ...options, commandEnv });
+      return;
+    }
+
+    throw new Error(`Refusing to initialize "${vaultDir}" because it is not empty and is not a git repository.`);
+  }
+
+  await ensureDirectory(dirname(vaultDir));
+  await cloneIntoVault(vaultDir, repoUrl, { ...options, commandEnv });
+  await ensureCollabMetadataGitExclude(vaultDir);
+  await ensureRepositoryIdentity(vaultDir, gitConfig, { ...options, commandEnv });
+}
+
 export async function prepareConfigForStartup(config, options = {}) {
   const gitConfig = config.git ?? {
     cleanup: null,
@@ -346,59 +387,25 @@ export async function prepareConfigForStartup(config, options = {}) {
       return config;
     }
 
-    if (await pathExists(config.vaultDir)) {
-      if (!(await isDirectory(config.vaultDir))) {
-        throw new Error(`Vault path "${config.vaultDir}" exists but is not a directory.`);
+    // ponytail: one checkout per mapped vault; unmapped vaults boot from disk untouched
+    const vaults = config.vaults?.length
+      ? config.vaults
+      : [{ dir: config.vaultDir, id: null, repoUrl: config.git.remote.repoUrl }];
+    for (const vault of vaults) {
+      if (!vault.repoUrl) {
+        continue;
       }
-
-      if (await isGitRepository(config.vaultDir, options)) {
-        const checkoutState = await updateExistingCheckout(config.vaultDir, config.git.remote.repoUrl, {
-          ...options,
-          commandEnv: config.git.commandEnv,
+      try {
+        await prepareVaultCheckout({
+          gitConfig: config.git,
+          options,
+          repoUrl: vault.repoUrl,
+          vaultDir: vault.dir,
         });
-        await ensureCollabMetadataGitExclude(config.vaultDir);
-        await ensureRepositoryIdentity(config.vaultDir, config.git, {
-          ...options,
-          commandEnv: config.git.commandEnv,
-        });
-
-        if (checkoutState?.syncSkipped) {
-          console.warn(
-            `Skipping git sync for "${config.vaultDir}" because the existing checkout has uncommitted changes.`,
-          );
-        }
-
-        return config;
+      } catch (error) {
+        throw vault.id ? new Error(`Vault "${vault.id}": ${error.message}`) : error;
       }
-
-      if (await isDirectoryEmpty(config.vaultDir)) {
-        await cloneIntoVault(config.vaultDir, config.git.remote.repoUrl, {
-          ...options,
-          commandEnv: config.git.commandEnv,
-        });
-        await ensureCollabMetadataGitExclude(config.vaultDir);
-        await ensureRepositoryIdentity(config.vaultDir, config.git, {
-          ...options,
-          commandEnv: config.git.commandEnv,
-        });
-        return config;
-      }
-
-      throw new Error(
-        `Refusing to initialize "${config.vaultDir}" because it is not empty and is not a git repository.`,
-      );
     }
-
-    await ensureDirectory(dirname(config.vaultDir));
-    await cloneIntoVault(config.vaultDir, config.git.remote.repoUrl, {
-      ...options,
-      commandEnv: config.git.commandEnv,
-    });
-    await ensureCollabMetadataGitExclude(config.vaultDir);
-    await ensureRepositoryIdentity(config.vaultDir, config.git, {
-      ...options,
-      commandEnv: config.git.commandEnv,
-    });
     return config;
   } catch (error) {
     await runtimeCleanup();
