@@ -103,6 +103,22 @@
   background: var(--color-surface-offset);
 }
 
+.file-context-search {
+  width: 100%;
+  margin-bottom: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-offset);
+  color: var(--color-text);
+  font-size: var(--text-ui-sm);
+  outline: none;
+}
+
+.file-context-search:focus {
+  border-color: var(--color-primary);
+}
+
 .file-context-danger {
   color: var(--color-error);
 }

@@ -30,6 +30,25 @@ const MOBILE_LONG_PRESS_MOVE_TOLERANCE_PX = 10;
 const DRAG_AUTO_EXPAND_DELAY_MS = 700;
 const SEARCH_RESULT_LIMIT = 80;
 
+function createMenuFilterInput({ container, itemSelector, placeholder, skipLabels = [] }) {
+  const searchInput = document.createElement('input');
+  searchInput.type = 'search';
+  searchInput.className = 'file-context-search';
+  searchInput.setAttribute('aria-label', placeholder);
+  searchInput.placeholder = placeholder;
+  searchInput.addEventListener('input', () => {
+    const query = searchInput.value.trim().toLowerCase();
+    container.querySelectorAll(itemSelector).forEach((button) => {
+      if (skipLabels.includes(button.textContent)) {
+        return;
+      }
+      button.hidden = query.length > 0 && !(button.textContent ?? '').toLowerCase().includes(query);
+    });
+  });
+  container.appendChild(searchInput);
+  return searchInput;
+}
+
 export class FileExplorerView {
   constructor({
     mobileBreakpointQuery = window.matchMedia('(max-width: 768px)'),
@@ -83,29 +102,32 @@ export class FileExplorerView {
       return;
     }
     const wrapper = document.createElement('div');
-    wrapper.className = 'sidebar-search';
+    wrapper.className = 'sidebar-search vault-switcher';
     wrapper.id = 'vaultSwitcherWrap';
-    const select = document.createElement('select');
-    select.className = 'ui-input sidebar-search-input';
-    select.id = 'vaultSwitcher';
-    select.setAttribute('aria-label', 'Switch vault');
-    select.title = 'Switch vault';
-    for (const vault of vaults) {
-      if (!vault?.id) {
-        continue;
-      }
-      const option = document.createElement('option');
-      option.value = vault.id;
-      option.textContent = vault.id;
-      if (vault.id === activeVaultId) {
-        option.selected = true;
-      }
-      select.appendChild(option);
+    const entries = vaults.filter((vault) => vault?.id);
+    if (entries.length === 0) {
+      return;
     }
-    select.addEventListener('change', (event) => {
-      (onVaultSelect ?? this.onVaultSelect)?.(event.target.value);
+    const active = entries.find((vault) => vault.id === activeVaultId) ?? entries[0];
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'vault-switcher-button';
+    button.id = 'vaultSwitcher';
+    button.setAttribute('aria-haspopup', 'menu');
+    button.setAttribute('aria-label', `Switch vault (current: ${active.id})`);
+    button.title = 'Switch vault';
+    button.innerHTML = `<span class="vault-switcher-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></span><span class="vault-switcher-name">${escapeHtml(active.id)}</span><span class="vault-switcher-chevron" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></span>`;
+    button.addEventListener('click', (event) => {
+      this.showContextMenu(event, entries.map((vault) => ({
+        label: vault.id,
+        onSelect: () => (onVaultSelect ?? this.onVaultSelect)?.(vault.id),
+      })), {
+        alignToAnchor: true,
+        // ponytail: filter only pays off for long vault lists
+        searchPlaceholder: entries.length > 8 ? 'Filter vaults…' : '',
+      });
     });
-    wrapper.appendChild(select);
+    wrapper.appendChild(button);
     const search = document.getElementById('fileSearch');
     if (search?.parentNode) {
       search.parentNode.insertBefore(wrapper, search);
@@ -1022,7 +1044,8 @@ export class FileExplorerView {
     return true;
   }
 
-  showContextMenu(event, items) {
+  showContextMenu(event, items, options) {
+    const { alignToAnchor = false, searchPlaceholder = '' } = options ?? {};
     this.removeContextMenu();
 
     if (!Array.isArray(items) || items.length === 0) {
@@ -1032,7 +1055,7 @@ export class FileExplorerView {
     const contextAnchor = event.currentTarget instanceof Element ? event.currentTarget : event.target;
     this.contextMenuAnchor = contextAnchor instanceof HTMLElement ? contextAnchor : null;
     if (this.isMobileViewport()) {
-      this.showActionSheet(items);
+      this.showActionSheet(items, { searchPlaceholder });
       return;
     }
 
@@ -1040,6 +1063,9 @@ export class FileExplorerView {
     menu.className = 'file-context-menu';
     menu.setAttribute('role', 'menu');
     menu.setAttribute('aria-label', 'File actions');
+    const searchInput = searchPlaceholder
+      ? createMenuFilterInput({ container: menu, itemSelector: '[role="menuitem"]', placeholder: searchPlaceholder })
+      : null;
 
     for (const item of items) {
       const button = document.createElement('button');
@@ -1059,8 +1085,18 @@ export class FileExplorerView {
     const menuRect = menu.getBoundingClientRect();
     const maxLeft = Math.max(8, window.innerWidth - menuRect.width - 8);
     const maxTop = Math.max(8, window.innerHeight - menuRect.height - 8);
-    menu.style.left = `${Math.max(8, Math.min(event.clientX, maxLeft))}px`;
-    menu.style.top = `${Math.max(8, Math.min(event.clientY, maxTop))}px`;
+    const anchorRect = alignToAnchor ? this.contextMenuAnchor?.getBoundingClientRect?.() : null;
+    if (anchorRect) {
+      menu.style.minWidth = `${anchorRect.width}px`;
+      menu.style.left = `${Math.max(8, Math.min(anchorRect.left, maxLeft))}px`;
+      const belowTop = anchorRect.bottom + 4;
+      menu.style.top = belowTop + menuRect.height > window.innerHeight - 8
+        ? `${Math.max(8, anchorRect.top - menuRect.height - 4)}px`
+        : `${belowTop}px`;
+    } else {
+      menu.style.left = `${Math.max(8, Math.min(event.clientX, maxLeft))}px`;
+      menu.style.top = `${Math.max(8, Math.min(event.clientY, maxTop))}px`;
+    }
 
     const close = (closeEvent) => {
       if (!menu.contains(closeEvent.target)) {
@@ -1069,8 +1105,9 @@ export class FileExplorerView {
     };
     this.contextMenuCloseHandler = close;
     const handleKeydown = (keyEvent) => {
-      const buttons = Array.from(menu.querySelectorAll('[role="menuitem"]'));
-      const index = Math.max(0, buttons.indexOf(document.activeElement));
+      const buttons = Array.from(menu.querySelectorAll('[role="menuitem"]')).filter((button) => !button.hidden);
+      const fromInput = document.activeElement === searchInput;
+      const index = fromInput ? -1 : Math.max(0, buttons.indexOf(document.activeElement));
       if (keyEvent.key === 'Escape') {
         keyEvent.preventDefault();
         this.removeContextMenu();
@@ -1102,14 +1139,18 @@ export class FileExplorerView {
         document.addEventListener('click', close);
       }
     }, 0);
-    menu.querySelector('[role="menuitem"]')?.focus();
+    (searchInput ?? menu.querySelector('[role="menuitem"]'))?.focus();
   }
 
-  showActionSheet(items) {
+  showActionSheet(items, options) {
+    const { searchPlaceholder = '' } = options ?? {};
     const sheet = document.createElement('dialog');
     sheet.className = 'file-action-sheet';
     sheet.setAttribute('aria-label', 'File actions');
 
+    if (searchPlaceholder) {
+      createMenuFilterInput({ container: sheet, itemSelector: '.file-action-sheet-item', placeholder: searchPlaceholder, skipLabels: ['Cancel'] });
+    }
     items.forEach((item) => {
       const button = document.createElement('button');
       button.type = 'button';
@@ -1155,7 +1196,7 @@ export class FileExplorerView {
       this.actionSheetCloseHandler = null;
     };
     sheet.showModal();
-    sheet.querySelector('button:not(:disabled)')?.focus();
+    (sheet.querySelector('.file-context-search') ?? sheet.querySelector('button:not(:disabled)'))?.focus();
   }
 
   removeContextMenu({ restoreFocus = true } = {}) {

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { uiFeatureTabActivityMethods } from '../../src/client/application/app-shell/ui-feature-tab-activity.js';
 import { FileExplorerController } from '../../src/client/presentation/file-explorer-controller.js';
@@ -604,18 +604,71 @@ describe('FileExplorerView vault switcher', () => {
     expect(document.getElementById('vaultSwitcher')).toBeNull();
   });
 
-  it('lists vaults and notifies on change', () => {
-    const view = createView();
+  it('opens a vault menu and notifies on pick', () => {
+    const view = createView({ mobileBreakpointQuery: { matches: false } });
     const notify = vi.fn();
     view.renderVaultSwitcher({ activeVaultId: 'alpha', onVaultSelect: notify, vaults: [{ id: 'alpha' }, { id: 'beta' }] });
 
-    const select = document.getElementById('vaultSwitcher');
-    expect(select).not.toBeNull();
-    expect(select.value).toBe('alpha');
-    expect(select.options.length).toBe(2);
+    const button = document.getElementById('vaultSwitcher');
+    expect(button).not.toBeNull();
+    expect(button.textContent).toContain('alpha');
+    expect(button.getAttribute('aria-haspopup')).toBe('menu');
 
-    select.value = 'beta';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 10, clientY: 10 }));
+    const items = Array.from(document.querySelectorAll('[role="menuitem"]'));
+    expect(items.map((item) => item.textContent)).toEqual(['alpha', 'beta']);
+
+    items[1].click();
     expect(notify).toHaveBeenCalledWith('beta');
+    view.removeContextMenu();
+  });
+});
+
+describe('FileExplorerView vault menu placement and filter', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('aligns the vault menu below the trigger button', () => {
+    const originalInnerWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
+    const view = createView({ mobileBreakpointQuery: { matches: false } });
+    view.renderVaultSwitcher({ activeVaultId: 'alpha', onVaultSelect: vi.fn(), vaults: [{ id: 'alpha' }, { id: 'beta' }] });
+
+    const button = document.getElementById('vaultSwitcher');
+    button.getBoundingClientRect = () => ({ bottom: 130, height: 30, left: 40, right: 240, top: 100, width: 200 });
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 300, clientY: 400 }));
+
+    const menu = document.querySelector('.file-context-menu');
+    expect(menu.style.left).toBe('40px');
+    expect(menu.style.top).toBe('134px');
+    expect(menu.style.minWidth).toBe('200px');
+    view.removeContextMenu();
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalInnerWidth });
+  });
+
+  it('filters long vault lists by typing', () => {
+    const view = createView({ mobileBreakpointQuery: { matches: false } });
+    const vaults = Array.from({ length: 10 }, (_, index) => ({ id: `vault-${index}` }));
+    view.renderVaultSwitcher({ activeVaultId: 'vault-0', onVaultSelect: vi.fn(), vaults });
+
+    document.getElementById('vaultSwitcher').dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 10, clientY: 10 }));
+    const input = document.querySelector('.file-context-search');
+    expect(input).not.toBeNull();
+
+    input.value = 'vault-1';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    const visible = Array.from(document.querySelectorAll('[role="menuitem"]')).filter((item) => !item.hidden);
+    expect(visible.map((item) => item.textContent)).toEqual(['vault-1']);
+    view.removeContextMenu();
+  });
+
+  it('omits the filter for short vault lists', () => {
+    const view = createView({ mobileBreakpointQuery: { matches: false } });
+    view.renderVaultSwitcher({ activeVaultId: 'alpha', onVaultSelect: vi.fn(), vaults: [{ id: 'alpha' }, { id: 'beta' }] });
+
+    document.getElementById('vaultSwitcher').dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 10, clientY: 10 }));
+    expect(document.querySelector('.file-context-search')).toBeNull();
+    view.removeContextMenu();
   });
 });
