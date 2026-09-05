@@ -92,9 +92,7 @@
         // Fallback for non-secure contexts.
         const ta = document.createElement('textarea');
         ta.value = text;
-        ta.style.position = 'fixed';
-        ta.style.left = '-9999px';
-        ta.style.opacity = '0';
+        ta.className = 'clipboard-fallback';
         ta.setAttribute('readonly', '');
         document.body.appendChild(ta);
         ta.select();
@@ -143,6 +141,9 @@
       }
     });
   });
-  if (tabs.length && panels.length) document.documentElement.classList.add('tabs-ready');
+  if (tabs.length && panels.length) {
+    activateTab(tabs[0], false);
+    document.documentElement.classList.add('tabs-ready');
+  }
 
 })();

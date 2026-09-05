@@ -7,6 +7,8 @@ on:
       - master
     paths:
       - 'landing/**'
+      - 'src/client/styles/foundation/themes.css'
+      - 'src/client/styles/surfaces/landing-page.css'
       - '.github/workflows/deploy-landing.yml'
   workflow_dispatch:
 
@@ -32,10 +34,16 @@ jobs:
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
+      - name: Prepare standalone landing page
+        run: |
+          mkdir -p .tmp/landing
+          cp -R landing/. .tmp/landing/
+          cat src/client/styles/foundation/themes.css src/client/styles/surfaces/landing-page.css > .tmp/landing/styles.css
+
       - name: Upload landing page
         uses: actions/upload-pages-artifact@v4
         with:
-          path: landing
+          path: .tmp/landing
 
       - name: Deploy to GitHub Pages
         id: deployment

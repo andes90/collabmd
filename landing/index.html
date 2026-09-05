@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0b0f14">
-  <meta name="color-scheme" content="dark">
-  <title>CollabMD | Your folder, now multiplayer</title>
-  <meta name="description" content="Turn any Markdown-and-diagram folder into a realtime workspace for people and AI agents. Your filesystem stays the source of truth.">
+  <meta name="theme-color" content="#f6f8fa">
+  <meta name="color-scheme" content="light">
+  <title>CollabMD | Work together. Keep your files.</title>
+  <meta name="description" content="Collaborate on Markdown, diagrams, and git-backed docs in the browser. Keep your files, connect AI agents, and run it yourself.">
   <link rel="canonical" href="https://collabmd.app/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="CollabMD">
   <meta property="og:url" content="https://collabmd.app/">
-  <meta property="og:title" content="CollabMD | Your folder, now multiplayer">
+  <meta property="og:title" content="CollabMD | Work together. Keep your files.">
   <meta property="og:description" content="Realtime collaboration for Markdown folders and diagram workspaces. Work with people and AI agents while your filesystem stays the source of truth.">
   <meta property="og:image" content="https://collabmd.app/assets/collabmd-hero.png">
   <meta property="og:image:secure_url" content="https://collabmd.app/assets/collabmd-hero.png">
@@ -19,387 +19,142 @@
   <meta property="og:image:height" content="750">
   <meta property="og:image:alt" content="CollabMD editing Markdown and diagrams in a shared browser workspace.">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="CollabMD | Your folder, now multiplayer">
+  <meta name="twitter:title" content="CollabMD | Work together. Keep your files.">
   <meta name="twitter:description" content="Realtime collaboration for Markdown folders and diagram workspaces. Work with people and AI agents while your files stay on disk.">
   <meta name="twitter:image" content="https://collabmd.app/assets/collabmd-hero.png">
   <meta name="twitter:image:alt" content="CollabMD editing Markdown and diagrams in a shared browser workspace.">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='2' y='4' width='18' height='24' rx='3' fill='%2360a5fa'/><rect x='12' y='4' width='18' height='24' rx='3' fill='%232563eb' opacity='0.8'/><path d='M18 12h6M18 16h6M18 20h4' stroke='white' stroke-width='1.5' stroke-linecap='round'/></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none'><rect x='3' y='4' width='17' height='24' rx='3' stroke='%232563eb' stroke-width='2'/><rect x='12' y='4' width='17' height='24' rx='3' fill='%232563eb'/><path d='M17 12h7m-7 4h7m-7 4h4' stroke='white' stroke-width='1.5'/></svg>">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-
   <a class="skip-link" href="#main">Skip to content</a>
-
-  <!-- ============ NAV ============ -->
   <header class="nav" id="top">
-    <div class="nav-inner">
+    <div class="wrap nav-inner">
       <a class="nav-brand" href="#top" aria-label="CollabMD home">
-        <svg class="nav-mark" viewBox="0 0 56 56" fill="none" aria-hidden="true">
-          <rect x="6" y="8" width="28" height="38" rx="4" stroke="currentColor" stroke-width="2" fill="currentColor" fill-opacity=".12"/>
-          <rect x="22" y="10" width="28" height="38" rx="4" stroke="currentColor" stroke-width="2" fill="currentColor" fill-opacity=".25"/>
-          <path d="M14 20l4 10 1.5-4 4-1.5L14 20z" fill="currentColor" opacity=".7"/>
-          <path d="M38 28l-4-10-1.5 4-4 1.5L38 28z" fill="currentColor"/>
-        </svg>
-        <span>CollabMD</span>
+        <svg class="nav-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect x="3" y="4" width="17" height="24" rx="3" stroke="currentColor" stroke-width="2"/><rect x="12" y="4" width="17" height="24" rx="3" fill="currentColor"/><path d="M17 12h7m-7 4h7m-7 4h4" stroke="var(--color-primary-contrast)" stroke-width="1.5"/></svg>
+        CollabMD
       </a>
       <nav class="nav-links" id="primary-nav" aria-label="Primary">
-        <a href="#features">Features</a>
+        <a href="#features">Product</a>
         <a href="#demo">Demo</a>
-        <a href="#how">How it works</a>
-        <a href="#install">Install</a>
+        <a href="#install">Get started</a>
+        <a href="#docs">Docs</a>
       </nav>
-      <a class="nav-demo" href="https://demo.collabmd.app/#file=README.md" target="_blank" rel="noopener">Open live demo</a>
-      <a class="btn btn-ghost nav-cta" href="https://github.com/andes90/collabmd" target="_blank" rel="noopener">
-        <svg viewBox="0 0 16 16" aria-hidden="true" class="icon"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
-        GitHub
-      </a>
-      <button class="nav-menu-toggle" type="button" aria-expanded="false" aria-controls="primary-nav" aria-label="Open navigation">
-        <span class="nav-menu-icon" aria-hidden="true"><i></i><i></i></span>
-      </button>
+      <a class="nav-github" href="https://github.com/andes90/collabmd" target="_blank" rel="noopener">GitHub <span aria-hidden="true">↗</span></a>
+      <a class="landing-button landing-button-primary nav-demo" href="https://demo.collabmd.app/#file=README.md" target="_blank" rel="noopener">Try live demo <span aria-hidden="true">↗</span></a>
+      <button class="nav-menu-toggle" type="button" aria-expanded="false" aria-controls="primary-nav" aria-label="Open navigation"><span aria-hidden="true">☰</span></button>
     </div>
   </header>
 
   <main id="main">
-
-    <!-- ============ HERO ============ -->
-    <section class="hero">
-      <div class="hero-grid" aria-hidden="true"></div>
-      <div class="hero-glow" aria-hidden="true"></div>
-
+    <section class="hero" aria-labelledby="hero-title">
       <div class="wrap hero-inner">
-        <p class="eyebrow reveal">plain files / live collaboration</p>
-        <h1 class="hero-title reveal">Your folder,<br>now <em class="grad">multiplayer</em>.</h1>
-        <p class="hero-sub reveal">Bring people and AI agents into any Obsidian vault, docs repo, or Markdown folder without moving your files.</p>
-
-        <div class="hero-actions reveal">
-          <a class="btn btn-primary" href="https://demo.collabmd.app/#file=README.md" target="_blank" rel="noopener">
-            <svg viewBox="0 0 16 16" aria-hidden="true" class="icon"><path fill="currentColor" d="M4.5 3.7v8.6c0 .8.9 1.3 1.6.9l6.9-4.3c.7-.4.7-1.4 0-1.8L6.1 2.8c-.7-.4-1.6.1-1.6.9Z"/></svg>
-            Open live demo
-          </a>
-          <a class="btn btn-ghost" href="https://github.com/andes90/collabmd" target="_blank" rel="noopener">
-            <svg viewBox="0 0 16 16" aria-hidden="true" class="icon"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
-            Star on GitHub
-          </a>
-        </div>
-
-        <figure class="hero-shot">
-          <div class="hero-shot-frame">
-            <img src="assets/collabmd-hero-1280.webp"
-                 srcset="assets/collabmd-hero-640.webp 640w, assets/collabmd-hero-1280.webp 1280w, assets/collabmd-hero.webp 2000w"
-                 sizes="(max-width: 1268px) calc(100vw - 48px), 1220px"
-                 alt="CollabMD live demo workspace: markdown editor with embedded Mermaid, PlantUML, Excalidraw, and draw.io files, rendered diagram preview, and six collaborators online."
-                 width="2000" height="1250" fetchpriority="high" decoding="async">
+        <div class="hero-copy">
+          <p class="eyebrow hero-enter">Open source. Ready for your folder.</p>
+          <h1 id="hero-title" class="hero-title hero-enter">CollabMD</h1>
+          <p class="hero-promise hero-enter">Work together.<br>Keep <em>your files.</em></p>
+          <p class="hero-sub hero-enter">Turn your Markdown folder into a shared workspace for docs, diagrams, and decisions. No migration required.</p>
+          <div class="hero-actions hero-enter">
+            <a class="landing-button landing-button-primary" href="https://demo.collabmd.app/#file=README.md" target="_blank" rel="noopener">Try live demo <span aria-hidden="true">↗</span></a>
+            <a class="text-link" href="#install">Run it yourself <span aria-hidden="true">→</span></a>
           </div>
-          <figcaption class="hero-shot-cap">
-            Captured from the <a href="https://demo.collabmd.app/#file=README.md" target="_blank" rel="noopener">live public demo</a>. Six collaborators are online, and no signup is required.
-          </figcaption>
+          <p class="hero-note hero-enter">Plain files on disk. A shared space in the browser.</p>
+        </div>
+        <figure class="hero-shot hero-enter">
+          <div class="preview-label"><span>YOUR FOLDER, OPEN TOGETHER</span><span aria-hidden="true">↗</span></div>
+          <img src="assets/collabmd-hero-1280.webp"
+               srcset="assets/collabmd-hero-640.webp 640w, assets/collabmd-hero-1280.webp 1280w, assets/collabmd-hero.webp 2000w"
+               sizes="(max-width: 900px) calc(100vw - 40px), 60vw"
+               alt="CollabMD workspace with a file explorer, Markdown source, diagram preview, and collaborator presence."
+               width="2000" height="1250" fetchpriority="high" decoding="async">
+          <figcaption>A real workspace. Markdown, diagrams, and people in one view.</figcaption>
         </figure>
       </div>
     </section>
 
-    <!-- ============ FORMAT MARQUEE ============ -->
-    <div class="marquee" aria-hidden="true">
-      <div class="marquee-track">
-        <span>.md</span><span>.mdx</span><span>.html</span><span>.mmd</span><span>.mermaid</span><span>.puml</span><span>.plantuml</span><span>.dsl</span><span>.excalidraw</span><span>.drawio</span><span>.pdf</span><span>[[wiki-links]]</span><span>backlinks</span>
-        <span>.md</span><span>.mdx</span><span>.html</span><span>.mmd</span><span>.mermaid</span><span>.puml</span><span>.plantuml</span><span>.dsl</span><span>.excalidraw</span><span>.drawio</span><span>.pdf</span><span>[[wiki-links]]</span><span>backlinks</span>
-      </div>
-    </div>
-
-    <!-- ============ FEATURES ============ -->
-    <section class="section" id="features">
+    <section class="section" id="features" aria-labelledby="features-title">
       <div class="wrap">
-
         <header class="section-head reveal">
-          <p class="eyebrow">~/features</p>
-          <h2 class="section-title">Built like a dev tool,<br>not a document silo.</h2>
+          <p class="eyebrow">Keep what works. Add each other.</p>
+          <h2 id="features-title">Your knowledge already has a home.<br>Now it has room for your team.</h2>
         </header>
-
-        <!-- 1. Local files first -->
-        <article class="feat reveal">
-          <div class="feat-copy">
-            <h3 class="feat-title">No migration. Files stay files.</h3>
-            <p class="feat-body">
-              Point CollabMD at an existing Obsidian vault, docs repo, or plain folder.
-              It reads and writes supported files in place instead of importing them into
-              a proprietary content store. Edits made in Obsidian, your editor, or by
-              <code>git pull</code> reconcile straight back into open sessions and the file explorer.
-            </p>
-            <ul class="feat-list">
-              <li>Markdown and diagram sources remain ordinary files on disk</li>
-              <li>Opening a file does not rewrite its source content</li>
-              <li>Ignores <code>.obsidian</code>, <code>.git</code>, <code>node_modules</code></li>
-            </ul>
-          </div>
-          <div class="feat-visual" aria-hidden="true">
-            <div class="sync-mock">
-              <div class="sync-node sync-node-side">
-                <span class="sync-node-label">Obsidian / editor / git</span>
-                <span class="sync-node-sub">any tool, any writer</span>
-              </div>
-              <div class="sync-lane">
-                <span class="sync-pulse sync-pulse-in"></span>
-                <span class="sync-pulse sync-pulse-out"></span>
-              </div>
-              <div class="sync-node sync-node-file">
-                <span class="sync-file-row">notes/<span class="sync-hl">architecture.md</span></span>
-                <span class="sync-file-row">diagrams/<span class="sync-hl">flow.mmd</span></span>
-                <span class="sync-file-row">rfcs/<span class="sync-hl">rfc-042.md</span></span>
-                <span class="sync-node-sub">plain files on disk</span>
-              </div>
-              <div class="sync-lane">
-                <span class="sync-pulse sync-pulse-in"></span>
-                <span class="sync-pulse sync-pulse-out"></span>
-              </div>
-              <div class="sync-node sync-node-side">
-                <span class="sync-node-label">CollabMD room</span>
-                <span class="sync-node-sub">every browser, live</span>
-              </div>
-            </div>
-          </div>
-        </article>
-
-        <!-- 2. Realtime -->
-        <article class="feat feat-flip reveal">
-          <div class="feat-copy">
-            <h3 class="feat-title">Everyone on the same line, live.</h3>
-            <p class="feat-body">
-              Edit together in realtime, see where collaborators are working, and discuss
-              changes without leaving the workspace.
-            </p>
-            <ul class="feat-list">
-              <li>Presence and follow mode show where collaborators are working</li>
-              <li>Room chat keeps decisions beside the work</li>
-              <li>Yjs merges concurrent edits without locks or conflict dialogs</li>
-            </ul>
-          </div>
-          <div class="feat-visual" aria-hidden="true">
-            <div class="editor-mock">
-              <div class="editor-mock-bar">
-                <span class="editor-mock-file">rfc-042.md</span>
-                <span class="editor-mock-presence"><i class="pdot pdot-amber"></i><i class="pdot pdot-violet"></i><i class="pdot pdot-blue"></i>3 online</span>
-              </div>
-              <div class="editor-mock-body">
-                <div class="eline"><span class="eln">12</span><span class="elt">## Decision</span></div>
-                <div class="eline"><span class="eln">13</span><span class="elt">&nbsp;</span></div>
-                <div class="eline"><span class="eln">14</span><span class="elt">Keep the vault as <b>plain files</b> and let</span><span class="ecaret ecaret-john"></span><span class="eflag eflag-john">Mara</span></div>
-                <div class="eline"><span class="eln">15</span><span class="elt">the room layer stay <b>ephemeral</b>.</span></div>
-                <div class="eline"><span class="eln">16</span><span class="elt">&nbsp;</span></div>
-                <div class="eline"><span class="eln">17</span><span class="elt">Yjs merges concurrent edits.</span><span class="ecaret ecaret-kim"></span><span class="eflag eflag-kim">Noor</span></div>
-                <div class="eline"><span class="eln">18</span><span class="elt elt-dim">no save button, no conflicts.</span></div>
-              </div>
-              <div class="editor-mock-chat">
-                <span class="echat-name echat-kim">Noor</span>
-                <span class="echat-text">looks good, resolving the thread</span>
-              </div>
-            </div>
-          </div>
-        </article>
-
-        <!-- 3. Comments -->
-        <article class="feat reveal">
-          <div class="feat-copy">
-            <h3 class="feat-title">Feedback pinned to words and shapes.</h3>
-            <p class="feat-body">
-              Comment on a line, selected phrase, or Excalidraw element. Threads stay
-              beside the source or canvas, and the workspace overview keeps every review
-              in one place.
-            </p>
-            <ul class="feat-list">
-              <li>Inline markers, preview bubbles, and canvas pins</li>
-              <li>Workspace-wide comment overview grouped by file</li>
-              <li>Reply, resolve, and reopen without leaving the workspace</li>
-            </ul>
-          </div>
-          <div class="feat-visual" aria-hidden="true">
-            <div class="comment-mock">
-              <div class="eline"><span class="eln">21</span><span class="elt">## Rollout</span></div>
-              <div class="eline eline-marked">
-                <span class="eln">22</span>
-                <span class="elt">Start the rollout with <span class="emark">the API service and its runbook</span>.</span>
-                <span class="emarker">2</span>
-              </div>
-              <div class="eline"><span class="eln">23</span><span class="elt elt-dim">Move the remaining docs after validation.</span></div>
-              <div class="thread-card">
-                <div class="thread-head">
-                  <span class="thread-avatar thread-avatar-john">M</span>
-                  <span class="thread-name">Mara</span>
-                  <span class="thread-time">2m</span>
-                </div>
-                <p class="thread-text">Can we link the rollout checklist here so the owner is clear?</p>
-                <div class="thread-reply">
-                  <span class="thread-avatar thread-avatar-kim">N</span>
-                  <p class="thread-text">Linked it and added the owner.</p>
-                </div>
-                <button class="thread-resolve" type="button" tabindex="-1">Resolve thread</button>
-              </div>
-            </div>
-          </div>
-        </article>
-
-        <!-- 4. Diagrams -->
-        <article class="feat feat-flip reveal">
-          <div class="feat-copy">
-            <h3 class="feat-title">Rich files stay in context.</h3>
-            <p class="feat-body">
-              Edit Markdown and diagrams beside live previews. Open Excalidraw, draw.io,
-              and PDFs without converting files or leaving the vault.
-            </p>
-            <ul class="feat-list">
-              <li>Live previews for Mermaid, PlantUML, and Structurizr C4</li>
-              <li>Native canvases with visual git diffs for diagram review</li>
-              <li>Searchable PDFs and self-contained document exports</li>
-            </ul>
-          </div>
-          <div class="feat-visual" aria-hidden="true">
-            <div class="diagram-grid">
-              <div class="diagram-tile">
-                <svg viewBox="0 0 120 64" class="diagram-glyph">
-                  <rect x="4" y="23" width="24" height="18" rx="4" class="dg-box"/>
-                  <path d="M44 32l12-12 12 12-12 12z" class="dg-box"/>
-                  <rect x="88" y="5" width="28" height="18" rx="4" class="dg-box"/>
-                  <rect x="88" y="41" width="28" height="18" rx="4" class="dg-box dg-box-blue"/>
-                  <path d="M28 32h16m24 0h10V14h10M78 32v18h10" class="dg-line"/>
-                  <path d="m84 10 4 4-4 4M84 46l4 4-4 4" class="dg-line dg-arrow"/>
-                </svg>
-                <span class="diagram-name">Mermaid</span>
-                <span class="diagram-ext">.mmd / fences</span>
-              </div>
-              <div class="diagram-tile">
-                <svg viewBox="0 0 120 64" class="diagram-glyph">
-                  <path d="M30 8v48M90 8v48" class="dg-line dg-dash"/>
-                  <circle cx="30" cy="8" r="4" class="dg-dot"/>
-                  <circle cx="90" cy="8" r="4" class="dg-dot"/>
-                  <path d="M30 22h60m-6-4 6 4-6 4" class="dg-line dg-arrow"/>
-                  <path d="M90 40H30m6-4-6 4 6 4" class="dg-line dg-arrow dg-line-blue"/>
-                </svg>
-                <span class="diagram-name">PlantUML</span>
-                <span class="diagram-ext">.puml / server render</span>
-              </div>
-              <div class="diagram-tile">
-                <svg viewBox="0 0 120 64" class="diagram-glyph">
-                  <path d="M14 18c8-6 26-8 34-2 6 4 8 16 2 24-8 10-30 10-36 0-4-8 0-18 0-22z" class="dg-sketch"/>
-                  <path d="M54 30h32m-7-6 7 6-7 6" class="dg-sketch"/>
-                  <path d="M96 20c10 2 12 18 2 22-10 4-18-6-12-16 4-6 8-6 10-6z" class="dg-sketch dg-sketch-blue"/>
-                </svg>
-                <span class="diagram-name">Excalidraw</span>
-                <span class="diagram-ext">.excalidraw / canvas</span>
-              </div>
-              <div class="diagram-tile">
-                <svg viewBox="0 0 120 64" class="diagram-glyph">
-                  <rect x="8" y="7" width="28" height="16" rx="2" class="dg-box"/>
-                  <rect x="84" y="7" width="28" height="16" rx="2" class="dg-box"/>
-                  <rect x="46" y="41" width="28" height="16" rx="2" class="dg-box dg-box-blue"/>
-                  <path d="M22 23v9h76v-9M60 32v9" class="dg-line"/>
-                  <circle cx="60" cy="32" r="2" class="dg-dot"/>
-                </svg>
-                <span class="diagram-name">Structurizr</span>
-                <span class="diagram-ext">.dsl / C4 views</span>
-              </div>
-            </div>
-          </div>
-        </article>
-
-        <!-- Secondary product capabilities -->
-        <div class="capability-rail" aria-label="More built-in capabilities">
-          <article class="capability reveal">
-            <p class="capability-kicker">mcp / agent access</p>
-            <h3 class="capability-title">Connect AI agents</h3>
-            <p class="capability-body">Search, read, exact-edit, validate, and create supported Vault Content. Protected workspaces use scoped, revocable connections.</p>
+        <div class="benefits">
+          <article class="benefit reveal">
+            <span class="feature-index" aria-hidden="true">01 / FILES</span>
+            <h3>Start where your docs live.</h3>
+            <p>Open an Obsidian vault, a docs repo, or a plain Markdown folder. Keep editing in your favorite tools; external file changes appear in the workspace.</p>
+            <p class="benefit-detail">Opening a file leaves its contents untouched.</p>
           </article>
-          <article class="capability reveal">
-            <p class="capability-kicker">git diff / stage</p>
-            <h3 class="capability-title">Review before commit</h3>
-            <p class="capability-body">Stage files in bulk and compare text, images, Excalidraw, and draw.io changes from the browser.</p>
+          <article class="benefit reveal">
+            <span class="feature-index" aria-hidden="true">02 / COLLABORATION</span>
+            <h3>Get to the decision together.</h3>
+            <p>Edit Markdown in realtime. Follow a collaborator, talk in chat, and anchor feedback to a passage or an Excalidraw element.</p>
+            <p class="benefit-detail">Find open discussions in the comment overview.</p>
           </article>
-          <article class="capability reveal">
-            <p class="capability-kicker">rg / pdf</p>
-            <h3 class="capability-title">Search the whole vault</h3>
-            <p class="capability-body">Find text across supported files, then search inside PDFs without leaving the workspace.</p>
+          <article class="benefit reveal">
+            <span class="feature-index" aria-hidden="true">03 / AI AGENTS</span>
+            <h3>Give your agent the context.</h3>
+            <p>Connect an MCP client to search, read, edit, and create supported files. Query Bases and inspect or update Excalidraw diagrams.</p>
+            <a class="text-link" href="https://github.com/andes90/collabmd/blob/master/docs/ai-agents.md">Connect AI agents <span aria-hidden="true">↗</span></a>
           </article>
+        </div>
+        <div class="workflow-detail reveal">
+          <div>
+            <p class="eyebrow">More than a page of text</p>
+            <h3>Keep the diagram<br>beside the decision.</h3>
+            <p>Write the RFC, sketch the architecture, and review both in the same workspace.</p>
+          </div>
+          <dl class="format-list">
+            <div><dt>Write &amp; connect</dt><dd>Markdown, wiki-links, backlinks, HTML, and Bases</dd></div>
+            <div><dt>Diagram &amp; explain</dt><dd>Mermaid, PlantUML, Structurizr, Excalidraw, and draw.io</dd></div>
+            <div><dt>Share &amp; take away</dt><dd>PDF previews; HTML, DOCX, PDF, and source ZIP exports</dd></div>
+          </dl>
+        </div>
+        <div class="capability-rail">
+          <article class="capability reveal"><p class="eyebrow">Multiple vaults</p><h3>Separate projects. One place.</h3><p>Switch between configured vaults from the sidebar. Each keeps its own files, search, and Git context.</p></article>
+          <article class="capability reveal"><p class="eyebrow">Git review</p><h3>See what changed.</h3><p>Review diffs, stage files, and create a commit from the browser when your changes are ready.</p></article>
+          <article class="capability reveal"><p class="eyebrow">Scoped agent access</p><h3>Choose what AI can do.</h3><p>Protected workspaces use named Agent Connections with read or edit scopes, expiry, and revocation.</p></article>
         </div>
       </div>
     </section>
 
-    <!-- ============ DEMO ============ -->
-    <section class="section section-demo" id="demo">
-      <div class="wrap">
-        <header class="section-head reveal">
-          <h2 class="section-title">Watch it once.<br>Then edit it live.</h2>
-          <p class="section-sub">The recording and public demo use the same shared vault. Join as a guest, type, and watch the preview update.</p>
-        </header>
-        <div class="demo-frame reveal">
-          <video src="assets/collabmd-demo.webm" poster="assets/collabmd-demo-poster.webp"
-                 controls muted loop playsinline preload="metadata"
-                 aria-label="Screen recording of the live CollabMD demo: editing markdown with instant preview, browsing Mermaid and Excalidraw diagram files."></video>
+    <section class="section demo-section" id="demo" aria-labelledby="demo-title">
+      <div class="wrap demo-layout">
+        <div class="demo-copy reveal">
+          <p class="eyebrow">See the shared workspace</p>
+          <h2 id="demo-title">Less back-and-forth.<br>More side by side.</h2>
+          <p>Watch the editor and preview work together, then open the public demo and try it in your browser.</p>
+          <a class="landing-button landing-button-primary" href="https://demo.collabmd.app/#file=README.md" target="_blank" rel="noopener">Try live demo <span aria-hidden="true">↗</span></a>
+          <p class="demo-note">Prefer your own files? <a href="#install">Start locally.</a></p>
         </div>
-        <div class="demo-cta reveal">
-          <a class="demo-link-card" href="https://demo.collabmd.app/#file=README.md" target="_blank" rel="noopener">
-            <span class="demo-link-left">
-              <span class="demo-link-text">
-                <span class="demo-link-title">demo.collabmd.app</span>
-                <span class="demo-link-sub">Start in the guided README. No signup; join as a guest.</span>
-              </span>
-            </span>
-            <span class="demo-link-arrow" aria-hidden="true">→</span>
-          </a>
-        </div>
+        <figure class="demo-frame reveal">
+          <video src="assets/collabmd-demo.webm" poster="assets/collabmd-demo-poster.webp" controls muted loop playsinline preload="none" aria-label="CollabMD demo: editing Markdown with live preview and browsing diagrams."></video>
+          <figcaption>Markdown and diagrams, with a live preview as you work.</figcaption>
+        </figure>
       </div>
     </section>
 
-    <!-- ============ HOW IT WORKS ============ -->
-    <section class="section" id="how">
-      <div class="wrap">
-        <header class="section-head reveal">
-          <h2 class="section-title">Three steps.<br>The middle one is a browser.</h2>
+    <section class="section" id="install" aria-labelledby="install-title">
+      <div class="wrap install-layout">
+        <header class="section-head">
+          <p class="eyebrow">Your folder is the starting point</p>
+          <h2 id="install-title">Bring a folder.<br>Open a browser.</h2>
+          <p>Start on your machine, then share a protected workspace with your collaborators.</p>
+          <p class="install-requirements">macOS, Linux, or Windows via WSL2.<br>Requires Node.js 26 for npx; ripgrep for global search. Docker includes the runtime and ripgrep.</p>
+          <a class="text-link" href="https://github.com/andes90/collabmd/blob/master/docs/installation.md">Full installation guide <span aria-hidden="true">↗</span></a>
         </header>
-        <ol class="steps">
-          <li class="step reveal">
-            <span class="step-num">1</span>
-            <div class="step-body">
-              <h3 class="step-title">Point at a folder</h3>
-              <p class="step-text">Any Markdown directory works: an Obsidian vault, a docs repo, or a pile of notes.</p>
-              <code class="step-cmd">npx collabmd@latest ~/my-vault</code>
-            </div>
-          </li>
-          <li class="step reveal">
-            <span class="step-num">2</span>
-            <div class="step-body">
-              <h3 class="step-title">Open the browser</h3>
-              <p class="step-text">Explorer, editor, live preview, comments, and chat are waiting at <code>localhost:1234</code>.</p>
-              <code class="step-cmd">open http://localhost:1234</code>
-            </div>
-          </li>
-          <li class="step reveal">
-            <span class="step-num">3</span>
-            <div class="step-body">
-              <h3 class="step-title">Share the link</h3>
-              <p class="step-text">Add a password and let the quick tunnel print a URL your collaborators can open.</p>
-              <code class="step-cmd">collabmd ~/my-vault --auth password</code>
-            </div>
-          </li>
-        </ol>
-      </div>
-    </section>
-
-    <!-- ============ INSTALL ============ -->
-    <section class="section" id="install">
-      <div class="wrap">
-        <header class="section-head reveal">
-          <h2 class="section-title">Choose how to run it.</h2>
-          <p class="section-sub">macOS, Linux, or Windows via WSL2. Requires Node.js 26 for the npx path; ripgrep powers global search.</p>
-        </header>
-
-        <div class="install reveal">
+        <div>
+        <div class="install">
           <div class="install-tabs" role="tablist" aria-label="Install methods">
             <button class="install-tab is-active" role="tab" id="tab-npx" aria-selected="true" aria-controls="panel-npx" type="button">npx</button>
             <button class="install-tab" role="tab" id="tab-brew" aria-selected="false" aria-controls="panel-brew" type="button" tabindex="-1">Homebrew</button>
             <button class="install-tab" role="tab" id="tab-docker" aria-selected="false" aria-controls="panel-docker" type="button" tabindex="-1">Docker</button>
           </div>
 
-          <div class="install-panel is-active" role="tabpanel" id="panel-npx" aria-labelledby="tab-npx">
+          <div class="install-panel is-active" role="tabpanel" id="panel-npx" tabindex="0" aria-labelledby="tab-npx">
             <div class="install-code">
               <pre><code>npx collabmd@latest ~/my-vault --no-tunnel</code></pre>
-              <button class="btn btn-ghost copy-btn" type="button" data-copy="npx collabmd@latest ~/my-vault --no-tunnel">
+              <button class="landing-button landing-button-secondary copy-btn" type="button" data-copy="npx collabmd@latest ~/my-vault --no-tunnel">
                 <svg viewBox="0 0 16 16" aria-hidden="true" class="icon"><path fill="currentColor" d="M5 2a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-.5v-1H12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1v.5H5V2Zm-3 4a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6Zm2-1a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1H4Z" transform="translate(1 1)"/></svg>
                 <span class="copy-label" aria-live="polite">Copy</span>
               </button>
@@ -407,11 +162,11 @@
             <p class="install-note">Then open <code>http://localhost:1234</code>. No global install required.</p>
           </div>
 
-          <div class="install-panel" role="tabpanel" id="panel-brew" aria-labelledby="tab-brew" hidden>
+          <div class="install-panel" role="tabpanel" id="panel-brew" tabindex="0" aria-labelledby="tab-brew" hidden>
             <div class="install-code">
               <pre><code>brew install andes90/tap/collabmd
 collabmd ~/my-vault --no-tunnel</code></pre>
-              <button class="btn btn-ghost copy-btn" type="button" data-copy="brew install andes90/tap/collabmd && collabmd ~/my-vault --no-tunnel">
+              <button class="landing-button landing-button-secondary copy-btn" type="button" data-copy="brew install andes90/tap/collabmd && collabmd ~/my-vault --no-tunnel">
                 <svg viewBox="0 0 16 16" aria-hidden="true" class="icon"><path fill="currentColor" d="M5 2a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-.5v-1H12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1v.5H5V2Zm-3 4a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6Zm2-1a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1H4Z" transform="translate(1 1)"/></svg>
                 <span class="copy-label" aria-live="polite">Copy</span>
               </button>
@@ -419,12 +174,12 @@ collabmd ~/my-vault --no-tunnel</code></pre>
             <p class="install-note">Then open <code>http://localhost:1234</code>.</p>
           </div>
 
-          <div class="install-panel" role="tabpanel" id="panel-docker" aria-labelledby="tab-docker" hidden>
+          <div class="install-panel" role="tabpanel" id="panel-docker" tabindex="0" aria-labelledby="tab-docker" hidden>
             <div class="install-code">
-              <pre><code>docker run --rm -p 1234:1234 \
+              <pre><code>docker run --rm -p 127.0.0.1:1234:1234 \
   -v "$PWD:/data" \
   ghcr.io/andes90/collabmd:latest</code></pre>
-              <button class="btn btn-ghost copy-btn" type="button" data-copy="docker run --rm -p 1234:1234 -v &quot;$PWD:/data&quot; ghcr.io/andes90/collabmd:latest">
+              <button class="landing-button landing-button-secondary copy-btn" type="button" data-copy="docker run --rm -p 127.0.0.1:1234:1234 -v &quot;$PWD:/data&quot; ghcr.io/andes90/collabmd:latest">
                 <svg viewBox="0 0 16 16" aria-hidden="true" class="icon"><path fill="currentColor" d="M5 2a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-.5v-1H12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1v.5H5V2Zm-3 4a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6Zm2-1a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1H4Z" transform="translate(1 1)"/></svg>
                 <span class="copy-label" aria-live="polite">Copy</span>
               </button>
@@ -433,46 +188,44 @@ collabmd ~/my-vault --no-tunnel</code></pre>
           </div>
         </div>
 
-      </div>
-    </section>
 
-    <!-- ============ FINAL CTA ============ -->
-    <section class="cta">
-      <div class="wrap cta-inner reveal">
-        <h2 class="cta-title">Stop migrating your docs.<br><span class="grad">Start collaborating on them.</span></h2>
-        <div class="cta-actions">
-          <a class="btn btn-primary btn-lg" href="https://demo.collabmd.app/#file=README.md" target="_blank" rel="noopener">
-            <svg viewBox="0 0 16 16" aria-hidden="true" class="icon"><path fill="currentColor" d="M4.5 3.7v8.6c0 .8.9 1.3 1.6.9l6.9-4.3c.7-.4.7-1.4 0-1.8L6.1 2.8c-.7-.4-1.6.1-1.6.9Z"/></svg>
-            Open live demo
-          </a>
-          <a class="btn btn-ghost btn-lg" href="https://github.com/andes90/collabmd" target="_blank" rel="noopener">
-            <svg viewBox="0 0 16 16" aria-hidden="true" class="icon"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
-            View on GitHub
-          </a>
+          <p class="share-note">Ready to invite someone? <a href="https://github.com/andes90/collabmd/blob/master/docs/auth-and-access.md">Set up password or Google sign-in</a>, then use a tunnel or your own deployment.</p>
         </div>
       </div>
     </section>
 
-  </main>
+    <section class="section docs-section" id="docs" aria-labelledby="docs-title">
+      <div class="wrap docs-layout">
+        <header class="section-head">
+          <p class="eyebrow">Documentation</p>
+          <h2 id="docs-title">From first run<br>to your team's setup.</h2>
+          <p>Pick the guide for your next step.</p>
+          <span class="docs-source">Guides maintained in the GitHub repository <span aria-hidden="true">↗</span></span>
+        </header>
+        <nav class="docs-list" aria-label="Documentation guides">
+          <a href="https://github.com/andes90/collabmd/blob/master/docs/installation.md"><span><strong>Get started</strong><small>Requirements, npx, Homebrew, and source installs</small></span><span aria-hidden="true">↗</span></a>
+          <a href="https://github.com/andes90/collabmd/blob/master/docs/configuration.md"><span><strong>Configure your workspace</strong><small>CLI options, multiple vaults, and environment variables</small></span><span aria-hidden="true">↗</span></a>
+          <a href="https://github.com/andes90/collabmd/blob/master/docs/auth-and-access.md"><span><strong>Share with your team</strong><small>Password protection and Google sign-in</small></span><span aria-hidden="true">↗</span></a>
+          <a href="https://github.com/andes90/collabmd/blob/master/docs/deployment.md"><span><strong>Deploy on your infrastructure</strong><small>Docker, Coolify, Helm, and private Git repositories</small></span><span aria-hidden="true">↗</span></a>
+          <a href="https://github.com/andes90/collabmd/blob/master/docs/ai-agents.md"><span><strong>Connect an AI agent</strong><small>MCP setup, supported tools, and scoped access</small></span><span aria-hidden="true">↗</span></a>
+          <a href="https://github.com/andes90/collabmd/blob/master/docs/troubleshooting.md"><span><strong>Find a fix</strong><small>Common setup and runtime problems</small></span><span aria-hidden="true">↗</span></a>
+        </nav>
+      </div>
+    </section>
 
-  <!-- ============ FOOTER ============ -->
+    <section class="closing">
+      <div class="wrap closing-inner reveal">
+        <div><p class="eyebrow">Your files. Your tools. Your people.</p><h2>Make room for<br>working together.</h2></div>
+        <div class="closing-actions"><a class="landing-button landing-button-primary" href="https://demo.collabmd.app/#file=README.md" target="_blank" rel="noopener">Try live demo <span aria-hidden="true">↗</span></a><a class="text-link" href="#install">Run CollabMD yourself <span aria-hidden="true">→</span></a></div>
+      </div>
+    </section>
+  </main>
   <footer class="footer">
     <div class="wrap footer-inner">
-      <div class="footer-brand">
-        <span class="footer-word">CollabMD</span>
-        <span class="footer-tag">Like Obsidian, but online.</span>
-      </div>
-      <nav class="footer-links" aria-label="Footer">
-        <a href="https://demo.collabmd.app/#file=README.md" target="_blank" rel="noopener">Open live demo</a>
-        <a href="https://github.com/andes90/collabmd" target="_blank" rel="noopener">GitHub</a>
-        <a href="https://github.com/andes90/collabmd#readme" target="_blank" rel="noopener">Docs</a>
-        <a href="https://github.com/andes90/collabmd/issues" target="_blank" rel="noopener">Issues</a>
-        <a href="https://deepwiki.com/andes90/collabmd" target="_blank" rel="noopener">DeepWiki</a>
-      </nav>
-      <p class="footer-legal">MIT licensed · Your filesystem stays the source of truth</p>
+      <a class="nav-brand" href="#top">CollabMD</a><p>Open source. MIT licensed. Files first.</p>
+      <nav aria-label="Footer"><a href="#docs">Docs</a><a href="https://github.com/andes90/collabmd">GitHub</a><a href="https://github.com/andes90/collabmd/issues">Issues</a><a href="https://github.com/andes90/collabmd/blob/master/docs/dev/development.md">Contribute</a></nav>
     </div>
   </footer>
-
   <script src="main.js" defer></script>
 </body>
 </html>
