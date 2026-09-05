@@ -1,4 +1,4 @@
-import { resolve } from 'path';
+import { basename, isAbsolute, relative, resolve } from 'path';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'url';
 
@@ -199,6 +199,94 @@ export function resolveCliVaultDir(positionals = [], env = process.env) {
   return resolve(positionals[0] || env.COLLABMD_VAULT_DIR || '.');
 }
 
+const VAULT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+const VAULT_ID_HINT = 'Use letters, numbers, ".", "_", or "-" starting with a letter or number.';
+
+export function parseVaultList(rawValue) {
+  return normalizeCsvList(rawValue).map((entry) => {
+    const separatorIndex = entry.indexOf('=');
+    const hasName = separatorIndex > 0;
+    const rawDir = (hasName ? entry.slice(separatorIndex + 1) : entry).trim();
+    if (!rawDir) {
+      throw new Error(`Vault entry "${entry}" is missing a directory path.`);
+    }
+    const dir = resolve(rawDir);
+    const id = (hasName ? entry.slice(0, separatorIndex).trim() : basename(dir));
+    if (!VAULT_ID_PATTERN.test(id)) {
+      throw new Error(`Invalid vault id "${id}". ${VAULT_ID_HINT}`);
+    }
+    return { id, dir };
+  });
+}
+
+export function resolveConfiguredVaults(overrides = {}, env = process.env) {
+  if (Array.isArray(overrides.vaults)) {
+    return overrides.vaults.map(({ id, dir, repoUrl }) => {
+      if (!VAULT_ID_PATTERN.test(String(id ?? ''))) {
+        throw new Error(`Invalid vault id "${id}". ${VAULT_ID_HINT}`);
+      }
+      return { id, dir: resolve(dir), repoUrl: normalizeOptionalString(repoUrl) };
+    });
+  }
+  // ponytail: explicit directory (CLI positional) wins over the operator list
+  if (overrides.vaultDir) {
+    const dir = resolve(overrides.vaultDir);
+    return [{ id: basename(dir), dir }];
+  }
+  const rawList = normalizeOptionalString(env.COLLABMD_VAULTS);
+  if (!rawList) {
+    const dir = resolveConfiguredVaultDir(overrides, env);
+    return [{ id: basename(dir), dir }];
+  }
+  const vaults = parseVaultList(rawList);
+  const seenIds = new Set();
+  for (const vault of vaults) {
+    if (seenIds.has(vault.id)) {
+      throw new Error(`Duplicate vault id "${vault.id}" in COLLABMD_VAULTS.`);
+    }
+    seenIds.add(vault.id);
+  }
+  for (let i = 0; i < vaults.length; i += 1) {
+    for (let j = i + 1; j < vaults.length; j += 1) {
+      const between = relative(vaults[i].dir, vaults[j].dir);
+      if (between === '' || (!between.startsWith('..') && !isAbsolute(between))) {
+        throw new Error(`Vaults "${vaults[i].id}" and "${vaults[j].id}" overlap. Vault directories must not nest.`);
+      }
+    }
+  }
+  return vaults;
+}
+
+export function mangleVaultIdForEnv(vaultId) {
+  return String(vaultId ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '_');
+}
+
+// ponytail: explicit repoUrl wins, then COLLABMD_GIT_REPO_URL_<ID>, then the shared URL for the primary
+export function resolveVaultRepoUrls(vaultDefs = [], overrides = {}, env = process.env) {
+  const globalRepoUrl = normalizeOptionalString(overrides.remote?.repoUrl ?? overrides.git?.remote?.repoUrl ?? env.COLLABMD_GIT_REPO_URL);
+  const bySuffix = new Map();
+  for (const def of vaultDefs) {
+    const suffix = mangleVaultIdForEnv(def.id);
+    if (!bySuffix.has(suffix)) {
+      bySuffix.set(suffix, []);
+    }
+    bySuffix.get(suffix).push(def.id);
+  }
+  return vaultDefs.map((def, index) => {
+    if (def.repoUrl) {
+      return def;
+    }
+    const suffix = mangleVaultIdForEnv(def.id);
+    const varName = `COLLABMD_GIT_REPO_URL_${suffix}`;
+    const perVaultUrl = normalizeOptionalString(env[varName]);
+    if (perVaultUrl && bySuffix.get(suffix).length > 1) {
+      throw new Error(`Ambiguous git remote: vaults ${bySuffix.get(suffix).map((id) => `"${id}"`).join(' and ')} share ${varName}.`);
+    }
+    return { ...def, repoUrl: perVaultUrl || (index === 0 ? globalRepoUrl : '') };
+  });
+}
+
 function getDefaultHost(nodeEnv) {
   return nodeEnv === 'production' ? '0.0.0.0' : '127.0.0.1';
 }
@@ -208,7 +296,7 @@ function resolveOptionalPath(filePath) {
   return normalized ? resolve(normalized) : '';
 }
 
-function loadGitConfig(overrides = {}) {
+function loadGitConfig(overrides = {}, { vaultRepoUrls = [] } = {}) {
   const remoteOverrides = overrides.remote ?? {};
   const identityOverrides = overrides.identity ?? {};
   const enabled = overrides.enabled ?? (process.env.COLLABMD_GIT_ENABLED !== 'false');
@@ -240,7 +328,7 @@ function loadGitConfig(overrides = {}) {
     remoteOverrides.sshKnownHostsFile
     ?? process.env.COLLABMD_GIT_SSH_KNOWN_HOSTS_FILE,
   );
-  const remoteEnabled = repoUrl.length > 0;
+  const remoteEnabled = repoUrl.length > 0 || vaultRepoUrls.some((entry) => String(entry ?? '').length > 0);
 
   if (remoteEnabled && !sshPrivateKeyFile && !sshPrivateKeyBase64) {
     throw new Error(
@@ -452,7 +540,9 @@ function resolvePublicDir(nodeEnv) {
 
 export function loadConfig(overrides = {}) {
   const nodeEnv = process.env.NODE_ENV || 'development';
-  const vaultDir = resolveConfiguredVaultDir(overrides);
+  const vaults = resolveVaultRepoUrls(resolveConfiguredVaults(overrides), overrides);
+  // ponytail: vaultDir stays the primary vault; other vaults resolve through the registry
+  const vaultDir = overrides.vaultDir || vaults[0].dir;
   const basePath = normalizeAppBasePath(process.env.BASE_PATH || '');
   const publicDir = resolvePublicDir(nodeEnv);
   const authOverrides = overrides.auth ?? {};
@@ -469,7 +559,7 @@ export function loadConfig(overrides = {}) {
   const oidc = authStrategy === AUTH_STRATEGY_OIDC
     ? loadOidcConfig(authOverrides.oidc, { basePath })
     : null;
-  const git = loadGitConfig(overrides.git);
+  const git = loadGitConfig(overrides.git, { vaultRepoUrls: vaults.map((vault) => vault.repoUrl) });
   const hosted = loadHostedConfig(overrides.hosted, { authStrategy, vaultDir });
   const agentAccess = loadAgentAccessConfig(overrides.agentAccess, {
     basePath,
@@ -531,6 +621,7 @@ export function loadConfig(overrides = {}) {
     plantumlServerUrl: process.env.PLANTUML_SERVER_URL || 'https://www.plantuml.com/plantuml',
     publicDir,
     vaultDir,
+    vaults,
     publicWsBaseUrl: process.env.PUBLIC_WS_BASE_URL || '',
     testWsRoomHydrateDelayMs: parsePositiveInt(process.env.TEST_WS_ROOM_HYDRATE_DELAY_MS, 0),
     wikiLinkAutoCreate: process.env.COLLABMD_WIKI_LINK_AUTO_CREATE !== 'false',

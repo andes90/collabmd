@@ -69,10 +69,16 @@ const enableTunnel = !values['no-tunnel'];
 const useLocalPlantUml = values['local-plantuml'];
 const useLocalStructurizr = values['local-structurizr'];
 
-const { resolveCliVaultDir, loadConfig } = await import('../src/server/config/env.js');
-const vaultPath = resolveCliVaultDir(positionals);
+const { resolveCliVaultDir, resolveConfiguredVaults, loadConfig } = await import('../src/server/config/env.js');
+// ponytail: explicit directory wins; COLLABMD_VAULTS only applies with no positional
+const useVaultList = positionals.length === 0 && String(process.env.COLLABMD_VAULTS ?? '').trim() !== '';
+const vaultPath = useVaultList ? '' : resolveCliVaultDir(positionals);
+// ponytail: primary vault known before loadConfig so local services mirror the right dir
+const primaryVaultDir = useVaultList ? resolveConfiguredVaults({}, process.env)[0].dir : vaultPath;
 
-process.env.COLLABMD_VAULT_DIR = vaultPath;
+if (!useVaultList) {
+  process.env.COLLABMD_VAULT_DIR = vaultPath;
+}
 process.env.PORT = String(port);
 process.env.HOST = host;
 
@@ -114,7 +120,7 @@ if (useLocalStructurizr) {
   try {
     const localStructurizrUrl = getLocalStructurizrServerUrl();
     console.log(`  Structurizr: starting local docker-compose service at ${localStructurizrUrl}...`);
-    await startLocalStructurizrComposeService({ vaultDir: vaultPath });
+    await startLocalStructurizrComposeService({ vaultDir: primaryVaultDir });
     process.env.STRUCTURIZR_SERVER_URL = localStructurizrUrl;
   } catch (error) {
     if (error.code === 'ENOENT') {
@@ -129,22 +135,25 @@ if (useLocalStructurizr) {
 const { createAppServer } = await import('../src/server/create-app-server.js');
 const { prepareConfigForStartup } = await import('../src/server/startup/git-remote-bootstrap.js');
 
-const config = loadConfig({ vaultDir: vaultPath });
+const config = useVaultList ? loadConfig({}) : loadConfig({ vaultDir: vaultPath });
 
-try {
-  const stats = await stat(vaultPath);
-  if (!stats.isDirectory()) {
-    console.error(`Error: "${vaultPath}" is not a directory.`);
-    process.exit(1);
-  }
-} catch (error) {
-  if (error.code !== 'ENOENT' || !config.git.remote.enabled) {
-    if (error.code === 'ENOENT') {
-      console.error(`Error: Directory "${vaultPath}" does not exist.`);
-    } else {
-      console.error(`Error: Cannot access "${vaultPath}": ${error.message}`);
+for (const vault of config.vaults) {
+  try {
+    const stats = await stat(vault.dir);
+    if (!stats.isDirectory()) {
+      console.error(`Error: "${vault.dir}" is not a directory.`);
+      process.exit(1);
     }
-    process.exit(1);
+  } catch (error) {
+    // ponytail: a mapped vault may be missing; prepareConfigForStartup clones it
+    if (error.code !== 'ENOENT' || !vault.repoUrl) {
+      if (error.code === 'ENOENT') {
+        console.error(`Error: Directory "${vault.dir}" does not exist.`);
+      } else {
+        console.error(`Error: Cannot access "${vault.dir}": ${error.message}`);
+      }
+      process.exit(1);
+    }
   }
 }
 
@@ -210,7 +219,14 @@ try {
   console.log(`  ║${bannerLine}║`);
   console.log('  ╚══════════════════════════════════════╝');
   console.log('');
-  console.log(`  Vault:  ${vaultPath} (${fileCount} files)`);
+  if (config.vaults.length > 1) {
+    console.log(`  Vaults: (${fileCount} files in primary)`);
+    for (const vault of config.vaults) {
+      console.log(`    - ${vault.id}: ${vault.dir}`);
+    }
+  } else {
+    console.log(`  Vault:  ${config.vaultDir} (${fileCount} files)`);
+  }
   console.log(`  Local:  http://${info.host}:${info.port}`);
   console.log(`  PlantUML: ${config.plantumlServerUrl}`);
   console.log(`  Structurizr: ${config.structurizr?.enabled ? config.structurizr.serverUrl : 'disabled'}`);
