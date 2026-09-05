@@ -5,6 +5,7 @@ This chart deploys CollabMD as a single-replica Kubernetes application with pers
 Important constraints:
 
 - Run exactly one replica. CollabMD keeps collaboration room state in-process and does not support horizontal scaling.
+- Upgrades use `Recreate`, stopping the existing app Pod before starting its replacement. Expect a brief interruption; this does not provide a general single-writer lock for manual replacements or failures.
 - Persist `/data`. CollabMD stores both vault content and runtime sidecar state under the vault root, including `.collabmd/`.
 
 ## Prerequisites

@@ -26,6 +26,8 @@ Use it when you want a Kubernetes-native deployment with:
 - optional bundled PlantUML
 - secret-backed auth and private git bootstrap settings
 
+The chart uses `Recreate` upgrades: the existing app Pod stops before its replacement starts. Expect a brief interruption during upgrades so two runtimes do not edit the same vault concurrently. This upgrade strategy is not a general single-writer lock for manual Pod replacements or failures.
+
 Quick start:
 
 ```bash

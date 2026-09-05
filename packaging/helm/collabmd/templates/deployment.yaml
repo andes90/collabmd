@@ -6,6 +6,8 @@ metadata:
     {{- include "collabmd.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "collabmd.selectorLabels" . | nindent 6 }}
