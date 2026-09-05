@@ -219,7 +219,7 @@ Vault text returned to an agent is untrusted input. Never paste managed Agent Ac
 
 - Single-instance deployment only: collaboration room state is kept in-process and is not shared across replicas
 - `oidc` currently supports Google only
-- Hosted workspace mode currently provides the backend/API surface; Team Settings UI, invitation email delivery, GitHub callback redirect polish, and GitHub App checkout/publish wiring are still pending
+- Hosted workspace mode now includes a basic Team Settings UI (collaborators, pending invitations, roles, and access history) plus claim, setup, and invitation-acceptance screens; invitation email delivery, GitHub callback redirect polish, and GitHub App checkout/publish wiring are still pending
 - Text-anchored comments support markdown, Mermaid, PlantUML, and Structurizr DSL files. Excalidraw supports element-anchored threads; draw.io comments are not supported
 - WebMCP requires experimental browser support and an active CollabMD tab; for local Chrome testing, enable `chrome://flags/#enable-webmcp-testing`. It uses the browser session rather than an Agent Connection and does not provide remote access, per-agent scopes, delete, rename, attachments, Git, commit, or publish tools
 - Windows use is supported via WSL2 rather than native Windows execution
@@ -417,14 +417,18 @@ Current backend endpoints include:
 
 - `GET /api/hosted/status`
 - `POST /api/hosted/claim`
+- `POST /api/hosted/setup/complete`
 - `POST /api/hosted/vault-source/github/setup`
 - `GET /api/hosted/vault-source/github/callback`
 - `GET /api/hosted/memberships`
+- `POST /api/hosted/memberships/leave`
 - `POST /api/hosted/invitations`
 - `POST /api/hosted/invitations/accept`
 - `GET /api/hosted/audit`
 
-Until the Team Settings UI and invitation email delivery are added, these are backend integration points rather than a complete hosted onboarding screen.
+The workspace also ships a basic hosted onboarding surface: a claim screen for the first Team Admin, a setup screen (Team Admins complete setup without a vault source for now), an invitation-acceptance prompt for signed-in invitees, and a Team Settings dialog in the toolbar overflow menu for admins with collaborators, pending invitations, roles, and the access audit trail. Setup completion and invitations stay gated until the Team Admin completes workspace setup; invitation email delivery is still pending, so share the workspace URL manually with invited people.
+
+For a local end-to-end checklist, see [Test hosted workspace administration locally](./docs/hosted-workspace-local-testing.md).
 
 ### Draw.io setup
 

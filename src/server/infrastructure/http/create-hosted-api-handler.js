@@ -43,6 +43,11 @@ export function createHostedApiHandler({
         user,
       }));
     }],
+    ['POST /api/hosted/setup/complete', async ({ req, res, user }) => {
+      const admin = await hostedWorkspaceService.requireAdmin(user);
+      const team = await hostedWorkspaceService.completeWorkspaceSetup({ user: admin });
+      jsonResponse(req, res, 200, { ok: true, setupComplete: true, team });
+    }],
     ['GET /api/hosted/vault-source', async ({ req, res, user }) => {
       jsonResponse(req, res, 200, { vaultSource: await hostedWorkspaceService.getVaultSource(user) });
     }],

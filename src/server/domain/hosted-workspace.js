@@ -381,7 +381,7 @@ export class HostedWorkspaceService {
     };
   }
 
-  async completeWorkspaceSetup() {
+  async completeWorkspaceSetup({ user = null } = {}) {
     await this.initialize();
     const team = await this.store.getTeam();
     if (!team) {
@@ -394,6 +394,15 @@ export class HostedWorkspaceService {
       setupCompletedAt: team.setupCompletedAt || timestamp,
     };
     await this.store.updateTeam(updatedTeam);
+    if (!team.setupCompletedAt) {
+      await this.store.createAuditEvent(createAuditEvent({
+        actor: user,
+        targetEmail: user?.email ?? '',
+        targetRole: user?.role ?? '',
+        timestamp,
+        type: 'workspace_setup_completed',
+      }));
+    }
     return updatedTeam;
   }
 

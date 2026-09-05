@@ -23,6 +23,7 @@ import { workspaceFeature } from '../application/app-shell/workspace-feature.js'
 import { LOBBY_CHAT_MESSAGE_MAX_LENGTH } from '../domain/lobby-chat.js';
 import { agentConnectionApiClient } from '../infrastructure/agent-connection-api-client.js';
 import { BrowserPreferencesPort } from '../infrastructure/browser-preferences-port.js';
+import { hostedApiClient } from '../infrastructure/hosted-api-client.js';
 import { BrowserNotificationPort } from '../infrastructure/browser-notification-port.js';
 import { AppVersionMonitor } from '../infrastructure/app-version-monitor.js';
 import { gitApiClient } from '../infrastructure/git-api-client.js';
@@ -42,6 +43,8 @@ import { WebMcpToolRegistry } from '../infrastructure/webmcp-tool-registry.js';
 import { createLazyLobbyPresence, createLazyWorkspaceSyncClient } from './lazy-collab-clients.js';
 import { AgentConnectionController } from '../presentation/agent-connection-controller.js';
 import { BacklinksPanel } from '../presentation/backlinks-panel.js';
+import { HostedWorkspaceGateController } from '../presentation/hosted-workspace-gate-controller.js';
+import { TeamSettingsController } from '../presentation/team-settings-controller.js';
 import { CommentOverviewController } from '../presentation/comment-overview-controller.js';
 import { CommentUiController } from '../presentation/comment-ui-controller.js';
 import { FileExplorerController } from '../presentation/file-explorer-controller.js';
@@ -179,6 +182,21 @@ export class CollabMdAppShell {
       runtimeConfig: this.runtimeConfig,
       toastController: this.toastController,
       trigger: this.elements.connectAgentButton,
+    });
+    this.teamSettingsController = new TeamSettingsController({
+      apiClient: hostedApiClient,
+      closeToolbarMenu: () => this.closeToolbarOverflowMenu(),
+      content: this.elements.teamSettingsContent,
+      dialog: this.elements.teamSettingsDialog,
+      toastController: this.toastController,
+      trigger: this.elements.teamSettingsButton,
+    });
+    this.hostedGateController = new HostedWorkspaceGateController({
+      apiClient: hostedApiClient,
+      appRoot: this.elements.appShell,
+      gate: this.elements.hostedGate,
+      runtimeConfig: this.runtimeConfig,
+      teamSettingsController: this.teamSettingsController,
     });
     const callAgentTool = (...args) => this.vaultApiClient.callAgentTool(...args);
     this.webMcpTools = new WebMcpToolRegistry({

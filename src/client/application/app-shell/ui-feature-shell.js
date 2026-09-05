@@ -48,7 +48,8 @@ const PREVIEW_HEADING_LINK_ICON = `
  */
 
 /** @this {UiShellContext} */
-function initialize() {
+async function initialize() {
+  await this.hostedGateController?.initialize();
   this.initializeExportBridge?.();
   this.renderMarkdownToolbar?.();
   this.initializeVisualViewportBinding?.();

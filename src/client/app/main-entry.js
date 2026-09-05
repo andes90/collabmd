@@ -5,7 +5,7 @@ import '../styles/style.css';
 async function start() {
   await ensureClientAuthenticated();
   const app = new CollabMdAppShell();
-  app.initialize();
+  await app.initialize();
 }
 
 if (document.readyState === 'loading') {

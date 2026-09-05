@@ -21,7 +21,7 @@
 
     <a href="#editorContainer" class="sr-only skip-link" id="skipToEditor">Skip to editor</a>
 
-    <div class="app-shell">
+    <div class="app-shell" id="appShell">
       <aside id="sidebar" class="sidebar">
         <div class="sidebar-header">
           <div class="sidebar-brand">
@@ -370,6 +370,16 @@
                 <span class="ui-toolbar-button-label">Connect AI Agent</span>
               </button>
 
+              <button class="ui-button ui-button--ghost ui-button--toolbar hidden" id="teamSettingsBtn" aria-label="Team Settings" title="Team Settings">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="9" cy="7" r="4"></circle>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+                <span class="ui-toolbar-button-label">Team Settings</span>
+              </button>
+
               <button class="ui-button ui-button--ghost ui-button--toolbar toolbar-search-files-btn" id="searchFilesBtn" aria-label="Search files" title="Search files">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
                   <circle cx="11" cy="11" r="7"></circle>
@@ -703,6 +713,20 @@
         <div id="agentConnectionContent"></div>
       </div>
     </dialog>
+
+    <dialog class="app-dialog team-settings-dialog" id="teamSettingsDialog" aria-labelledby="teamSettingsTitle">
+      <div class="app-dialog-form">
+        <div class="app-dialog-header">
+          <h2 class="app-dialog-title" id="teamSettingsTitle">Team Settings</h2>
+          <p class="app-dialog-copy">Manage collaborators, pending invitations, and access history.</p>
+        </div>
+        <div id="teamSettingsContent"></div>
+      </div>
+    </dialog>
+
+    <div class="hosted-gate hidden" id="hostedGate">
+      <div class="hosted-gate-card" data-hosted-gate-content role="dialog" aria-modal="true" aria-labelledby="hostedGateTitle"></div>
+    </div>
 
     <dialog class="app-dialog" id="fileActionDialog" aria-labelledby="fileActionTitle">
       <form class="app-dialog-form" id="fileActionForm" method="dialog">

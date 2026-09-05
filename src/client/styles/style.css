@@ -17,6 +17,7 @@
 @import './features/collaboration-chat.css';
 @import './features/collaboration-dialogs.css';
 @import './features/agent-connection.css';
+@import './features/team-settings.css';
 @import './features/outline.css';
 @import './layout/view-modes.css';
 @import './components/feedback.css';

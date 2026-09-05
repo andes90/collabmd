@@ -19,6 +19,17 @@ export function escapeHtml(text) {
 }
 
 /**
+ * Builds a document fragment from an HTML string for a single
+ * replaceChildren() call. Escape untrusted parts before calling.
+ *
+ * @param {string} markup — trusted HTML markup
+ * @returns {DocumentFragment} parsed fragment
+ */
+export function createFragment(markup) {
+  return document.createRange().createContextualFragment(markup);
+}
+
+/**
  * Clamps a numeric value between a minimum and maximum bound.
  *
  * @param {number} value

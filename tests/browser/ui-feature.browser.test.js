@@ -223,9 +223,9 @@ describe('uiFeature browser helpers', () => {
         handleHashChange,
       },
     };
-    uiFeatureShellMethods.initialize.call(context);
-    await context.fileExplorerReadyPromise;
+    await uiFeatureShellMethods.initialize.call(context);
 
+    expect(context.initializeExportBridge).toHaveBeenCalledTimes(1);
     expect(context.fileExplorer.refresh).toHaveBeenCalledTimes(1);
     expect(context.gitPanel.initialize).toHaveBeenCalledTimes(1);
     expect(context.gitPanel.refresh).not.toHaveBeenCalled();

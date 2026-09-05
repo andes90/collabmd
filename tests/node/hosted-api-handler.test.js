@@ -229,3 +229,61 @@ test('hosted API supports claim, invitation, acceptance, membership, and audit f
   assert.ok(response.body.events.some((event) => event.type === 'vault_source_configured'));
   assert.ok(response.body.events.some((event) => event.type === 'invitation_accepted'));
 });
+
+test('hosted API completes setup without a vault source for admins only', async (t) => {
+  const api = await createHostedApi(t);
+
+  let response = await invoke(api.handler, {
+    body: {
+      teamName: 'Docs Team',
+      token: 'claim-secret',
+    },
+    method: 'POST',
+    path: '/api/hosted/claim',
+  });
+  assert.equal(response.statusCode, 200);
+
+  response = await invoke(api.handler, {
+    body: {
+      email: 'writer@example.com',
+      role: 'collaborator',
+    },
+    method: 'POST',
+    path: '/api/hosted/invitations',
+  });
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.body.code, 'HOSTED_SETUP_INCOMPLETE');
+
+  response = await invoke(api.handler, {
+    method: 'POST',
+    path: '/api/hosted/setup/complete',
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.setupComplete, true);
+
+  response = await invoke(api.handler, {
+    method: 'GET',
+    path: '/api/hosted/audit',
+  });
+  assert.equal(response.statusCode, 200);
+  assert.ok(response.body.events.some((event) => event.type === 'workspace_setup_completed'));
+
+  api.setUser(googleUser('writer@example.com', 'Writer User'));
+  response = await invoke(api.handler, {
+    method: 'POST',
+    path: '/api/hosted/setup/complete',
+  });
+  assert.equal(response.statusCode, 403);
+
+  api.setUser(googleUser('admin@example.com', 'Admin User'));
+  response = await invoke(api.handler, {
+    body: {
+      email: 'writer@example.com',
+      role: 'collaborator',
+    },
+    method: 'POST',
+    path: '/api/hosted/invitations',
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.invitation.email, 'writer@example.com');
+});
