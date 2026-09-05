@@ -37,6 +37,18 @@ jobs:
       - name: Run project validation
         run: npm run check
 
+      - name: Verify Comment Overview user flow
+        run: npm run test:e2e:prebuilt -- tests/e2e/collaboration.spec.js
+          --grep overview
+
+      - name: Upload browser failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-failures
+          path: test-results/
+          if-no-files-found: ignore
+
   docker:
     needs: validate
     runs-on: ubuntu-latest
