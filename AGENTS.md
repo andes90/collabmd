@@ -6,15 +6,16 @@ Guidance for coding agents working in CollabMD.
 
 1. Read `CONTEXT.md` for product terminology and invariants. Use its terms
    precisely.
-2. Read `docs/architecture.md` before moving code or adding imports across
-   layers. Check `docs/adr/` before changing a documented decision.
+2. Read `docs/dev/architecture.md` before moving code or adding imports across
+   layers. Check `docs/dev/adr/` before changing a documented decision.
 3. Check `git status --short`; preserve unrelated user changes.
 4. Find the existing implementation and its callers before editing. Prefer the
    smallest root-cause change.
 5. Add or update the nearest focused test for behavioral changes.
 
-`README.md` is the user-facing source of truth for CLI behavior, configuration,
-and supported features. Keep it and `.env.example` aligned with user-visible
+`docs/configuration.md` is the user-facing source of truth for CLI behavior,
+configuration, and supported features; `README.md` covers the product overview
+and links to it. Keep both and `.env.example` aligned with user-visible
 config changes.
 
 ## Runtime and commands
@@ -88,7 +89,7 @@ CollabMD is a layered monolith. Keep domain code pure and dependencies inward:
 
 `eslint.config.js` enforces the currently durable boundaries. Do not bypass a
 restriction; move the behavior to the correct layer or inject a collaborator.
-See `docs/architecture.md` for the exact allowed imports.
+See `docs/dev/architecture.md` for the exact allowed imports.
 
 ## Product invariants
 
