@@ -563,6 +563,8 @@ export class ExcalidrawEmbedController {
       entry.wrapper.style.width = '';
       entry.wrapper.style.margin = '';
       entry.wrapper.style.pointerEvents = 'auto';
+      // Moving an iframe reloads its document; wait for its new ready message.
+      entry.isReady = false;
       placeholder.replaceWith(entry.wrapper);
       entry.placeholder = null;
       return;
@@ -571,6 +573,7 @@ export class ExcalidrawEmbedController {
     const overlayRoot = this._ensureOverlayRoot();
     overlayRoot.hidden = false;
     if (entry.wrapper?.parentElement !== overlayRoot) {
+      entry.isReady = false;
       overlayRoot.appendChild(entry.wrapper);
     }
 

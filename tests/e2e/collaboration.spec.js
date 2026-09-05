@@ -1016,16 +1016,19 @@ test('shows Excalidraw comments in the workspace overview and opens the selected
     frame.evaluate(() => window.__COLLABMD_EXCALIDRAW_TEST__.getViewport()?.zoom)
   )).toBe(1);
 
+  await page.goto('/?test=1#file=README.md');
+  await expect(page.locator('.cm-editor')).toBeVisible();
   await page.locator('#commentsSidebarTab').click();
   const overviewRow = page.locator('.comment-overview-thread');
   await expect(overviewRow).toContainText('Review this diagram');
   await expect(overviewRow).toContainText('Diagram element');
   await overviewRow.click();
 
-  await expect(frame.getByTestId('diagram-comments-drawer')).toBeVisible();
-  await expect(frame.getByTestId('diagram-comments-drawer')).toContainText('Review this diagram');
+  const reopenedFrame = await waitForExcalidrawFrameHarness(page);
+  await expect(reopenedFrame.getByTestId('diagram-comments-drawer')).toBeVisible();
+  await expect(reopenedFrame.getByTestId('diagram-comments-drawer')).toContainText('Review this diagram');
   await expect.poll(async () => (
-    frame.evaluate(() => window.__COLLABMD_EXCALIDRAW_TEST__.getViewport()?.zoom)
+    reopenedFrame.evaluate(() => window.__COLLABMD_EXCALIDRAW_TEST__.getViewport()?.zoom)
   )).toBeGreaterThan(1);
 });
 
