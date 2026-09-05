@@ -71,6 +71,42 @@ Copy the example file:
 cp .env.example .env
 ```
 
+
+### Common setups
+
+Multi-vault with one git-backed vault (full walkthrough: [Deployment](deployment.md)):
+
+```bash
+COLLABMD_VAULTS="docs=/data/docs, notes=/data/notes"
+COLLABMD_GIT_REPO_URL_DOCS=git@github.com:your-org/docs.git
+COLLABMD_GIT_SSH_PRIVATE_KEY_FILE=/run/secrets/collabmd_git_key
+```
+
+Google OIDC (all three, or startup refuses; full walkthrough: [Auth and access](auth-and-access.md)):
+
+```bash
+AUTH_STRATEGY=oidc
+PUBLIC_BASE_URL=https://notes.example.com
+AUTH_OIDC_CLIENT_ID=your-google-client-id
+AUTH_OIDC_CLIENT_SECRET=your-google-client-secret
+```
+
+Single private repo bootstrap in Docker:
+
+```bash
+COLLABMD_GIT_REPO_URL=git@github.com:your-org/your-private-vault.git
+COLLABMD_GIT_SSH_PRIVATE_KEY_B64="$(base64 < ~/.ssh/id_ed25519 | tr -d '\n')"
+```
+
+### Security notes
+
+- No auth is the default, and no-auth means anonymous write access to the vault. Treat the URL as write access unless `AUTH_STRATEGY` is `password` or `oidc`, and never expose an unauthenticated instance beyond localhost.
+- Keep secrets out of shell history, images, and chat logs: prefer the `_FILE` variants (`COLLABMD_GIT_SSH_PRIVATE_KEY_FILE`, `COLLABMD_GITHUB_APP_PRIVATE_KEY_FILE`) mounted from a secret store over inline values.
+- `AUTH_PASSWORD` and `AUTH_SESSION_SECRET` are generated per run when unset, so restarts rotate them. Set both explicitly for stable multi-restart deployments.
+- Without `COLLABMD_GIT_SSH_KNOWN_HOSTS_FILE`, SSH falls back to `StrictHostKeyChecking=accept-new`. Set it for untrusted networks.
+- Diagram sources are sent to the configured renderers. The defaults for PlantUML (`plantuml.com`) and draw.io (`embed.diagrams.net`) are public services; self-host both for sensitive content.
+- Keep `COLLABMD_STRUCTURIZR_TRUSTED_EXECUTABLE_DSL` at `false` for untrusted vaults; `!script` and `!plugin` directives execute code.
+- `AUTH_SESSION_MAX_AGE_MS` lengthens the window a stolen session cookie stays valid; leave it unset unless persistence across restarts is needed.
 ### Server
 
 | Variable | Description | Default | Required |
