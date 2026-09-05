@@ -9,8 +9,6 @@ export class OutlineController {
     this.activeHeadingId = null;
     this.headings = [];
     this.pinnedHeadingId = null;
-    this.pdfOutline = null;
-    this.onNavigateToPdfOutline = null;
     this.onNavigateToHeading = onNavigateToHeading;
     this.onWillOpen = onWillOpen;
     this.panel = document.getElementById('outlinePanel');
@@ -83,11 +81,6 @@ export class OutlineController {
       return;
     }
 
-    if (this.pdfOutline) {
-      this.renderPdfOutline();
-      return;
-    }
-
     const previewContent = document.getElementById('previewContent');
     const headings = previewContent?.querySelectorAll('h1, h2, h3, h4, h5, h6') ?? [];
 
@@ -129,85 +122,6 @@ export class OutlineController {
     });
 
     this.observeHeadings(Array.from(headings));
-  }
-
-  setPdfOutline(outline, onNavigate) {
-    this.cleanup();
-    this.pdfOutline = Array.isArray(outline) && outline.length > 0 ? outline : null;
-    this.onNavigateToPdfOutline = this.pdfOutline ? onNavigate : null;
-    this.activeHeadingId = null;
-    this.toggleButton?.classList.toggle('hidden', !this.pdfOutline);
-
-    if (!this.pdfOutline) {
-      this.navigation?.replaceChildren();
-      this.close();
-      return;
-    }
-
-    if (this.outlineOpen) {
-      this.renderPdfOutline();
-    }
-  }
-
-  clearPdfOutline() {
-    this.pdfOutline = null;
-    this.onNavigateToPdfOutline = null;
-    this.activeHeadingId = null;
-    this.pinnedHeadingId = null;
-    this.navigation?.replaceChildren();
-    this.toggleButton?.classList.add('hidden');
-    this.close();
-  }
-
-  renderPdfOutline() {
-    if (!this.navigation || !this.pdfOutline) {
-      return;
-    }
-
-    this.cleanup();
-    this.navigation.replaceChildren();
-    const fragment = document.createDocumentFragment();
-    let itemIndex = 0;
-    const appendItems = (items, level = 1) => {
-      items.forEach((item) => {
-        if (!item || typeof item !== 'object') {
-          return;
-        }
-
-        const title = String(item.title ?? '').trim();
-        if (title) {
-          const id = `pdf-outline-${itemIndex}`;
-          const button = document.createElement('button');
-          button.type = 'button';
-          button.className = 'outline-item';
-          button.dataset.level = String(Math.min(level, 6));
-          button.dataset.target = id;
-          button.title = title;
-          button.textContent = title;
-          button.addEventListener('click', () => {
-            this.setActiveItem(id, { behavior: 'auto' });
-            this.onNavigateToPdfOutline?.(item);
-            if (this.mobileBreakpointQuery.matches) {
-              this.close();
-            }
-          });
-          fragment.appendChild(button);
-          itemIndex += 1;
-        }
-
-        if (Array.isArray(item.items)) {
-          appendItems(item.items, Math.min(level + 1, 6));
-        }
-      });
-    };
-
-    appendItems(this.pdfOutline);
-    if (fragment.childNodes.length === 0) {
-      this.navigation.innerHTML = '<div class="outline-empty">No outline found</div>';
-      return;
-    }
-
-    this.navigation.appendChild(fragment);
   }
 
   cleanup({ preservePinnedHeading = false } = {}) {
