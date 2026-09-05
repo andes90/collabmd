@@ -1,103 +1,113 @@
 # Development
 
-> Operator docs. Start with the [README](../../README.md) for the product overview.
+Contributor setup and verification for CollabMD. Start with the
+[product overview](../../README.md), [terminology](../../CONTEXT.md), and
+[architecture boundaries](architecture.md). Runtime/configuration behavior belongs
+in [configuration](../configuration.md), not this guide.
 
-Install dependencies:
+## Setup
 
-```bash
-npm install
-```
-
-Build and run:
-
-```bash
-npm start
-```
-
-Open `http://localhost:1234`.
-
-Useful commands:
+Use Node.js 26 (the exact local version is in `.tool-versions`), npm, and ripgrep
+(`rg`, required by search tests). From a clean checkout:
 
 ```bash
-npm run build                 # Build the Vite client into dist/client
-npm run check                 # Syntax check all entry points
-npm run dev:client            # Start the Vite dev server with API/WebSocket proxying
-npm run dev:server            # Start only the backend server for local frontend development
-npm run start                 # Build + start server
-npm run start:local-plantuml  # Build + start server with local docker-compose PlantUML
-npm run start:local-structurizr # Build + start server with local Structurizr
-npm run start:prod            # Start server (expects previous build)
-npm run test                  # Run unit + e2e tests
-npm run test:unit             # Fast Node-based unit tests
-npm run test:e2e              # Playwright browser tests
-npm run tunnel                # Start only the Cloudflare tunnel
-npm run plantuml:up           # Start only the local docker-compose PlantUML service
-npm run plantuml:down         # Stop only the local docker-compose PlantUML service
-npm run structurizr:up        # Start only the local Structurizr renderer
-npm run structurizr:down      # Stop only the local Structurizr renderer
-npm run capture:readme-assets # Regenerate the README screenshot and demo assets
+npm ci
+npx playwright install chromium
+npm start -- --no-tunnel
 ```
 
-## Testing
+Open `http://localhost:1234`. `npm start` builds first. For split development,
+run `npm run dev:server` and `npm run dev:client` in separate terminals; the
+Vite URL printed by the latter proxies API/WebSocket traffic to the backend.
+See [configuration](../configuration.md) for optional local diagram renderers.
 
-### Unit tests
+## Completing a change
+
+One owner carries the change from the requested outcome through integration and
+verification. A short task/PR description is enough; no separate plan is needed
+for a small change.
+
+1. State what a collaborator should be able to do and the observable result.
+   Trace only the necessary path through UI, application, API/WebSocket,
+   persistence, background workers/timers, and external services. Mark unused
+   boundaries as not applicable.
+2. Inspect existing implementations, callers, tests, and suitable existing
+   services before adding infrastructure. Fix the shared cause; keep unrelated
+   cleanup separate.
+3. Load an available skill only when its stated purpose matches the task (for
+   example diagnosis for a hard failure, UI design for a redesign, or commit
+   preparation when asked to commit). Read its instructions then; do not copy
+   personal skill catalogs into this repo. There are currently no repository
+   skills. Product [AI agent access](../ai-agents.md) describes Vault access over
+   MCP/WebMCP, not how coding agents contribute to this repository.
+4. Delegate only bounded, independent work when it reduces total effort. Name
+   the owned files/output, avoid recursive delegation, and retain one integration
+   owner. Review again only when a change or new evidence warrants it.
+5. Run the checks below for the affected boundaries. On repeated failure, inspect
+   logs/traces and investigate the cause before retrying or changing direction.
+   Separate blocking defects from optional improvements. Preserve regression
+   coverage unless evidence shows it obsolete, redundant, or ineffective.
+6. Finish with the outcome, changed scope, commands and results, boundaries
+   exercised/unverified, and any blocker. A passing unit test alone does not prove
+   a browser flow or external integration. Measure before/after any performance
+   claim. Stop once the scoped outcome is verified; release actions require
+   authorization.
+
+## Verification
+
+`package.json` defines the commands. Use the narrowest check while iterating:
+
+| Changed boundary | Focused command |
+| --- | --- |
+| Pure/domain rules | `node --test tests/node/<name>.test.js` |
+| HTTP, filesystem, git, startup, WebSocket | `npm run build && node --test tests/node/integration/<name>.test.js` |
+| Browser component/DOM | `npm run test:browser -- tests/browser/<name>.browser.test.js` |
+| CSS/UI conventions | `npm run test:guardrails` |
+| Full user flow | `npm run test:e2e -- tests/e2e/<name>.spec.js` |
+
+For completion:
+
+- Documentation only: check the diff, links, and any changed command examples.
+- Source changes: focused tests plus `npm run lint` and `npm run build`.
+- Changes spanning layers or UI behavior: `npm run check`, plus relevant E2E
+  flows. `check` already includes lint and build; do not run them again unchanged.
+- Broad changes: `npm run lint && npm test` runs lint and every test suite.
+
+`check` runs lint, guardrails, unit (which builds), integration, and browser tests.
+`npm test` runs guardrails, unit (which builds), integration, browser, and E2E;
+it does **not** include lint. `:prebuilt` commands assume a current build and
+are useful after `check`, not as standalone clean-checkout verification.
+
+Playwright's app fixture starts isolated servers with temporary copies of
+`test-vault/` and `dist/client/`; it does not edit the committed fixture vault.
+Inspect `test-results/` traces, screenshots, and error context before retrying.
+If Chromium fails before launch with an OS/sandbox permission error, resolve the
+execution permission rather than modifying tests or disabling coverage.
+
+The existing [Docker workflow](../../.github/workflows/docker-publish.yml)
+validates PRs with `npm run check` and the Comment Overview E2E pilot below.
+The NPM release workflow runs `check`; neither runs the entire E2E suite.
+GitHub execution and live external services still need their own evidence.
+
+## First feature pilot: Comment Overview
+
+Outcome: a collaborator posts a comment on an Excalidraw element, leaves the
+file, then uses Comments to reopen the persisted discussion at that element.
+See the [feature notes](comment-overview.md#implementation-and-verification)
+for the traced path and coverage limits. Run the same pilot selection as PR CI:
 
 ```bash
-npm run test:unit
+npm run check
+npm run test:e2e:prebuilt -- tests/e2e/collaboration.spec.js --grep overview
 ```
 
-Covers the vault file store, HTTP endpoints, collaboration room behavior, WebSocket integration, and supporting domain logic.
-
-### End-to-end tests
-
-```bash
-npx playwright install chromium    # first time only
-npm run test:e2e
-```
-
-Playwright boots the full app against the `test-vault/` directory and verifies the file explorer, editor, preview, collaboration, chat, outline, and scroll sync flows.
-
-### All tests
-
-```bash
-npm run test
-```
-
-
-<details>
-<summary>Architecture</summary>
-
-```text
-bin/
-  collabmd.js              CLI entry point
-src/
-  client/
-    app/                     Vite-owned HTML entries and browser entry modules
-    application/           app orchestration, preview rendering, workspace coordination
-    bootstrap/             app-shell composition and startup wiring
-    domain/                markdown editing, wiki-link, room, and vault helpers
-    infrastructure/        runtime config, auth bootstrap, browser ports, collaborative editor session
-    presentation/          file explorer, backlinks, quick switcher, outline, scroll sync, theme, layout
-    static/                Vite passthrough assets copied into the built client
-    styles/                app CSS
-  domain/                  shared wiki-link helpers
-  server/
-    auth/                  strategy selection and cookie-backed auth sessions
-    config/                environment loading
-    domain/                collaboration room model, registry, backlink index, server-side abstractions
-    infrastructure/        HTTP handlers, git service, vault file store, PlantUML, WebSocket gateway
-    startup/               preflight vault bootstrap, including remote git checkout setup
-dist/
-  client/                  built client served by the backend and packaged for release
-scripts/
-  cloudflare-tunnel.mjs    Cloudflare quick tunnel helper
-  local-plantuml-compose.mjs
-  capture-readme-assets.mjs
-vite.config.mjs            Vite multi-page build and dev-server proxy config
-```
-
-</details>
-
+This pilot exposed stale feature support notes, incorrect command descriptions,
+and a CI gap: browser component tests did not exercise the full overview flow.
+Leaving the file in the pilot also exposed a lost comment-open request during
+iframe remounting; the host now resets readiness before mounting.
+The existing feature tests and validation job cover the gap without a new test
+runner or workflow. Use failures or missing evidence from the next real change
+to choose further improvements; do not expand the process speculatively.
 
 ## Release notes
 
@@ -120,18 +130,4 @@ GitHub releases use the tag as the title and this body format:
 
 Group commits by theme instead of listing them one by one, lead each
 category with its biggest item, and keep one line per nested item.
-
-## Notes
-
-- The filesystem is the source of truth; Yjs provides the collaboration layer.
-- When `COLLABMD_GIT_REPO_URL` is set, startup clones the configured repo into `COLLABMD_VAULT_DIR` on first boot and reuses an existing same-origin checkout on later starts.
-- With `COLLABMD_VAULTS`, each vault can name its own remote via `COLLABMD_GIT_REPO_URL_<VAULT_ID>` (id uppercased, non-alphanumeric characters become `_`); a per-vault URL wins for that vault and the shared URL stays the primary vault's fallback. Unmapped vaults boot from disk, one SSH key covers all vaults, and any failure names the vault and stops startup.
-- If `COLLABMD_GIT_SSH_KNOWN_HOSTS_FILE` is not set, SSH falls back to `StrictHostKeyChecking=accept-new`.
-- External filesystem edits are reconciled back into active rooms and the explorer. Ambiguous watcher bursts still fall back to batched workspace reconciliation.
-- `.obsidian`, `.git`, `.trash`, and `node_modules` directories are ignored.
-- Markdown, HTML, Base, Mermaid, PlantUML, Structurizr DSL, draw.io, Excalidraw, PDF, and image files are tracked by the vault tree; global text search indexes supported text formats.
-- PlantUML preview rendering is server-side and uses `PLANTUML_SERVER_URL`; point it at a self-hosted renderer if you do not want to use the public PlantUML service.
-- Structurizr previews use a read-only official Local sidecar and a disposable `.collabmd/structurizr` mirror; the authoritative vault is never mounted into the renderer as its data directory.
-- `docker compose up` uses the included local PlantUML and Structurizr services and avoids public diagram renderers by default. The initial git clone may also require a longer health-check grace period than a purely local vault.
-- `collabmd --local-plantuml` and `npm run start:local-plantuml` start the local PlantUML compose service. `collabmd --local-structurizr` starts Structurizr Local against `http://127.0.0.1:${STRUCTURIZR_HOST_PORT:-19090}`.
 

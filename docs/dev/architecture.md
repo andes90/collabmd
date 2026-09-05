@@ -16,7 +16,8 @@ Allowed imports should flow inward:
 
 - `presentation` -> `domain` (application behavior is injected)
 - `application` -> `domain`
-- `infrastructure` -> `application`, `domain`
+- Server `infrastructure` -> `application`, `domain`
+- Client `infrastructure` -> `domain` (application/presentation imports are forbidden)
 - `domain` -> `domain`
 
 Current repo structure is still mid-refactor, so the boundary test enforces the
@@ -36,7 +37,7 @@ rules that are already durable today:
 
 Bootstrap entrypoints may compose across layers, but should stay thin:
 
-- `src/client/main.js`
+- `src/client/app/main-entry.js`
 - `src/client/bootstrap/**`
 
 ## Naming Rules
