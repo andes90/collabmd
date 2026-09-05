@@ -39,6 +39,7 @@ The first version should include only Vault paths that currently support comment
 - Markdown
 - Mermaid
 - PlantUML
+- Excalidraw element comments
 
 Markdown follows the app's Markdown file-kind classification, including `.md`, `.markdown`, and `.mdx`; this does not imply MDX runtime/component support.
 
@@ -48,7 +49,7 @@ Sidecars for missing files or unsupported file kinds should be omitted from the 
 
 Overview reads should not clean up stale sidecars. Missing or unsupported sidecars are hidden from the normal overview, while cleanup belongs to file lifecycle operations or an explicit maintenance path.
 
-Malformed or unfocusable threads should also be omitted from the normal overview. A thread needs an id, a valid source anchor, and at least one message to be shown as an overview item.
+Malformed or unfocusable threads should also be omitted from the normal overview. A thread needs an id, a valid text or diagram-element anchor, and at least one message to be shown as an overview item. Excalidraw element anchors do not require source line numbers.
 
 ## Data Source
 
@@ -79,7 +80,7 @@ The response should return lightweight summaries, not full conversations:
 - file-level `threadCount` for open thread count
 - total open-thread count
 - thread id
-- anchor kind and start/end line
+- anchor kind and start/end line for text anchors (diagram-element anchors omit lines)
 - anchor quote or excerpt
 - created metadata
 - latest message author, timestamp, and preview
@@ -146,3 +147,46 @@ Comment Overview styling should stay inside the comments feature stylesheet bund
 
 The overview empty state should say there are no open comments. Comment creation remains anchored to editor selection or preview comment bubbles.
 Do not offer global comment creation from the overview empty state.
+
+
+## Implementation and verification
+
+The Excalidraw pilot follows this existing path:
+
+1. `src/client/excalidraw-editor.js` provides the element-comment controls in the
+   iframe. The collaborative session sends Yjs updates over WebSocket.
+2. `src/server/domain/collaboration/collaboration-room.js` schedules persistence
+   after a 500 ms debounce. `CollaborationDocumentStore.persistState` calls
+   `VaultFileStore.persistCollaborationState` to save comment sidecars and editor
+   snapshots; Vault Content is included only when content is dirty.
+3. `GET /api/comments/overview` in
+   `src/server/infrastructure/http/create-vault-api-query-handler.js` reads
+   current Workspace State paths, then `VaultFileStore.readCommentOverview`
+   filters supported paths and reads persisted sidecars. The pure
+   `src/server/domain/comment-overview.js` builds summaries.
+4. `src/client/presentation/comment-overview-controller.js` renders the response
+   from the injected Vault API client. Selection reaches
+   `src/client/application/app-shell/comments-feature.js`, which navigates to
+   the file and asks the Excalidraw embed to open the selected thread. Mounting
+   an iframe resets readiness because DOM movement reloads its document; queued
+   comment/element requests wait for the new document’s ready message.
+
+There is no separate overview worker or external service; persistence and
+refresh use timers in the app processes. The overview is a persisted projection,
+so tests wait for the API to observe the comment before navigating.
+
+The existing `tests/e2e/collaboration.spec.js` overview selection covers posting
+through the browser, sidecar-backed API visibility, leaving for another file,
+then reopening the discussion and zooming to its element. Scene setup and
+selection use the Excalidraw test harness; comment posting and overview selection
+use the real UI. The companion overview test checks the Markdown row hover
+surface. Run both via the [development pilot command](development.md#first-feature-pilot-comment-overview).
+
+`tests/node/comment-overview.test.js` covers summary rules;
+`tests/node/comment-thread-store.test.js` covers comment serialization;
+`tests/node/comments-feature.test.js` covers refresh and focus orchestration.
+The browser test fixture disables the filesystem watcher and uses local,
+unauthenticated servers. These two E2E tests do not establish hosted access
+control, server-restart durability, external filesystem reconciliation,
+multiple collaborators, or other browsers. Select additional existing tests
+when a change touches those boundaries.
