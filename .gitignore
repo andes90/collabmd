@@ -23,6 +23,7 @@ data/
 playwright-report/
 test-results/
 .vitest-attachments/
+.vitest/
 **/__screenshots__/
 *vault*/
 .codex/
