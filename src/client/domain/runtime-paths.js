@@ -58,8 +58,48 @@ function applyBasePath(basePath, pathValue) {
   return normalizedBasePath ? `${normalizedBasePath}/${normalizedPath}` : `/${normalizedPath}`;
 }
 
+export const ACTIVE_VAULT_STORAGE_KEY = 'collabmd.activeVault';
+
+// ponytail: agent/hosted/auth/plantuml/structurizr/test stay global; everything else is vault-scoped
+const VAULT_UNSCOPED_API_PATHS = ['/auth/', '/hosted/', '/agent/', '/test/', '/plantuml/', '/structurizr/'];
+
+function isVaultScopedApiPath(pathname) {
+  if (pathname === '/api' || pathname === '/api/' || pathname === '/api/vaults') {
+    return false;
+  }
+  const sub = pathname.startsWith('/api/') ? pathname.slice('/api'.length) : pathname;
+  return !VAULT_UNSCOPED_API_PATHS.some((prefix) => sub === prefix.slice(0, -1) || sub.startsWith(prefix));
+}
+
+export function getActiveVaultId(config = getClientRuntimeConfig()) {
+  const vaults = Array.isArray(config?.vaults) ? config.vaults.map((vault) => vault?.id).filter(Boolean) : [];
+  if (vaults.length === 0) {
+    return null;
+  }
+  try {
+    const stored = globalThis.window?.localStorage?.getItem(ACTIVE_VAULT_STORAGE_KEY);
+    if (stored && vaults.includes(stored)) {
+      return stored;
+    }
+  } catch {
+    // Ignore storage failures and fall back to the server default.
+  }
+  if (config?.activeVault && vaults.includes(config.activeVault)) {
+    return config.activeVault;
+  }
+  return vaults[0] ?? null;
+}
+
+export function setActiveVaultId(vaultId) {
+  try {
+    globalThis.window?.localStorage?.setItem(ACTIVE_VAULT_STORAGE_KEY, String(vaultId ?? ''));
+  } catch {
+    // Ignore storage failures; the server default still applies.
+  }
+}
 export function getClientRuntimeConfig() {
   const rawConfig = {
+    activeVault: '',
     agentAccess: {
       enabled: false,
       endpoint: '',
@@ -92,6 +132,7 @@ export function getClientRuntimeConfig() {
       version: '',
     },
     structurizrEnabled: false,
+    vaults: [],
     wikiLinkAutoCreate: true,
     wsBasePath: '/ws',
     ...(window.__COLLABMD_CONFIG__ ?? {}),
@@ -142,11 +183,17 @@ export function resolveApiUrl(pathValue = '/', config = getClientRuntimeConfig()
     return resolveAppPath('/api', config);
   }
 
-  if (normalizedPath.startsWith('/api')) {
-    return resolveAppPath(normalizedPath, config);
+  const apiPath = normalizedPath.startsWith('/api')
+    ? normalizedPath
+    : `/api${normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`}`;
+  const queryIndex = apiPath.indexOf('?');
+  const pathname = queryIndex === -1 ? apiPath : apiPath.slice(0, queryIndex);
+  const query = queryIndex === -1 ? '' : apiPath.slice(queryIndex);
+  const vaultId = getActiveVaultId(config);
+  if (vaultId && isVaultScopedApiPath(pathname)) {
+    return resolveAppPath(`/api/v/${vaultId}${pathname.slice('/api'.length)}${query}`, config);
   }
-
-  return resolveAppPath(`/api${normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`}`, config);
+  return resolveAppPath(`${pathname}${query}`, config);
 }
 
 export function resolveWsServerOverride(config = getClientRuntimeConfig()) {
@@ -172,15 +219,17 @@ export function resolveWsServerOverride(config = getClientRuntimeConfig()) {
 }
 
 export function resolveWsBaseUrl(config = getClientRuntimeConfig()) {
+  const vaultId = getActiveVaultId(config);
+  const vaultSuffix = vaultId ? `/v/${vaultId}` : '';
   const serverOverride = resolveWsServerOverride(config);
   if (serverOverride) {
-    return serverOverride;
+    return `${serverOverride}${vaultSuffix}`;
   }
 
   if (config.publicWsBaseUrl) {
-    return trimTrailingSlash(config.publicWsBaseUrl);
+    return `${trimTrailingSlash(config.publicWsBaseUrl)}${vaultSuffix}`;
   }
 
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${protocol}//${window.location.host}${resolveAppPath(config.wsBasePath, config)}`;
+  return `${protocol}//${window.location.host}${resolveAppPath(`${config.wsBasePath}${vaultSuffix}`, config)}`;
 }

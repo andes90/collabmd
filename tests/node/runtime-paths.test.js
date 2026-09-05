@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { resolveWsBaseUrl, resolveWsServerOverride } from '../../src/client/domain/runtime-paths.js';
+import { getActiveVaultId, resolveApiUrl, resolveWsBaseUrl, resolveWsServerOverride } from '../../src/client/domain/runtime-paths.js';
 
 test('resolveWsBaseUrl ignores query server overrides outside development and test environments', () => {
   const originalWindow = globalThis.window;
@@ -66,6 +66,50 @@ test('resolveWsBaseUrl rejects unsupported query server protocols', () => {
   try {
     assert.equal(resolveWsServerOverride(), '');
     assert.equal(resolveWsBaseUrl(), 'ws://app.example.test/ws');
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
+test('resolveApiUrl prefixes vault-scoped paths with the active vault', () => {
+  const config = { basePath: '', vaults: [{ id: 'alpha' }, { id: 'beta' }], activeVault: 'beta', wsBasePath: '/ws' };
+  assert.equal(resolveApiUrl('/files', config), '/api/v/beta/files');
+  assert.equal(resolveApiUrl('/file?path=a.md', config), '/api/v/beta/file?path=a.md');
+  assert.equal(resolveApiUrl('/api/git/status', config), '/api/v/beta/git/status');
+});
+
+test('resolveApiUrl leaves global paths unscoped', () => {
+  const config = { basePath: '', vaults: [{ id: 'alpha' }], activeVault: 'alpha', wsBasePath: '/ws' };
+  assert.equal(resolveApiUrl('/auth/status', config), '/api/auth/status');
+  assert.equal(resolveApiUrl('/hosted/status', config), '/api/hosted/status');
+  assert.equal(resolveApiUrl('/agent/tools/x', config), '/api/agent/tools/x');
+  assert.equal(resolveApiUrl('/plantuml/render', config), '/api/plantuml/render');
+  assert.equal(resolveApiUrl('/vaults', config), '/api/vaults');
+});
+
+test('resolveApiUrl skips the vault prefix without a known vault', () => {
+  assert.equal(resolveApiUrl('/files', { basePath: '', vaults: [], wsBasePath: '/ws' }), '/api/files');
+});
+
+test('getActiveVaultId prefers a stored vault override', () => {
+  const originalWindow = globalThis.window;
+  globalThis.window = { localStorage: { getItem: () => 'beta', setItem: () => {} } };
+  try {
+    const config = { vaults: [{ id: 'alpha' }, { id: 'beta' }], activeVault: 'alpha' };
+    assert.equal(getActiveVaultId(config), 'beta');
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
+test('resolveWsBaseUrl appends the active vault segment', () => {
+  const originalWindow = globalThis.window;
+  globalThis.window = {
+    location: { host: 'app.example.test', origin: 'http://app.example.test', protocol: 'http:', search: '' },
+  };
+  try {
+    const config = { environment: 'production', vaults: [{ id: 'alpha' }], activeVault: 'alpha', wsBasePath: '/ws' };
+    assert.equal(resolveWsBaseUrl(config), 'ws://app.example.test/ws/v/alpha');
   } finally {
     globalThis.window = originalWindow;
   }

@@ -14,6 +14,7 @@ export class FileExplorerController {
     showFileExtensions = false,
     toastController,
     vaultClient,
+    vaultSwitcher = null,
   }) {
     this.onFileSelect = onFileSelect;
     this.onFileDelete = onFileDelete;
@@ -21,6 +22,7 @@ export class FileExplorerController {
     this.onShowFileExtensionsChange = onShowFileExtensionsChange;
     this.toastController = toastController;
     this.vaultClient = vaultClient;
+    this.vaultSwitcher = vaultSwitcher;
     this.state = new FileTreeState();
     this.showFileExtensions = Boolean(showFileExtensions);
     this.threadCounts = new Map();
@@ -78,6 +80,7 @@ export class FileExplorerController {
 
   initialize() {
     this.view.initialize();
+    this.view.renderVaultSwitcher(this.vaultSwitcher);
     this.actionController.initialize();
   }
 

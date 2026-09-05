@@ -28,8 +28,10 @@ import { BrowserNotificationPort } from '../infrastructure/browser-notification-
 import { AppVersionMonitor } from '../infrastructure/app-version-monitor.js';
 import { gitApiClient } from '../infrastructure/git-api-client.js';
 import {
+  getActiveVaultId,
   getHashRoute,
   getRuntimeConfig,
+  setActiveVaultId,
   navigateToFile,
   navigateToGitCommit,
   navigateToGitDiff,
@@ -262,6 +264,18 @@ export class CollabMdAppShell {
       showFileExtensions: this.preferences.getFileTreeShowExtensions(),
       toastController: this.toastController,
       vaultClient: this.vaultApiClient,
+      // ponytail: reload keeps the file hash, so the same path reopens in the new vault
+      vaultSwitcher: {
+        activeVaultId: getActiveVaultId(this.runtimeConfig),
+        vaults: this.runtimeConfig.vaults ?? [],
+        onVaultSelect: (vaultId) => {
+          if (!vaultId || vaultId === getActiveVaultId(this.runtimeConfig)) {
+            return;
+          }
+          setActiveVaultId(vaultId);
+          window.location.reload();
+        },
+      },
     });
     this.commentsOverview = new CommentOverviewController({
       onOverviewChange: (_overview, { threadCounts }) => {

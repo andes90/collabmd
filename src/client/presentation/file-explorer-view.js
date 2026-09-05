@@ -40,7 +40,9 @@ export class FileExplorerView {
     onSearchChange,
     onTreeContextMenu,
     onValidateDrop,
+    onVaultSelect,
   }) {
+    this.onVaultSelect = onVaultSelect;
     this.onEntryDrop = onEntryDrop;
     this.onDirectoryToggle = onDirectoryToggle;
     this.onFileContextMenu = onFileContextMenu;
@@ -73,6 +75,43 @@ export class FileExplorerView {
     this.rootDropZone = null;
     this.threadCounts = new Map();
     this.showFileExtensions = false;
+  }
+
+  renderVaultSwitcher(options) {
+    const { activeVaultId, onVaultSelect, vaults } = options ?? {};
+    if (!Array.isArray(vaults) || vaults.length < 2 || document.getElementById('vaultSwitcher')) {
+      return;
+    }
+    const wrapper = document.createElement('div');
+    wrapper.className = 'sidebar-search';
+    wrapper.id = 'vaultSwitcherWrap';
+    const select = document.createElement('select');
+    select.className = 'ui-input sidebar-search-input';
+    select.id = 'vaultSwitcher';
+    select.setAttribute('aria-label', 'Switch vault');
+    select.title = 'Switch vault';
+    for (const vault of vaults) {
+      if (!vault?.id) {
+        continue;
+      }
+      const option = document.createElement('option');
+      option.value = vault.id;
+      option.textContent = vault.id;
+      if (vault.id === activeVaultId) {
+        option.selected = true;
+      }
+      select.appendChild(option);
+    }
+    select.addEventListener('change', (event) => {
+      (onVaultSelect ?? this.onVaultSelect)?.(event.target.value);
+    });
+    wrapper.appendChild(select);
+    const search = document.getElementById('fileSearch');
+    if (search?.parentNode) {
+      search.parentNode.insertBefore(wrapper, search);
+    } else {
+      this.treeContainer?.parentNode?.prepend(wrapper);
+    }
   }
 
   initialize() {

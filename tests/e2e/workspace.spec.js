@@ -452,7 +452,7 @@ test('export docx uses the export page and posts the rendered snapshot html', as
   await expect(page.locator('#exportMenuGroup')).not.toHaveClass(/hidden/);
 
   let exportRequestBody = null;
-  await context.route('**/api/export/docx', async (route) => {
+  await context.route('**/export/docx', async (route) => {
     exportRequestBody = route.request().postDataJSON();
     await route.fulfill({
       body: Buffer.from('PK\x03\x04'),
@@ -695,7 +695,7 @@ test('image toolbar uploads a vault attachment and inserts inline markdown', asy
   await expect(uploadedImage).toBeVisible();
   await expect(uploadedImage).toHaveAttribute(
     'src',
-    /\/api\/attachment\?path=assets%2Finline-diagram-[^?]+\.webp/,
+    /\/api\/(?:v\/[^/]+\/)?attachment\?path=assets%2Finline-diagram-[^?]+\.webp/,
   );
 
   const uploadedMarkdown = await page.evaluate(async () => {
@@ -798,7 +798,7 @@ test('pasting an image uploads a vault attachment and inserts inline markdown', 
   await expect(uploadedImage).toBeVisible();
   await expect(uploadedImage).toHaveAttribute(
     'src',
-    /\/api\/attachment\?path=assets%2F[^?]+\.webp/,
+    /\/api\/(?:v\/[^/]+\/)?attachment\?path=assets%2F[^?]+\.webp/,
   );
 });
 

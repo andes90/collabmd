@@ -596,3 +596,26 @@ describe('File explorer reveal behavior', () => {
     }
   });
 });
+
+describe('FileExplorerView vault switcher', () => {
+  it('renders nothing for a single vault', () => {
+    const view = createView();
+    view.renderVaultSwitcher({ activeVaultId: 'solo', onVaultSelect: vi.fn(), vaults: [{ id: 'solo' }] });
+    expect(document.getElementById('vaultSwitcher')).toBeNull();
+  });
+
+  it('lists vaults and notifies on change', () => {
+    const view = createView();
+    const notify = vi.fn();
+    view.renderVaultSwitcher({ activeVaultId: 'alpha', onVaultSelect: notify, vaults: [{ id: 'alpha' }, { id: 'beta' }] });
+
+    const select = document.getElementById('vaultSwitcher');
+    expect(select).not.toBeNull();
+    expect(select.value).toBe('alpha');
+    expect(select.options.length).toBe(2);
+
+    select.value = 'beta';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(notify).toHaveBeenCalledWith('beta');
+  });
+});

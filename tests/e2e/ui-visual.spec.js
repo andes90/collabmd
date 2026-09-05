@@ -90,7 +90,7 @@ test.describe('ui visual regression', () => {
       window.localStorage.setItem('collabmd-user-name', 'Audit User');
     });
     await openFile(page, 'README.md', { userName: 'Audit User', waitFor: 'preview' });
-    await page.route('**/api/git/diff?*', async (route) => {
+    await page.route('**/git/diff?*', async (route) => {
       await route.fulfill({
         body: JSON.stringify({ error: 'Synthetic visual-test failure' }),
         contentType: 'application/json',
