@@ -21,6 +21,87 @@ function googleUser(email, name = null) {
   };
 }
 
+const membershipChanges = {
+  leave: (service, user, _membership) => service.leaveTeam(user),
+  demote: (service, user, membership) => service.updateMembershipRole({
+    membershipId: membership.id,
+    role: HOSTED_ROLE_COLLABORATOR,
+    user,
+  }),
+  remove: (service, user, membership) => service.removeMembership({ membershipId: membership.id, user }),
+};
+
+for (const [action, change] of Object.entries(membershipChanges)) {
+  test(`concurrent admin ${action} preserves one admin`, async (t) => {
+    const service = await createHostedService(t);
+    const admin = googleUser('admin@example.com');
+    const second = googleUser('second@example.com');
+    const { membership } = await service.claimWorkspace({ token: 'claim-secret', user: admin });
+    await service.completeWorkspaceSetup();
+    await service.createInvitation({ email: second.email, role: HOSTED_ROLE_ADMIN, user: admin });
+    const secondMembership = await service.acceptInvitation(second);
+
+    const results = await Promise.allSettled([
+      change(service, admin, membership),
+      change(service, second, secondMembership),
+    ]);
+
+    assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1);
+    assert.equal(results.find((result) => result.status === 'rejected').reason.code, 'HOSTED_LAST_ADMIN');
+    assert.equal((await service.store.listMemberships()).filter((member) => member.role === HOSTED_ROLE_ADMIN).length, 1);
+  });
+
+  test(`admin ${action} rolls back when its audit insertion fails`, async (t) => {
+    const service = await createHostedService(t);
+    const admin = googleUser('admin@example.com');
+    const second = googleUser('second@example.com');
+    const { membership } = await service.claimWorkspace({ token: 'claim-secret', user: admin });
+    await service.completeWorkspaceSetup();
+    await service.createInvitation({ email: second.email, role: HOSTED_ROLE_ADMIN, user: admin });
+    await service.acceptInvitation(second);
+    const events = [];
+    service.onAccessChanged((event) => events.push(event));
+    const auditBefore = await service.store.listAuditEvents();
+    service.store.db.exec(`CREATE TRIGGER fail_membership_audit BEFORE INSERT ON audit_events
+      WHEN NEW.type LIKE 'membership_%' BEGIN SELECT RAISE(ABORT, 'Injected audit failure'); END`);
+
+    await assert.rejects(change(service, admin, membership), /Injected audit failure/u);
+    assert.deepEqual(await service.store.getMembershipById(membership.id), membership);
+    assert.deepEqual(await service.store.listAuditEvents(), auditBefore);
+    assert.deepEqual(events, []);
+
+    service.store.db.exec('DROP TRIGGER fail_membership_audit');
+    await change(service, admin, membership);
+    assert.deepEqual(events, [{ email: admin.email }]);
+    assert.equal((await service.store.listAuditEvents()).length, auditBefore.length + 1);
+  });
+}
+
+for (const action of ['demote', 'remove']) {
+  test(`membership changes recheck an actor concurrently ${action === 'demote' ? 'demoted' : 'removed'}`, async (t) => {
+    const service = await createHostedService(t);
+    const admin = googleUser('admin@example.com');
+    const second = googleUser('second@example.com');
+    const writer = googleUser('writer@example.com');
+    await service.claimWorkspace({ token: 'claim-secret', user: admin });
+    await service.completeWorkspaceSetup();
+    await service.createInvitation({ email: second.email, role: HOSTED_ROLE_ADMIN, user: admin });
+    const secondMembership = await service.acceptInvitation(second);
+    await service.createInvitation({ email: writer.email, role: HOSTED_ROLE_COLLABORATOR, user: admin });
+    const writerMembership = await service.acceptInvitation(writer);
+
+    const results = await Promise.allSettled([
+      membershipChanges[action](service, admin, secondMembership),
+      service.removeMembership({ membershipId: writerMembership.id, user: second }),
+    ]);
+
+    assert.equal(results[0].status, 'fulfilled');
+    assert.equal(results[1].status, 'rejected');
+    assert.equal(results[1].reason.code, action === 'demote' ? 'HOSTED_ADMIN_REQUIRED' : 'HOSTED_MEMBERSHIP_REQUIRED');
+    assert.deepEqual(await service.store.getMembershipById(writerMembership.id), writerMembership);
+  });
+}
+
 async function createHostedService(t, {
   claimEmail = 'admin@example.com',
   claimToken = 'claim-secret',

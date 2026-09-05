@@ -1,7 +1,7 @@
 import { mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
-import { HOSTED_ROLE_ADMIN } from '../../domain/hosted-workspace-contract.js';
+import { createHostedError, HOSTED_ROLE_ADMIN } from '../../domain/hosted-workspace-contract.js';
 
 function rowToTeam(row) {
   if (!row) {
@@ -343,7 +343,7 @@ export class HostedMetadataStore {
     ).get(email));
   }
 
-  async getMembershipById(id) {
+  getMembershipById(id) {
     return rowToMembership(this.prepare(
       'getMembershipById',
       'SELECT * FROM memberships WHERE id = ?',
@@ -357,23 +357,60 @@ export class HostedMetadataStore {
     ).all(HOSTED_ROLE_ADMIN).map(rowToMembership);
   }
 
-  async updateMembership(membership) {
+  updateMembership(membership) {
     this.prepare(
       'updateMembership',
       'UPDATE memberships SET name = ?, picture = ?, role = ?, updated_at = ? WHERE id = ?',
     ).run(membership.name, membership.picture, membership.role, membership.updatedAt, membership.id);
   }
 
-  async deleteMembership(id) {
+  deleteMembership(id) {
     this.prepare('deleteMembership', 'DELETE FROM memberships WHERE id = ?').run(id);
   }
 
-  async countAdminsExcept(email) {
+  countAdminsExcept(email) {
     const row = this.prepare(
       'countAdminsExcept',
       'SELECT COUNT(*) AS count FROM memberships WHERE role = ? AND email != ?',
     ).get(HOSTED_ROLE_ADMIN, email);
     return Number(row?.count ?? 0);
+  }
+
+  async changeMembership({ actorId, membershipId, auditEvent, role = null, requireAdmin = true }) {
+    return this.transaction(() => {
+      const actor = this.getMembershipById(actorId);
+      if (!actor) {
+        throw createHostedError(403, 'Team membership is required.', 'HOSTED_MEMBERSHIP_REQUIRED');
+      }
+      const isSelfLeave = !requireAdmin && actorId === membershipId && role === null;
+      if (!isSelfLeave && actor.role !== HOSTED_ROLE_ADMIN) {
+        throw createHostedError(403, 'Team Admin role is required.', 'HOSTED_ADMIN_REQUIRED');
+      }
+
+      const membership = this.getMembershipById(membershipId);
+      if (!membership) {
+        throw createHostedError(404, 'Membership was not found.', 'HOSTED_MEMBERSHIP_NOT_FOUND');
+      }
+      if (membership.role === HOSTED_ROLE_ADMIN && role !== HOSTED_ROLE_ADMIN
+        && this.countAdminsExcept(membership.email) < 1) {
+        throw createHostedError(409, 'A team must always have at least one Team Admin.', 'HOSTED_LAST_ADMIN');
+      }
+
+      const updated = role === null ? membership : { ...membership, role, updatedAt: auditEvent.createdAt };
+      if (role === null) {
+        this.deleteMembership(membershipId);
+      } else {
+        this.updateMembership(updated);
+      }
+      this.insertAuditEvent({
+        ...auditEvent,
+        actorEmail: actor.email,
+        actorName: actor.name,
+        targetEmail: membership.email,
+        targetRole: updated.role,
+      });
+      return updated;
+    });
   }
 
   async upsertPendingInvitation(invitation) {

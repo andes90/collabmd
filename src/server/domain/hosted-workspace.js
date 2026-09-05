@@ -3,6 +3,7 @@ import { randomUUID, timingSafeEqual, createHash } from 'node:crypto';
 import {
   HOSTED_ROLE_ADMIN,
   HOSTED_ROLE_COLLABORATOR,
+  createHostedError,
   normalizeHostedEmail,
   normalizeHostedRole,
 } from './hosted-workspace-contract.js';
@@ -29,13 +30,6 @@ function safeEqualHash(left, right) {
   const leftBuffer = Buffer.from(String(left ?? ''), 'hex');
   const rightBuffer = Buffer.from(String(right ?? ''), 'hex');
   return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
-}
-
-function createHostedError(statusCode, message, code) {
-  const error = new Error(message);
-  error.statusCode = statusCode;
-  error.code = code;
-  return error;
 }
 
 function createAuditEvent({
@@ -663,53 +657,33 @@ export class HostedWorkspaceService {
       throw createHostedError(400, 'Invalid membership role.', 'HOSTED_INVALID_ROLE');
     }
 
-    const membership = await this.store.getMembershipById(membershipId);
-    if (!membership) {
-      throw createHostedError(404, 'Membership was not found.', 'HOSTED_MEMBERSHIP_NOT_FOUND');
-    }
-
-    if (membership.role === HOSTED_ROLE_ADMIN && normalizedRole !== HOSTED_ROLE_ADMIN) {
-      await this.assertAnotherAdmin(membership.email);
-    }
-
     const timestamp = nowMs();
-    const updated = {
-      ...membership,
+    const updated = await this.store.changeMembership({
+      actorId: admin.id,
+      membershipId,
       role: normalizedRole,
-      updatedAt: timestamp,
-    };
-    await this.store.updateMembership(updated);
-    await this.store.createAuditEvent(createAuditEvent({
-      actor: admin,
-      targetEmail: updated.email,
-      targetRole: normalizedRole,
-      timestamp,
-      type: 'membership_role_changed',
-    }));
+      auditEvent: createAuditEvent({
+        actor: admin,
+        timestamp,
+        type: 'membership_role_changed',
+      }),
+    });
     this.emitAccessChanged(updated.email);
     return publicMembership(updated);
   }
 
   async removeMembership({ membershipId, user }) {
     const admin = await this.requireAdmin(user);
-    const membership = await this.store.getMembershipById(membershipId);
-    if (!membership) {
-      throw createHostedError(404, 'Membership was not found.', 'HOSTED_MEMBERSHIP_NOT_FOUND');
-    }
-
-    if (membership.role === HOSTED_ROLE_ADMIN) {
-      await this.assertAnotherAdmin(membership.email);
-    }
-
     const timestamp = nowMs();
-    await this.store.deleteMembership(membership.id);
-    await this.store.createAuditEvent(createAuditEvent({
-      actor: admin,
-      targetEmail: membership.email,
-      targetRole: membership.role,
-      timestamp,
-      type: 'membership_removed',
-    }));
+    const membership = await this.store.changeMembership({
+      actorId: admin.id,
+      membershipId,
+      auditEvent: createAuditEvent({
+        actor: admin,
+        timestamp,
+        type: 'membership_removed',
+      }),
+    });
     this.emitAccessChanged(membership.email);
     return { ok: true };
   }
@@ -724,17 +698,17 @@ export class HostedWorkspaceService {
     }
 
     const membership = access.membership;
-    if (membership.role === HOSTED_ROLE_ADMIN) {
-      await this.assertAnotherAdmin(membership.email);
-    }
-
     const timestamp = nowMs();
-    await this.store.deleteMembership(membership.id);
-    await this.store.createAuditEvent(createAuditEvent({
-      actor: membership,
-      timestamp,
-      type: 'membership_left',
-    }));
+    await this.store.changeMembership({
+      actorId: membership.id,
+      membershipId: membership.id,
+      requireAdmin: false,
+      auditEvent: createAuditEvent({
+        actor: membership,
+        timestamp,
+        type: 'membership_left',
+      }),
+    });
     this.emitAccessChanged(membership.email);
     return { ok: true };
   }
@@ -763,12 +737,5 @@ export class HostedWorkspaceService {
   async listAuditEvents(user) {
     await this.requireAdmin(user);
     return (await this.store.listAuditEvents()).map(publicAuditEvent);
-  }
-
-  async assertAnotherAdmin(email) {
-    const adminCount = await this.store.countAdminsExcept(normalizeHostedEmail(email));
-    if (adminCount < 1) {
-      throw createHostedError(409, 'A team must always have at least one Team Admin.', 'HOSTED_LAST_ADMIN');
-    }
   }
 }
