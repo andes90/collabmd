@@ -99,6 +99,28 @@ vite.config.mjs            Vite multi-page build and dev-server proxy config
 </details>
 
 
+## Release notes
+
+GitHub releases use the tag as the title and this body format:
+
+```markdown
+## Summary
+
+- Added:
+  - <headline feature>: <one-line detail>
+- Changed:
+  - <behavior or performance change>
+- Fixed:
+  - <bug fix>
+- Internal:
+  - <deps, tests, and the version bump>
+
+**Full Changelog**: https://github.com/andes90/collabmd/compare/<prev>...<new>
+```
+
+Group commits by theme instead of listing them one by one, lead each
+category with its biggest item, and keep one line per nested item.
+
 ## Notes
 
 - The filesystem is the source of truth; Yjs provides the collaboration layer.
