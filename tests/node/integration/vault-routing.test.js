@@ -160,6 +160,8 @@ test('vault routing scopes git status and commits per vault', async (t) => {
   const betaDir = join(app.tempRoot, 'beta');
   for (const dir of [alphaDir, betaDir]) {
     await runGit(dir, ['init']);
+    await runGit(dir, ['config', 'user.email', 'tests@example.com']);
+    await runGit(dir, ['config', 'user.name', 'CollabMD Tests']);
     await runGit(dir, ['add', '.']);
     await runGit(dir, ['commit', '-m', 'init']);
   }
