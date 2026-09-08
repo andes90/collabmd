@@ -230,7 +230,13 @@ export class FileHistoryViewController {
     };
   }
 
+  ensureDeferredGitStyles() {
+    this._deferredGitStylesPromise ??= import('../styles/deferred-git.css').catch(() => {});
+    return this._deferredGitStylesPromise;
+  }
+
   async openFileHistory({ filePath }) {
+    void this.ensureDeferredGitStyles();
     this.isActive = true;
     this.currentFilePath = String(filePath ?? '').trim() || null;
     this.localChanges = null;
