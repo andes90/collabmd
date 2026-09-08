@@ -14,12 +14,15 @@ function isSyncMessage(payload) {
 
 export class ClientSocketSession {
   constructor({
+    expiresAt = null,
     onDisconnected = null,
     onFailed = null,
     room,
     roomName,
     ws,
   }) {
+    this.expiresAt = expiresAt;
+    this.expiryTimer = null;
     this.onDisconnected = onDisconnected;
     this.onFailed = onFailed;
     this.room = room;
@@ -33,6 +36,7 @@ export class ClientSocketSession {
     this.initialSyncTimer = null;
 
     this.handleMessage = (payload) => {
+      if (this.expireAuthentication()) return;
       if (isSyncMessage(payload)) {
         this.hasReceivedClientSync = true;
         this.clearInitialSyncTimer();
@@ -46,6 +50,7 @@ export class ClientSocketSession {
       this.room.handleMessage(this.ws, payload);
     };
     this.handleClose = () => {
+      clearTimeout(this.expiryTimer);
       if (!this.initialized) {
         this.closedBeforeReady = true;
         this.clearInitialSyncTimer();
@@ -61,6 +66,21 @@ export class ClientSocketSession {
     this.handlePong = () => {
       this.markAlive();
     };
+  }
+
+  expireAuthentication() {
+    if (!Number.isFinite(this.expiresAt) || Date.now() < this.expiresAt) return false;
+    this.handleClose();
+    this.ws.close(4001, 'Authentication expired');
+    return true;
+  }
+
+  scheduleAuthenticationExpiry() {
+    if (!Number.isFinite(this.expiresAt) || this.expireAuthentication()) return;
+    this.expiryTimer = setTimeout(() => {
+      this.scheduleAuthenticationExpiry();
+    }, Math.min(this.expiresAt - Date.now(), 2 ** 31 - 1));
+    this.expiryTimer.unref?.();
   }
 
   markAlive() {
@@ -93,6 +113,7 @@ export class ClientSocketSession {
     this.ws.off('error', this.handleError);
     this.ws.off('pong', this.handlePong);
     this.clearInitialSyncTimer();
+    clearTimeout(this.expiryTimer);
   }
 
   flushPendingMessages() {
@@ -126,6 +147,12 @@ export class ClientSocketSession {
 
   async initialize() {
     this.attach();
+    if (this.expireAuthentication()) {
+      this.detach();
+      this.onFailed?.(this.roomName);
+      return;
+    }
+    this.scheduleAuthenticationExpiry();
 
     try {
       await this.room.addClient(this.ws, { sendInitialSync: false });
@@ -138,13 +165,14 @@ export class ClientSocketSession {
     }
 
     this.initialized = true;
-    this.flushPendingMessages();
-    this.scheduleInitialSync();
-
+    if (this.expireAuthentication()) return;
     if (this.closedBeforeReady) {
       this.disconnect();
       return;
     }
+
+    this.flushPendingMessages();
+    this.scheduleInitialSync();
 
     console.log(`[ws] "${this.roomName}" connected (${this.room.clients.size} active client(s))`);
   }

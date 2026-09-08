@@ -6,6 +6,7 @@ import {
   encodeContentDispositionFilename,
   jsonResponse,
   sendResponse,
+  SVG_ATTACHMENT_CSP,
 } from './http-response.js';
 
 function resolveDiffScope(requestUrl) {
@@ -127,11 +128,35 @@ export function createGitApiQueryHandler({ gitService }) {
             'Content-Disposition': `inline; filename="${createSafeAsciiFilename(fileName)}"; filename*=UTF-8''${encodeContentDispositionFilename(fileName)}`,
             'Content-Type': attachment.mimeType || 'application/octet-stream',
             'X-Content-Type-Options': 'nosniff',
+            ...(attachment.mimeType === 'image/svg+xml' ? { 'Content-Security-Policy': SVG_ATTACHMENT_CSP } : {}),
           },
           statusCode: 200,
         });
       } catch (error) {
         handleApiError(req, res, error, '[api] Failed to read git file attachment:', 'Failed to read git file attachment');
+      }
+      return true;
+    }
+
+    if (requestUrl.pathname === '/api/git/pull-backup-summary' && req.method === 'GET') {
+      try {
+        const content = await gitService.readPullBackupSummary(requestUrl.searchParams.get('id'));
+        if (content === null) {
+          jsonResponse(req, res, 404, { error: 'Pull backup summary not found' });
+        } else {
+          sendResponse(req, res, {
+            body: content,
+            headers: {
+              'Cache-Control': 'no-store',
+              'Content-Type': 'text/plain; charset=utf-8',
+              'Content-Security-Policy': "default-src 'none'; sandbox",
+              'X-Content-Type-Options': 'nosniff',
+            },
+            statusCode: 200,
+          });
+        }
+      } catch (error) {
+        handleApiError(req, res, error, '[api] Failed to read pull backup summary:', 'Failed to read pull backup summary');
       }
       return true;
     }

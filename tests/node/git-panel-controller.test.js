@@ -211,15 +211,15 @@ test('GitPanelController renders pull backups and opens the summary when selecte
   assert.match(harness.panel.innerHTML, /20260317-100000-abc1234/);
 
   const backupButton = new FakeElement({
-    'data-git-pull-backup-path': '.collabmd/pull-backups/20260317-100000-abc1234/summary.md',
+    'data-git-pull-backup-id': '20260317-100000-abc1234',
   }, {
-    '[data-git-pull-backup-path]': new FakeElement({
-      'data-git-pull-backup-path': '.collabmd/pull-backups/20260317-100000-abc1234/summary.md',
+    '[data-git-pull-backup-id]': new FakeElement({
+      'data-git-pull-backup-id': '20260317-100000-abc1234',
     }),
   });
   harness.triggerClick(backupButton);
 
-  assert.deepEqual(openedPaths, ['.collabmd/pull-backups/20260317-100000-abc1234/summary.md']);
+  assert.deepEqual(openedPaths, ['20260317-100000-abc1234']);
 });
 
 test('GitPanelController renders history rows and selects commits in history mode', async (t) => {

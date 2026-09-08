@@ -108,6 +108,31 @@ test('BaseQueryService evaluates base filters, formulas, groups, summaries, and 
   assert.equal(result.view.supported, true);
 });
 
+test('Base CSV treats formula text and headers literally while preserving numbers', async (t) => {
+  const { cleanup, service, writeVaultFile } = await createBaseWorkspace();
+  t.after(cleanup);
+  const values = ['=1+1', '+1+1', '-1+1', '@SUM(A1)', '\t=1+1', '\r=1+1', '  =1+1', 'plain,"quoted"'];
+  for (const [index, value] of values.entries()) {
+    await writeVaultFile(`row-${index}.md`, `---\ntext: ${JSON.stringify(value)}\nnumber: -5\n---\n`);
+  }
+  await writeVaultFile('table.base', [
+    'properties:',
+    '  note.text:',
+    '    displayName: "=HEADER()"',
+    'views:',
+    '  - type: table',
+    '    name: Table',
+    '    order: [note.text, note.number]',
+  ].join('\n'));
+  const result = await service.query({ basePath: 'table.base', includeCsv: true });
+  assert.match(result.csv, /^'=HEADER\(\),number\n/);
+  for (const value of values.slice(0, -1)) {
+    assert.ok(result.csv.includes(`'${value}`));
+  }
+  assert.match(result.csv, /"plain,""quoted""",-5/);
+  assert.equal(result.rows[0].cells['note.number'].value, -5);
+});
+
 test('BaseQueryService omits csv output by default', async (t) => {
   const { cleanup, service, writeVaultFile } = await createBaseWorkspace();
   t.after(cleanup);

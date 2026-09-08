@@ -30,6 +30,8 @@ Remote MCP renders PlantUML through the configured PlantUML service; Mermaid ren
 
 With password or OIDC auth, open **More actions → Connect AI Agent** after signing in. Create a named connection, choose read/edit scope, and copy the token shown once. Tokens expire after 30 days by default and can be revoked from the same dialog. OIDC connections retain Collaborator attribution; shared-password connections are workspace-level because password sessions have no individual identity.
 
+When enabling hosted workspace mode on an existing deployment, create new Agent Connections after joining the team. Tokens issued before hosted mode was enabled are rejected; new connections are bound to an active Team Membership.
+
 Use these connection details with any Streamable HTTP MCP client:
 
 ```text
@@ -47,4 +49,3 @@ The `Authorization` header is required for password and OIDC workspaces. Omit it
 Remote endpoints should use HTTPS. `COLLABMD_AGENT_ALLOWED_HOSTS` adds comma-separated MCP hostnames accepted for password/OIDC requests and browser-origin requests. OIDC automatically allows the hostname from `PUBLIC_BASE_URL`; localhost is always allowed. Native no-auth MCP clients normally omit `Origin` and remain anonymous; browser-origin MCP requests must use an allowed hostname to prevent DNS rebinding.
 
 Vault text returned to an agent is untrusted input. Never paste managed Agent Access tokens into agent prompts or chat history. Treat every no-auth workspace URL as anonymous automated write access to the Vault.
-

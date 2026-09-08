@@ -111,3 +111,23 @@ test('hosted Agent Connection stops authorizing after membership loss', async (t
     { code: 'AGENT_MEMBERSHIP_REQUIRED' },
   );
 });
+
+test('enabling hosted mode invalidates legacy OIDC connections even for an active member', async (t) => {
+  const membership = { email: 'member@example.com', id: 'member-1' };
+  const hostedWorkspaceService = {
+    enabled: false,
+    async authorizeWorkspaceAccess() { return { membership, ok: true }; },
+  };
+  const fixture = await createFixture({ authStrategy: 'oidc', hostedWorkspaceService });
+  t.after(fixture.cleanup);
+  const input = {
+    clientKind: 'codex', label: 'Codex', scopes: ['vault:read'],
+    user: { email: membership.email, sub: 'google-1' },
+  };
+  const legacy = await fixture.service.createConnection(input);
+  assert.equal((await fixture.service.authenticateToken(legacy.token)).collaborator.email, membership.email);
+  hostedWorkspaceService.enabled = true;
+  await assert.rejects(fixture.service.authenticateToken(legacy.token), { code: 'AGENT_MEMBERSHIP_REQUIRED' });
+  const replacement = await fixture.service.createConnection(input);
+  assert.equal((await fixture.service.authenticateToken(replacement.token)).collaborator.id, membership.id);
+});

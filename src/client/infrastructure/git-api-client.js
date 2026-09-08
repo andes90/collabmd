@@ -28,6 +28,11 @@ export const gitApiClient = {
     return parseApiResponse(response, 'Failed to load git status');
   },
 
+  getPullBackupSummaryUrl(backupId) {
+    const params = createSearchParams({ id: backupId });
+    return resolveApiUrl(`/git/pull-backup-summary?${params.toString()}`);
+  },
+
   async readPullBackups() {
     const response = await fetch(resolveApiUrl('/git/pull-backups'));
     return parseApiResponse(response, 'Failed to load pull backups');

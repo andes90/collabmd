@@ -779,6 +779,18 @@ test('HTTP server exposes git status and diff endpoints for git-backed vaults', 
   assert.equal(imageResponse.headers['content-disposition'], 'inline; filename="diagram.png"; filename*=UTF-8\'\'diagram.png');
   assert.deepEqual(imageResponse.bodyBuffer, diagramBytes);
 
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(document.domain)</script></svg>';
+  await writeFile(join(app.vaultDir, 'diagram.svg'), svg);
+  await execFile('git', ['add', 'diagram.svg'], { cwd: app.vaultDir, env: gitEnv });
+  await execFile('git', ['commit', '-m', 'Add SVG'], { cwd: app.vaultDir, env: gitEnv });
+  const svgResponse = await httpRequest(`${app.baseUrl}/api/git/file-attachment?hash=HEAD&path=diagram.svg`);
+  const currentSvgResponse = await httpRequest(`${app.baseUrl}/api/attachment?path=diagram.svg`);
+  assert.equal(svgResponse.statusCode, 200);
+  assert.equal(svgResponse.body, svg);
+  assert.match(svgResponse.headers['content-security-policy'], /default-src 'none'/);
+  assert.match(svgResponse.headers['content-security-policy'], /(?:^|; )sandbox(?:;|$)/);
+  assert.equal(svgResponse.headers['content-security-policy'], currentSvgResponse.headers['content-security-policy']);
+
   const stageResponse = await httpRequest(`${app.baseUrl}/api/git/stage`, {
     body: JSON.stringify({ path: 'test.md' }),
     headers: {
@@ -931,7 +943,9 @@ test('HTTP server returns pull backup metadata and lists saved pull backups', as
 
   const backupsPayload = JSON.parse(backupsResponse.body);
   const summaryPath = backupsPayload.backups[0].summaryPath;
-  const summaryResponse = await httpRequest(`${app.baseUrl}/api/file?path=${encodeURIComponent(summaryPath)}`);
+  const blockedSummaryResponse = await httpRequest(`${app.baseUrl}/api/file?path=${encodeURIComponent(summaryPath)}`);
+  assert.equal(blockedSummaryResponse.statusCode, 404);
+  const summaryResponse = await httpRequest(`${app.baseUrl}/api/git/pull-backup-summary?id=${encodeURIComponent(backupsPayload.backups[0].id)}`);
   assert.equal(summaryResponse.statusCode, 200);
   assert.match(summaryResponse.body, /Pull Backup/);
 
@@ -1921,6 +1935,18 @@ test('HTTP server exports DOCX downloads from snapshot HTML', async (t) => {
   assert.match(String(response.headers['content-disposition']), /attachment; filename="README\.docx"/);
   assert.equal(response.bodyBuffer[0], 0x50);
   assert.equal(response.bodyBuffer[1], 0x4b);
+});
+
+test('HTTP server rejects DOCX snapshots with remote images', async (t) => {
+  const app = await startTestServer();
+  t.after(() => app.close());
+  const response = await httpRequest(`${app.baseUrl}/api/export/docx`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filePath: 'README.md', html: '<img src="http://127.0.0.1/private.png">' }),
+  });
+  assert.equal(response.statusCode, 400);
+  assert.match(response.body, /images must be embedded data URLs/);
 });
 
 test('HTTP server rejects oversized DOCX export payloads', async (t) => {

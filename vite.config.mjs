@@ -69,7 +69,7 @@ export default defineConfig(({ command }) => ({
         target: backendProxyTarget,
       },
       '/ws': {
-        changeOrigin: true,
+        changeOrigin: false,
         target: backendProxyTarget,
         ws: true,
       },

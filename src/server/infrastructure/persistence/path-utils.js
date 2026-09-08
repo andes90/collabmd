@@ -1,4 +1,5 @@
-import { isAbsolute, normalize, relative, resolve } from 'path';
+import { lstatSync } from 'node:fs';
+import { isAbsolute, join, normalize, relative, resolve } from 'path';
 
 import { isVaultFilePath } from '../../../domain/file-kind.js';
 
@@ -8,7 +9,7 @@ export const INVALID_VAULT_FILE_PATH_ERROR = `Invalid file path — must end in 
 export const INVALID_DIRECTORY_PATH_ERROR = 'Invalid directory path';
 
 export function isIgnoredVaultEntry(name) {
-  return IGNORED_DIRECTORIES.has(name) || name.startsWith('.');
+  return IGNORED_DIRECTORIES.has(name.toLowerCase()) || name.startsWith('.');
 }
 
 function normalizeRequestedPath(requestedPath) {
@@ -16,6 +17,7 @@ function normalizeRequestedPath(requestedPath) {
   const segments = value.split('/');
   if (
     !value
+    || value.includes('\0')
     || isAbsolute(value)
     || segments.some((segment) => segment === '.' || segment === '..')
   ) {
@@ -26,7 +28,7 @@ function normalizeRequestedPath(requestedPath) {
   return normalized === '.' ? '' : normalized;
 }
 
-export function sanitizeVaultPath(vaultDir, requestedPath) {
+export function sanitizeVaultPath(vaultDir, requestedPath, { allowIgnored = false } = {}) {
   const normalized = normalizeRequestedPath(requestedPath);
   if (!normalized) {
     return null;
@@ -34,13 +36,31 @@ export function sanitizeVaultPath(vaultDir, requestedPath) {
 
   const absolute = resolve(vaultDir, normalized);
   const relativePath = relative(vaultDir, absolute);
+  const segments = relativePath.split(/[\\/]/u);
 
   if (
     relativePath.startsWith('..')
     || relativePath === '..'
     || isAbsolute(relativePath)
+    || (!allowIgnored && segments.some(isIgnoredVaultEntry))
   ) {
     return null;
+  }
+
+  // The configured root may be a symlink; content below it must never be one.
+  let currentPath = resolve(vaultDir);
+  for (const segment of segments) {
+    currentPath = join(currentPath, segment);
+    try {
+      if (lstatSync(currentPath).isSymbolicLink()) {
+        return null;
+      }
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        break;
+      }
+      return null;
+    }
   }
 
   return absolute;

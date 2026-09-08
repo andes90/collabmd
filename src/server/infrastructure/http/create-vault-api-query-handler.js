@@ -12,10 +12,10 @@ import {
   jsonResponse,
   sendResponse,
   sendStreamResponse,
+  SVG_ATTACHMENT_CSP,
 } from './http-response.js';
 
 const SVG_MIME_TYPE = 'image/svg+xml';
-const SVG_ATTACHMENT_CSP = "default-src 'none'; img-src 'self' data: blob:; style-src 'unsafe-inline'; sandbox";
 const DEFAULT_MAX_ARCHIVE_ENTRIES = 10_000;
 const DEFAULT_MAX_DOWNLOAD_FILE_BYTES = 268_435_456;
 

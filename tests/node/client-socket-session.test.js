@@ -98,3 +98,53 @@ test('ClientSocketSession removes room client when socket closes before room ini
   assert.deepEqual(removedSockets, [socket]);
   assert.deepEqual(disconnectedRooms, ['notes.md']);
 });
+
+test('expired authentication closes the socket and rejects messages during pending room initialization', async (t) => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 1_000 });
+  const socket = createSocket();
+  let resolveRoom;
+  const pendingRoom = new Promise((resolve) => { resolveRoom = resolve; });
+  const handled = [];
+  const removed = [];
+  const room = {
+    clients: new Set([socket]),
+    addClient: () => pendingRoom,
+    handleMessage: (_ws, message) => handled.push(message),
+    removeClient: (ws) => removed.push(ws),
+    sendInitialSync: () => assert.fail('Expired session must not sync'),
+  };
+  const session = new ClientSocketSession({ expiresAt: 1_100, room, roomName: 'test.md', ws: socket });
+  const initializing = session.initialize();
+  socket.emit('message', Buffer.from('queued'));
+  t.mock.timers.tick(100);
+  socket.emit('message', Buffer.from('expired'));
+  resolveRoom();
+  await initializing;
+  assert.equal(socket.closed[0].code, 4001);
+  assert.deepEqual(handled, []);
+  assert.deepEqual(removed, [socket]);
+});
+
+test('long-lived sessions expire without overflowing the timer or accepting late messages', async (t) => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 1_000 });
+  const socket = createSocket();
+  const handled = [];
+  const room = {
+    clients: new Set([socket]),
+    addClient: async () => {},
+    handleMessage: (_ws, message) => handled.push(message),
+    removeClient: (ws) => room.clients.delete(ws),
+    sendInitialSync: () => {},
+  };
+  const expiresAt = 1_000 + 2 ** 31 + 100;
+  const session = new ClientSocketSession({ expiresAt, room, roomName: 'test.md', ws: socket });
+  await session.initialize();
+  t.mock.timers.tick(2 ** 31 - 1);
+  assert.equal(socket.closed.length, 0);
+  // Advancing Date alone exercises the guard when the timer has not yet run.
+  t.mock.timers.setTime(expiresAt);
+  socket.emit('message', Buffer.from('expired'));
+  assert.equal(socket.closed[0].code, 4001);
+  assert.equal(room.clients.size, 0);
+  assert.deepEqual(handled, []);
+});

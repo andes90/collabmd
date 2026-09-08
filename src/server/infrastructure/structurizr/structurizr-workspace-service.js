@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, realpath, rm, stat, utimes, writeFile } from 'node:fs/promises';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 import {
   isStructurizrFilePath,
@@ -19,6 +19,14 @@ function createServiceError(message, statusCode, code) {
   error.statusCode = statusCode;
   error.requestCode = code;
   return error;
+}
+
+function resolveMirrorPath(mirrorDir, pathValue) {
+  const absolute = sanitizeVaultPath(mirrorDir, pathValue, { allowIgnored: true });
+  if (!absolute) {
+    throw createServiceError('Invalid Structurizr mirror path.', 400, 'STRUCTURIZR_MIRROR_INVALID');
+  }
+  return absolute;
 }
 
 function normalizeWorkspaceRootPath(pathValue) {
@@ -117,7 +125,9 @@ async function collectMirrorPaths(directoryPath, prefix = '') {
 async function readManifest(manifestPath) {
   try {
     const parsed = JSON.parse(await readFile(manifestPath, 'utf8'));
-    return Array.isArray(parsed?.paths) ? parsed.paths : [];
+    return Array.isArray(parsed?.paths)
+      ? parsed.paths.filter((pathValue) => typeof pathValue === 'string' && sanitizeVaultPath(dirname(manifestPath), pathValue))
+      : [];
   } catch (error) {
     if (error.code === 'ENOENT' || error instanceof SyntaxError) {
       return [];
@@ -128,14 +138,14 @@ async function readManifest(manifestPath) {
 
 async function writeMirrorFiles(mirrorDir, files) {
   await Promise.all(Array.from(files, async ([relativePath, content]) => {
-    const targetPath = join(mirrorDir, relativePath);
+    const targetPath = resolveMirrorPath(mirrorDir, relativePath);
     await mkdir(dirname(targetPath), { recursive: true });
     await writeFile(targetPath, content);
   }));
 }
 
 async function removeMirrorPaths(mirrorDir, paths) {
-  await Promise.all(paths.map((relativePath) => rm(join(mirrorDir, relativePath), {
+  await Promise.all(paths.map((relativePath) => rm(resolveMirrorPath(mirrorDir, relativePath), {
     force: true,
     recursive: true,
   })));
@@ -145,7 +155,7 @@ async function snapshotMirror(mirrorDir) {
   const paths = await collectMirrorPaths(mirrorDir);
   const files = new Map();
   await Promise.all(paths.map(async (relativePath) => {
-    files.set(relativePath, await readFile(join(mirrorDir, relativePath)));
+    files.set(relativePath, await readFile(resolveMirrorPath(mirrorDir, relativePath)));
   }));
   return files;
 }
@@ -209,6 +219,10 @@ export class StructurizrWorkspaceService {
   }
 
   async syncWorkspace({ content, rootPath }) {
+    const mirrorRelativePath = relative(this.vaultDir, this.mirrorDir);
+    if (!isAbsolute(mirrorRelativePath) && !mirrorRelativePath.startsWith('..')) {
+      resolveMirrorPath(this.vaultDir, mirrorRelativePath);
+    }
     const normalizedRootPath = normalizeWorkspaceRootPath(rootPath);
     if (!isStructurizrFilePath(normalizedRootPath)) {
       throw createServiceError('Structurizr previews require a workspace.dsl root file.', 400, 'STRUCTURIZR_ROOT_REQUIRED');
@@ -262,7 +276,7 @@ export class StructurizrWorkspaceService {
 
     await mkdir(this.mirrorDir, { recursive: true });
     const snapshot = await snapshotMirror(this.mirrorDir);
-    const previousManifest = await readManifest(join(this.mirrorDir, MANIFEST_FILE_NAME));
+    const previousManifest = await readManifest(resolveMirrorPath(this.mirrorDir, MANIFEST_FILE_NAME));
     const sourcePaths = Array.from(files.keys());
     const stalePaths = previousManifest.filter((pathValue) => !files.has(pathValue));
 
@@ -270,7 +284,7 @@ export class StructurizrWorkspaceService {
       await removeMirrorPaths(this.mirrorDir, stalePaths);
       await writeMirrorFiles(this.mirrorDir, files);
       // Local caches workspace.json; an old mtime makes it parse the DSL without a delete race.
-      const workspaceJsonPath = join(this.mirrorDir, WORKSPACE_JSON_FILE_NAME);
+      const workspaceJsonPath = resolveMirrorPath(this.mirrorDir, WORKSPACE_JSON_FILE_NAME);
       try {
         await utimes(workspaceJsonPath, new Date(0), new Date(0));
       } catch (error) {
@@ -285,7 +299,7 @@ export class StructurizrWorkspaceService {
         ]));
       }
       await writeFile(
-        join(this.mirrorDir, MANIFEST_FILE_NAME),
+        resolveMirrorPath(this.mirrorDir, MANIFEST_FILE_NAME),
         `${JSON.stringify({ paths: sourcePaths }, null, 2)}\n`,
         'utf8',
       );
@@ -397,4 +411,3 @@ export class StructurizrWorkspaceService {
     };
   }
 }
-

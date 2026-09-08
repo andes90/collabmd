@@ -127,6 +127,10 @@ export class GitService {
     return this.statusService.getStatus(options);
   }
 
+  async readPullBackupSummary(backupId) {
+    return this.pullBackupStore.readSummary(backupId);
+  }
+
   async listPullBackups() {
     if (!(await this.isGitRepo())) {
       return [];

@@ -103,8 +103,12 @@ function createSummaryPayload(columns, rows, summaries, definition, snapshot, th
 
 function createCsv(rows, columns) {
   const escapeCell = (value) => {
-    const text = String(value ?? '');
-    if (/[,"\n]/u.test(text)) {
+    let text = toDisplayText(value);
+    // CSV quoting alone does not prevent spreadsheets from evaluating formulas.
+    if (typeof value !== 'number' && /^[\s\p{Cc}]*[=+@-]|^[\t\r\n]/u.test(text)) {
+      text = `'${text}`;
+    }
+    if (/[,"\r\n]/u.test(text)) {
       return `"${text.replace(/"/g, '""')}"`;
     }
     return text;
@@ -112,7 +116,7 @@ function createCsv(rows, columns) {
 
   const lines = [
     columns.map((column) => escapeCell(column.label)).join(','),
-    ...rows.map((row) => columns.map((column) => escapeCell(toDisplayText(row.rawCells[column.id]))).join(',')),
+    ...rows.map((row) => columns.map((column) => escapeCell(row.rawCells[column.id])).join(',')),
   ];
   return `${lines.join('\n')}\n`;
 }

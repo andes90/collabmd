@@ -112,14 +112,16 @@ export function attachCollaborationGateway({
     });
   }) ?? (() => {});
 
-  websocketServer.on('connection', (ws, req, requestUrl, user = null) => {
+  websocketServer.on('connection', (ws, req, requestUrl, user = null, expiresAt = null) => {
     const { roomName, vaultId } = extractVaultAndRoom(requestUrl.pathname, wsBasePath, vaultRegistry?.isKnownVaultId?.bind(vaultRegistry));
     const registryPromise = vaultId && vaultRegistry
       ? vaultRegistry.getOrCreateContextAsync(vaultId).then((context) => context.roomRegistry)
       : Promise.resolve(roomRegistry);
     registryPromise.then((targetRegistry) => {
+      if (ws.readyState !== ws.OPEN) return;
       const room = targetRegistry.getOrCreate(roomName);
       const session = new ClientSocketSession({
+        expiresAt,
         onDisconnected: (disconnectedRoomName) => {
           socketSessions.delete(ws);
           const remaining = targetRegistry.rooms.get(disconnectedRoomName)?.clients.size ?? 0;
@@ -187,7 +189,7 @@ export function attachCollaborationGateway({
       }
 
       websocketServer.handleUpgrade(req, socket, head, (ws) => {
-        websocketServer.emit('connection', ws, req, requestUrl, authenticatedUser);
+        websocketServer.emit('connection', ws, req, requestUrl, authenticatedUser, authResult.expiresAt);
       });
     }).catch((error) => {
       console.error('[ws] Hosted workspace authorization failed:', error.message);

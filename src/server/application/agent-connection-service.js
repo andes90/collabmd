@@ -158,12 +158,16 @@ export class AgentConnectionService {
       throw createAccessError('AGENT_TOKEN_INVALID', 'Agent Connection token is invalid or expired', 401);
     }
 
+    if (this.hostedWorkspaceService?.enabled && connection.subjectType !== 'hosted_membership') {
+      throw createAccessError('AGENT_MEMBERSHIP_REQUIRED', 'Create a new Agent Connection for this Team Membership', 403);
+    }
+
     let collaborator = connection.subjectEmail
       ? { email: connection.subjectEmail, name: connection.subjectEmail }
       : null;
     if (connection.subjectType === 'hosted_membership') {
-      const access = await this.hostedWorkspaceService.authorizeWorkspaceAccess({ user: collaborator });
-      if (!access.ok || access.membership.id !== connection.subjectId) {
+      const access = await this.hostedWorkspaceService?.authorizeWorkspaceAccess({ user: collaborator });
+      if (!access?.ok || access.membership?.id !== connection.subjectId) {
         throw createAccessError('AGENT_MEMBERSHIP_REQUIRED', 'Team Membership is no longer active', 403);
       }
       collaborator = access.membership;

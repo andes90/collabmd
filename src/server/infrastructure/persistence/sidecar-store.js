@@ -1,7 +1,7 @@
-import { dirname, join, resolve } from 'path';
+import { dirname, join } from 'path';
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'fs/promises';
 
-import { resolveVaultFilePath, toVaultRelativePath } from './path-utils.js';
+import { resolveVaultFilePath, sanitizeVaultPath, toVaultRelativePath } from './path-utils.js';
 import { mapWithConcurrency } from '../../shared/async-utils.js';
 
 const COMMENT_STORAGE_ROOT = '.collabmd/comments';
@@ -15,7 +15,7 @@ function resolveSidecarPath(vaultDir, filePath, storageRoot, extension) {
   }
 
   const relativeVaultPath = toVaultRelativePath(vaultDir, absoluteVaultPath);
-  return resolve(vaultDir, storageRoot, `${relativeVaultPath}${extension}`);
+  return sanitizeVaultPath(vaultDir, `${storageRoot}/${relativeVaultPath}${extension}`, { allowIgnored: true });
 }
 
 async function renameIfPresent(sourcePath, targetPath) {
@@ -44,7 +44,7 @@ export class SidecarStore {
   }
 
   getCommentStorageRootPath() {
-    return resolve(this.vaultDir, COMMENT_STORAGE_ROOT);
+    return sanitizeVaultPath(this.vaultDir, COMMENT_STORAGE_ROOT, { allowIgnored: true });
   }
 
   getSnapshotPath(filePath) {
@@ -77,6 +77,9 @@ export class SidecarStore {
   async listCommentThreadEntries({ filePaths = null } = {}) {
     const allowedPaths = filePaths ? new Set(filePaths) : null;
     const rootPath = this.getCommentStorageRootPath();
+    if (!rootPath) {
+      return [];
+    }
     const commentFilePaths = [];
 
     const visitDirectory = async (absoluteDirectoryPath, relativeDirectoryPath = '') => {

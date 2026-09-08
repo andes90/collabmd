@@ -290,7 +290,7 @@ export class CollabMdAppShell {
       enabled: this.runtimeConfig.gitEnabled !== false,
       gitApiClient: this.gitApiClient,
       onCommitStaged: () => this.openGitCommitDialog(),
-      onOpenPullBackup: (filePath) => filePath && this.navigation.navigateToFile(filePath),
+      onOpenPullBackup: (backupId) => backupId && window.open(gitApiClient.getPullBackupSummaryUrl(backupId), '_blank', 'noopener,noreferrer'),
       onPullBranch: () => this.pullGitBranch(),
       onPushBranch: () => this.pushGitBranch(),
       onRepoChange: (isGitRepo, status) => this.handleGitRepoChange(isGitRepo, status),

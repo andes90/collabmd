@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { access, mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'fs/promises';
+import { access, mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import sharp from 'sharp';
@@ -31,6 +31,68 @@ async function pathExists(pathValue) {
     return false;
   }
 }
+
+test('VaultFileStore protects reserved paths across public file and directory operations', async (t) => {
+  const { store, vaultDir, cleanup } = await createVaultStore();
+  t.after(cleanup);
+  for (const reserved of ['.git', '.collabmd', '.GIT', '.COLLABMD', 'notes/.git', 'notes\\.collabmd', 'NODE_MODULES']) {
+    assert.equal((await store.createDirectory(reserved)).ok, false, reserved);
+    assert.equal((await store.createFile(`${reserved}/config.md`, 'bad')).ok, false, reserved);
+    assert.equal((await store.renameDirectory('notes', reserved)).ok, false, reserved);
+    assert.equal((await store.renameDirectory(reserved, 'moved')).ok, false, reserved);
+    assert.equal((await store.deleteDirectory(reserved, { recursive: true })).ok, false, reserved);
+    assert.equal((await store.resolveDirectoryDownloadRoot(reserved)).ok, false, reserved);
+    assert.equal((await store.renameFile('README.md', `${reserved}/config.md`)).ok, false, reserved);
+  }
+  assert.equal((await store.renameDirectory('README.md', 'config')).ok, false);
+  await mkdir(join(vaultDir, 'folder.md'));
+  assert.equal((await store.renameFile('folder.md', 'renamed.md')).ok, false);
+  assert.equal(await store.readMarkdownFile('README.md'), '# Readme\n');
+});
+
+test('VaultFileStore rejects leaf, parent and dangling symlinks for reads and mutations', async (t) => {
+  const { store, vaultDir, cleanup } = await createVaultStore();
+  const outside = await mkdtemp(join(tmpdir(), 'collabmd-outside-'));
+  t.after(async () => { await cleanup(); await rm(outside, { force: true, recursive: true }); });
+  await writeFile(join(outside, 'secret.md'), 'outside');
+  await symlink(outside, join(vaultDir, 'linked'));
+  await symlink(join(outside, 'secret.md'), join(vaultDir, 'leaf.md'));
+  await symlink(join(outside, 'missing.md'), join(vaultDir, 'dangling.md'));
+  for (const path of ['linked/secret.md', 'leaf.md', 'dangling.md', 'linked/new/deep.md']) {
+    assert.equal(await store.readMarkdownFile(path), null, path);
+    assert.equal(await store.openDownloadFileStream(path), null, path);
+    assert.equal((await store.createFile(path, 'bad')).ok, false, path);
+    assert.equal((await store.writeEditableVaultContent(path, 'bad')).ok, false, path);
+    assert.equal((await store.deleteFile(path)).ok, false, path);
+    assert.equal((await store.renameFile('README.md', path)).ok, false, path);
+    assert.equal((await store.renameFile(path, 'new.md')).ok, false, path);
+  }
+  assert.equal((await store.resolveDirectoryDownloadRoot('linked')).ok, false);
+  assert.equal((await store.renameDirectory('linked', 'moved')).ok, false);
+  assert.equal((await store.deleteDirectory('linked', { recursive: true })).ok, false);
+  assert.equal((await store.createDirectory('linked/new')).ok, false);
+  assert.equal((await store.tree()).some((entry) => ['leaf.md', 'dangling.md', 'linked'].includes(entry.name)), false);
+  assert.equal(await readFile(join(outside, 'secret.md'), 'utf8'), 'outside');
+  assert.equal(await pathExists(join(outside, 'missing.md')), false);
+  assert.equal(await pathExists(join(outside, 'new')), false);
+});
+
+test('VaultFileStore rejects symlinked sidecars while preserving configured root symlinks', async (t) => {
+  const { vaultDir, cleanup } = await createVaultStore();
+  const outside = await mkdtemp(join(tmpdir(), 'collabmd-sidecar-outside-'));
+  t.after(async () => { await cleanup(); await rm(outside, { force: true, recursive: true }); });
+  await symlink(vaultDir, join(outside, 'vault'));
+  const store = new VaultFileStore({ vaultDir: join(outside, 'vault') });
+  assert.equal((await store.writeEditableVaultContent('README.md', 'safe')).ok, true);
+  await rm(join(vaultDir, '.collabmd'), { force: true, recursive: true });
+  await symlink(outside, join(vaultDir, '.collabmd'));
+  assert.equal((await store.writeCommentThreads('README.md', [{ id: 'unsafe' }])).ok, false);
+  assert.equal((await store.writeCollaborationSnapshot('README.md', Uint8Array.of(1))).ok, false);
+  assert.equal((await store.persistCollaborationState('README.md', { content: 'bad' })).ok, false);
+  assert.equal(await store.readMarkdownFile('README.md'), 'safe');
+  assert.equal(await pathExists(join(outside, 'comments')), false);
+  assert.equal(await pathExists(join(outside, 'yjs')), false);
+});
 
 function createGifBuffer() {
   return Buffer.from('R0lGODlhAQABAPAAAP///wAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw==', 'base64');
@@ -300,7 +362,7 @@ test('VaultFileStore leaves live content untouched when staged collaboration sna
   });
 
   assert.equal(result.ok, false);
-  assert.match(result.error, /not a directory|EEXIST|ENOTDIR/i);
+  assert.equal(result.error, 'Invalid collaboration state path');
   assert.equal(await store.readMarkdownFile('README.md'), '# Readme\n');
   assert.deepEqual(await store.readCommentThreads('README.md'), []);
   assert.equal(await pathExists(join(vaultDir, '.collabmd/comments/README.md.json')), false);

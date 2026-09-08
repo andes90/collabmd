@@ -1,5 +1,5 @@
 import { copyFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 
 import { ensureCollabMetadataGitExclude } from '../git/local-exclude.js';
 import { sanitizeVaultPath } from './path-utils.js';
@@ -104,12 +104,18 @@ export class PullBackupStore {
     this.vaultDir = resolve(vaultDir);
   }
 
+  resolveStoragePath(path) {
+    const absolute = sanitizeVaultPath(this.vaultDir, path, { allowIgnored: true });
+    if (!absolute) throw new Error('Unsafe pull backup path');
+    return absolute;
+  }
+
   getStorageRoot() {
-    return resolve(this.vaultDir, PULL_BACKUP_STORAGE_ROOT);
+    return this.resolveStoragePath(PULL_BACKUP_STORAGE_ROOT);
   }
 
   getBackupPath(backupId) {
-    return resolve(this.getStorageRoot(), backupId);
+    return this.resolveStoragePath(`${PULL_BACKUP_STORAGE_ROOT}/${backupId}`);
   }
 
   getSummaryPath(backupId) {
@@ -123,12 +129,12 @@ export class PullBackupStore {
     headRef = null,
     targetRef = null,
   } = {}) {
-    await ensureCollabMetadataGitExclude(this.vaultDir);
-
     const backupId = createBackupId(headRef, createdAt);
-    const backupDir = this.getBackupPath(backupId);
-    const filesRoot = join(backupDir, 'files');
-    const patchesRoot = join(backupDir, 'patches');
+    const filesRoot = this.resolveStoragePath(`${PULL_BACKUP_STORAGE_ROOT}/${backupId}/files`);
+    const patchesRoot = this.resolveStoragePath(`${PULL_BACKUP_STORAGE_ROOT}/${backupId}/patches`);
+    this.resolveStoragePath(this.getSummaryPath(backupId));
+    this.resolveStoragePath('.git/info/exclude');
+    await ensureCollabMetadataGitExclude(this.vaultDir);
     const backupEntries = [];
 
     await mkdir(filesRoot, { recursive: true });
@@ -140,7 +146,8 @@ export class PullBackupStore {
         continue;
       }
 
-      const absoluteSourcePath = sanitizeVaultPath(this.vaultDir, normalizedPath);
+      const absoluteSourcePath = sanitizeVaultPath(this.vaultDir, normalizedPath, { allowIgnored: true });
+      if (!absoluteSourcePath) continue;
       const relativeBackupPath = `${PULL_BACKUP_STORAGE_ROOT}/${backupId}/files/${normalizedPath}`;
       const relativeStagedPatchPath = entry?.stagedPatchContent
         ? `${PULL_BACKUP_STORAGE_ROOT}/${backupId}/patches/${normalizedPath}.staged.patch`
@@ -150,28 +157,26 @@ export class PullBackupStore {
         : null;
       let backupPath = null;
 
-      if (absoluteSourcePath) {
-        try {
-          await stat(absoluteSourcePath);
-          const absoluteBackupPath = resolve(this.vaultDir, relativeBackupPath);
-          await mkdir(dirname(absoluteBackupPath), { recursive: true });
-          await copyFile(absoluteSourcePath, absoluteBackupPath);
-          backupPath = normalizeRelativePath(relativeBackupPath);
-        } catch (error) {
-          if (error?.code !== 'ENOENT') {
-            throw error;
-          }
+      try {
+        await stat(absoluteSourcePath);
+        const absoluteBackupPath = this.resolveStoragePath(relativeBackupPath);
+        await mkdir(dirname(absoluteBackupPath), { recursive: true });
+        await copyFile(absoluteSourcePath, absoluteBackupPath);
+        backupPath = normalizeRelativePath(relativeBackupPath);
+      } catch (error) {
+        if (error?.code !== 'ENOENT') {
+          throw error;
         }
       }
 
       if (relativeStagedPatchPath) {
-        const absolutePatchPath = resolve(this.vaultDir, relativeStagedPatchPath);
+        const absolutePatchPath = this.resolveStoragePath(relativeStagedPatchPath);
         await mkdir(dirname(absolutePatchPath), { recursive: true });
         await writeFile(absolutePatchPath, entry.stagedPatchContent, 'utf8');
       }
 
       if (relativeWorktreePatchPath) {
-        const absolutePatchPath = resolve(this.vaultDir, relativeWorktreePatchPath);
+        const absolutePatchPath = this.resolveStoragePath(relativeWorktreePatchPath);
         await mkdir(dirname(absolutePatchPath), { recursive: true });
         await writeFile(absolutePatchPath, entry.worktreePatchContent, 'utf8');
       }
@@ -192,7 +197,7 @@ export class PullBackupStore {
     )).length;
     const summaryPath = this.getSummaryPath(backupId);
     await writeFile(
-      resolve(this.vaultDir, summaryPath),
+      this.resolveStoragePath(summaryPath),
       formatSummary({
         backupEntries,
         backupId,
@@ -214,6 +219,18 @@ export class PullBackupStore {
     };
   }
 
+  async readSummary(backupId) {
+    if (typeof backupId !== 'string' || !/^[a-z0-9-]{1,128}$/iu.test(backupId)) return null;
+    const path = sanitizeVaultPath(this.vaultDir, this.getSummaryPath(backupId), { allowIgnored: true });
+    if (!path) return null;
+    try {
+      return await readFile(path, 'utf8');
+    } catch (error) {
+      if (error.code === 'ENOENT' || error.code === 'EISDIR') return null;
+      throw error;
+    }
+  }
+
   async listBackups() {
     let entries;
     try {
@@ -229,26 +246,19 @@ export class PullBackupStore {
       .filter((entry) => entry.isDirectory())
       .map(async (entry) => {
         const summaryPath = this.getSummaryPath(entry.name);
-        try {
-          const content = await readFile(resolve(this.vaultDir, summaryPath), 'utf8');
-          const metadata = parseBackupMetadata(content);
-          if (!metadata) {
-            return null;
-          }
-
-          return {
-            branch: metadata.branch ?? null,
-            createdAt: metadata.createdAt ?? null,
-            fileCount: Number(metadata.fileCount ?? 0) || 0,
-            id: entry.name,
-            summaryPath,
-          };
-        } catch (error) {
-          if (error?.code === 'ENOENT') {
-            return null;
-          }
-          throw error;
+        const content = await this.readSummary(entry.name);
+        const metadata = parseBackupMetadata(content);
+        if (!metadata) {
+          return null;
         }
+
+        return {
+          branch: metadata.branch ?? null,
+          createdAt: metadata.createdAt ?? null,
+          fileCount: Number(metadata.fileCount ?? 0) || 0,
+          id: entry.name,
+          summaryPath,
+        };
       }));
 
     return backups

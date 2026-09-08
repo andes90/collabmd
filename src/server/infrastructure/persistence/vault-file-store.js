@@ -345,7 +345,7 @@ export class VaultFileStore {
     });
 
     for (const entry of sorted) {
-      if (isIgnoredVaultEntry(entry.name)) {
+      if (isIgnoredVaultEntry(entry.name) || entry.isSymbolicLink()) {
         continue;
       }
 
@@ -618,16 +618,22 @@ export class VaultFileStore {
       };
     }
 
+    const commentPath = this.sidecarStore.getCommentThreadPath(filePath);
+    const snapshotPath = this.sidecarStore.getSnapshotPath(filePath);
+    if (!commentPath || !snapshotPath) {
+      return { ok: false, error: 'Invalid collaboration state path' };
+    }
+
     const operations = [
       {
         kind: Array.isArray(commentThreads) && commentThreads.length > 0 ? 'write' : 'delete',
-        targetPath: this.sidecarStore.getCommentThreadPath(filePath),
+        targetPath: commentPath,
         value: createCommentThreadsPayload(commentThreads),
         writeOptions: 'utf-8',
       },
       {
         kind: snapshot ? 'write' : 'delete',
-        targetPath: this.sidecarStore.getSnapshotPath(filePath),
+        targetPath: snapshotPath,
         value: snapshot ? Buffer.from(snapshot) : null,
       },
       includeContent ? {
@@ -797,7 +803,7 @@ export class VaultFileStore {
       const sortedEntries = dirEntries.sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }));
 
       for (const entry of sortedEntries) {
-        if (isIgnoredVaultEntry(entry.name)) {
+        if (isIgnoredVaultEntry(entry.name) || entry.isSymbolicLink()) {
           continue;
         }
 
@@ -908,6 +914,14 @@ export class VaultFileStore {
       return { ok: false, error };
     }
 
+    try {
+      if (!(await stat(absoluteOld)).isFile()) {
+        return { ok: false, error: 'Path is not a file' };
+      }
+    } catch {
+      return { ok: false, error: 'File not found' };
+    }
+
     if (absoluteOld === absoluteNew) {
       return { ok: true };
     }
@@ -946,6 +960,14 @@ export class VaultFileStore {
     const { absoluteNew, absoluteOld, error } = resolveVaultDirectoryRenamePaths(this.vaultDir, oldPath, newPath);
     if (!absoluteOld || !absoluteNew) {
       return { ok: false, error };
+    }
+
+    try {
+      if (!(await stat(absoluteOld)).isDirectory()) {
+        return { ok: false, error: 'Path is not a directory' };
+      }
+    } catch {
+      return { ok: false, error: 'Directory not found' };
     }
 
     if (absoluteOld === absoluteNew) {

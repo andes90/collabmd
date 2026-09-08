@@ -229,12 +229,12 @@ export class GitPanelController {
     if (this._handleFileSelectionClick(event)) return;
 
     const pullBackupButton = event.target instanceof Element
-      ? event.target.closest('[data-git-pull-backup-path]')
+      ? event.target.closest('[data-git-pull-backup-id]')
       : null;
     if (pullBackupButton) {
-      const summaryPath = pullBackupButton.getAttribute('data-git-pull-backup-path');
-      if (summaryPath) {
-        this.onOpenPullBackup(summaryPath);
+      const backupId = pullBackupButton.getAttribute('data-git-pull-backup-id');
+      if (backupId) {
+        this.onOpenPullBackup(backupId);
       }
       return;
     }
@@ -722,7 +722,8 @@ export class GitPanelController {
         <button
           class="ui-item-main git-file-item"
           type="button"
-          data-git-pull-backup-path="${escapeHtml(backup.summaryPath || '')}"
+          title="Open read-only pull backup summary in a new tab"
+          data-git-pull-backup-id="${escapeHtml(backup.id || '')}"
         >
           ${fileIconSvg()}
           <span class="ui-item-copy git-file-copy">

@@ -72,8 +72,27 @@ export function createAuthService(config) {
     },
 
     authorizeWebSocketRequest(req) {
+      // Browsers always send Origin; clients without it still need authentication.
+      if (req.headers.origin !== undefined) {
+        let allowed = false;
+        try {
+          const protocol = req.socket?.encrypted || req.headers['x-forwarded-proto'] === 'https'
+            ? 'https:' : 'http:';
+          const expectedOrigin = authConfig.oidc?.publicBaseUrl
+            ? new URL(authConfig.oidc.publicBaseUrl).origin
+            : new URL(`${protocol}//${req.headers.host}`).origin;
+          allowed = req.headers.origin === expectedOrigin;
+        } catch {
+          // Malformed or opaque origins are forbidden.
+        }
+        if (!allowed) {
+          return { ok: false, statusCode: 403, statusMessage: 'Forbidden', body: 'Origin not allowed' };
+        }
+      }
       if (strategy.isAuthenticated(req)) {
-        return { ok: true };
+        const expiresAt = authConfig.strategy === AUTH_STRATEGY_NONE
+          ? null : sessionCookieManager.readSession(req)?.expiresAt;
+        return { ok: true, expiresAt: Number.isFinite(expiresAt) ? expiresAt : null };
       }
 
       return {
