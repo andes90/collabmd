@@ -53,6 +53,27 @@ for (const strategy of ['none', 'password', 'oidc']) {
   });
 }
 
+test('WebSocket honors proxy TLS signals when checking browser origin', async (t) => {
+  const app = await startTestServer({ auth: authConfig('none') });
+  t.after(() => app.close());
+  const httpsOrigin = app.baseUrl.replace(/^http:/, 'https:');
+  for (const headers of [
+    { Origin: httpsOrigin, 'X-Forwarded-Proto': 'https' },
+    { Origin: httpsOrigin, 'X-Forwarded-Proto': 'https, http' },
+    { Origin: httpsOrigin, 'CF-Visitor': '{"scheme":"https"}' },
+  ]) {
+    const ws = new WebSocket(app.wsUrl('test.md'), { headers });
+    await waitForOpen(ws);
+    ws.close();
+    await waitForClose(ws);
+  }
+  const attacker = new WebSocket(app.wsUrl('test.md'), {
+    headers: { Origin: 'https://attacker.example.com', 'X-Forwarded-Proto': 'https' },
+  });
+  assert.equal((await waitForUnexpectedResponse(attacker)).statusCode, 403);
+  attacker.terminate();
+});
+
 test('OIDC WebSocket closes at the signed session deadline and rejects reconnect', async (t) => {
   const app = await startTestServer({ auth: authConfig('oidc') });
   t.after(() => app.close());

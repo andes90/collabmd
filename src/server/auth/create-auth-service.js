@@ -27,6 +27,28 @@ export {
   createRandomSessionSecret,
 };
 
+function resolveRequestProtocol(req) {
+  const forwarded = String(req.headers['x-forwarded-proto'] ?? '').split(',')[0].trim().toLowerCase();
+  if (forwarded === 'https' || forwarded === 'http') {
+    return `${forwarded}:`;
+  }
+
+  try {
+    const cfVisitor = JSON.parse(req.headers['cf-visitor'] ?? '');
+    if (String(cfVisitor?.scheme).toLowerCase() === 'https') {
+      return 'https:';
+    }
+  } catch {
+    // Non-Cloudflare requests carry no cf-visitor payload.
+  }
+
+  if (req.socket?.encrypted) {
+    return 'https:';
+  }
+
+  return 'http:';
+}
+
 export function createAuthService(config) {
   const authConfig = config.auth ?? { strategy: AUTH_STRATEGY_NONE };
   const clientConfig = buildClientConfig(authConfig, {
@@ -76,8 +98,7 @@ export function createAuthService(config) {
       if (req.headers.origin !== undefined) {
         let allowed = false;
         try {
-          const protocol = req.socket?.encrypted || req.headers['x-forwarded-proto'] === 'https'
-            ? 'https:' : 'http:';
+          const protocol = resolveRequestProtocol(req);
           const expectedOrigin = authConfig.oidc?.publicBaseUrl
             ? new URL(authConfig.oidc.publicBaseUrl).origin
             : new URL(`${protocol}//${req.headers.host}`).origin;
