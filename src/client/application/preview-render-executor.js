@@ -85,7 +85,10 @@ export class PreviewRenderExecutor {
 
     if (worker) {
       if (this.workerJob) {
-        this.reset('Superseded preview render');
+        // Reject the superseded job but keep the worker alive: the stale
+        // result is ignored by renderVersion in handleWorkerMessage, and
+        // respawning the worker per keystroke costs a module re-parse.
+        this.cancelWorkerJob('Superseded preview render');
       }
 
       const activeWorker = this.ensureWorker();

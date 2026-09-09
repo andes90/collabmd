@@ -4,6 +4,7 @@ export const LARGE_DOCUMENT_EXCALIDRAW_THRESHOLD = 8;
 export const LARGE_DOCUMENT_DRAWIO_THRESHOLD = 8;
 export const LARGE_DOCUMENT_PLANTUML_THRESHOLD = 12;
 export const DIAGRAM_RENDER_DEBOUNCE_MS = 300;
+export const DEFAULT_RENDER_DEBOUNCE_MS = 250;
 
 function countMatches(source, pattern) {
   return source.match(pattern)?.length ?? 0;
@@ -38,30 +39,25 @@ export function isLargeDocumentStats(stats) {
 }
 
 export function getRenderProfile(markdownText = '') {
-  const source = String(markdownText);
-  const hasMermaid = /(^|\n)```mermaid\b/i.test(source)
-    || /!\[\[[^\]]+\.(?:mmd|mermaid)(?:\|[^\]]+)?\]\]/i.test(source);
-  const hasDrawioEmbed = /!\[\[[^\]]+\.drawio(?:\|[^\]]+)?\]\]/i.test(source);
-  const hasExcalidrawEmbed = /!\[\[[^\]]+\.excalidraw(?:\|[^\]]+)?\]\]/i.test(source);
-  const hasPlantUml = /(^|\n)```(?:plantuml|puml)\b/i.test(source)
-    || /!\[\[[^\]]+\.(?:puml|plantuml)(?:\|[^\]]+)?\]\]/i.test(source);
-  const isLargeByLength = source.length >= LARGE_DOCUMENT_CHAR_THRESHOLD;
+  // Reuse the single complexity scan instead of re-running the same regexes:
+  // this previously cost ~10 full-source scans per keystroke.
+  const stats = analyzeMarkdownComplexity(markdownText);
 
-  if (isLargeByLength) {
+  if (stats.chars >= LARGE_DOCUMENT_CHAR_THRESHOLD) {
     return {
       debounceMs: 500,
       deferUntilIdle: true,
     };
   }
 
-  if (hasMermaid || hasPlantUml) {
+  if (stats.mermaidBlocks > 0 || stats.plantumlBlocks > 0) {
     return {
       debounceMs: DIAGRAM_RENDER_DEBOUNCE_MS,
       deferUntilIdle: false,
     };
   }
 
-  if (hasDrawioEmbed || hasExcalidrawEmbed) {
+  if (stats.drawioEmbeds > 0 || stats.excalidrawEmbeds > 0) {
     return {
       debounceMs: 0,
       deferUntilIdle: false,
@@ -69,7 +65,7 @@ export function getRenderProfile(markdownText = '') {
   }
 
   return {
-    debounceMs: 100,
+    debounceMs: DEFAULT_RENDER_DEBOUNCE_MS,
     deferUntilIdle: false,
   };
 }

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  DEFAULT_RENDER_DEBOUNCE_MS,
   DIAGRAM_RENDER_DEBOUNCE_MS,
   LARGE_DOCUMENT_CHAR_THRESHOLD,
   getRenderProfile,
@@ -30,5 +31,16 @@ test('getRenderProfile keeps the large-document idle policy for diagrams', () =>
   assert.deepEqual(getRenderProfile(source), {
     debounceMs: 500,
     deferUntilIdle: true,
+  });
+});
+
+test('getRenderProfile debounces plain documents and instant embed-only documents', () => {
+  assert.deepEqual(getRenderProfile('# Hello'), {
+    debounceMs: DEFAULT_RENDER_DEBOUNCE_MS,
+    deferUntilIdle: false,
+  });
+  assert.deepEqual(getRenderProfile('![[board.drawio]]'), {
+    debounceMs: 0,
+    deferUntilIdle: false,
   });
 });

@@ -38,10 +38,37 @@ hljs.registerAliases(['ecmascript', 'node'], { languageName: 'javascript' });
 
 export { hljs };
 
+// Unchanged fences re-highlight on every preview compile while typing, so
+// memoize results. Huge one-off sources bypass the cache to bound memory.
+const HIGHLIGHT_CACHE_LIMIT = 200;
+const HIGHLIGHT_CACHE_MAX_SOURCE_CHARS = 20000;
+const highlightCache = new Map();
+
+export function getHighlightCacheSize() {
+  return highlightCache.size;
+}
+
 export function highlightFence(source, language, { ignoreIllegals = false } = {}) {
-  if (language && hljs.getLanguage(language)) {
-    return hljs.highlight(source, { ignoreIllegals, language }).value;
+  const text = String(source);
+  const cacheable = text.length <= HIGHLIGHT_CACHE_MAX_SOURCE_CHARS;
+  const cacheKey = cacheable ? `${language ?? ''}\n${ignoreIllegals ? 1 : 0}\n${text}` : null;
+  if (cacheKey) {
+    const cached = highlightCache.get(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
   }
 
-  return hljs.highlightAuto(source, AUTO_HIGHLIGHT_LANGUAGES).value;
+  const result = language && hljs.getLanguage(language)
+    ? hljs.highlight(text, { ignoreIllegals, language }).value
+    : hljs.highlightAuto(text, AUTO_HIGHLIGHT_LANGUAGES).value;
+
+  if (cacheKey) {
+    if (highlightCache.size >= HIGHLIGHT_CACHE_LIMIT) {
+      highlightCache.delete(highlightCache.keys().next().value);
+    }
+    highlightCache.set(cacheKey, result);
+  }
+
+  return result;
 }

@@ -110,3 +110,32 @@ test('PreviewRenderExecutor forwards disabled wiki-link auto-create to the worke
   await resultPromise;
 });
 
+test('PreviewRenderExecutor reuses the worker across superseded compiles', async () => {
+  const worker = createFakeWorker();
+  let workerCount = 0;
+  const executor = new PreviewRenderExecutor({
+    createWorkerFn: () => {
+      workerCount += 1;
+      return worker;
+    },
+    getFileList: () => [],
+  });
+
+  const firstPromise = executor.compile('# One', 1);
+  const secondPromise = executor.compile('# Two', 2);
+
+  assert.equal(workerCount, 1);
+  assert.ok(!worker.terminated);
+  assert.equal(worker.lastMessage.markdownText, '# Two');
+
+  worker.dispatch('message', {
+    data: { html: '<h1>One</h1>', renderVersion: 1, stats: {} },
+  });
+  worker.dispatch('message', {
+    data: { html: '<h1>Two</h1>', renderVersion: 2, stats: {} },
+  });
+
+  await assert.rejects(firstPromise, /Superseded preview render/);
+  assert.deepEqual(await secondPromise, { html: '<h1>Two</h1>', stats: {} });
+});
+
