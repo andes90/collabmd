@@ -142,19 +142,23 @@ export class GitDiffService {
     scope = 'working-tree',
   } = {}) {
     const trackedFiles = files.filter((entry) => entry.status !== 'untracked');
-    const trackedSummary = trackedFiles.length > 0
-      ? parseNumstatOutput(
-        await this.commandRunner.execGit(this.buildDiffCommandArgs({
-          hasHeadCommit,
-          numstat: true,
-          path,
-          scope,
-        })),
-      )
-      : createEmptyStats();
-    const untrackedAdditions = await this.untrackedFileService.countAdditions(
+    // The diff spawn and the untracked file scan are independent: overlap them.
+    const trackedSummaryPromise = trackedFiles.length > 0
+      ? this.commandRunner.execGit(this.buildDiffCommandArgs({
+        hasHeadCommit,
+        numstat: true,
+        path,
+        scope,
+      })).then((output) => parseNumstatOutput(output))
+      : Promise.resolve(createEmptyStats());
+    const untrackedAdditionsPromise = this.untrackedFileService.countAdditions(
       files.filter((entry) => entry.status === 'untracked'),
     );
+
+    const [trackedSummary, untrackedAdditions] = await Promise.all([
+      trackedSummaryPromise,
+      untrackedAdditionsPromise,
+    ]);
 
     return {
       additions: trackedSummary.additions + untrackedAdditions,

@@ -84,12 +84,16 @@ export class GitStatusService {
   }
 
   async getLocalChangeSummary({ hasHeadCommit = false, untrackedFiles = [] } = {}) {
-    const trackedSummary = parseNumstatOutput(
-      await this.commandRunner.execGit(hasHeadCommit
-        ? ['diff', '--numstat', 'HEAD']
-        : ['diff', '--cached', '--numstat']),
-    );
-    const untrackedAdditions = await this.untrackedFileService.countAdditions(untrackedFiles);
+    // The diff spawn and the untracked file scan are independent: overlap them.
+    const trackedSummaryPromise = this.commandRunner.execGit(hasHeadCommit
+      ? ['diff', '--numstat', 'HEAD']
+      : ['diff', '--cached', '--numstat']).then((output) => parseNumstatOutput(output));
+    const untrackedAdditionsPromise = this.untrackedFileService.countAdditions(untrackedFiles);
+
+    const [trackedSummary, untrackedAdditions] = await Promise.all([
+      trackedSummaryPromise,
+      untrackedAdditionsPromise,
+    ]);
 
     return {
       additions: trackedSummary.additions + untrackedAdditions,
