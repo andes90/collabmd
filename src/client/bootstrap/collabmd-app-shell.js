@@ -221,12 +221,21 @@ export class CollabMdAppShell {
             signal: options?.signal,
           })
         : callAgentTool(name, input, options),
-      getActiveContext: () => ({
-        activeDiagramPath: this.isExcalidrawFile(this.currentFilePath)
-          ? this.currentFilePath
-          : null,
-        activePath: this.currentFilePath,
-      }),
+      getActiveContext: async () => {
+        const activePath = this.currentFilePath;
+        const session = this.session;
+        const context = session?.activeFilePath === activePath
+          ? await session.getAgentContext()
+          : null;
+        if (activePath !== this.currentFilePath || session !== this.session) {
+          throw new Error('Active document changed; request active context again');
+        }
+        return {
+          ...context,
+          activeDiagramPath: this.isExcalidrawFile(activePath) ? activePath : null,
+          activePath,
+        };
+      },
       getIsTabActive: () => this.isTabActive,
       onDidMutate: () => {
         this.toastController.show('Agent-assisted Vault change applied. Review it before committing.');

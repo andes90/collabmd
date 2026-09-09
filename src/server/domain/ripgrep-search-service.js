@@ -143,12 +143,14 @@ function createRipgrepArgs(query, {
 }
 
 export function parseRipgrepJson(stdout, {
+  excludedPaths = [],
   kinds = [],
   maxFiles = DEFAULT_MAX_FILES,
   maxSnippetsPerFile = DEFAULT_MAX_SNIPPETS_PER_FILE,
   prefix = '',
   query = '',
 } = {}) {
+  const excluded = new Set(excludedPaths);
   const kindFilter = new Set(Array.isArray(kinds) ? kinds : []);
   const files = [];
   const filesByPath = new Map();
@@ -176,6 +178,7 @@ export function parseRipgrepJson(stdout, {
     const kind = getVaultFileKind(filePath) ?? 'text';
     if (
       !filePath
+      || excluded.has(filePath)
       || (prefix && filePath !== prefix && !filePath.startsWith(`${prefix}/`))
       || (kindFilter.size > 0 && !kindFilter.has(kind))
     ) {
@@ -237,7 +240,38 @@ export function parseRipgrepJson(stdout, {
   };
 }
 
+export function searchExcalidrawSceneText(scene, { query, maxSnippetsPerFile = 5, wholeWord = false }) {
+  const normalizedQuery = query.toLocaleLowerCase();
+  const snippets = [];
+  let matchCount = 0;
+  for (const element of Array.isArray(scene?.elements) ? scene.elements : []) {
+    if (element?.isDeleted || element?.type !== 'text' || typeof element.text !== 'string') continue;
+    const text = element.text;
+    const normalizedText = text.toLocaleLowerCase();
+    let matchStart = normalizedText.indexOf(normalizedQuery);
+    while (matchStart >= 0) {
+      if (!wholeWord || isWholeWordMatch(normalizedText, matchStart, matchStart + normalizedQuery.length)) {
+        matchCount += 1;
+        if (snippets.length < maxSnippetsPerFile) {
+          const snippet = createSnippet(text, matchStart, matchStart + query.length);
+          snippets.push({
+            column: matchStart + 1,
+            line: 1,
+            matchEnd: snippet.matchEnd,
+            matchStart: snippet.matchStart,
+            text: snippet.text,
+          });
+        }
+      }
+      matchStart = normalizedText.indexOf(normalizedQuery, matchStart + Math.max(query.length, 1));
+    }
+  }
+
+  return { matchCount, snippets, truncated: matchCount > snippets.length };
+}
+
 async function searchExcalidrawText({
+  excludedPaths = [],
   kinds = [],
   maxFileSize,
   maxFiles,
@@ -248,6 +282,7 @@ async function searchExcalidrawText({
   signal,
   vaultDir,
 }) {
+  const excluded = new Set(excludedPaths);
   const kindFilter = new Set(Array.isArray(kinds) ? kinds : []);
   if (kindFilter.size > 0 && !kindFilter.has('excalidraw')) {
     return { files: [], matchCount: 0, truncated: false };
@@ -255,7 +290,6 @@ async function searchExcalidrawText({
   const files = [];
   let matchCount = 0;
   let truncated = false;
-  const normalizedQuery = query.toLocaleLowerCase();
   const paths = glob('**/*.excalidraw', {
     cwd: vaultDir,
     exclude: ['**/.*', '**/node_modules/**'],
@@ -263,6 +297,7 @@ async function searchExcalidrawText({
 
   for await (const filePath of paths) {
     const normalizedPath = filePath.replaceAll('\\', '/');
+    if (excluded.has(normalizedPath)) continue;
     if (prefix && normalizedPath !== prefix && !normalizedPath.startsWith(`${prefix}/`)) continue;
     signal?.throwIfAborted?.();
     const absolutePath = join(vaultDir, filePath);
@@ -275,33 +310,10 @@ async function searchExcalidrawText({
       continue;
     }
 
-    const snippets = [];
-    let fileMatchCount = 0;
-    for (const element of Array.isArray(scene?.elements) ? scene.elements : []) {
-      if (element?.isDeleted || element?.type !== 'text' || typeof element.text !== 'string') continue;
-      const text = element.text;
-      const normalizedText = text.toLocaleLowerCase();
-      let matchStart = normalizedText.indexOf(normalizedQuery);
-      while (matchStart >= 0) {
-        if (!wholeWord || isWholeWordMatch(normalizedText, matchStart, matchStart + normalizedQuery.length)) {
-          fileMatchCount += 1;
-          matchCount += 1;
-          if (snippets.length < maxSnippetsPerFile) {
-            const snippet = createSnippet(text, matchStart, matchStart + query.length);
-            snippets.push({
-              column: matchStart + 1,
-              line: 1,
-              matchEnd: snippet.matchEnd,
-              matchStart: snippet.matchStart,
-              text: snippet.text,
-            });
-          } else {
-            truncated = true;
-          }
-        }
-        matchStart = normalizedText.indexOf(normalizedQuery, matchStart + Math.max(query.length, 1));
-      }
-    }
+    const result = searchExcalidrawSceneText(scene, { query, maxSnippetsPerFile, wholeWord });
+    const { matchCount: fileMatchCount, snippets } = result;
+    matchCount += fileMatchCount;
+    truncated ||= result.truncated;
 
     if (fileMatchCount > 0) {
       if (files.length >= maxFiles) {
@@ -383,6 +395,7 @@ export class RipgrepSearchService {
   }
 
   async search({
+    excludedPaths = [],
     kinds = [],
     limit = DEFAULT_MAX_FILES,
     maxSnippetsPerFile = DEFAULT_MAX_SNIPPETS_PER_FILE,
@@ -431,6 +444,7 @@ export class RipgrepSearchService {
         timeout: this.timeoutMs,
       });
       parsed = parseRipgrepJson(result.stdout, {
+        excludedPaths,
         kinds,
         maxFiles,
         maxSnippetsPerFile: snippetLimit,
@@ -446,6 +460,7 @@ export class RipgrepSearchService {
       } else {
         const isMaxBuffer = error?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER';
         parsed = parseRipgrepJson(error?.stdout ?? '', {
+          excludedPaths,
           kinds,
           maxFiles,
           maxSnippetsPerFile: snippetLimit,
@@ -463,6 +478,7 @@ export class RipgrepSearchService {
 
     if (parsed.files.length < maxFiles) {
       const excalidraw = await searchExcalidrawText({
+        excludedPaths,
         kinds,
         maxFileSize: this.maxFileSize,
         maxFiles: maxFiles - parsed.files.length,

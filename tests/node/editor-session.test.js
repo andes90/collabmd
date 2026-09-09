@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { EditorState } from '@codemirror/state';
 import * as Y from 'yjs';
 
+import { createEditableContentRevision } from '../../src/domain/editable-content-revision.js';
 import { EditorSession } from '../../src/client/infrastructure/editor-session.js';
 import { createCommentThreadSharedType } from '../../src/domain/comment-threads.js';
 
@@ -285,4 +286,21 @@ test('EditorSession delegates replaceText to the view adapter', () => {
   assert.deepEqual(replaced, ['updated']);
 
   session.destroy();
+});
+
+
+test('agent context bounds the exact primary selection and binds it to a local snapshot', async () => {
+  const content = '# Title\n' + 'x'.repeat(2100) + '\n';
+  const state = EditorState.create({ doc: content, selection: { anchor: 8, head: content.length } });
+  const session = Object.create(EditorSession.prototype);
+  session.viewAdapter = { getState: () => state };
+  session.collaborationClient = { initialSyncComplete: false };
+  assert.equal(await session.getAgentContext(), null);
+  session.collaborationClient.initialSyncComplete = true;
+  const context = await session.getAgentContext();
+  assert.equal(context.localRevision, await createEditableContentRevision(content));
+  assert.deepEqual(context.selection, {
+    endLine: 2, from: 8, startLine: 2, text: 'x'.repeat(2000), to: content.length, truncated: true,
+  });
+  assert.equal(state.doc.toString(), content);
 });

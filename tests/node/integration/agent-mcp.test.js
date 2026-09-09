@@ -643,3 +643,131 @@ test('MCP creates, updates, and queries Base files', async (t) => {
   assert.equal(invalid.isError, true);
   assert.equal(invalid.structuredContent.code, 'AGENT_INVALID_BASE');
 });
+
+test('MCP and WebMCP support compact retrieval, outlines, and validated authoring', async (t) => {
+  const app = await startTestServer({ agentAccess: { enabled: true } });
+  const client = await connectMcp(t, app);
+  for (let index = 0; index < 12; index += 1) {
+    const content = [
+      '# Retrieval fixture',
+      ...Array.from({ length: 99 }, (_, line) => `Evidence needle ${line}: retained source context.`),
+    ].join('\n');
+    const created = await client.callTool({
+      name: 'create_document', arguments: { path: `evaluation/note-${String(index).padStart(2, '0')}.md`, content },
+    });
+    assert.equal(created.isError, undefined);
+  }
+  const call = async (name, input) => {
+    const result = await client.callTool({ name, arguments: input });
+    assert.equal(result.isError, undefined, JSON.stringify(result.structuredContent));
+    return result.structuredContent;
+  };
+  const baselineSearch = await call('search_vault', { query: 'Evidence needle', prefix: 'evaluation', limit: 50, maxSnippetsPerFile: 5 });
+  const compactSearch = await call('search_vault', { query: 'Evidence needle', prefix: 'evaluation' });
+  assert.equal(compactSearch.files.length, 10);
+  assert.ok(compactSearch.files.every(({ snippets }) => snippets.length === 2));
+  const evidencePath = compactSearch.files[0].file;
+  const baselineRead = await call('read_document', { path: evidencePath, lineCount: 500 });
+  const compactRead = await call('read_document', { path: evidencePath });
+  assert.equal(compactRead.endLine, 80);
+  assert.equal(compactRead.nextStartLine, 81);
+  assert.ok(compactRead.content.includes(compactSearch.files[0].snippets[0].text));
+  assert.equal(compactRead.revision, baselineRead.revision);
+  const baselineBytes = Buffer.byteLength(JSON.stringify([baselineSearch, baselineRead]));
+  const compactBytes = Buffer.byteLength(JSON.stringify([compactSearch, compactRead]));
+  assert.ok(compactBytes < baselineBytes);
+  t.diagnostic(`Fixed retrieval fixture: ${baselineBytes} -> ${compactBytes} JSON bytes, two calls each; same first-document evidence and revision. This does not measure model tokens or semantic answer quality.`);
+
+  const outline = await call('read_document', { path: evidencePath, mode: 'outline' });
+  assert.equal(outline.content, '');
+  assert.equal(outline.headings[0].text, 'Retrieval fixture');
+  assert.equal(outline.revision, compactRead.revision);
+  const browserOutline = await callWebMcpTool(app, 'read_document', { path: evidencePath, mode: 'outline' });
+  assert.equal(browserOutline.response.status, 200);
+  assert.deepEqual(browserOutline.body, outline);
+  const created = await call('create_document', { path: 'evaluation/summary.md', content: '# Summary\n[[missing-target]]', validate: true });
+  assert.equal(created.validation.valid, false);
+  const edited = await callWebMcpTool(app, 'apply_text_edits', {
+    path: created.path, revision: created.revision, validate: true,
+    replacements: [{ oldText: '[[missing-target]]', newText: '[[evaluation/note-00]]' }],
+  });
+  assert.equal(edited.response.status, 200);
+  assert.equal(edited.body.validation.valid, true);
+  const current = await call('read_document', { path: created.path });
+  assert.equal(current.revision, edited.body.revision);
+  assert.equal(current.content, '# Summary\n[[evaluation/note-00]]');
+  const stale = await client.callTool({ name: 'apply_text_edits', arguments: {
+    path: created.path, revision: created.revision,
+    replacements: [{ oldText: '# Summary', newText: '# Stale' }], validate: true,
+  } });
+  assert.equal(stale.structuredContent.code, 'AGENT_REVISION_CONFLICT');
+});
+
+test('MCP live search suppresses removed disk evidence and still fills a limited result', async (t) => {
+  const app = await startTestServer({ agentAccess: { enabled: true } });
+  const client = await connectMcp(t, app);
+  for (const path of ['live.md', 'closed.md']) {
+    await client.callTool({ name: 'create_document', arguments: { path, content: 'uniqueneedle' } });
+  }
+  const room = app.server.roomRegistry.getOrCreate('live.md');
+  await room.hydrate();
+  room.applyExactTextChanges([{ from: 0, to: 12, insert: 'removed' }], { origin: 'test-collaborator' });
+  const result = await client.callTool({ name: 'search_vault', arguments: { query: 'uniqueneedle', limit: 1, kinds: ['markdown'] } });
+  assert.equal(result.isError, undefined);
+  assert.deepEqual(result.structuredContent.files.map(({ file }) => file), ['closed.md']);
+  assert.equal(result.structuredContent.truncated, false);
+});
+
+test('MCP searches current visible text in an active Excalidraw room', async (t) => {
+  const app = await startTestServer({ agentAccess: { enabled: true } });
+  const client = await connectMcp(t, app);
+  const created = await client.callTool({ name: 'create_excalidraw', arguments: {
+    path: 'live.excalidraw', elements: [{ id: 'label', type: 'text', x: 0, y: 0, text: 'oldneedle' }],
+  } });
+  const room = app.server.roomRegistry.getOrCreate('live.excalidraw');
+  await room.hydrate();
+  const inspection = await client.callTool({ name: 'inspect_excalidraw', arguments: { path: created.structuredContent.path } });
+  const edited = await client.callTool({ name: 'edit_excalidraw', arguments: {
+    path: 'live.excalidraw', revision: inspection.structuredContent.revision,
+    update: [{ id: 'label', set: { text: 'newneedle' } }],
+  } });
+  assert.equal(edited.isError, undefined);
+  const result = await client.callTool({ name: 'search_vault', arguments: { query: 'newneedle', kinds: ['excalidraw'] } });
+  assert.equal(result.structuredContent.files[0].snippets[0].text, 'newneedle');
+  assert.equal(result.structuredContent.truncated, false);
+  const stale = await client.callTool({ name: 'search_vault', arguments: { query: 'oldneedle', kinds: ['excalidraw'] } });
+  assert.deepEqual(stale.structuredContent.files, []);
+});
+
+test('Excalidraw design guidance is on demand and its examples create verified scenes over MCP', async (t) => {
+  const app = await startTestServer({ agentAccess: { enabled: true } });
+  const client = await connectMcp(t, app);
+  const capabilities = await client.callTool({ name: 'get_collabmd_syntax', arguments: {} });
+  const summary = capabilities.structuredContent.capabilities.find(({ kind }) => kind === 'excalidraw');
+  const syntax = await client.callTool({ name: 'get_collabmd_syntax', arguments: { kind: 'excalidraw' } });
+  assert.equal(syntax.isError, undefined);
+  const guide = syntax.structuredContent;
+  assert.ok(guide.guide.length > summary.guide.length);
+  assert.ok(summary.examples.every((example) => !example.startsWith('{')));
+  const browserSyntax = await callWebMcpTool(app, 'get_collabmd_syntax', { kind: 'excalidraw' });
+  assert.equal(browserSyntax.response.status, 200);
+  assert.deepEqual(browserSyntax.body, guide);
+
+  const examples = guide.examples.filter((example) => example.startsWith('{')).map((example) => JSON.parse(example));
+  assert.equal(examples.length, 2);
+  for (const example of examples) {
+    const created = await client.callTool(example);
+    assert.equal(created.isError, undefined, JSON.stringify(created.structuredContent));
+    const { inspection } = created.structuredContent.verification;
+    assert.equal(inspection.valid, true);
+    assert.deepEqual(inspection.warnings, []);
+    assert.equal(inspection.layout.boundText.misaligned, 0);
+    const image = created.content.find(({ type }) => type === 'image');
+    assert.equal(image.mimeType, 'image/png');
+    assert.equal(Buffer.from(image.data, 'base64').subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+    const inspected = await client.callTool({ name: 'inspect_excalidraw', arguments: { path: example.arguments.path } });
+    assert.equal(inspected.structuredContent.revision, created.structuredContent.revision);
+    assert.equal(inspected.structuredContent.elements.filter(({ containerId }) => containerId).length, 3);
+    assert.equal(inspected.structuredContent.elements.filter(({ startElementId, endElementId }) => startElementId && endElementId).length, 2);
+  }
+});

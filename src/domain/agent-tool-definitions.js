@@ -49,6 +49,15 @@ const VALIDATION_ISSUE_SCHEMA = objectSchema({
   target: { type: 'string' },
 });
 
+const MARKDOWN_VALIDATION_SCHEMA = objectSchema({
+  issues: { items: VALIDATION_ISSUE_SCHEMA, type: 'array' },
+  valid: { type: 'boolean' },
+});
+const VALIDATE_MARKDOWN_INPUT = {
+  description: 'Return reference validation for the exact saved revision. Markdown only; validation issues do not roll back the save.',
+  type: 'boolean',
+};
+
 const DIAGRAM_RENDER_OUTPUT_PROPERTIES = {
   endLine: { minimum: 1, type: 'integer' },
   format: { enum: ['png', 'svg'], type: 'string' },
@@ -382,16 +391,18 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
 
   {
     annotations: { idempotentHint: true, readOnlyHint: true },
-    description: 'Search current Vault text with one fixed case-insensitive term. Returns path and line evidence.',
+    description: 'Search current Vault text with one literal case-insensitive phrase, not a natural-language question. Defaults to 10 files and 2 snippets each. Read relevant ranges before answering and cite path:line evidence. Narrow prefix or query when truncated; no matches do not prove a topic is absent.',
     inputSchema: objectSchema({
       limit: {
-        description: 'Maximum matching documents to return.',
+        default: 10,
+        description: 'Maximum matching documents to return (default 10).',
         maximum: 50,
         minimum: 1,
         type: 'integer',
       },
       maxSnippetsPerFile: {
-        description: 'Maximum matching snippets returned per document.',
+        default: 2,
+        description: 'Maximum matching snippets returned per document (default 2).',
         maximum: 10,
         minimum: 1,
         type: 'integer',
@@ -437,7 +448,7 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
         required: ['available', 'backend', 'minQueryLength', 'unavailableReason', 'version'],
         type: 'object',
       },
-      truncated: { type: 'boolean' },
+      truncated: { description: 'True when documents or snippets were omitted, or the search was incomplete. Counts cover observed matches, not necessarily all Vault matches.', type: 'boolean' },
     }),
     scope: 'vault:read',
     untrustedContentHint: true,
@@ -445,13 +456,20 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
   },
   {
     annotations: { idempotentHint: true, readOnlyHint: true },
-    description: 'Read a current CollabMD document range and return full-document revision for citations and edits.',
+    description: 'Read current text (default 80 lines) or a compact Markdown outline with full-document revision. Follow nextStartLine for more. Read content immediately before exact edits; on revision conflict reread and recompute. Maximum source size is 1000000 characters; a single content line over 100000 characters fails explicitly.',
     inputSchema: objectSchema({
       lineCount: {
-        description: 'Maximum number of lines to return.',
+        default: 80,
+        description: 'Maximum content lines or outline headings to return (default 80).',
         maximum: 500,
         minimum: 1,
         type: 'integer',
+      },
+      mode: {
+        default: 'content',
+        description: 'Outline returns top-level ATX and single-line Setext headings, excluding fenced code and frontmatter. Heading text is capped at 200 characters.',
+        enum: ['content', 'outline'],
+        type: 'string',
       },
       path: {
         description: 'Vault-relative document path.',
@@ -470,13 +488,23 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
     outputSchema: objectSchema({
       content: { type: 'string' },
       endLine: { minimum: 1, type: 'integer' },
+      headings: {
+        items: objectSchema({
+          level: { minimum: 1, maximum: 6, type: 'integer' },
+          line: { minimum: 1, type: 'integer' },
+          text: { type: 'string' },
+          truncated: { type: 'boolean' },
+        }),
+        type: 'array',
+      },
+      nextStartLine: { type: ['integer', 'null'], minimum: 1 },
       kind: { type: 'string' },
       path: { type: 'string' },
       revision: REVISION_SCHEMA,
       startLine: { minimum: 1, type: 'integer' },
       totalLines: { minimum: 1, type: 'integer' },
       truncated: { type: 'boolean' },
-    }),
+    }, ['content', 'endLine', 'kind', 'nextStartLine', 'path', 'revision', 'startLine', 'totalLines', 'truncated']),
     scope: 'vault:read',
     untrustedContentHint: true,
     webMcp: true,
@@ -676,7 +704,7 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
   },
   {
     annotations: { destructiveHint: false, idempotentHint: true, readOnlyHint: false },
-    description: 'Create a valid editable .excalidraw scene from basic Excalidraw elements, with optional same-revision verification.',
+    description: 'Create an editable .excalidraw scene. Before the first diagram in a task, call get_collabmd_syntax with kind="excalidraw" for design guidance and valid examples. Request inline inspection/rendering and examine the image before finishing.',
     inputSchema: objectSchema({
       elements: {
         description: 'One to 200 basic Excalidraw elements in back-to-front order. Text may bind to a container with containerId; groupIds define atomic movement groups. Arrows may bind with startElementId and endElementId. beforeElementId or afterElementId sets explicit placement.',
@@ -707,7 +735,7 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
   },
   {
     annotations: { destructiveHint: false, idempotentHint: false, readOnlyHint: false },
-    description: 'Create, update, replace, translate, reorder, or delete elements in an existing .excalidraw scene when its revision still matches. Bound text whose font, size, line height, or content changes reflows automatically.',
+    description: 'Edit an existing .excalidraw scene only when its revision matches. Before the first diagram edit in a task, consult get_collabmd_syntax with kind="excalidraw". Inspect first, preserve existing style and unrelated elements, then verify the result. Supports create, update, replace, translate, reorder, and delete; bound-text metric edits reflow automatically.',
     inputSchema: objectSchema({
       create: {
         items: EXCALIDRAW_ELEMENT_INPUT_SCHEMA,
@@ -782,7 +810,7 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
   },
   {
     annotations: { destructiveHint: false, idempotentHint: false, readOnlyHint: false },
-    description: 'Apply bounded exact replacements to a document only when its revision still matches.',
+    description: 'Apply up to 20 unique, non-overlapping exact replacements against the revision from a fresh content read. Combined old/new text is limited to 50000 characters. On conflict reread; on ambiguous matches include more surrounding text. Optional Markdown validation checks the saved revision.',
     inputSchema: objectSchema({
       path: {
         description: 'Vault-relative path returned by read_document.',
@@ -813,6 +841,7 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
         type: 'array',
       },
       revision: REVISION_SCHEMA,
+      validate: VALIDATE_MARKDOWN_INPUT,
     }, ['path', 'revision', 'replacements']),
     method: 'applyTextEdits',
     name: 'apply_text_edits',
@@ -820,13 +849,14 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
       path: { type: 'string' },
       replacementCount: { minimum: 1, type: 'integer' },
       revision: REVISION_SCHEMA,
-    }),
+      validation: MARKDOWN_VALIDATION_SCHEMA,
+    }, ['path', 'replacementCount', 'revision']),
     scope: 'vault:edit',
     webMcp: true,
   },
   {
     annotations: { destructiveHint: false, idempotentHint: true, readOnlyHint: false },
-    description: 'Create a new supported CollabMD text document. An identical retry succeeds; different content at an existing path fails.',
+    description: 'Create a new supported text document (up to 200000 characters). Inspect nearby naming/style and consult get_collabmd_syntax for unfamiliar kinds. Identical retries succeed; different content at an existing path fails. Optional Markdown validation checks the saved revision.',
     inputSchema: objectSchema({
       content: {
         description: 'Initial document text, normalized to LF line endings.',
@@ -839,6 +869,7 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
         minLength: 1,
         type: 'string',
       },
+      validate: VALIDATE_MARKDOWN_INPUT,
     }, ['path', 'content']),
     method: 'createDocument',
     name: 'create_document',
@@ -846,7 +877,8 @@ export const AGENT_TOOL_DEFINITIONS = Object.freeze([
       kind: { type: 'string' },
       path: { type: 'string' },
       revision: REVISION_SCHEMA,
-    }),
+      validation: MARKDOWN_VALIDATION_SCHEMA,
+    }, ['kind', 'path', 'revision']),
     scope: 'vault:edit',
     webMcp: true,
   },

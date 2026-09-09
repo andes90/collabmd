@@ -580,20 +580,24 @@ test('agent whole-word search overlays only matching active room text', async ()
   assert.equal(result.files[0].snippets[0].line, 3);
 });
 
-test('agent reads report the last line actually returned after character truncation', async () => {
-  const firstLine = 'x'.repeat(100_001);
+test('agent reads stop at complete lines and reject oversized individual lines', async () => {
+  const firstLine = 'x'.repeat(99_999);
   const { service } = createService({ content: `${firstLine}\nsecond line\n` });
-  const result = await service.readDocument(actor, {
-    lineCount: 2,
-    path: 'notes.md',
-  });
-
-  assert.equal(result.content.length, 100_000);
+  const result = await service.readDocument(actor, { lineCount: 2, path: 'notes.md' });
+  assert.equal(result.content, firstLine);
   assert.equal(result.endLine, 1);
-  assert.equal(result.startLine, 1);
-  assert.equal(result.truncated, true);
-});
+  assert.equal(result.nextStartLine, 2);
+  const next = await service.readDocument(actor, { path: 'notes.md', startLine: result.nextStartLine });
+  assert.equal(next.content, 'second line\n');
+  assert.equal(next.nextStartLine, null);
+  assert.equal(next.revision, result.revision);
 
+  const oversized = createService({ content: `${'x'.repeat(100_001)}\nsecond line\n` });
+  await assert.rejects(oversized.service.readDocument(actor, { path: 'notes.md' }), {
+    code: 'AGENT_DOCUMENT_LINE_TOO_LARGE',
+  });
+  assert.equal((await oversized.service.readDocument(actor, { path: 'notes.md', startLine: 2 })).content, 'second line\n');
+});
 
 test('agent content service creates, edits, and queries Base files', async () => {
   const queries = [];
@@ -667,4 +671,112 @@ test('agent content service creates, edits, and queries Base files', async () =>
     }),
     { code: 'AGENT_BASE_QUERY_UNAVAILABLE' },
   );
+});
+
+
+test('agent search excludes live disk paths before limits and merges without false truncation', async () => {
+  let text = 'no longer matches';
+  const room = { isHydrated: () => true, readEditableContent: () => text };
+  const { service } = createService({ room });
+  service.searchService.search = async ({ excludedPaths, limit, maxSnippetsPerFile }) => {
+    assert.deepEqual(excludedPaths, ['notes.md']);
+    assert.equal(limit, 10);
+    assert.equal(maxSnippetsPerFile, 2);
+    return { files: [], matchCount: 0, truncated: false };
+  };
+  const removed = await service.searchVault(actor, { query: 'needle' });
+  assert.deepEqual(removed.files, []);
+  assert.equal(removed.truncated, false);
+  text = 'needle';
+  const live = await service.searchVault(actor, { query: 'needle' });
+  assert.equal(live.files.length, 1);
+  assert.equal(live.matchCount, 1);
+  assert.equal(live.truncated, false);
+  text = 'needle needle needle';
+  assert.equal((await service.searchVault(actor, { query: 'needle' })).truncated, true);
+  room.isHydrated = () => false;
+  const syncing = await service.searchVault(actor, { query: 'needle' });
+  assert.deepEqual(syncing.files, []);
+  assert.equal(syncing.truncated, true);
+});
+
+test('agent reads default to 80 lines and offer paginated Markdown outlines', async () => {
+  const content = Array.from({ length: 100 }, (_, i) => `## Heading ${i}`).join('\n');
+  const { service } = createService({ content });
+  const read = await service.readDocument(actor, { path: 'notes.md' });
+  assert.equal(read.endLine, 80);
+  assert.equal(read.nextStartLine, 81);
+  const outline = await service.readDocument(actor, { mode: 'outline', path: 'notes.md' });
+  assert.equal(outline.content, '');
+  assert.equal(outline.headings.length, 80);
+  assert.equal(outline.headings[0].text, 'Heading 0');
+  assert.equal(outline.revision, read.revision);
+  const next = await service.readDocument(actor, { mode: 'outline', path: 'notes.md', startLine: outline.nextStartLine });
+  assert.equal(next.headings.length, 20);
+  assert.equal(next.headings[0].line, 81);
+  assert.equal(next.nextStartLine, null);
+  await assert.rejects(service.readDocument(actor, { mode: 'outline', path: 'scene.mmd' }), { code: 'AGENT_INPUT_INVALID' });
+});
+
+test('optional Markdown validation belongs to the saved snapshot and does not block invalid references', async () => {
+  const { files, service } = createService();
+  const created = await service.createDocument(actor, {
+    content: '# New\n[[new]] [[notes]] [[missing]]', path: 'new.md', validate: true,
+  });
+  assert.equal(created.validation.valid, false);
+  assert.deepEqual(created.validation.issues.map(({ target }) => target), ['missing']);
+  const read = await service.readDocument(actor, { path: 'new.md' });
+  assert.equal(created.revision, read.revision);
+  // A later read must not supply the inline validation snapshot.
+  let reads = 0;
+  const originalRead = service.readCurrentContent.bind(service);
+  service.readCurrentContent = async (...args) => {
+    assert.equal(++reads, 1);
+    return originalRead(...args);
+  };
+  const edited = await service.applyTextEdits(actor, {
+    path: 'new.md', replacements: [{ oldText: '[[missing]]', newText: 'fixed' }], revision: read.revision, validate: true,
+  });
+  assert.equal(edited.validation.valid, true);
+  assert.equal(files.get('new.md'), '# New\n[[new]] [[notes]] fixed');
+  await assert.rejects(service.createDocument(actor, { path: 'bad.mmd', content: 'graph TD', validate: true }), { code: 'AGENT_INPUT_INVALID' });
+  assert.equal(files.has('bad.mmd'), false);
+});
+
+test('live Excalidraw search uses visible text rather than stale disk content or scene metadata', async () => {
+  let visible = 'currentneedle';
+  const room = {
+    isHydrated: () => true,
+    readEditableContent: () => null,
+    getPersistedContent: () => JSON.stringify({
+      type: 'excalidraw',
+      elements: [
+        { type: 'text', text: visible },
+        { type: 'text', text: 'deletedneedle', isDeleted: true },
+        { type: 'rectangle', id: 'metadataneedle' },
+      ],
+    }),
+  };
+  const { service } = createService({ documentPath: 'scene.excalidraw', room });
+  const result = await service.searchVault(actor, { query: 'needle' });
+  assert.equal(result.files[0].snippets[0].text, 'currentneedle');
+  assert.equal(result.matchCount, 1);
+  assert.equal(result.truncated, false);
+  visible = 'removed';
+  assert.deepEqual((await service.searchVault(actor, { query: 'needle' })).files, []);
+});
+
+test('text edits reject a live change during revision hashing before applying offsets', async () => {
+  const { service } = createService();
+  const original = await service.readDocument(actor, { path: 'notes.md' });
+  let reads = 0;
+  service.roomRegistry.get = () => ({
+    isHydrated: () => true,
+    readEditableContent: () => ++reads === 1 ? original.content : `Concurrent\n${original.content}`,
+    applyExactTextChanges: () => assert.fail('stale offsets must never be applied'),
+  });
+  await assert.rejects(service.applyTextEdits(actor, {
+    path: 'notes.md', revision: original.revision,
+    replacements: [{ oldText: 'Hello world', newText: 'Hello agent' }],
+  }), { code: 'AGENT_REVISION_CONFLICT' });
 });

@@ -1,5 +1,7 @@
 import * as Y from 'yjs';
 
+import { createEditableContentRevision } from '../../domain/editable-content-revision.js';
+
 import { CommentThreadStore } from './comment-thread-store.js';
 import { EditorCollaborationClient } from './editor-collaboration-client.js';
 import { EditorViewAdapter } from './editor-view-adapter.js';
@@ -170,6 +172,24 @@ export class EditorSession {
 
   get ytext() {
     return this.collaborationClient.ytext;
+  }
+
+  async getAgentContext() {
+    const state = this.viewAdapter.getState();
+    if (!this.isInitialSyncComplete() || !state || state.doc.length > 1_000_000) return null;
+    const { from, to } = state.selection.main;
+    const end = to > from ? to - 1 : to;
+    return {
+      localRevision: await createEditableContentRevision(state.doc.toString()),
+      selection: {
+        endLine: state.doc.lineAt(end).number,
+        from,
+        startLine: state.doc.lineAt(from).number,
+        text: state.doc.sliceString(from, Math.min(to, from + 2000)),
+        to,
+        truncated: to - from > 2000,
+      },
+    };
   }
 
   getCurrentSelectionLineRange() {

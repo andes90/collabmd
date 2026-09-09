@@ -1,3 +1,4 @@
+import { getVaultFileKind } from '../../domain/file-kind.js';
 import {
   listWebMcpToolDefinitions,
   toWebMcpToolName,
@@ -128,10 +129,15 @@ function createActiveContextResult(context = {}) {
   return {
     activeDiagramPath,
     activePath,
+    kind: getVaultFileKind(activePath),
+    localRevision: context.localRevision ?? null,
+    selection: context.selection ?? null,
     preferredDiagramPath: activeDiagramPath,
     workflow: activeDiagramPath
       ? `Current diagram is ${activeDiagramPath}. Inspect it, edit with the returned exact revision, request inline verification, then use the returned canvas paint acknowledgement.`
-      : 'No diagram is active. Use create_excalidraw with a new .excalidraw path and request inline verification. Inspect then revision-edit any existing path; do not retry stale edits without rereading.',
+      : activePath
+        ? 'Read the active document before editing. Selection offsets are UTF-16 and refer to localRevision; compare it with the fresh server revision and reconsider the selection if they differ. Batch unique exact replacements; reread on conflict. Request Markdown validation when changing references.'
+        : 'No diagram is active. Use create_excalidraw with a new .excalidraw path and request inline verification. Inspect then revision-edit any existing path; do not retry stale edits without rereading.',
   };
 }
 
@@ -158,10 +164,10 @@ function createActiveContextTool(getActiveContext) {
   return {
     annotations: {
       readOnlyHint: true,
-      untrustedContentHint: false,
+      untrustedContentHint: true,
     },
-    description: 'Return current CollabMD file and active-diagram context plus the safe create-or-edit workflow. Call before Excalidraw tools.',
-    execute: async () => createActiveContextResult(getActiveContext?.()),
+    description: 'Return the active file kind, bounded primary editor selection (up to 2000 characters), local snapshot revision, and diagram context. Call for edits referring to this document or selection. Local revision does not confirm server synchronization; read_document supplies the edit revision.',
+    execute: async () => createActiveContextResult(await getActiveContext?.()),
     inputSchema: {
       additionalProperties: false,
       properties: {},
@@ -213,7 +219,8 @@ export class WebMcpToolRegistry {
     try {
       const tools = listWebMcpToolDefinitions().map((definition) => ({
         annotations: {
-          ...definition.annotations,
+          consequentialHint: !definition.annotations.readOnlyHint,
+          readOnlyHint: Boolean(definition.annotations.readOnlyHint),
           untrustedContentHint: Boolean(definition.untrustedContentHint),
         },
         description: getWebMcpDescription(definition),

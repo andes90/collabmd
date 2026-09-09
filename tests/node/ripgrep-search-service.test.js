@@ -257,3 +257,13 @@ test('RipgrepSearchService passes search limits and cancellation to rg', async (
   const maxCountIndex = calls[1].args.indexOf('--max-count');
   assert.equal(calls[1].args[maxCountIndex + 1], '3');
 });
+
+
+test('ripgrep exclusions suppress stale live documents before filling the result limit', () => {
+  const payload = ['live.md', 'closed.md'].map((file) => rgMatch({
+    file: `./${file}`, line: 1, start: 0, end: 6, text: 'needle',
+  })).join('\n');
+  const result = parseRipgrepJson(payload, { excludedPaths: ['live.md'], maxFiles: 1, query: 'needle' });
+  assert.deepEqual(result.files.map(({ file }) => file), ['closed.md']);
+  assert.equal(result.truncated, false);
+});

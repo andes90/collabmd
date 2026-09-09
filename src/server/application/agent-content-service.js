@@ -16,6 +16,7 @@ import {
 } from '../../domain/excalidraw-agent-scene.js';
 import { inspectAgentExcalidrawScene, renderAgentExcalidrawSvg } from '../../domain/excalidraw-agent-verification.js';
 import { getVaultFileKind, isBaseFilePath } from '../../domain/file-kind.js';
+import { collectMarkdownOutline } from '../../domain/markdown-outline.js';
 import { isWholeWordMatch } from '../../domain/literal-text-search.js';
 import { createWikiTargetIndex } from '../../domain/wiki-link-resolver.js';
 import {
@@ -27,6 +28,7 @@ import {
   collectMarkdownImageSources,
   collectMarkdownReferences,
 } from '../domain/markdown-reference-extractor.js';
+import { searchExcalidrawSceneText } from '../domain/ripgrep-search-service.js';
 import { compareWorkspacePaths, normalizeWorkspacePath } from '../domain/workspace-state.js';
 
 const MAX_DOCUMENT_CHARACTERS = 200_000;
@@ -337,8 +339,8 @@ export class AgentContentService {
 
   async searchVault(actor, {
     kinds = [],
-    limit = 50,
-    maxSnippetsPerFile = 5,
+    limit = 10,
+    maxSnippetsPerFile = 2,
     prefix = '',
     query = '',
     wholeWord = false,
@@ -348,54 +350,77 @@ export class AgentContentService {
     const normalizedQuery = String(query ?? '').trim().slice(0, 500);
     const normalizedPrefix = normalizeWorkspacePath(prefix);
     const kindFilter = new Set(Array.isArray(kinds) ? kinds : []);
-    const snippetLimit = clampInteger(maxSnippetsPerFile, 5, 1, 10);
+    const snippetLimit = clampInteger(maxSnippetsPerFile, 2, 1, 10);
+    const pageSize = clampInteger(limit, 10, 1, 50);
+    const livePaths = new Set();
+    let liveIncomplete = false;
+    const liveFiles = [];
+    for (const [path, room] of normalizedQuery.length >= 2 ? this.roomRegistry?.getRooms?.() ?? [] : []) {
+      const kind = getVaultFileKind(path);
+      if (
+        !isAgentReadablePath(path)
+        || (normalizedPrefix && path !== normalizedPrefix && !path.startsWith(`${normalizedPrefix}/`))
+        || (kindFilter.size > 0 && !kindFilter.has(kind))
+      ) continue;
+      livePaths.add(path);
+      const content = room.isHydrated?.()
+        ? room.readEditableContent?.() ?? room.getPersistedContent?.()
+        : null;
+      if (content == null || content.length > MAX_AGENT_READ_SOURCE_CHARACTERS) {
+        liveIncomplete = true;
+        continue;
+      }
+      signal?.throwIfAborted();
+      let live;
+      if (kind === 'excalidraw') {
+        let scene;
+        try {
+          scene = JSON.parse(content);
+        } catch {
+          liveIncomplete = true;
+          continue;
+        }
+        live = searchExcalidrawSceneText(scene, {
+          query: normalizedQuery, maxSnippetsPerFile: snippetLimit, wholeWord,
+        });
+      } else {
+        live = searchLiveText(content, normalizedQuery, snippetLimit, wholeWord);
+      }
+      if (live.matchCount > 0) {
+        liveFiles.push({ file: path, kind, ...live });
+      }
+    }
     const result = await this.searchService.search({
+      excludedPaths: [...livePaths],
       kinds: [...kindFilter],
-      limit,
+      limit: pageSize,
       maxSnippetsPerFile: snippetLimit,
       prefix: normalizedPrefix,
       query: normalizedQuery,
       wholeWord,
       signal,
     });
-    if (normalizedQuery.length < 2) return result;
-
-    const liveFiles = [];
-    for (const [path, room] of this.roomRegistry?.getRooms?.() ?? []) {
-      const kind = getVaultFileKind(path);
-      if (
-        !isAgentReadablePath(path)
-        || !room.isHydrated?.()
-        || (normalizedPrefix && path !== normalizedPrefix && !path.startsWith(`${normalizedPrefix}/`))
-        || (kindFilter.size > 0 && !kindFilter.has(kind))
-      ) continue;
-      const content = room.readEditableContent?.();
-      if (content === null || content === undefined) continue;
-      if (content.length > MAX_AGENT_READ_SOURCE_CHARACTERS) continue;
-      const live = searchLiveText(content, normalizedQuery, snippetLimit, wholeWord);
-      if (live.matchCount > 0) {
-        liveFiles.push({ file: path, kind, ...live });
-      }
-    }
-    if (liveFiles.length === 0) return result;
-
-    const livePaths = new Set(liveFiles.map(({ file }) => file));
-    const files = [...result.files.filter(({ file }) => !livePaths.has(file)), ...liveFiles]
-      .sort((left, right) => compareWorkspacePaths(left.file, right.file))
-      .slice(0, clampInteger(limit, 50, 1, 50));
+    const candidates = [...result.files.filter(({ file }) => !livePaths.has(file)), ...liveFiles]
+      .sort((left, right) => compareWorkspacePaths(left.file, right.file));
+    const files = candidates.slice(0, pageSize);
     return {
       ...result,
       files,
       matchCount: files.reduce((sum, file) => sum + file.matchCount, 0),
-      truncated: result.truncated || files.length < result.files.length + liveFiles.length,
+      truncated: result.truncated || liveIncomplete || candidates.length > files.length
+        || files.some((file) => file.truncated),
     };
   }
 
-  async readDocument(actor, { lineCount = MAX_READ_LINES, path, startLine = 1 } = {}) {
+  async readDocument(actor, { lineCount = 80, mode = 'content', path, startLine = 1 } = {}) {
     requireScope(actor, 'vault:read');
     const normalizedPath = normalizeWorkspacePath(path);
+    const kind = getVaultFileKind(normalizedPath);
     if (!isAgentReadablePath(normalizedPath)) {
       throw createAgentContentError('AGENT_UNSUPPORTED_DOCUMENT', 'Document type is not readable by agents', 400);
+    }
+    if (!['content', 'outline'].includes(mode) || (mode === 'outline' && kind !== 'markdown')) {
+      throw createAgentContentError('AGENT_INPUT_INVALID', 'Outline mode requires a Markdown document', 400);
     }
     const content = await this.readCurrentContent(normalizedPath);
     if (content.length > MAX_AGENT_READ_SOURCE_CHARACTERS) {
@@ -403,30 +428,46 @@ export class AgentContentService {
     }
     const lines = content.split('\n');
     const start = clampInteger(startLine, 1, 1, Math.max(lines.length, 1));
-    const count = clampInteger(lineCount, MAX_READ_LINES, 1, MAX_READ_LINES);
-    let selected = lines.slice(start - 1, start - 1 + count).join('\n');
-    let characterTruncated = false;
-    let endLine = Math.min(start + count - 1, lines.length);
-    if (selected.length > MAX_READ_CHARACTERS) {
-      selected = selected.slice(0, MAX_READ_CHARACTERS);
-      characterTruncated = true;
-      let returnedLineCount = 1;
-      for (let index = 0; index < selected.length; index += 1) {
-        if (selected.charCodeAt(index) === 10) returnedLineCount += 1;
-      }
-      if (selected.endsWith('\n')) returnedLineCount -= 1;
-      endLine = Math.min(start + Math.max(returnedLineCount, 1) - 1, lines.length);
-    }
-    return {
-      content: selected,
-      endLine,
-      kind: getVaultFileKind(normalizedPath),
+    const count = clampInteger(lineCount, 80, 1, MAX_READ_LINES);
+    const result = {
+      content: '',
+      endLine: lines.length,
+      kind,
+      nextStartLine: null,
       path: normalizedPath,
       revision: await createEditableContentRevision(content),
       startLine: start,
       totalLines: lines.length,
-      truncated: characterTruncated || endLine < lines.length,
+      truncated: false,
     };
+    if (mode === 'outline') {
+      const headings = collectMarkdownOutline(content).filter(({ line }) => line >= start);
+      result.headings = headings.slice(0, count);
+      if (headings.length > count) {
+        result.endLine = result.headings.at(-1).line;
+        result.nextStartLine = headings[count].line;
+        result.truncated = true;
+      }
+      return result;
+    }
+    const selected = [];
+    let characters = 0;
+    for (const line of lines.slice(start - 1, start - 1 + count)) {
+      const size = line.length + (selected.length ? 1 : 0);
+      if (characters + size > MAX_READ_CHARACTERS) {
+        if (selected.length === 0) {
+          throw createAgentContentError('AGENT_DOCUMENT_LINE_TOO_LARGE', 'This line exceeds the 100000-character read limit; read a different line or use Markdown outline mode', 413);
+        }
+        break;
+      }
+      selected.push(line);
+      characters += size;
+    }
+    result.content = selected.join('\n');
+    result.endLine = start + selected.length - 1;
+    result.truncated = result.endLine < lines.length;
+    result.nextStartLine = result.truncated ? result.endLine + 1 : null;
+    return result;
   }
   async inspectDocumentReferences(actor, { path } = {}) {
     requireScope(actor, 'vault:read');
@@ -438,13 +479,22 @@ export class AgentContentService {
     if (content.length > MAX_AGENT_READ_SOURCE_CHARACTERS) {
       throw createAgentContentError('AGENT_DOCUMENT_TOO_LARGE', 'Document is too large for agent inspection', 413);
     }
+    return {
+      ...this.inspectMarkdownContent(normalizedPath, content),
+      backlinks: await this.backlinkIndex?.getBacklinks?.(normalizedPath) ?? [],
+      path: normalizedPath,
+      revision: await createEditableContentRevision(content),
+    };
+  }
+
+  inspectMarkdownContent(normalizedPath, content) {
     const entries = Array.from(this.workspaceMutationCoordinator?.workspaceState?.entries?.values?.() ?? []);
     const filePaths = entries
       .filter((entry) => entry.nodeType !== 'directory')
       .map((entry) => entry.path);
     const references = collectMarkdownReferences(content, {
       sourceFilePath: normalizedPath,
-      wikiTargetIndex: createWikiTargetIndex(filePaths),
+      wikiTargetIndex: createWikiTargetIndex([...filePaths, normalizedPath]),
     });
     const toPublicReference = (reference) => ({
       exists: Boolean(reference.resolvedPath),
@@ -468,10 +518,7 @@ export class AgentContentService {
         };
       });
     return {
-      backlinks: await this.backlinkIndex?.getBacklinks?.(normalizedPath) ?? [],
       embeds: references.filter(({ isEmbed }) => isEmbed).map(toPublicReference),
-      path: normalizedPath,
-      revision: await createEditableContentRevision(content),
       videos,
       wikiLinks: references.filter(({ isEmbed }) => !isEmbed).map(toPublicReference),
     };
@@ -479,6 +526,10 @@ export class AgentContentService {
 
   async validateDocument(actor, { path } = {}) {
     const inspected = await this.inspectDocumentReferences(actor, { path });
+    return { ...this.validateMarkdownReferences(inspected), path: inspected.path, revision: inspected.revision };
+  }
+
+  validateMarkdownReferences(inspected) {
     const issues = [];
     inspected.wikiLinks.filter(({ exists }) => !exists).forEach((reference) => {
       issues.push({
@@ -506,8 +557,6 @@ export class AgentContentService {
     });
     return {
       issues,
-      path: inspected.path,
-      revision: inspected.revision,
       valid: issues.length === 0,
     };
   }
@@ -587,12 +636,13 @@ export class AgentContentService {
   }
 
 
-  async applyTextEdits(actor, { path, replacements, revision } = {}) {
+  async applyTextEdits(actor, { path, replacements, revision, validate = false } = {}) {
     requireScope(actor, 'vault:edit');
     const normalizedPath = normalizeWorkspacePath(path);
     if (!isAgentEditablePath(normalizedPath)) {
       throw createAgentContentError('AGENT_UNSUPPORTED_DOCUMENT', 'Document type is not editable by agents', 400);
     }
+    this.requireMarkdownValidation(normalizedPath, validate);
     return this.runForPath(normalizedPath, async () => {
       const content = await this.readCurrentContent(normalizedPath);
       if (content.length > MAX_DOCUMENT_CHARACTERS) {
@@ -619,7 +669,13 @@ export class AgentContentService {
       const nextContent = applyExactTextChanges(content, changes);
       assertValidAgentBaseContent(normalizedPath, nextContent);
       const room = this.roomRegistry?.get?.(normalizedPath);
+      const validation = validate
+        ? this.validateMarkdownReferences(this.inspectMarkdownContent(normalizedPath, nextContent))
+        : null;
       if (room) {
+        if (room.readEditableContent() !== content) {
+          throw createAgentContentError('AGENT_REVISION_CONFLICT', 'Document changed; read it again before editing', 409);
+        }
         room.applyExactTextChanges(changes, {
           origin: createCollaborationOrigin(actor),
         });
@@ -636,7 +692,8 @@ export class AgentContentService {
       return {
         path: normalizedPath,
         replacementCount: changes.length,
-        revision: await createEditableContentRevision(room ? room.readEditableContent() : nextContent),
+        revision: await createEditableContentRevision(nextContent),
+        ...(validation ? { validation } : {}),
       };
     });
   }
@@ -795,18 +852,22 @@ export class AgentContentService {
     });
   }
 
-  async createDocument(actor, { content = '', path } = {}) {
+  async createDocument(actor, { content = '', path, validate = false } = {}) {
     requireScope(actor, 'vault:edit');
     const normalizedPath = normalizeWorkspacePath(path);
     if (!isAgentCreatablePath(normalizedPath)) {
       throw createAgentContentError('AGENT_UNSUPPORTED_DOCUMENT', 'Document type cannot be created by agents', 400);
     }
+    this.requireMarkdownValidation(normalizedPath, validate);
     const normalizedContent = normalizeEditableText(content);
     if (normalizedContent.length > MAX_DOCUMENT_CHARACTERS) {
       throw createAgentContentError('AGENT_DOCUMENT_TOO_LARGE', 'Document is too large for agent creation', 413);
     }
     assertValidAgentBaseContent(normalizedPath, normalizedContent);
     return this.runForPath(normalizedPath, async () => {
+      const validation = validate
+        ? this.validateMarkdownReferences(this.inspectMarkdownContent(normalizedPath, normalizedContent))
+        : null;
       const result = await this.workspaceMutationCoordinator.createFile({
         content: normalizedContent,
         origin: getMutationOrigin(actor),
@@ -827,8 +888,15 @@ export class AgentContentService {
         kind: getVaultFileKind(normalizedPath),
         path: normalizedPath,
         revision: await createEditableContentRevision(normalizedContent),
+        ...(validation ? { validation } : {}),
       };
     });
+  }
+
+  requireMarkdownValidation(path, validate) {
+    if (validate && getVaultFileKind(path) !== 'markdown') {
+      throw createAgentContentError('AGENT_INPUT_INVALID', 'Reference validation requires a Markdown document', 400);
+    }
   }
 
   getSyntax(actor, { kind = '' } = {}) {
