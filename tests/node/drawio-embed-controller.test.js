@@ -87,6 +87,8 @@ function createController(overrides = {}) {
     syncEntryLayout: DrawioEmbedController.prototype.syncEntryLayout,
     syncLayout: DrawioEmbedController.prototype.syncLayout,
     syncMountedEntryMetadata: DrawioEmbedController.prototype.syncMountedEntryMetadata,
+    _disconnectPlaceholderObserver: () => {},
+    _ensurePlaceholderObserver: () => {},
     _enterMaximizedEntry: DrawioEmbedController.prototype._enterMaximizedEntry,
     _exitMaximizedEntry: () => {},
     ...overrides,
@@ -376,6 +378,7 @@ test('detachForCommit hides preserved draw.io overlay roots during preview swaps
     hydrationIdleId: null,
     hydrationQueue: ['diagram.drawio#0'],
     overlayRoot: { hidden: false },
+    _disconnectPlaceholderObserver: () => {},
     _exitMaximizedEntry: () => {
       exitCalls += 1;
     },

@@ -38,13 +38,17 @@ export class TabActivityLock {
     this.channel = null;
     this.heartbeatTimer = null;
     this.isOwner = false;
+    this.listenerController = null;
     this.handleStorageEvent = this.handleStorageEvent.bind(this);
     this.handlePageHide = this.handlePageHide.bind(this);
   }
 
   initialize() {
-    window.addEventListener('storage', this.handleStorageEvent);
-    window.addEventListener('pagehide', this.handlePageHide);
+    this.listenerController?.abort();
+    this.listenerController = new AbortController();
+    const { signal } = this.listenerController;
+    window.addEventListener('storage', this.handleStorageEvent, { signal });
+    window.addEventListener('pagehide', this.handlePageHide, { signal });
 
     if ('BroadcastChannel' in globalThis) {
       this.channel = new BroadcastChannel(CHANNEL_NAME);
@@ -56,8 +60,8 @@ export class TabActivityLock {
 
   destroy() {
     this.release();
-    window.removeEventListener('storage', this.handleStorageEvent);
-    window.removeEventListener('pagehide', this.handlePageHide);
+    this.listenerController?.abort();
+    this.listenerController = null;
     this.channel?.close();
     this.channel = null;
   }

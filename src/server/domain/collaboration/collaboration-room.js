@@ -3,6 +3,7 @@ import * as awarenessProtocol from 'y-protocols/awareness';
 import * as syncProtocol from 'y-protocols/sync';
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import {
   MSG_AGENT_FLUSH,
@@ -281,7 +282,7 @@ export class CollaborationRoom {
 
         try {
           if (hydrateDelayMs > 0) {
-            await new Promise((resolve) => setTimeout(resolve, hydrateDelayMs));
+            await delay(hydrateDelayMs);
           }
 
           if (this.documentStore?.hasPersistence()) {

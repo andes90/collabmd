@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, realpath, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import {
   isStructurizrFilePath,
@@ -341,7 +342,7 @@ export class StructurizrWorkspaceService {
       const isTransientStartupFailure = response.status >= 500
         && /(?:No workspace|FileNotFoundException|workspace\.json)/iu.test(message);
       if (isTransientStartupFailure && attempt < 7) {
-        await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
+        await delay(250);
         continue;
       }
 

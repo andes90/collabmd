@@ -1153,6 +1153,8 @@ export class FileExplorerView {
     };
     menu.addEventListener('keydown', handleKeydown);
     document.addEventListener('collabmd:close-custom-modals', this.blockingModalHandler);
+    // Defer outside-click tracking: the opening gesture's own events must not dismiss the menu.
+    // (An auto popover cannot be used here: Chromium light-dismisses it on that same gesture's trailing pointerup.)
     this.contextMenuCloseTimer = setTimeout(() => {
       this.contextMenuCloseTimer = null;
       if (menu.isConnected && this.contextMenuCloseHandler === close) {
@@ -1167,6 +1169,9 @@ export class FileExplorerView {
     const sheet = document.createElement('dialog');
     sheet.className = 'file-action-sheet';
     sheet.setAttribute('aria-label', 'File actions');
+    // Native light-dismiss where supported; the cancel/click handlers below
+    // cover older browsers and the close listener funnels both paths here.
+    sheet.setAttribute('closedby', 'any');
 
     if (searchPlaceholder) {
       createMenuFilterInput({ container: sheet, itemSelector: '.file-action-sheet-item', placeholder: searchPlaceholder, skipLabels: ['Cancel'] });
@@ -1201,6 +1206,11 @@ export class FileExplorerView {
     sheet.addEventListener('cancel', (event) => {
       event.preventDefault();
       this.removeContextMenu();
+    });
+    sheet.addEventListener('close', () => {
+      if (sheet.isConnected) {
+        this.removeContextMenu();
+      }
     });
     sheet.addEventListener('click', (event) => {
       const bounds = sheet.getBoundingClientRect();

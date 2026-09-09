@@ -1,5 +1,6 @@
 import { createReadStream } from 'fs';
 import { copyFile, mkdir, readFile, readdir, rename, rm, rmdir, stat, writeFile } from 'fs/promises';
+import { randomUUID } from 'node:crypto';
 import { basename, dirname, extname, join, relative, resolve } from 'path';
 import sharp from 'sharp';
 
@@ -76,7 +77,7 @@ const TEXT_FILE_MIME_TYPES = Object.freeze({
 });
 
 function createTransactionalPath(targetPath, label) {
-  return `${targetPath}.collabmd-${label}-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+  return `${targetPath}.collabmd-${label}-${process.pid}-${Date.now()}-${randomUUID()}`;
 }
 
 function createCommentThreadsPayload(threads = []) {

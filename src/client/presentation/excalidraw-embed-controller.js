@@ -213,15 +213,20 @@ export class ExcalidrawEmbedController {
       return;
     }
 
-    const margin = this.isLargeDocument ? 180 : 420;
     this.embedEntries.forEach((entry) => {
       if (entry.wrapper || !entry.placeholder?.isConnected) {
         return;
       }
 
-      if (isNearViewport(entry.placeholder, this.previewContainer, margin)) {
-        this._enqueueHydration(entry, { prioritize: true });
+      if (typeof IntersectionObserver === 'undefined' || !this.placeholderObserver) {
+        const margin = this.isLargeDocument ? 180 : 420;
+        if (isNearViewport(entry.placeholder, this.previewContainer, margin)) {
+          this._enqueueHydration(entry, { prioritize: true });
+        }
+        return;
       }
+
+      this.placeholderObserver.observe(entry.placeholder);
     });
   }
 

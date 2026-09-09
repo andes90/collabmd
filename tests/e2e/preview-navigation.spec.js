@@ -268,14 +268,12 @@ test('keeps the clicked parent section active in the outline after navigation se
 
   await page.locator('#outlineNav .outline-item', { hasText: 'Embedded Diagram Files' }).click();
 
-  const parentHeadingOffset = await page.locator('#previewContent h2', { hasText: 'Embedded Diagram Files' }).evaluate((heading) => {
+  await expect.poll(async () => page.locator('#previewContent h2', { hasText: 'Embedded Diagram Files' }).evaluate((heading) => {
     const container = document.getElementById('previewContainer');
     const containerRect = container.getBoundingClientRect();
     const headingRect = heading.getBoundingClientRect();
     return Math.abs(headingRect.top - containerRect.top);
-  });
-
-  expect(parentHeadingOffset).toBeLessThan(100);
+  })).toBeLessThan(100);
   await expect(page.locator('#outlineNav .outline-item.active').first()).toHaveText('Embedded Diagram Files');
   await expect(page.locator('#previewContent .excalidraw-embed').first()).toBeVisible();
   await expect.poll(async () => (

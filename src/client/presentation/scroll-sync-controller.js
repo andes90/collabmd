@@ -61,6 +61,8 @@ export class ScrollSyncController {
     this.lastInteractionSource = 'editor';
     this.scrollInputSource = null;
     this.suspendedUntil = 0;
+    this.listenerController = null;
+    this.editorListenerController = null;
 
     this.handleScrollInput = (event) => {
       const source = event.currentTarget;
@@ -112,8 +114,11 @@ export class ScrollSyncController {
   }
 
   initialize() {
-    this.previewContainer?.addEventListener('scroll', this.handlePreviewScroll, { passive: true });
-    SCROLL_INPUT_EVENTS.forEach((type) => this.previewContainer?.addEventListener(type, this.handleScrollInput, { passive: true }));
+    this.listenerController?.abort();
+    this.listenerController = new AbortController();
+    const { signal } = this.listenerController;
+    this.previewContainer?.addEventListener('scroll', this.handlePreviewScroll, { passive: true, signal });
+    SCROLL_INPUT_EVENTS.forEach((type) => this.previewContainer?.addEventListener(type, this.handleScrollInput, { passive: true, signal }));
   }
 
   attachEditorScroller(editorScroller) {
@@ -121,12 +126,18 @@ export class ScrollSyncController {
       return;
     }
 
-    this.editorScroller?.removeEventListener('scroll', this.handleEditorScroll);
-    SCROLL_INPUT_EVENTS.forEach((type) => this.editorScroller?.removeEventListener(type, this.handleScrollInput));
+    this.editorListenerController?.abort();
     this.editorScroller = editorScroller;
     this.scrollInputSource = null;
-    this.editorScroller?.addEventListener('scroll', this.handleEditorScroll, { passive: true });
-    SCROLL_INPUT_EVENTS.forEach((type) => this.editorScroller?.addEventListener(type, this.handleScrollInput, { passive: true }));
+    if (!this.editorScroller) {
+      this.editorListenerController = null;
+      return;
+    }
+
+    this.editorListenerController = new AbortController();
+    const { signal } = this.editorListenerController;
+    this.editorScroller.addEventListener('scroll', this.handleEditorScroll, { passive: true, signal });
+    SCROLL_INPUT_EVENTS.forEach((type) => this.editorScroller.addEventListener(type, this.handleScrollInput, { passive: true, signal }));
   }
 
   syncPreviewToEditor() {
@@ -140,12 +151,10 @@ export class ScrollSyncController {
   }
 
   destroy() {
-    this.previewContainer?.removeEventListener('scroll', this.handlePreviewScroll);
-    this.editorScroller?.removeEventListener('scroll', this.handleEditorScroll);
-    SCROLL_INPUT_EVENTS.forEach((type) => {
-      this.previewContainer?.removeEventListener(type, this.handleScrollInput);
-      this.editorScroller?.removeEventListener(type, this.handleScrollInput);
-    });
+    this.listenerController?.abort();
+    this.listenerController = null;
+    this.editorListenerController?.abort();
+    this.editorListenerController = null;
     this.editorScroller = null;
     this.scrollInputSource = null;
     clearTimeout(this.editorScrollIdleTimer);

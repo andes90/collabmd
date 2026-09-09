@@ -1,3 +1,4 @@
+import { scheduler } from 'node:timers/promises';
 import {
   buildColumns,
   collectEvaluatedPropertyIds,
@@ -24,12 +25,6 @@ import { transformBaseSource } from './base-transform.js';
 export { serializeBaseDefinition } from './base-definition.js';
 
 const BASE_QUERY_ROW_CHUNK_SIZE = 50;
-
-function yieldToEventLoop() {
-  return new Promise((resolve) => {
-    setImmediate(resolve);
-  });
-}
 
 function buildSortChain(activeView) {
   const entries = [];
@@ -292,7 +287,7 @@ export class BaseQueryService {
       }
 
       if (chunkEnd < filePaths.length) {
-        await yieldToEventLoop();
+        await scheduler.yield();
       }
     }
 

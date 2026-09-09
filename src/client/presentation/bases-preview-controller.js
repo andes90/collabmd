@@ -7,7 +7,8 @@ import { segmentedButtonClassNames, segmentedControlClassNames } from './compone
 import { downloadBlob, parseDownloadFileName } from '../browser-utils.js';
 
 function createShellKey() {
-  return `base-${Math.random().toString(36).slice(2, 10)}`;
+  const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  return `base-${id}`;
 }
 
 function replaceChildrenFromHtml(target, html) {

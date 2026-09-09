@@ -63,6 +63,7 @@ export class CommentUiController {
     this.cardRoot = null;
     this.pendingCardFocusElement = null;
     this.reactionPicker = null;
+    this.listenerController = null;
     this.layoutFrame = 0;
     this.timeFormatter = new Intl.DateTimeFormat(undefined, {
       day: 'numeric',
@@ -200,26 +201,28 @@ export class CommentUiController {
       }
     };
 
-    this.commentSelectionButton?.addEventListener('pointerdown', this.handleCommentSelectionButtonPointerDown);
+    this.listenerController = new AbortController();
+    const { signal } = this.listenerController;
+    this.commentSelectionButton?.addEventListener('pointerdown', this.handleCommentSelectionButtonPointerDown, { signal });
     this.commentSelectionButton?.addEventListener('click', () => {
       this.openComposerForSelection('toolbar');
-    });
+    }, { signal });
     this.commentsToggleButton?.addEventListener('click', () => {
       this.setDrawerOpen(!this.drawerOpen);
-    });
-    this.previewContainer?.addEventListener('scroll', this.handlePreviewScroll, { passive: true });
-    this.previewElement?.addEventListener('pointermove', this.handlePreviewPointerMove, { passive: true });
-    this.previewElement?.addEventListener('pointerleave', this.handlePreviewPointerLeave);
-    this.previewElement?.addEventListener('focusin', this.handlePreviewFocusIn);
-    this.previewElement?.addEventListener('focusout', this.handlePreviewFocusOut);
-    this.editorContainer?.addEventListener('pointerdown', this.handleEditorPointerDown);
-    this.editorContainer?.addEventListener('focusout', this.handleEditorFocusOut);
-    window.addEventListener('resize', this.handleWindowResize);
-    document.addEventListener('pointerup', this.handleDocumentPointerUp);
-    document.addEventListener('pointercancel', this.handleDocumentPointerUp);
-    document.addEventListener('pointerdown', this.handleDocumentPointerDown);
-    document.addEventListener('keydown', this.handleDocumentKeyDown);
-    document.addEventListener('selectionchange', this.handleDocumentSelectionChange);
+    }, { signal });
+    this.previewContainer?.addEventListener('scroll', this.handlePreviewScroll, { passive: true, signal });
+    this.previewElement?.addEventListener('pointermove', this.handlePreviewPointerMove, { passive: true, signal });
+    this.previewElement?.addEventListener('pointerleave', this.handlePreviewPointerLeave, { signal });
+    this.previewElement?.addEventListener('focusin', this.handlePreviewFocusIn, { signal });
+    this.previewElement?.addEventListener('focusout', this.handlePreviewFocusOut, { signal });
+    this.editorContainer?.addEventListener('pointerdown', this.handleEditorPointerDown, { signal });
+    this.editorContainer?.addEventListener('focusout', this.handleEditorFocusOut, { signal });
+    window.addEventListener('resize', this.handleWindowResize, { signal });
+    document.addEventListener('pointerup', this.handleDocumentPointerUp, { signal });
+    document.addEventListener('pointercancel', this.handleDocumentPointerUp, { signal });
+    document.addEventListener('pointerdown', this.handleDocumentPointerDown, { signal });
+    document.addEventListener('keydown', this.handleDocumentKeyDown, { signal });
+    document.addEventListener('selectionchange', this.handleDocumentSelectionChange, { signal });
   }
 
   destroy() {
@@ -228,20 +231,8 @@ export class CommentUiController {
       this.layoutFrame = 0;
     }
     this.attachSession(null);
-    this.previewContainer?.removeEventListener('scroll', this.handlePreviewScroll);
-    this.previewElement?.removeEventListener('pointermove', this.handlePreviewPointerMove);
-    this.previewElement?.removeEventListener('pointerleave', this.handlePreviewPointerLeave);
-    this.previewElement?.removeEventListener('focusin', this.handlePreviewFocusIn);
-    this.previewElement?.removeEventListener('focusout', this.handlePreviewFocusOut);
-    this.commentSelectionButton?.removeEventListener('pointerdown', this.handleCommentSelectionButtonPointerDown);
-    this.editorContainer?.removeEventListener('pointerdown', this.handleEditorPointerDown);
-    this.editorContainer?.removeEventListener('focusout', this.handleEditorFocusOut);
-    window.removeEventListener('resize', this.handleWindowResize);
-    document.removeEventListener('pointerup', this.handleDocumentPointerUp);
-    document.removeEventListener('pointercancel', this.handleDocumentPointerUp);
-    document.removeEventListener('pointerdown', this.handleDocumentPointerDown);
-    document.removeEventListener('keydown', this.handleDocumentKeyDown);
-    document.removeEventListener('selectionchange', this.handleDocumentSelectionChange);
+    this.listenerController?.abort();
+    this.listenerController = null;
     this.previewHoverRegions = [];
     this.previewSelection = null;
     this.cardRoot?.remove();

@@ -489,6 +489,9 @@ body.is-file-tree-dragging * {
 
 .create-menu {
   position: fixed;
+  /* Override UA popover styles (inset/margin/width) so explicit coordinates win. */
+  inset: auto;
+  margin: 0;
   z-index: 1010;
   width: min(240px, calc(100vw - 24px));
   padding: 6px;

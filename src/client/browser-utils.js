@@ -83,7 +83,7 @@ export function isNearViewport(element, root, marginPx) {
 }
 
 export function downloadBlob(blob, fileName, {
-  removeDelayMs = 30_000,
+  removeDelayMs = 1000,
   revokeDelayMs = removeDelayMs,
 } = {}) {
   const windowRef = getWindowRef();

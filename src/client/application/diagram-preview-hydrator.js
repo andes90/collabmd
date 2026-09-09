@@ -409,6 +409,13 @@ export class DiagramPreviewHydrator {
       return;
     }
 
+    if (this.observer && typeof IntersectionObserver !== 'undefined') {
+      Array.from(previewElement.querySelectorAll(this.shellSelector)).forEach((shell) => {
+        this.observer.observe(shell);
+      });
+      return;
+    }
+
     const margin = this.renderer.isLargeDocument ? 180 : 420;
     Array.from(previewElement.querySelectorAll(this.shellSelector)).forEach((shell) => {
       if (this.isNearViewportFn(shell, previewContainer, margin)) {

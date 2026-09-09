@@ -21,16 +21,6 @@ import { mapWithConcurrency } from '../shared/async-utils.js';
 
 const BACKLINK_BUILD_CONCURRENCY = 8;
 
-function createDeferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((nextResolve, nextReject) => {
-    resolve = nextResolve;
-    reject = nextReject;
-  });
-  return { promise, reject, resolve };
-}
-
 export class BacklinkIndex {
   constructor({
     rebuildDelayMs = 150,
@@ -83,7 +73,7 @@ export class BacklinkIndex {
       this._latestRequestedWorkspaceState = workspaceState;
     }
     if (!this._scheduledBuildDeferred) {
-      this._scheduledBuildDeferred = createDeferred();
+      this._scheduledBuildDeferred = Promise.withResolvers();
     }
 
     if (this._scheduledBuildTimer) {

@@ -38,20 +38,23 @@ export class DrawioEmbedController {
     this.instanceCounter = 0;
     this.maximizedEntry = null;
     this.overlayRoot = null;
+    this.placeholderObserver = null;
 
     this._onMessage = this._onMessage.bind(this);
     this._onKeyDown = this._onKeyDown.bind(this);
     this._onPreviewClick = this._onPreviewClick.bind(this);
 
-    window.addEventListener('message', this._onMessage);
-    window.addEventListener('keydown', this._onKeyDown);
-    this.previewElement?.addEventListener('click', this._onPreviewClick);
+    this.listenerController = new AbortController();
+    const { signal } = this.listenerController;
+    window.addEventListener('message', this._onMessage, { signal });
+    window.addEventListener('keydown', this._onKeyDown, { signal });
+    this.previewElement?.addEventListener('click', this._onPreviewClick, { signal });
   }
 
   destroy() {
-    window.removeEventListener('message', this._onMessage);
-    window.removeEventListener('keydown', this._onKeyDown);
-    this.previewElement?.removeEventListener('click', this._onPreviewClick);
+    this.listenerController?.abort();
+    this.listenerController = null;
+    this._disconnectPlaceholderObserver();
     cancelIdleRender(this.hydrationIdleId);
     this.hydrationIdleId = null;
     this.hydrationQueue = [];
@@ -64,6 +67,7 @@ export class DrawioEmbedController {
   }
 
   detachForCommit() {
+    this._disconnectPlaceholderObserver();
     cancelIdleRender(this.hydrationIdleId);
     this.hydrationIdleId = null;
     this.hydrationQueue = [];
@@ -122,6 +126,9 @@ export class DrawioEmbedController {
 
     this.embedEntries = nextEntries;
 
+    this._disconnectPlaceholderObserver();
+    this._ensurePlaceholderObserver();
+
     this.embedEntries.forEach((entry) => {
       if (entry.wrapper) {
         this.attachWrapper(entry);
@@ -164,10 +171,51 @@ export class DrawioEmbedController {
         return;
       }
 
-      if (entry.mode === 'edit' || isNearViewport(entry.placeholder, this.previewContainer, HYDRATE_VIEWPORT_MARGIN_PX)) {
+      if (entry.mode === 'edit') {
         this.enqueueHydration(entry);
+        return;
       }
+
+      if (typeof IntersectionObserver === 'undefined') {
+        if (isNearViewport(entry.placeholder, this.previewContainer, HYDRATE_VIEWPORT_MARGIN_PX)) {
+          this.enqueueHydration(entry);
+        }
+        return;
+      }
+
+      this.placeholderObserver?.observe(entry.placeholder);
     });
+  }
+
+  _ensurePlaceholderObserver() {
+    if (!this.previewContainer || typeof IntersectionObserver === 'undefined') {
+      return;
+    }
+
+    this.placeholderObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) {
+          return;
+        }
+
+        const embedEntry = this.embedEntries.get(entry.target.dataset.drawioKey);
+        if (embedEntry && !embedEntry.wrapper) {
+          this.enqueueHydration(embedEntry);
+        }
+      });
+    }, {
+      root: this.previewContainer,
+      rootMargin: `${HYDRATE_VIEWPORT_MARGIN_PX}px 0px`,
+    });
+  }
+
+  _disconnectPlaceholderObserver() {
+    if (!this.placeholderObserver) {
+      return;
+    }
+
+    this.placeholderObserver.disconnect();
+    this.placeholderObserver = null;
   }
 
   enqueueHydration(entry) {

@@ -23,8 +23,6 @@ export class CreateMenuPresenter {
     this.mobileBreakpointQuery = mobileBreakpointQuery;
     this.activeAnchor = null;
     this.desktopMenu = null;
-    this.mobileSheet = null;
-    this.documentPointerDownHandler = null;
     this.windowResizeHandler = null;
     this.blockingModalHandler = () => this.close();
     this.boundClose = () => this.close();
@@ -67,8 +65,9 @@ export class CreateMenuPresenter {
 
   close({ restoreFocus = true } = {}) {
     if (this.desktopMenu) {
-      this.desktopMenu.remove();
+      const menu = this.desktopMenu;
       this.desktopMenu = null;
+      menu.remove();
     }
 
     if (this.mobileSheet) {
@@ -77,11 +76,6 @@ export class CreateMenuPresenter {
       this.mobileSheet = null;
     }
     document.removeEventListener('collabmd:close-custom-modals', this.blockingModalHandler);
-
-    if (this.documentPointerDownHandler) {
-      document.removeEventListener('pointerdown', this.documentPointerDownHandler);
-      this.documentPointerDownHandler = null;
-    }
 
     if (this.windowResizeHandler && typeof window !== 'undefined') {
       window.removeEventListener('resize', this.windowResizeHandler);
@@ -104,26 +98,24 @@ export class CreateMenuPresenter {
     menu.className = 'create-menu';
     menu.setAttribute('role', 'menu');
     menu.setAttribute('aria-label', title);
+    menu.setAttribute('popover', 'auto');
 
     this.renderMenuItems(menu, items);
     document.body.appendChild(menu);
+    menu.showPopover?.();
     this.positionDesktopMenu(menu, anchor);
 
     menu.addEventListener('keydown', (event) => {
       this.handleDesktopMenuKeyDown(event, menu);
     });
-
-    this.documentPointerDownHandler = (event) => {
-      if (menu.contains(event.target) || anchor?.contains?.(event.target)) {
-        return;
+    // Native light-dismiss replaces the deferred pointerdown listener;
+    // explicit closes detach the element first, so ignore those toggles.
+    menu.addEventListener('toggle', (toggleEvent) => {
+      if (toggleEvent.newState === 'closed' && menu.isConnected && this.desktopMenu === menu) {
+        this.close();
       }
-
-      this.close();
-    };
+    });
     this.windowResizeHandler = this.boundClose;
-    setTimeout(() => {
-      document.addEventListener('pointerdown', this.documentPointerDownHandler);
-    }, 0);
     if (typeof window !== 'undefined') {
       window.addEventListener('resize', this.windowResizeHandler);
     }
@@ -136,6 +128,7 @@ export class CreateMenuPresenter {
     const sheet = document.createElement('dialog');
     sheet.className = 'file-action-sheet create-action-sheet';
     sheet.setAttribute('aria-label', title);
+    sheet.setAttribute('closedby', 'any');
 
     const header = document.createElement('div');
     header.className = 'create-action-sheet-header';
@@ -159,6 +152,11 @@ export class CreateMenuPresenter {
     sheet.addEventListener('cancel', (event) => {
       event.preventDefault();
       this.close();
+    });
+    sheet.addEventListener('close', () => {
+      if (sheet.isConnected && this.mobileSheet === sheet) {
+        this.close();
+      }
     });
     sheet.addEventListener('click', (event) => {
       const bounds = sheet.getBoundingClientRect();

@@ -78,6 +78,8 @@ export class ImageLightboxController {
     this.resetButton = null;
     this.previouslyFocusedElement = null;
     this.blockingModalHandler = () => this.close();
+    this.listenerController = new AbortController();
+    const { signal } = this.listenerController;
 
     this.handlePreviewClick = (event) => {
       const target = event.target;
@@ -131,15 +133,14 @@ export class ImageLightboxController {
       this.syncTransform();
     };
 
-    this.previewElement?.addEventListener('click', this.handlePreviewClick);
-    this.document.addEventListener('keydown', this.handleKeyDown);
-    this.window.addEventListener('resize', this.handleWindowResize);
+    this.previewElement?.addEventListener('click', this.handlePreviewClick, { signal });
+    this.document.addEventListener('keydown', this.handleKeyDown, { signal });
+    this.window.addEventListener('resize', this.handleWindowResize, { signal });
   }
 
   destroy() {
-    this.previewElement?.removeEventListener('click', this.handlePreviewClick);
-    this.document.removeEventListener('keydown', this.handleKeyDown);
-    this.window.removeEventListener('resize', this.handleWindowResize);
+    this.listenerController?.abort();
+    this.listenerController = null;
     this.close();
     this.overlayRoot?.remove();
     this.overlayRoot = null;
