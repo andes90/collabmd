@@ -504,3 +504,57 @@ test('FileSystemSyncService silently rebases workspace state for managed writes'
   assert.equal(mutationCoordinator.workspaceState.metadata.get('diagram.excalidraw').mtimeMs, 2);
   assert.equal(service.lastState.metadata.get('diagram.excalidraw').mtimeMs, 2);
 });
+
+test('FileSystemSyncService skips the rebase rescan when the first pass already full-scanned', async () => {
+  const baselineState = createWorkspaceState([
+    ['docs', 'directory'],
+  ]);
+  const diskState = createWorkspaceState([
+    ['docs', 'directory'],
+    ['docs/new.md', 'file'],
+  ]);
+  let scanCount = 0;
+  let syncCount = 0;
+  let replaceCount = 0;
+
+  const mutationCoordinator = {
+    filterManagedWorkspaceChange() {
+      return null;
+    },
+    isGloballySuppressed() {
+      return false;
+    },
+    async apply() {
+      assert.fail('managed-only flush must not apply');
+    },
+    replaceWorkspaceState(nextState) {
+      replaceCount += 1;
+      this.workspaceState = nextState;
+    },
+    syncWorkspaceEntries() {
+      syncCount += 1;
+    },
+    workspaceState: baselineState,
+  };
+
+  const service = new FileSystemSyncService({
+    mutationCoordinator,
+    vaultFileStore: {
+      async scanWorkspaceState() {
+        scanCount += 1;
+        return diskState;
+      },
+      vaultDir: process.cwd(),
+    },
+  });
+  service.lastState = baselineState;
+  service.forceFullScan = true;
+
+  await service.flush();
+
+  assert.equal(scanCount, 1);
+  assert.equal(syncCount, 1);
+  assert.equal(replaceCount, 1);
+  assert.equal(mutationCoordinator.workspaceState.entries.has('docs/new.md'), true);
+  assert.equal(service.lastState.entries.has('docs/new.md'), true);
+});

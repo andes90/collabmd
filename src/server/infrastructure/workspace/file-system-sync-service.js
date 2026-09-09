@@ -11,7 +11,7 @@ import {
 import { isIgnoredVaultEntry } from '../persistence/path-utils.js';
 import { createWorkspaceStateFileSystemAdapter } from './workspace-state-file-system-adapter.js';
 
-const MAX_INCREMENTAL_PENDING_PATHS = 16;
+const MAX_INCREMENTAL_PENDING_PATHS = 64;
 
 function normalizeWatchedPath(filename) {
   if (typeof filename !== 'string' && !Buffer.isBuffer(filename)) {
@@ -193,7 +193,9 @@ export class FileSystemSyncService {
     let filteredChange = this.mutationCoordinator.filterManagedWorkspaceChange(workspaceChange);
     if (!filteredChange) {
       const authoritativeChange = detectWorkspaceStateChange(authoritativePreviousState, nextState);
-      if (hasWorkspaceMutation(authoritativeChange)) {
+      // A full scan already reflects current disk state (no awaits since),
+      // so only rebase when the first pass was incremental and may be stale.
+      if (incrementalResult && hasWorkspaceMutation(authoritativeChange)) {
         nextState = await this.vaultFileStore.scanWorkspaceState();
         workspaceChange = detectWorkspaceStateChange(authoritativePreviousState, nextState);
         this.lastState = nextState;
