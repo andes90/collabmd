@@ -1,11 +1,53 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 
+import '../../src/client/styles/foundation/themes.css';
 import { EditorViewAdapter } from '../../src/client/infrastructure/editor-view-adapter.js';
 
 function nextFrame() {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
+
+describe('EditorViewAdapter selection highlight', () => {
+  it.each(['light', 'dark'])('keeps selection endpoints consistent in %s mode', async (theme) => {
+    document.body.innerHTML = '<div id="editor"></div>';
+    document.documentElement.dataset.theme = theme;
+    const adapter = new EditorViewAdapter({
+      editorContainer: document.getElementById('editor'),
+      initialTheme: theme,
+    });
+    const content = '```mermaid\ngraph LR\n  A --> B\n```';
+    adapter.initializeProvisional({ content, filePath: 'note.md' });
+    const view = adapter.editorView;
+    view.focus();
+
+    try {
+      for (const [anchor, head] of [[0, content.length], [content.length, 0]]) {
+        view.dispatch({ selection: { anchor, head } });
+        await expect.poll(() => view.dom.querySelectorAll('.cm-selectionBackground').length).toBeGreaterThan(1);
+        expect(getComputedStyle(view.dom.querySelector('.cm-activeLine')).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+        expect(getComputedStyle(view.dom.querySelector('.cm-activeLine')).boxShadow).toBe('none');
+        const colors = [...view.dom.querySelectorAll('.cm-selectionBackground')]
+          .map((element) => getComputedStyle(element).backgroundColor);
+        expect(new Set(colors).size).toBe(1);
+        for (const element of view.dom.querySelectorAll('.cm-selectionBackground')) {
+          const style = getComputedStyle(element);
+          expect(style.borderTopWidth).toBe('0px');
+          expect(style.borderBottomWidth).toBe('0px');
+          expect(style.borderRadius).toBe('0px');
+        }
+      }
+
+      view.dispatch({ selection: { anchor: 0 } });
+      await expect.poll(() => view.dom.querySelector('.cm-selectionBackground')).toBeNull();
+      expect(getComputedStyle(view.dom.querySelector('.cm-activeLine')).backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
+    } finally {
+      adapter.destroy();
+      document.body.innerHTML = '';
+      delete document.documentElement.dataset.theme;
+    }
+  });
+});
 
 describe('EditorViewAdapter Vim mode', () => {
   afterEach(() => {

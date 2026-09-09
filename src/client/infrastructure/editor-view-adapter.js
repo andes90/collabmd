@@ -251,9 +251,6 @@ function createEditorTheme(theme) {
   const selectionBackground = theme === 'dark'
     ? 'oklch(from var(--color-primary) l c h / 0.4)'
     : 'oklch(from var(--color-primary) l c h / 0.26)';
-  const selectionBorder = theme === 'dark'
-    ? 'oklch(from var(--color-primary) l c h / 0.65)'
-    : 'oklch(from var(--color-primary) l c h / 0.5)';
   const caretColor = theme === 'dark'
     ? 'color-mix(in oklab, var(--color-primary) 78%, white)'
     : 'color-mix(in oklab, var(--color-primary) 84%, black)';
@@ -302,6 +299,10 @@ function createEditorTheme(theme) {
     '.cm-activeLine': {
       backgroundColor: activeLineBackground,
       boxShadow: `inset 3px 0 0 ${activeLineAccent}`,
+    },
+    '&:has(.cm-selectionBackground) .cm-activeLine': {
+      backgroundColor: 'transparent',
+      boxShadow: 'none',
     },
     '.cm-activeLineGutter': {
       backgroundColor: activeLineBackground,
@@ -355,10 +356,6 @@ function createEditorTheme(theme) {
     },
     '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
       backgroundColor: selectionBackground,
-    },
-    '&.cm-focused .cm-selectionLayer .cm-selectionBackground': {
-      border: `1px solid ${selectionBorder}`,
-      borderRadius: '2px',
     },
     '@keyframes collabmd-remote-update-flash': {
       '0%': {
