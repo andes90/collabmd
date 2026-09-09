@@ -9,7 +9,7 @@ import {
   SUPPORTED_AUTH_STRATEGIES,
   createRandomAuthPassword,
   createRandomSessionSecret,
-} from '../auth/create-auth-service.js';
+} from '../auth/auth-constants.js';
 import { loadBuildInfo } from './build-info.js';
 import { isPerfLoggingEnabled } from './perf-logging.js';
 

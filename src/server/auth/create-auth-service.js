@@ -3,9 +3,6 @@ import {
   AUTH_STRATEGY_NONE,
   AUTH_STRATEGY_OIDC,
   AUTH_STRATEGY_PASSWORD,
-  SUPPORTED_AUTH_STRATEGIES,
-  createRandomAuthPassword,
-  createRandomSessionSecret,
 } from './auth-constants.js';
 import {
   buildClientConfig,
@@ -17,15 +14,6 @@ import {
   createOidcStrategy,
   createPasswordStrategy,
 } from './auth-strategies.js';
-
-export {
-  AUTH_STRATEGY_NONE,
-  AUTH_STRATEGY_OIDC,
-  AUTH_STRATEGY_PASSWORD,
-  SUPPORTED_AUTH_STRATEGIES,
-  createRandomAuthPassword,
-  createRandomSessionSecret,
-};
 
 function resolveRequestProtocol(req) {
   const forwarded = String(req.headers['x-forwarded-proto'] ?? '').split(',')[0].trim().toLowerCase();

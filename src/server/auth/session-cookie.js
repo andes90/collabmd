@@ -1,19 +1,11 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 function decodeBase64Url(value) {
-  const normalized = String(value ?? '')
-    .replace(/-/g, '+')
-    .replace(/_/g, '/');
-  const paddingLength = (4 - (normalized.length % 4)) % 4;
-  return Buffer.from(`${normalized}${'='.repeat(paddingLength)}`, 'base64');
+  return Buffer.from(String(value ?? ''), 'base64url');
 }
 
 function encodeBase64Url(value) {
-  return Buffer.from(value)
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/g, '');
+  return Buffer.from(value).toString('base64url');
 }
 
 function parseCookieHeader(headerValue) {

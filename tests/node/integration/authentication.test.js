@@ -4,12 +4,12 @@ import { createSign, generateKeyPairSync } from 'node:crypto';
 import { createServer } from 'node:http';
 
 import { extractCookieHeader } from '../helpers/cookie.js';
+import { createAuthService } from '../../../src/server/auth/create-auth-service.js';
 import {
   AUTH_STRATEGY_NONE,
   AUTH_STRATEGY_OIDC,
   AUTH_STRATEGY_PASSWORD,
-  createAuthService,
-} from '../../../src/server/auth/create-auth-service.js';
+} from '../../../src/server/auth/auth-constants.js';
 import { loadConfig } from '../../../src/server/config/env.js';
 
 function withAuthEnvCleared(fn) {
