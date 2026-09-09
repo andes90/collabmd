@@ -22,8 +22,9 @@ function getDiffFileKind(file = null) {
 
 function getImageFormat(filePath = '') {
   const normalizedPath = String(filePath ?? '').toLowerCase();
-  const extension = Object.keys(IMAGE_MIME_LABELS).find((candidate) => normalizedPath.endsWith(candidate));
-  return extension ? IMAGE_MIME_LABELS[extension] : 'Image';
+  const dotIndex = normalizedPath.lastIndexOf('.');
+  const extension = dotIndex >= 0 ? normalizedPath.slice(dotIndex) : '';
+  return IMAGE_MIME_LABELS[extension] ?? 'Image';
 }
 
 function parseExcalidrawScene(rawSource = '') {
