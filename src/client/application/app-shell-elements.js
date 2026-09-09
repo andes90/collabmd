@@ -81,6 +81,8 @@ export function bindAppShellElements(doc = document) {
     toggleVimModeButton: doc.getElementById('toggleVimModeBtn'),
     userAvatars: doc.getElementById('userAvatars'),
     userCount: doc.getElementById('userCount'),
+    cursorNamesToggleLabel: doc.getElementById('cursorNamesToggleLabel'),
+    toggleCursorNamesButton: doc.getElementById('toggleCursorNamesBtn'),
     wrapToggleLabel: doc.getElementById('wrapToggleLabel'),
     vimModeToggleLabel: doc.getElementById('vimModeToggleLabel'),
     activeFileName: doc.getElementById('activeFileName'),

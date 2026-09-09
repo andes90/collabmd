@@ -66,6 +66,7 @@ async function initialize() {
   this.initializePreviewLayoutObserver();
   this.syncIdentityManagementUi();
   this.syncCurrentUserName();
+  this.syncCursorNamesToggle();
   this.syncWrapToggle();
   this.syncVimModeToggle();
   this.syncToolbarOverflowVisibility?.();
@@ -351,6 +352,12 @@ function bindEvents() {
     this.toggleLineWrapping();
   });
 
+  this.elements.toggleCursorNamesButton?.addEventListener('click', () => {
+    const visible = this.elements.editorContainer.classList.contains('hide-cursor-names');
+    this.preferences.setCursorNamesVisible(visible);
+    this.syncCursorNamesToggle(visible);
+  });
+
   this.elements.toggleVimModeButton?.addEventListener('click', () => {
     this.toggleVimMode();
   });
@@ -367,7 +374,7 @@ function bindEvents() {
 
   this.elements.toolbarOverflowMenu?.addEventListener('click', (event) => {
     const button = event.target instanceof Element ? event.target.closest('button') : null;
-    if (button && button !== this.elements.toggleVimModeButton) {
+    if (button && button !== this.elements.toggleVimModeButton && button !== this.elements.toggleCursorNamesButton) {
       this.closeToolbarOverflowMenu();
     }
   });
@@ -1044,6 +1051,17 @@ function syncVimModeToggle(state) {
 }
 
 /** @this {UiShellContext} */
+function syncCursorNamesToggle(visible = this.preferences.getCursorNamesVisible()) {
+  this.elements.editorContainer?.classList.toggle('hide-cursor-names', !visible);
+  const label = this.elements.cursorNamesToggleLabel;
+  if (label) label.textContent = visible ? 'On' : 'Off';
+  const button = this.elements.toggleCursorNamesButton;
+  button?.setAttribute('aria-pressed', String(visible));
+  button?.setAttribute('aria-label', `${visible ? 'Hide' : 'Show'} cursor names`);
+  button?.setAttribute('title', `${visible ? 'Hide' : 'Show'} cursor names`);
+}
+
+/** @this {UiShellContext} */
 function syncWrapToggle(state) {
   const enabled = state ?? this.session?.isLineWrappingEnabled() ?? this.getStoredLineWrapping();
   const label = this.elements.wrapToggleLabel;
@@ -1140,6 +1158,7 @@ export const uiFeatureShellMethods = {
   syncVisualViewportBounds,
   syncToolbarOverflowVisibility,
   syncVimModeToggle,
+  syncCursorNamesToggle,
   syncWrapToggle,
   toggleLineWrapping,
   unfoldPreviewHeading,

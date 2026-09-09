@@ -62,6 +62,14 @@ export class BrowserPreferencesPort {
     writeStorage(this.storage, this.lineWrappingKey, String(enabled));
   }
 
+  getCursorNamesVisible() {
+    return readStorage(this.storage, 'collabmd-editor-cursor-names', null) !== 'false';
+  }
+
+  setCursorNamesVisible(visible) {
+    writeStorage(this.storage, 'collabmd-editor-cursor-names', String(visible));
+  }
+
   getVimModeEnabled() {
     return readStorage(this.storage, this.vimModeKey, null) === 'true';
   }

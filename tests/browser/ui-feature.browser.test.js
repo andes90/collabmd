@@ -209,6 +209,7 @@ describe('uiFeature browser helpers', () => {
       syncReviewFileChangesButton: vi.fn(),
       syncIdentityManagementUi: vi.fn(),
       syncToolbarOverflowVisibility: vi.fn(),
+      syncCursorNamesToggle: vi.fn(),
       syncVimModeToggle: vi.fn(),
       syncWrapToggle: vi.fn(),
       tabActivityLock: {

@@ -155,6 +155,10 @@
   font-weight: 600;
 }
 
+.editor-container.hide-cursor-names .cm-ySelectionInfo {
+  display: none;
+}
+
 .preview-body {
   --preview-floating-sidebar-gap: var(--space-3);
   --preview-floating-comments-width: var(--panel-comments-width);

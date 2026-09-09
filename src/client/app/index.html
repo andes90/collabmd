@@ -387,6 +387,15 @@
                 <span class="ui-toolbar-button-label">Search files</span>
               </button>
 
+              <button type="button" class="ui-button ui-button--ghost ui-button--toolbar ui-button--toggle" id="toggleCursorNamesBtn" aria-label="Hide cursor names" aria-pressed="true" title="Hide cursor names">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="8" r="4"></circle>
+                  <path d="M5 21v-2a7 7 0 0 1 14 0v2"></path>
+                </svg>
+                <span class="ui-toolbar-button-label">Cursor names</span>
+                <span class="ui-pill-badge ui-pill-badge--muted toolbar-toggle-state" id="cursorNamesToggleLabel">On</span>
+              </button>
+
               <button class="ui-button ui-button--ghost ui-button--toolbar ui-button--toggle toolbar-vim-button" id="toggleVimModeBtn" aria-label="Enable Vim keybindings" aria-pressed="false" title="Enable Vim keybindings">
                 <span class="toolbar-vim-icon" aria-hidden="true">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -396,7 +405,7 @@
                   </svg>
                 </span>
                 <span class="ui-toolbar-button-label">Vim</span>
-                <span class="ui-pill-badge ui-pill-badge--muted toolbar-vim-state" id="vimModeToggleLabel">Off</span>
+                <span class="ui-pill-badge ui-pill-badge--muted toolbar-toggle-state" id="vimModeToggleLabel">Off</span>
               </button>
 
               <details class="toolbar-overflow-group hidden" id="exportMenuGroup">

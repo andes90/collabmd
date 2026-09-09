@@ -1916,3 +1916,43 @@ test('opens the participant panel for hidden collaborators and follows them', as
     await Promise.all(contexts.map((context) => context.close().catch(() => {})));
   }
 });
+
+test('toggles editor cursor names locally and remembers the choice after reload', async ({ browser }) => {
+  const viewer = await browser.newPage();
+  const collaborator = await browser.newPage();
+  try {
+    await openFile(viewer, 'README.md');
+    await openFile(collaborator, 'README.md');
+    await setEditorSelection(collaborator, 'Welcome to the test vault');
+    const name = viewer.locator('.cm-ySelectionInfo').first();
+    await expect(name).toBeVisible();
+
+    const toggle = viewer.locator('#toggleCursorNamesBtn');
+    const badge = viewer.locator('#cursorNamesToggleLabel');
+    await viewer.locator('#toolbarOverflowToggle').click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await expect(badge).toHaveText('On');
+    await toggle.click();
+    await expect(name).toBeHidden();
+    await expect(badge).toBeVisible();
+    await expect(badge).toHaveText('Off');
+    await expect(viewer.locator('.cm-ySelectionCaret').first()).toBeVisible();
+    await expect(viewer.locator('.cm-ySelection').first()).toBeVisible();
+    await expect(collaborator.locator('#editorContainer')).not.toHaveClass(/hide-cursor-names/);
+
+    await viewer.reload();
+    await expect(viewer.locator('.cm-editor')).toBeVisible();
+    await expect(viewer.locator('.cm-ySelectionCaret').first()).toBeVisible();
+    await expect(name).toBeHidden();
+    await viewer.locator('#toolbarOverflowToggle').click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await expect(badge).toHaveText('Off');
+    await toggle.click();
+    await expect(name).toBeVisible();
+    await expect(badge).toBeVisible();
+    await expect(badge).toHaveText('On');
+  } finally {
+    await viewer.close();
+    await collaborator.close();
+  }
+});
