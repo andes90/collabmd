@@ -67,7 +67,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@excalidraw/fractional-indexing": "^0.18.0-214cd6e",
+    "@excalidraw/fractional-indexing": "^0.18.0-2b1c2a9",
     "@modelcontextprotocol/client": "^2.0.0",
     "@modelcontextprotocol/node": "^2.0.0",
     "@modelcontextprotocol/server": "^2.0.0",
@@ -107,7 +107,7 @@
     "@codemirror/view": "^6.43.11",
     "@embedpdf/snippet": "2.15.0",
     "@eslint/js": "^10.0.1",
-    "@excalidraw/excalidraw": "0.18.0-214cd6e",
+    "@excalidraw/excalidraw": "0.18.0-2b1c2a9",
     "@playwright/test": "^1.63.0",
     "@replit/codemirror-vim": "^6.4.0",
     "@vitest/browser": "^5.0.0",
