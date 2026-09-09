@@ -1,5 +1,6 @@
 export const IDLE_RENDER_TIMEOUT_MS = 500;
 export const MERMAID_BATCH_SIZE = 2;
+export const MERMAID_RENDER_CACHE_LIMIT = 30;
 export const PLANTUML_BATCH_SIZE = 2;
 
 export {

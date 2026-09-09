@@ -7,9 +7,26 @@ import {
   createMermaidPlaceholderCardWithMessage,
   createDiagramErrorPlaceholderCard,
   MERMAID_BATCH_SIZE,
+  MERMAID_RENDER_CACHE_LIMIT,
   normalizeDiagramError,
   normalizeMermaidSvg,
+  resolveSvgDimensions,
 } from './preview-diagram-utils.js';
+
+function parseCachedSvgMarkup(svgMarkup) {
+  try {
+    const template = document.createElement('template');
+    template.innerHTML = String(svgMarkup);
+    const svg = template.content?.querySelector?.('svg');
+    if (svg?.nodeName?.toLowerCase() === 'svg') {
+      return svg;
+    }
+  } catch {
+    // Fall through to a fresh render below.
+  }
+
+  return null;
+}
 
 export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
   constructor(renderer, { loadFileSource = null } = {}) {
@@ -35,6 +52,7 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
     this.diagramChrome = renderer.diagramChrome;
     this.loader = null;
     this.runtime = null;
+    this.renderCache = new Map();
   }
 
   cancelHydration({ preserveActiveShell = false } = {}) {
@@ -45,6 +63,10 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
   }
 
   applyTheme(theme) {
+    if (theme === this.currentTheme) {
+      return;
+    }
+
     this.currentTheme = theme;
     const mermaid = this.runtime;
     if (!mermaid) {
@@ -181,6 +203,16 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
       const renderedSource = source;
       source = this.prepareSource(source);
 
+      const renderCacheKey = this.getRenderCacheKey(source);
+      if (this.tryMountCachedDiagram(shell, {
+        hydrationToken,
+        renderCacheKey,
+        renderedSource,
+        renderVersion,
+      })) {
+        return;
+      }
+
       shell.querySelector('.mermaid-placeholder-card')?.remove();
 
       const diagram = document.createElement('div');
@@ -208,7 +240,7 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
           return;
         }
 
-        this.enhanceDiagram(shell, diagram, renderedSource);
+        this.enhanceDiagram(shell, diagram, renderedSource, renderCacheKey);
         this.markShellHydrated(shell);
       } finally {
         renderHost.remove();
@@ -326,21 +358,30 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
     }
   }
 
-  enhanceDiagram(shell, renderedDiagram, renderedSource = '') {
+  enhanceDiagram(shell, renderedDiagram, renderedSource = '', renderCacheKey = null) {
     const svg = renderedDiagram.querySelector('svg');
     if (!svg) {
       renderedDiagram.remove();
       return;
     }
     const { width: baseWidth, height: baseHeight } = normalizeMermaidSvg(svg);
+    if (renderCacheKey) {
+      // The markup is already normalized (viewBox/size set), so a cache hit
+      // can mount without another mermaid run or layout measurement.
+      this.storeRenderCache(renderCacheKey, svg.outerHTML);
+    }
 
+    renderedDiagram.remove();
+    this.mountDiagramSvg(shell, svg, { baseWidth, baseHeight, renderedSource });
+  }
+
+  mountDiagramSvg(shell, svg, { baseWidth, baseHeight, renderedSource = '' } = {}) {
     const exportFileNames = () => createDiagramExportFileNames({
       currentFilePath: this.renderer.getSourceFilePath?.() ?? '',
       diagramKind: 'mermaid',
       sourceLine: shell.getAttribute('data-source-line') || '',
       targetPath: shell.dataset.mermaidTarget || '',
     });
-    renderedDiagram.remove();
     this.diagramChrome.mount(shell, {
       baseHeight,
       baseWidth,
@@ -351,6 +392,51 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
       sourceSelector: '.mermaid-source',
     });
     shell._diagramRenderedSource = renderedSource;
+  }
+
+  tryMountCachedDiagram(shell, {
+    hydrationToken,
+    renderCacheKey,
+    renderedSource = '',
+    renderVersion,
+  } = {}) {
+    const cachedSvgMarkup = this.renderCache.get(renderCacheKey) ?? null;
+    if (!cachedSvgMarkup) {
+      return false;
+    }
+
+    shell.querySelector('.mermaid-placeholder-card')?.remove();
+    const svg = parseCachedSvgMarkup(cachedSvgMarkup);
+    if (
+      this.isHydrationCurrent(renderVersion, shell, hydrationToken)
+      && svg
+    ) {
+      const { width, height } = resolveSvgDimensions(svg);
+      this.mountDiagramSvg(shell, svg, { baseWidth: width, baseHeight: height, renderedSource });
+      this.markShellHydrated(shell);
+      return true;
+    }
+
+    this.renderCache.delete(renderCacheKey);
+    return false;
+  }
+
+  getRenderCacheKey(preparedSource) {
+    return `${this.currentTheme}\n${preparedSource}`;
+  }
+
+  storeRenderCache(key, markup) {
+    if (!key || !markup) {
+      return;
+    }
+
+    if (this.renderCache.has(key)) {
+      this.renderCache.delete(key);
+    }
+    while (this.renderCache.size >= MERMAID_RENDER_CACHE_LIMIT) {
+      this.renderCache.delete(this.renderCache.keys().next().value);
+    }
+    this.renderCache.set(key, markup);
   }
 
 }
