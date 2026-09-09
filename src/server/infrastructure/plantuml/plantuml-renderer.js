@@ -18,13 +18,45 @@ function normalizeSvgPayload(body = '') {
   return normalized;
 }
 
+const SVG_CACHE_LIMIT = 50;
+
 export class PlantUmlRenderer {
   constructor({ fetchImpl = fetch, serverUrl } = {}) {
     this.fetchImpl = fetchImpl;
     this.serverUrl = normalizeServerUrl(serverUrl);
+    this.svgCache = new Map();
+    this.inflightRequests = new Map();
   }
 
   async renderSvg(source = '') {
+    const cacheKey = String(source);
+    const cached = this.svgCache.get(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    if (this.inflightRequests.has(cacheKey)) {
+      return this.inflightRequests.get(cacheKey);
+    }
+
+    const request = this.fetchSvg(cacheKey).finally(() => {
+      this.inflightRequests.delete(cacheKey);
+    });
+    this.inflightRequests.set(cacheKey, request);
+    return request;
+  }
+
+  storeSvg(source, svgMarkup) {
+    if (this.svgCache.has(source)) {
+      this.svgCache.delete(source);
+    }
+    while (this.svgCache.size >= SVG_CACHE_LIMIT) {
+      this.svgCache.delete(this.svgCache.keys().next().value);
+    }
+    this.svgCache.set(source, svgMarkup);
+  }
+
+  async fetchSvg(source = '') {
     const encoded = encodePlantUmlText(source);
     const requestUrl = `${this.serverUrl}/svg/${encoded}`;
 
@@ -51,6 +83,7 @@ export class PlantUmlRenderer {
       throw error;
     }
 
+    this.storeSvg(source, normalizedSvg);
     return normalizedSvg;
   }
 }
