@@ -31,6 +31,10 @@ import { normalizeEditableText } from '../../../domain/editable-text.js';
 import { normalizeWorkspaceEvent } from '../../../domain/workspace-change.js';
 import { WORKSPACE_EVENT_MAX_MESSAGES, WORKSPACE_ROOM_NAME } from '../../../domain/workspace-room.js';
 
+// Coalesce scroll-driven awareness bursts (cursor/viewport) into one broadcast.
+// Awareness updates are last-write-wins, so flushing the latest state is safe.
+const AWARENESS_BROADCAST_DEBOUNCE_MS = 30;
+
 function closeSlowClient(ws, clientState, { maxBufferedAmountBytes, name }) {
   if (!clientState || clientState.backpressureCloseIssued) {
     return false;
@@ -248,6 +252,8 @@ export class CollaborationRoom {
     };
     this.persistTimer = null;
     this.destroyTimer = null;
+    this.awarenessBroadcastTimer = null;
+    this.pendingAwarenessClientIds = new Set();
     this.finalizePromise = null;
     this.shutdownGeneration = 0;
 
@@ -393,6 +399,10 @@ export class CollaborationRoom {
         this.schedulePersist();
       }
 
+      if (this.clients.size === 0) {
+        return;
+      }
+
       const encoder = encoding.createEncoder();
       encoding.writeVarUint(encoder, MSG_SYNC);
       syncProtocol.writeUpdate(encoder, update);
@@ -402,22 +412,41 @@ export class CollaborationRoom {
     });
 
     this.awareness.on('update', ({ added, updated, removed }) => {
-      const changedClientIds = added.concat(updated, removed);
+      for (const clientId of added.concat(updated, removed)) {
+        this.pendingAwarenessClientIds.add(clientId);
+      }
 
-      if (changedClientIds.length === 0) {
+      if (this.pendingAwarenessClientIds.size === 0 || this.awarenessBroadcastTimer) {
         return;
       }
 
-      const encoder = encoding.createEncoder();
-      encoding.writeVarUint(encoder, MSG_AWARENESS);
-      encoding.writeVarUint8Array(
-        encoder,
-        awarenessProtocol.encodeAwarenessUpdate(this.awareness, changedClientIds),
-      );
-      const message = encoding.toUint8Array(encoder);
-
-      this.broadcastToClients(message, { failureLabel: 'awareness update' });
+      this.awarenessBroadcastTimer = setTimeout(() => {
+        this.flushAwarenessBroadcast();
+      }, AWARENESS_BROADCAST_DEBOUNCE_MS);
+      this.awarenessBroadcastTimer.unref?.();
     });
+  }
+
+  flushAwarenessBroadcast() {
+    clearTimeout(this.awarenessBroadcastTimer);
+    this.awarenessBroadcastTimer = null;
+
+    if (this.pendingAwarenessClientIds.size === 0 || this.destroyed || this.clients.size === 0) {
+      this.pendingAwarenessClientIds.clear();
+      return;
+    }
+
+    const changedClientIds = Array.from(this.pendingAwarenessClientIds);
+    this.pendingAwarenessClientIds.clear();
+
+    const encoder = encoding.createEncoder();
+    encoding.writeVarUint(encoder, MSG_AWARENESS);
+    encoding.writeVarUint8Array(
+      encoder,
+      awarenessProtocol.encodeAwarenessUpdate(this.awareness, changedClientIds),
+    );
+
+    this.broadcastToClients(encoding.toUint8Array(encoder), { failureLabel: 'awareness update' });
   }
 
   registerContentDirtyListeners() {
@@ -426,7 +455,10 @@ export class CollaborationRoom {
         return;
       }
 
-      this.refreshContentDirty();
+      // Fast path: observed content changed, so mark dirty without
+      // re-serializing the whole document per keystroke. persist() still
+      // compares against the baseline, so edit-then-undo stays clean.
+      this.contentDirty = true;
     };
 
     if (isExcalidrawRoom(this.name)) {
@@ -527,7 +559,10 @@ export class CollaborationRoom {
         console.warn(`[room:${this.name}] Skipping persist because the Excalidraw scene is invalid`);
         return;
       }
-      const includeContent = this.refreshContentDirty();
+      // Compare inline: refreshContentDirty() would serialize the document
+      // a second time for the same check.
+      const includeContent = content !== this.persistedContentBaseline;
+      this.contentDirty = includeContent;
       const commentThreads = serializeCommentThreads(this.doc.getArray('comments'));
       await this.documentStore.persistState({
         commentThreads,
@@ -537,7 +572,7 @@ export class CollaborationRoom {
       });
       if (includeContent) {
         this.persistedContentBaseline = content;
-        this.refreshContentDirty();
+        this.contentDirty = false;
       }
     })();
 
@@ -662,8 +697,10 @@ export class CollaborationRoom {
     this.shutdownGeneration += 1;
     clearTimeout(this.persistTimer);
     clearTimeout(this.destroyTimer);
+    clearTimeout(this.awarenessBroadcastTimer);
     this.persistTimer = null;
     this.destroyTimer = null;
+    this.awarenessBroadcastTimer = null;
   }
 
   markDeleted() {

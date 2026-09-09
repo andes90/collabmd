@@ -56,7 +56,9 @@ export function attachCollaborationGateway({
   const websocketServer = new WebSocketServer({
     maxPayload,
     noServer: true,
-    perMessageDeflate: false,
+    // Compress large frames (initial sync, pastes); small Yjs updates fall
+    // under the default 1024-byte threshold and skip compression.
+    perMessageDeflate: true,
   });
   const socketSessions = new Map();
   let isShuttingDown = false;

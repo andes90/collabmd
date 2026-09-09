@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import * as decoding from 'lib0/decoding';
+import * as awarenessProtocol from 'y-protocols/awareness';
 import * as syncProtocol from 'y-protocols/sync';
 import * as Y from 'yjs';
 
@@ -43,6 +44,51 @@ function getSyncSubmessageType(payload) {
   assert.equal(messageType, 0);
   return decoding.readVarUint(decoder);
 }
+
+function getMessageType(payload) {
+  return decoding.readVarUint(decoding.createDecoder(payload));
+}
+
+test('CollaborationRoom coalesces rapid awareness updates into one broadcast', async () => {
+  const room = new CollaborationRoom({
+    maxBufferedAmountBytes: 1024,
+    name: 'awareness-batch.md',
+    onEmpty: () => {},
+    vaultFileStore: null,
+  });
+
+  const first = createSocket();
+  const second = createSocket();
+  await room.addClient(first);
+  await room.addClient(second);
+  assert.equal(getMessageType(second.sent[0]), 0);
+
+  const remoteDoc = new Y.Doc();
+  const remoteAwareness = new awarenessProtocol.Awareness(remoteDoc);
+  try {
+    remoteAwareness.setLocalStateField('user', { name: 'Peer' });
+    awarenessProtocol.applyAwarenessUpdate(
+      room.awareness,
+      awarenessProtocol.encodeAwarenessUpdate(remoteAwareness, [remoteAwareness.clientID]),
+      'test-origin',
+    );
+    remoteAwareness.setLocalStateField('cursor', { x: 1, y: 2 });
+    awarenessProtocol.applyAwarenessUpdate(
+      room.awareness,
+      awarenessProtocol.encodeAwarenessUpdate(remoteAwareness, [remoteAwareness.clientID]),
+      'test-origin',
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    assert.equal(second.sent.length, 2);
+    assert.equal(getMessageType(second.sent[1]), 1);
+  } finally {
+    remoteAwareness.destroy();
+    remoteDoc.destroy();
+    await room.destroy();
+  }
+});
 
 test('CollaborationRoom hydrates once for concurrent joins', async () => {
   let readCount = 0;
@@ -169,6 +215,67 @@ test('CollaborationRoom skips content write when text returns to the in-memory b
   await room.persist();
 
   assert.equal(writes.length, 0);
+});
+
+test('CollaborationRoom marks content dirty without serializing on every edit', async () => {
+  const room = new CollaborationRoom({
+    maxBufferedAmountBytes: 1024,
+    name: 'dirty-flag.md',
+    onEmpty: () => {},
+    vaultFileStore: {
+      async readEditableVaultContent() {
+        return '# Title\n';
+      },
+      async persistCollaborationState() {
+        return { ok: true };
+      },
+    },
+  });
+
+  await room.hydrate();
+  const originalGetPersistedContent = room.getPersistedContent.bind(room);
+  let serializeCalls = 0;
+  room.getPersistedContent = (...args) => {
+    serializeCalls += 1;
+    return originalGetPersistedContent(...args);
+  };
+
+  room.doc.getText('codemirror').insert(room.doc.getText('codemirror').length, 'Draft\n');
+
+  assert.equal(room.contentDirty, true);
+  assert.equal(serializeCalls, 0);
+  await room.destroy();
+});
+
+test('CollaborationRoom serializes content once per persist', async () => {
+  const room = new CollaborationRoom({
+    maxBufferedAmountBytes: 1024,
+    name: 'single-serialize.md',
+    onEmpty: () => {},
+    vaultFileStore: {
+      async readEditableVaultContent() {
+        return '# Title\n';
+      },
+      async persistCollaborationState() {
+        return { ok: true };
+      },
+    },
+  });
+
+  await room.hydrate();
+  room.doc.getText('codemirror').insert(room.doc.getText('codemirror').length, 'Draft\n');
+
+  const originalGetPersistedContent = room.getPersistedContent.bind(room);
+  let serializeCalls = 0;
+  room.getPersistedContent = (...args) => {
+    serializeCalls += 1;
+    return originalGetPersistedContent(...args);
+  };
+
+  await room.persist();
+
+  assert.equal(serializeCalls, 1);
+  await room.destroy();
 });
 
 test('CollaborationRoom closes slow clients when buffered writes exceed the limit', async () => {
