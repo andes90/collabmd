@@ -78,6 +78,44 @@ export function createSignedCookieManager({
   cookiePath = '/',
   secret,
 }) {
+  // Authenticating one request can verify the same cookie several times
+  // (strategy check + expiry read + user lookup). Memoize per request object;
+  // the cookie-header check keeps it correct if headers ever change.
+  const readCache = new WeakMap();
+
+  function readSignedCookie(req) {
+    const token = parseCookieHeader(req.headers.cookie).get(cookieName);
+    if (!token) {
+      return null;
+    }
+
+    const separatorIndex = token.lastIndexOf('.');
+    if (separatorIndex <= 0) {
+      return null;
+    }
+
+    const encodedPayload = token.slice(0, separatorIndex);
+    const encodedSignature = token.slice(separatorIndex + 1);
+
+    try {
+      const expectedSignature = createSignature(encodedPayload, secret);
+      const actualSignature = decodeBase64Url(encodedSignature);
+
+      if (actualSignature.length !== expectedSignature.length) {
+        return null;
+      }
+
+      if (!timingSafeEqual(actualSignature, expectedSignature)) {
+        return null;
+      }
+
+      const payloadBuffer = decodeBase64Url(encodedPayload);
+      const payload = JSON.parse(payloadBuffer.toString('utf8'));
+      return payload && typeof payload === 'object' ? payload : null;
+    } catch {
+      return null;
+    }
+  }
   function createCookieAttributes(req, { expires = null } = {}) {
     const attributes = [
       'HttpOnly',
@@ -115,37 +153,18 @@ export function createSignedCookieManager({
     },
 
     read(req) {
-      const token = parseCookieHeader(req.headers.cookie).get(cookieName);
-      if (!token) {
-        return null;
-      }
-
-      const separatorIndex = token.lastIndexOf('.');
-      if (separatorIndex <= 0) {
-        return null;
-      }
-
-      const encodedPayload = token.slice(0, separatorIndex);
-      const encodedSignature = token.slice(separatorIndex + 1);
-
-      try {
-        const expectedSignature = createSignature(encodedPayload, secret);
-        const actualSignature = decodeBase64Url(encodedSignature);
-
-        if (actualSignature.length !== expectedSignature.length) {
-          return null;
+      if (req && typeof req === 'object') {
+        const cached = readCache.get(req);
+        if (cached !== undefined) {
+          return cached;
         }
 
-        if (!timingSafeEqual(actualSignature, expectedSignature)) {
-          return null;
-        }
-
-        const payloadBuffer = decodeBase64Url(encodedPayload);
-        const payload = JSON.parse(payloadBuffer.toString('utf8'));
-        return payload && typeof payload === 'object' ? payload : null;
-      } catch {
-        return null;
+        const result = readSignedCookie(req);
+        readCache.set(req, result);
+        return result;
       }
+
+      return readSignedCookie(req);
     },
   };
 }
