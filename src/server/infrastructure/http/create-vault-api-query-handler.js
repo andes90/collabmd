@@ -1,10 +1,7 @@
 import { ZipArchive } from 'archiver';
-import { readdir } from 'node:fs/promises';
 import { basename } from 'node:path';
-import { join } from 'node:path';
 
 import { getVaultFileKind, isImageAttachmentFilePath } from '../../../domain/file-kind.js';
-import { isIgnoredVaultEntry } from '../persistence/path-utils.js';
 import { parseJsonBody } from './request-body.js';
 import {
   createSafeAsciiFilename,
@@ -75,8 +72,7 @@ function createDownloadHeaders(fileName, contentType, { inline = false } = {}) {
 }
 
 async function streamDirectoryArchive(req, res, {
-  maxEntries = 10_000,
-  rootAbsolutePath = '',
+  entries = [],
   rootName = 'archive',
 } = {}) {
   const archive = new ZipArchive({
@@ -97,55 +93,20 @@ async function streamDirectoryArchive(req, res, {
     stream: archive,
   });
 
-  let entryCount = 0;
-  const appendEntry = () => {
-    entryCount += 1;
-    if (entryCount > maxEntries) {
-      throw new Error(`Directory archive exceeds ${maxEntries} entries`);
-    }
-  };
-
   try {
-    const visitDirectory = async (directoryAbsolutePath, relativeDirectoryPath = '') => {
-      const dirEntries = (await readdir(directoryAbsolutePath, { withFileTypes: true }))
-        .filter((entry) => !isIgnoredVaultEntry(entry.name))
-        .sort((left, right) => {
-          if (left.isDirectory() && !right.isDirectory()) return -1;
-          if (!left.isDirectory() && right.isDirectory()) return 1;
-          return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
-        });
-
-      if (dirEntries.length === 0) {
-        appendEntry();
+    for (const entry of entries) {
+      if (entry.kind === 'directory') {
         archive.append('', {
-          name: relativeDirectoryPath ? `${rootName}/${relativeDirectoryPath}/` : `${rootName}/`,
+          name: entry.relativePath ? `${rootName}/${entry.relativePath}/` : `${rootName}/`,
         });
-        return;
+        continue;
       }
 
-      for (const entry of dirEntries) {
-        const childAbsolutePath = join(directoryAbsolutePath, entry.name);
-        const childRelativePath = relativeDirectoryPath
-          ? `${relativeDirectoryPath}/${entry.name}`
-          : entry.name;
+      archive.file(entry.absolutePath, {
+        name: `${rootName}/${entry.relativePath}`,
+      });
+    }
 
-        if (entry.isDirectory()) {
-          await visitDirectory(childAbsolutePath, childRelativePath);
-          continue;
-        }
-
-        if (!entry.isFile()) {
-          continue;
-        }
-
-        appendEntry();
-        archive.file(childAbsolutePath, {
-          name: `${rootName}/${childRelativePath}`,
-        });
-      }
-    };
-
-    await visitDirectory(rootAbsolutePath);
     await archive.finalize();
     await responsePromise;
   } catch (error) {
@@ -365,17 +326,16 @@ async function handleDirectoryDownload(req, res, requestUrl, { config, vaultFile
       return;
     }
     const maxArchiveEntries = config.maxArchiveEntries ?? DEFAULT_MAX_ARCHIVE_ENTRIES;
-    const entryCount = await vaultFileStore.countDirectoryDownloadEntries(result.absolute, {
+    const collected = await vaultFileStore.collectDirectoryDownloadEntries(result.absolute, {
       maxEntries: maxArchiveEntries,
     });
-    if (!entryCount.withinLimit) {
+    if (!collected.withinLimit) {
       jsonResponse(req, res, 413, { error: `Directory archive exceeds ${maxArchiveEntries} entries` });
       return;
     }
 
     await streamDirectoryArchive(req, res, {
-      maxEntries: maxArchiveEntries,
-      rootAbsolutePath: result.absolute,
+      entries: collected.entries,
       rootName: result.rootName || 'archive',
     });
   } catch (error) {

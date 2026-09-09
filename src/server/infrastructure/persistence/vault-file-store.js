@@ -852,21 +852,28 @@ export class VaultFileStore {
     };
   }
 
-  async countDirectoryDownloadEntries(directoryAbsolutePath, { maxEntries = Infinity } = {}) {
+  async collectDirectoryDownloadEntries(directoryAbsolutePath, { maxEntries = Infinity } = {}) {
+    const entries = [];
     let count = 0;
-    const visitDirectory = async (currentDirectoryPath) => {
+    const visitDirectory = async (currentDirectoryPath, relativeDirectoryPath = '') => {
       const dirEntries = sortDirectoryEntries(await readdir(currentDirectoryPath, { withFileTypes: true }))
         .filter((entry) => !isIgnoredVaultEntry(entry.name));
 
       if (dirEntries.length === 0) {
         count += 1;
-        return count <= maxEntries;
+        if (count > maxEntries) {
+          return false;
+        }
+
+        entries.push({ kind: 'directory', relativePath: relativeDirectoryPath });
+        return true;
       }
 
       for (const entry of dirEntries) {
         const childAbsolutePath = join(currentDirectoryPath, entry.name);
+        const childRelativePath = relativeDirectoryPath ? `${relativeDirectoryPath}/${entry.name}` : entry.name;
         if (entry.isDirectory()) {
-          const withinLimit = await visitDirectory(childAbsolutePath);
+          const withinLimit = await visitDirectory(childAbsolutePath, childRelativePath);
           if (!withinLimit) {
             return false;
           }
@@ -878,6 +885,12 @@ export class VaultFileStore {
           if (count > maxEntries) {
             return false;
           }
+
+          entries.push({
+            absolutePath: childAbsolutePath,
+            kind: 'file',
+            relativePath: childRelativePath,
+          });
         }
       }
 
@@ -886,7 +899,7 @@ export class VaultFileStore {
 
     const withinLimit = await visitDirectory(directoryAbsolutePath);
     return {
-      count,
+      entries,
       withinLimit,
     };
   }

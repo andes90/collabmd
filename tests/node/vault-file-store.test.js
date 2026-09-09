@@ -835,9 +835,25 @@ test('VaultFileStore streams downloads and counts directory archive entries', as
     ok: true,
     rootName: 'notes',
   });
-  assert.deepEqual(await store.countDirectoryDownloadEntries(directoryRoot.absolute), {
-    count: 3,
+  assert.deepEqual(await store.collectDirectoryDownloadEntries(directoryRoot.absolute), {
+    entries: [
+      { kind: 'directory', relativePath: 'empty' },
+      {
+        absolutePath: join(store.vaultDir, 'notes/daily.md'),
+        kind: 'file',
+        relativePath: 'daily.md',
+      },
+      {
+        absolutePath: join(store.vaultDir, 'notes/reference.base'),
+        kind: 'file',
+        relativePath: 'reference.base',
+      },
+    ],
     withinLimit: true,
+  });
+  assert.deepEqual(await store.collectDirectoryDownloadEntries(directoryRoot.absolute, { maxEntries: 1 }), {
+    entries: [{ kind: 'directory', relativePath: 'empty' }],
+    withinLimit: false,
   });
 });
 
