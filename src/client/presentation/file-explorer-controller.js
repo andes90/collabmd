@@ -126,6 +126,7 @@ export class FileExplorerController {
   revealFile(filePath, { clearSearch = false } = {}) {
     if (clearSearch) {
       this.state.setSearchQuery('');
+      this.view.cancelPendingSearch();
     }
 
     this.state.setActiveFile(filePath);

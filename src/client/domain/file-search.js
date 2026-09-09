@@ -40,6 +40,7 @@ export function createFileSearchEntry(filePath) {
   const rawFileName = String(filePath ?? '').split('/').pop() || String(filePath ?? '');
 
   return {
+    dirPath: displayName.includes('/') ? displayName.slice(0, displayName.lastIndexOf('/')) : '',
     displayName,
     fileName,
     filePath,

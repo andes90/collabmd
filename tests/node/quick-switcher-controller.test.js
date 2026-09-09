@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { QuickSwitcherController } from '../../src/client/presentation/quick-switcher-controller.js';
+import { FILE_FILTER_DEBOUNCE_MS, QuickSwitcherController } from '../../src/client/presentation/quick-switcher-controller.js';
 
 function createElementStub({ dataset = {} } = {}) {
   const listeners = new Map();
@@ -423,4 +423,54 @@ test('QuickSwitcherController confirms text search matches with navigation paylo
       text: 'abcneedle',
     },
   });
+});
+
+test('QuickSwitcherController debounces file filtering on input events', async (t) => {
+  const elements = installDocumentStub(t);
+  const controller = new QuickSwitcherController({
+    getFileList: () => ['docs/guide.md', 'notes/todo.md'],
+    onFileSelect() {},
+  });
+  controller.renderResults = () => {};
+  controller.input = elements.get('quickSwitcherInput');
+  controller.isOpen = true;
+
+  controller.input.value = 'gui';
+  elements.get('quickSwitcherInput').dispatchEvent({ type: 'input' });
+  assert.deepEqual(controller.filteredFiles, []);
+
+  controller.input.value = 'guide';
+  elements.get('quickSwitcherInput').dispatchEvent({ type: 'input' });
+  await new Promise((resolve) => setTimeout(resolve, FILE_FILTER_DEBOUNCE_MS + 100));
+
+  assert.deepEqual(controller.filteredFiles, ['docs/guide.md']);
+});
+
+test('QuickSwitcherController indexes the corpus and caches metadata ranks until inputs change', (t) => {
+  const elements = installDocumentStub(t);
+  const fileMetadata = [
+    { mtimeMs: 2, path: 'b.md' },
+    { mtimeMs: 1, path: 'a.md' },
+  ];
+  const recentFiles = ['a.md'];
+  const controller = new QuickSwitcherController({
+    getFileList: () => ['a.md', 'b.md'],
+    getFileMetadata: () => fileMetadata,
+    getRecentFiles: () => recentFiles,
+    onFileSelect() {},
+  });
+  controller.renderResults = () => {};
+  controller.input = elements.get('quickSwitcherInput');
+
+  controller.filterFiles();
+
+  assert.equal(controller.fileCorpusByPath.get('a.md')?.lowerPath, 'a.md');
+  assert.deepEqual(controller.filteredFiles, ['b.md', 'a.md']);
+  const modifiedTimes = controller.cachedModifiedTimes;
+  const recentRanks = controller.cachedRecentRanks;
+
+  controller.filterFiles();
+
+  assert.equal(controller.cachedModifiedTimes, modifiedTimes);
+  assert.equal(controller.cachedRecentRanks, recentRanks);
 });

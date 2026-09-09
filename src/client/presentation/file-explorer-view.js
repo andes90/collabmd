@@ -29,6 +29,7 @@ const MOBILE_LONG_PRESS_DELAY_MS = 420;
 const MOBILE_LONG_PRESS_MOVE_TOLERANCE_PX = 10;
 const DRAG_AUTO_EXPAND_DELAY_MS = 700;
 const SEARCH_RESULT_LIMIT = 80;
+export const FILE_TREE_SEARCH_DEBOUNCE_MS = 150;
 
 function createMenuFilterInput({ container, itemSelector, placeholder, skipLabels = [] }) {
   const searchInput = document.createElement('input');
@@ -94,6 +95,8 @@ export class FileExplorerView {
     this.rootDropZone = null;
     this.threadCounts = new Map();
     this.showFileExtensions = false;
+    this.searchDebounceTimer = null;
+    this.pendingSearchValue = null;
   }
 
   renderVaultSwitcher(options) {
@@ -138,7 +141,7 @@ export class FileExplorerView {
 
   initialize() {
     this.searchInput?.addEventListener('input', (event) => {
-      this.onSearchChange?.(event.target.value);
+      this.handleSearchInput(event.target.value);
     });
 
     this.treeContainer?.addEventListener('click', (event) => {
@@ -180,6 +183,22 @@ export class FileExplorerView {
     this.treeContainer?.addEventListener('dragleave', (event) => {
       this.handleTreeDragLeave(event);
     });
+  }
+
+  handleSearchInput(value) {
+    this.pendingSearchValue = String(value ?? '');
+    clearTimeout(this.searchDebounceTimer);
+    this.searchDebounceTimer = setTimeout(() => {
+      this.searchDebounceTimer = null;
+      this.pendingSearchValue = null;
+      this.onSearchChange?.(value);
+    }, FILE_TREE_SEARCH_DEBOUNCE_MS);
+  }
+
+  cancelPendingSearch() {
+    clearTimeout(this.searchDebounceTimer);
+    this.searchDebounceTimer = null;
+    this.pendingSearchValue = null;
   }
 
   getTreeItem(event) {
@@ -366,7 +385,8 @@ export class FileExplorerView {
       this.clearDragFeedback();
     }
 
-    if (this.searchInput && this.searchInput.value !== searchQuery) {
+    // Never clobber keystrokes that are still waiting out the input debounce.
+    if (this.searchInput && this.pendingSearchValue === null && this.searchInput.value !== searchQuery) {
       this.searchInput.value = searchQuery;
     }
     this.updateSearchStatus(searchQuery, this.currentSearchQuery ? searchMatches.length : null);

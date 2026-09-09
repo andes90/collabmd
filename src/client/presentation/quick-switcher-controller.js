@@ -11,6 +11,7 @@ const MAX_VISIBLE_RESULTS = 30;
 const NO_RECENT_FILE_RANK = Number.MAX_SAFE_INTEGER;
 const FILE_RESULT_ID_PREFIX = 'quick-switcher-file-';
 const TEXT_RESULT_ID_PREFIX = 'quick-switcher-text-';
+export const FILE_FILTER_DEBOUNCE_MS = 150;
 
 function getRawFileName(filePath) {
   return String(filePath ?? '').split('/').pop() || String(filePath ?? '');
@@ -94,7 +95,13 @@ export class QuickSwitcherController {
     this.fileMatchCount = 0;
     this.fileResultsTruncated = false;
     this.fileCorpus = [];
+    this.fileCorpusByPath = new Map();
     this.lastFileListRef = null;
+    this.lastFileMetadataRef = null;
+    this.cachedModifiedTimes = new Map();
+    this.lastRecentFilesRef = null;
+    this.cachedRecentRanks = new Map();
+    this.fileFilterTimer = null;
     this.selectedIndex = 0;
     this.selectedTextIndex = 0;
     this.isOpen = false;
@@ -136,7 +143,13 @@ export class QuickSwitcherController {
     });
 
     this.input?.addEventListener('input', () => {
-      this.handleInput();
+      if (this.mode === 'text') {
+        this.handleInput();
+        return;
+      }
+
+      this.abortTextSearch();
+      this.scheduleFileFilter();
     });
 
     this.input?.addEventListener('keydown', (e) => {
@@ -166,6 +179,8 @@ export class QuickSwitcherController {
   }
 
   handleClose() {
+    clearTimeout(this.fileFilterTimer);
+    this.fileFilterTimer = null;
     this.abortTextSearch();
     this.isOpen = false;
     this.input?.setAttribute('aria-expanded', 'false');
@@ -245,27 +260,48 @@ export class QuickSwitcherController {
     this.filterFiles();
   }
 
+  scheduleFileFilter() {
+    clearTimeout(this.fileFilterTimer);
+    this.fileFilterTimer = setTimeout(() => {
+      this.fileFilterTimer = null;
+      if (this.isOpen && this.mode === 'files') {
+        this.filterFiles();
+      }
+    }, FILE_FILTER_DEBOUNCE_MS);
+  }
+
   filterFiles() {
+    clearTimeout(this.fileFilterTimer);
+    this.fileFilterTimer = null;
     this.resultsList?.setAttribute('aria-busy', 'false');
     const query = this.input?.value.trim().toLowerCase().replace(/\s+/gu, ' ') ?? '';
     const allFiles = this.getFileList?.() ?? [];
     if (allFiles !== this.lastFileListRef) {
       this.lastFileListRef = allFiles;
       this.fileCorpus = allFiles.map((filePath) => createFileSearchEntry(filePath));
+      this.fileCorpusByPath = new Map(this.fileCorpus.map((entry) => [entry.filePath, entry]));
     }
 
     this.fileMatches.clear();
     const fileMetadata = this.getFileMetadata?.() ?? [];
-    const modifiedTimes = new Map(
-      (Array.isArray(fileMetadata) ? fileMetadata : []).map((entry) => [
-        entry?.path,
-        Number.isFinite(Number(entry?.mtimeMs)) ? Number(entry.mtimeMs) : 0,
-      ]),
-    );
+    if (fileMetadata !== this.lastFileMetadataRef) {
+      this.lastFileMetadataRef = fileMetadata;
+      this.cachedModifiedTimes = new Map(
+        (Array.isArray(fileMetadata) ? fileMetadata : []).map((entry) => [
+          entry?.path,
+          Number.isFinite(Number(entry?.mtimeMs)) ? Number(entry.mtimeMs) : 0,
+        ]),
+      );
+    }
+    const modifiedTimes = this.cachedModifiedTimes;
     const recentFiles = this.getRecentFiles?.() ?? [];
-    const recentRanks = new Map(
-      (Array.isArray(recentFiles) ? recentFiles : []).map((filePath, index) => [filePath, index]),
-    );
+    if (recentFiles !== this.lastRecentFilesRef) {
+      this.lastRecentFilesRef = recentFiles;
+      this.cachedRecentRanks = new Map(
+        (Array.isArray(recentFiles) ? recentFiles : []).map((filePath, index) => [filePath, index]),
+      );
+    }
+    const recentRanks = this.cachedRecentRanks;
     if (!query) {
       this.filteredFiles = [...this.fileCorpus]
         .sort((left, right) => {
@@ -293,6 +329,7 @@ export class QuickSwitcherController {
         this.fileMatches.set(entry.filePath, match);
         const rankedEntry = {
           filePath: entry.filePath,
+          lowerPath: entry.lowerPath,
           recentRank: recentRanks.get(entry.filePath) ?? NO_RECENT_FILE_RANK,
           score: match.score,
         };
@@ -306,7 +343,7 @@ export class QuickSwitcherController {
                 rankedEntry.recentRank < current.recentRank
                 || (
                   rankedEntry.recentRank === current.recentRank
-                  && entry.lowerPath < String(current.filePath).toLowerCase()
+                  && rankedEntry.lowerPath < current.lowerPath
                 )
               )
             );
@@ -372,10 +409,10 @@ export class QuickSwitcherController {
       item.setAttribute('aria-selected', index === this.selectedIndex ? 'true' : 'false');
       item.dataset.index = String(index);
 
+      const corpusEntry = this.fileCorpusByPath.get(filePath);
       const fileName = getRawFileName(filePath);
-      const dirPath = getDirPath(filePath);
+      const dirPath = corpusEntry ? corpusEntry.dirPath : getDirPath(filePath);
       const match = this.fileMatches.get(filePath);
-      const corpusEntry = this.fileCorpus.find((entry) => entry.filePath === filePath);
       const matchIndices = corpusEntry ? splitMatchIndices(corpusEntry, match?.indices) : { dirPath: [], fileName: [] };
 
       const svg = getVaultFileIconSvg(filePath, { className: 'qs-result-icon' });
