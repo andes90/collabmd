@@ -13,6 +13,7 @@ import {
   defaultHighlightStyle,
   foldGutter,
   foldKeymap,
+  forceParsing,
   indentOnInput,
   syntaxHighlighting,
 } from '@codemirror/language';
@@ -582,6 +583,9 @@ export class EditorViewAdapter {
       parent: this.editorContainer,
       state,
     });
+    // Parse beyond the viewport so diagram syntax does not recolor during scrolling.
+    // ponytail: cap startup work at 50ms; larger documents retain background parsing.
+    forceParsing(this.editorView, state.doc.length, 50);
 
     this.editorContainer.dataset.editorMode = editorMode;
     this.editorView.scrollDOM.addEventListener('scroll', this.handleScroll, { passive: true });

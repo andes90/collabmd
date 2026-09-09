@@ -115,6 +115,7 @@
   max-width: 100%;
   max-height: min(70vh, 720px);
   overflow: auto;
+  scrollbar-gutter: stable;
   padding: var(--space-3);
   touch-action: pan-x pan-y;
   background: transparent;

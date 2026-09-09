@@ -478,6 +478,26 @@ test('keeps the editor interactive while heavy preview initializes', async ({ pa
   await page.keyboard.press('Backspace');
 });
 
+test('can reverse scroll direction in both panes of a narrow split view', async ({ page }) => {
+  await page.setViewportSize({ width: 773, height: 1215 });
+  await openSampleFull(page);
+  await waitForHeavyPreviewContent(page);
+
+  for (const selector of ['.cm-scroller', '#previewContainer']) {
+    const pane = page.locator(selector);
+    await pane.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await expect.poll(() => page.locator('#previewContent').getAttribute('data-render-phase')).toBe('ready');
+    const bounds = await pane.boundingBox();
+    await page.mouse.move(bounds.x + 8, bounds.y + bounds.height / 2);
+    const beforeUp = await pane.evaluate((element) => element.scrollTop);
+    await page.mouse.wheel(0, -700);
+    await expect.poll(() => pane.evaluate((element) => element.scrollTop)).toBeLessThan(beforeUp - 100);
+    const beforeDown = await pane.evaluate((element) => element.scrollTop);
+    await page.mouse.wheel(0, 350);
+    await expect.poll(() => pane.evaluate((element) => element.scrollTop)).toBeGreaterThan(beforeDown + 100);
+  }
+});
+
 test('progressively hydrates heavy preview instead of rendering all embeds at once', async ({ page }) => {
   test.slow();
 

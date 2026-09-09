@@ -5,6 +5,9 @@ const VIEWPORT_FOCUS_RATIO = 0.35;
 const LARGE_DOCUMENT_EDITOR_IDLE_MS = 120;
 const MIN_VIEWPORT_FOCUS_OFFSET = 12;
 const TOP_SCROLL_EPSILON = 2;
+// SVG renderers may expose source lines relative to the diagram, not the document.
+const SOURCE_BLOCK_SELECTOR = '[data-source-line]:not(svg, svg *)';
+const SCROLL_INPUT_EVENTS = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
 
 function getScrollableRange(element) {
   return Math.max(element.scrollHeight - element.clientHeight, 0);
@@ -29,7 +32,7 @@ function getElementScrollTop(container, element) {
 }
 
 function isLeafSourceBlock(element) {
-  return !element.querySelector('[data-source-line]');
+  return !element.querySelector(SOURCE_BLOCK_SELECTOR);
 }
 
 export class ScrollSyncController {
@@ -48,7 +51,7 @@ export class ScrollSyncController {
     this.editorScroller = null;
     this.editorScrollActive = false;
     this.editorScrollIdleTimer = null;
-    this.lockedElements = new Set();
+    this.scrollUnlockFrames = new Map();
     this.pendingSync = null;
     this.frameId = null;
     this.previewBlocks = null;
@@ -56,10 +59,31 @@ export class ScrollSyncController {
     this.previewBlocksReadyCallbacks = [];
     this.largeDocumentMode = false;
     this.lastInteractionSource = 'editor';
+    this.scrollInputSource = null;
     this.suspendedUntil = 0;
 
+    this.handleScrollInput = (event) => {
+      const source = event.currentTarget;
+      // Layout and hydration can emit scroll events long after a frame lock expires.
+      // Only input in the other pane transfers control of scroll synchronization.
+      this.scrollInputSource = source;
+      this.lastInteractionSource = source === this.editorScroller ? 'editor' : 'preview';
+      // A collaborator's input takes priority over pending programmatic scrolling.
+      this.pendingSync = null;
+      cancelAnimationFrame(this.scrollUnlockFrames.get(source));
+      this.scrollUnlockFrames.delete(source);
+      const target = source === this.editorScroller ? this.previewContainer : this.editorScroller;
+      if (target) this.lockScrollTarget(target);
+      if (source === this.previewContainer) {
+        clearTimeout(this.editorScrollIdleTimer);
+        this.editorScrollIdleTimer = null;
+        this.setEditorScrollActive(false);
+      }
+    };
+
     this.handleEditorScroll = () => {
-      if (!this.editorScroller || this.lockedElements.has(this.editorScroller) || this.isSuspended()) {
+      if (!this.editorScroller || (this.scrollInputSource && this.scrollInputSource !== this.editorScroller)
+        || this.scrollUnlockFrames.has(this.editorScroller) || this.isSuspended()) {
         return;
       }
 
@@ -77,7 +101,8 @@ export class ScrollSyncController {
     };
 
     this.handlePreviewScroll = () => {
-      if (!this.previewContainer || this.lockedElements.has(this.previewContainer) || this.isSuspended()) {
+      if (!this.previewContainer || (this.scrollInputSource && this.scrollInputSource !== this.previewContainer)
+        || this.scrollUnlockFrames.has(this.previewContainer) || this.isSuspended()) {
         return;
       }
 
@@ -88,6 +113,7 @@ export class ScrollSyncController {
 
   initialize() {
     this.previewContainer?.addEventListener('scroll', this.handlePreviewScroll, { passive: true });
+    SCROLL_INPUT_EVENTS.forEach((type) => this.previewContainer?.addEventListener(type, this.handleScrollInput, { passive: true }));
   }
 
   attachEditorScroller(editorScroller) {
@@ -96,8 +122,11 @@ export class ScrollSyncController {
     }
 
     this.editorScroller?.removeEventListener('scroll', this.handleEditorScroll);
+    SCROLL_INPUT_EVENTS.forEach((type) => this.editorScroller?.removeEventListener(type, this.handleScrollInput));
     this.editorScroller = editorScroller;
+    this.scrollInputSource = null;
     this.editorScroller?.addEventListener('scroll', this.handleEditorScroll, { passive: true });
+    SCROLL_INPUT_EVENTS.forEach((type) => this.editorScroller?.addEventListener(type, this.handleScrollInput, { passive: true }));
   }
 
   syncPreviewToEditor() {
@@ -113,7 +142,12 @@ export class ScrollSyncController {
   destroy() {
     this.previewContainer?.removeEventListener('scroll', this.handlePreviewScroll);
     this.editorScroller?.removeEventListener('scroll', this.handleEditorScroll);
+    SCROLL_INPUT_EVENTS.forEach((type) => {
+      this.previewContainer?.removeEventListener(type, this.handleScrollInput);
+      this.editorScroller?.removeEventListener(type, this.handleScrollInput);
+    });
     this.editorScroller = null;
+    this.scrollInputSource = null;
     clearTimeout(this.editorScrollIdleTimer);
     this.editorScrollIdleTimer = null;
     this.pendingSync = null;
@@ -121,7 +155,8 @@ export class ScrollSyncController {
     cancelIdleRender(this.previewBlocksWarmId);
     this.previewBlocksWarmId = null;
     this.previewBlocksReadyCallbacks = [];
-    this.lockedElements.clear();
+    this.scrollUnlockFrames.forEach((frame) => cancelAnimationFrame(frame));
+    this.scrollUnlockFrames.clear();
     this.editorScrollActive = false;
     this.lastInteractionSource = 'editor';
     this.suspendedUntil = 0;
@@ -133,7 +168,7 @@ export class ScrollSyncController {
   }
 
   scheduleSync(source, target, { preferApproximateMapping = false } = {}) {
-    if (!source || !target || this.lockedElements.has(source) || this.isSuspended()) {
+    if (!source || !target || this.scrollUnlockFrames.has(source) || this.isSuspended()) {
       return;
     }
 
@@ -268,7 +303,7 @@ export class ScrollSyncController {
   }
 
   sync(source, target, { preferApproximateMapping = false } = {}) {
-    if (!source || !target || this.lockedElements.has(source) || this.isSuspended()) {
+    if (!source || !target || this.scrollUnlockFrames.has(source) || this.isSuspended()) {
       return;
     }
 
@@ -283,11 +318,8 @@ export class ScrollSyncController {
     if (source === this.previewContainer && target === this.editorScroller) {
       const targetLine = this.getEditorLineNumberForPreviewScroll();
       if (targetLine !== null) {
-        this.lockedElements.add(target);
+        this.lockScrollTarget(target);
         this.scrollEditorToLine?.(targetLine, VIEWPORT_FOCUS_RATIO);
-        requestAnimationFrame(() => {
-          this.lockedElements.delete(target);
-        });
         return;
       }
     }
@@ -301,12 +333,19 @@ export class ScrollSyncController {
   }
 
   setScrollTop(target, nextScrollTop) {
-    this.lockedElements.add(target);
+    this.lockScrollTarget(target);
     target.scrollTop = clampScrollTop(nextScrollTop);
+  }
 
-    requestAnimationFrame(() => {
-      this.lockedElements.delete(target);
-    });
+  lockScrollTarget(target) {
+    cancelAnimationFrame(this.scrollUnlockFrames.get(target));
+    // CodeMirror can adjust scroll position during its next layout measurement.
+    // Keep that adjustment from feeding back into the pane being scrolled.
+    this.scrollUnlockFrames.set(target, requestAnimationFrame(() => {
+      this.scrollUnlockFrames.set(target, requestAnimationFrame(() => {
+        this.scrollUnlockFrames.delete(target);
+      }));
+    }));
   }
 
   getPreviewScrollTopForEditorLine() {
@@ -371,7 +410,7 @@ export class ScrollSyncController {
   }
 
   buildPreviewBlocks() {
-    const allBlocks = Array.from(this.previewElement.querySelectorAll('[data-source-line]'))
+    const allBlocks = Array.from(this.previewElement.querySelectorAll(SOURCE_BLOCK_SELECTOR))
       .map((element) => {
         const start = Number.parseInt(element.getAttribute('data-source-line') || '', 10);
         const end = Number.parseInt(element.getAttribute('data-source-line-end') || '', 10);
