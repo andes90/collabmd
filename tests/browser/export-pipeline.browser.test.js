@@ -6,6 +6,7 @@ import {
   buildDocxHtmlDocument,
   buildHtmlDocument,
   prepareDirectoryExportSnapshot,
+  prepareExportSnapshot,
   resolveExportAssets,
   waitForRenderedExportContent,
 } from '../../src/client/export/export-pipeline.js';
@@ -654,4 +655,49 @@ describe('export pipeline browser helpers', () => {
     expect(html).toContain('data-decoded="true"');
     expect(image.decode).toHaveBeenCalledTimes(1);
   });
+
+  it('renders excalidraw embeds through the lazily loaded runtimes', async () => {
+    const scene = {
+      appState: { gridSize: null, viewBackgroundColor: '#ffffff' },
+      elements: [{
+        angle: 0,
+        backgroundColor: 'transparent',
+        boundElements: [],
+        fillStyle: 'solid',
+        groupIds: [],
+        height: 80,
+        id: 'rect-1',
+        isDeleted: false,
+        link: null,
+        locked: false,
+        opacity: 100,
+        roughness: 1,
+        roundness: { type: 3 },
+        strokeColor: '#1e1e1e',
+        strokeStyle: 'solid',
+        strokeWidth: 2,
+        type: 'rectangle',
+        width: 120,
+        x: 10,
+        y: 10,
+      }],
+      files: {},
+      source: 'collabmd-test',
+      type: 'excalidraw',
+      version: 2,
+    };
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ content: JSON.stringify(scene) }), {
+      headers: { 'Content-Type': 'application/json' },
+      status: 200,
+    }));
+
+    const snapshot = await prepareExportSnapshot({
+      fileList: ['notes/doc.md', 'art.excalidraw'],
+      filePath: 'notes/doc.md',
+      markdownText: '# Doc\n\n![[art.excalidraw]]\n',
+    });
+
+    expect(snapshot.warnings).toEqual([]);
+    expect(snapshot.html).toContain('<svg');
+  }, 30000);
 });

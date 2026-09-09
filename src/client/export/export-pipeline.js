@@ -1,5 +1,3 @@
-import { exportToSvg as exportExcalidrawToSvg } from '@excalidraw/excalidraw';
-
 import baseStyles from '../styles/base.css?inline';
 import tokenStyles from '../styles/foundation/tokens.css?inline';
 import themeStyles from '../styles/foundation/themes.css?inline';
@@ -13,7 +11,6 @@ import {
   resolveSvgDimensions,
   sanitizeSvgMarkup,
 } from '../application/preview-diagram-utils.js';
-import { compilePreviewDocument } from '../application/preview-render-compiler.js';
 import { isMarkdownFilePath, stripVaultFileExtension } from '../../domain/file-kind.js';
 import { resolveVaultRelativePath } from '../../domain/vault-paths.js';
 import { resolveWikiTargetPath } from '../../domain/wiki-link-resolver.js';
@@ -72,6 +69,7 @@ const HTML_EXPORT_STYLES = [
 ].join('\n');
 
 let mermaidLoaderPromise = null;
+let excalidrawLoaderPromise = null;
 let assetCounter = 0;
 
 function createAssetId(prefix = 'asset') {
@@ -746,6 +744,23 @@ async function ensureMermaidRuntime() {
   return mermaidLoaderPromise;
 }
 
+async function ensureExcalidrawRuntime() {
+  if (excalidrawLoaderPromise) {
+    return excalidrawLoaderPromise;
+  }
+
+  excalidrawLoaderPromise = import('@excalidraw/excalidraw').then((module) => {
+    const exportToSvg = module?.exportToSvg;
+    if (typeof exportToSvg !== 'function') {
+      throw new Error('Excalidraw runtime failed to initialize');
+    }
+
+    return exportToSvg;
+  });
+
+  return excalidrawLoaderPromise;
+}
+
 function prepareMermaidSource(source) {
   let text = String(source ?? '');
 
@@ -817,7 +832,8 @@ async function renderPlantUmlToSvgMarkup(source) {
 async function renderExcalidrawToSvgMarkup(filePath) {
   const rawScene = await fetchTextFile(filePath);
   const scene = parseSceneJson(rawScene);
-  const svgElement = await exportExcalidrawToSvg(createExcalidrawExportOptions(scene));
+  const exportToSvg = await ensureExcalidrawRuntime();
+  const svgElement = await exportToSvg(createExcalidrawExportOptions(scene));
   return normalizeExportSvgMarkup(svgElement.outerHTML, { padding: 24 });
 }
 
@@ -1236,6 +1252,7 @@ export async function prepareExportSnapshot({
     warnings: [],
   };
 
+  const { compilePreviewDocument } = await import('../application/preview-render-compiler.js');
   const compiled = compilePreviewDocument({
     attachmentApiPath: resolveApiUrl('/attachment'),
     fileList,
