@@ -313,6 +313,7 @@ export class PreviewRenderer {
 
 
   commitBaseRender({ html, stats }, renderVersion) {
+    const scrollTop = this.previewContainer?.scrollTop ?? 0;
     this.activeRenderVersion = renderVersion;
     this.readyRenderVersion = 0;
     this.currentStats = stats;
@@ -334,6 +335,8 @@ export class PreviewRenderer {
     this.applyFrontmatterState();
     this.mermaidHydrator.reconcileHydratedShells();
     this.plantUmlHydrator.reconcileHydratedShells();
+    // Detaching diagrams can temporarily shrink the document and clamp scrolling.
+    if (this.previewContainer) this.previewContainer.scrollTop = scrollTop;
     this.setPhase('base');
 
     this.outlineController.refresh();

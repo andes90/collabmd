@@ -172,6 +172,8 @@
 }
 
 .preview-container {
+  /* Preview commits and scroll sync explicitly preserve the reading position. */
+  overflow-anchor: none;
   flex: 1;
   min-width: 0;
   overflow-x: hidden;
