@@ -1,6 +1,6 @@
 import * as decoding from 'lib0/decoding';
 
-import { MSG_SYNC } from '../../domain/collaboration/protocol.js';
+import { MSG_SYNC } from '../../../domain/collaboration-protocol.js';
 
 function isSyncMessage(payload) {
   try {

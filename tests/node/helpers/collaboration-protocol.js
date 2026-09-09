@@ -6,7 +6,7 @@ import * as syncProtocol from 'y-protocols/sync';
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
 
-import { MSG_AWARENESS, MSG_SYNC } from '../../../src/server/domain/collaboration/protocol.js';
+import { MSG_AWARENESS, MSG_SYNC } from '../../../src/domain/collaboration-protocol.js';
 
 function normalizeMessagePayload(payload) {
   return payload instanceof Buffer ? new Uint8Array(payload) : new Uint8Array(payload);

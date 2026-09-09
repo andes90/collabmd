@@ -9,7 +9,7 @@ import {
   MSG_AGENT_FLUSH_ACK,
   MSG_AWARENESS,
   MSG_SYNC,
-} from './protocol.js';
+} from '../../../domain/collaboration-protocol.js';
 import { CollaborationDocumentStore } from './collaboration-document-store.js';
 import { logPerfEvent } from '../../config/perf-logging.js';
 import { populateCommentThreads, serializeCommentThreads } from '../../../domain/comment-threads.js';

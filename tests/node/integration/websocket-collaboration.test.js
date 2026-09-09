@@ -16,7 +16,7 @@ import {
   MSG_AGENT_FLUSH_ACK,
   MSG_AWARENESS,
   MSG_SYNC,
-} from '../../../src/server/domain/collaboration/protocol.js';
+} from '../../../src/domain/collaboration-protocol.js';
 import { startTestServer, waitForCondition } from '../helpers/test-server.js';
 import {
   applySyncMessageToDoc,
