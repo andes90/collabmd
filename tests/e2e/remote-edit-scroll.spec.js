@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { test, expect, openFile, replaceEditorContent, setEditorSelection } from './helpers/app-fixture.js';
+import { test, expect, openFile, replaceEditorContent, restoreReadmeTestDocument, setEditorSelection } from './helpers/app-fixture.js';
 
 for (const selector of ['.cm-scroller', '#previewContainer']) {
   test(`remote typing preserves the reader viewport in ${selector}`, async ({ browser }) => {
@@ -30,6 +30,9 @@ for (const selector of ['.cm-scroller', '#previewContainer']) {
       const after = await pane.evaluate((element) => element.scrollTop);
       expect(Math.abs(after - before)).toBeLessThan(100);
     } finally {
+      // This spec replaces README.md content; restore it so later tests in
+      // the same worker (which share one vault snapshot) see a clean file.
+      await restoreReadmeTestDocument(writer);
       await writer.close();
       await reader.close();
     }
