@@ -111,5 +111,7 @@ test('renders styled math on the PDF export page before printing', async ({ page
   const math = popup.locator('#exportContent .katex').first();
   await expect(math).toBeVisible();
   await expect.poll(() => math.evaluate((element) => getComputedStyle(element).fontFamily)).toMatch(/KaTeX_Main/);
+  await expect.poll(() => popup.evaluate(() => document.fonts?.status ?? 'loaded')).toBe('loaded');
+  await expect.poll(() => popup.evaluate(() => document.fonts?.check('16px "KaTeX_Main"') ?? false)).toBe(true);
   await expect(popup.locator('#exportStatus')).toContainText('Print dialog opened.');
 });
