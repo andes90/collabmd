@@ -325,8 +325,11 @@ describe('export pipeline browser helpers', () => {
     expect(svg).not.toBeNull();
     expect(svg?.querySelector('foreignObject')).toBeNull();
     const textContent = svg?.textContent || '';
-    expect(textContent).toContain('Source markdown');
-    expect(textContent).toContain('Export snapshot');
+    // dagre-wrapper word-wraps SVG labels across tspans (e.g. Source/markdown on
+    // separate rows), so assert words instead of space-joined label strings.
+    for (const word of ['Source', 'markdown', 'Export', 'snapshot']) {
+      expect(textContent).toContain(word);
+    }
     expect(snapshot.warnings).toHaveLength(0);
   });
 

@@ -66,5 +66,32 @@ test('excalidraw build references the lazy Mermaid-to-Excalidraw converter', asy
   assert.match(excalidrawHtml, /src="\.\/app-config\.js"/);
   assert.doesNotMatch(excalidrawHtml, /excalidraw-editor-entry\.js/);
   assert.doesNotMatch(excalidrawBundle, /excalidraw-mermaid-stub/i);
-  assert.match(excalidrawHtml, /(?:mermaid(?:\.core)?-)[A-Za-z0-9_-]+\.js/u);
+  // Chunk filenames follow the bundler's output naming (previously mermaid.core-*.js,
+  // now a dist-*.js re-export), so resolve the lazy import instead of matching a name.
+  const preloadedJsPaths = [...new Set(
+    [...excalidrawHtml.matchAll(/<link rel="modulepreload"[^>]*href="\.\/(assets\/[^"]+\.js)"/gu)]
+      .map((match) => match[1]),
+  )];
+  const preloadedBundles = await Promise.all(
+    preloadedJsPaths.map((assetPath) => readFile(resolve(clientDistDir, assetPath), 'utf8')),
+  );
+  const lazyChunkNames = new Set(
+    preloadedBundles.flatMap((content) => [...content.matchAll(/import\(\s*[`'"]\.\/([^`'"]+\.js)[`'"]/gu)]
+      .map((match) => match[1])),
+  );
+  assert.ok(
+    [...lazyChunkNames].every((fileName) => !/excalidraw-mermaid-stub/iu.test(fileName)),
+    'expected no excalidraw-mermaid-stub among lazy excalidraw chunks',
+  );
+  const converterChunks = [];
+  for (const fileName of lazyChunkNames) {
+    const content = await readFile(resolve(clientDistDir, 'assets', fileName), 'utf8');
+    if (/parseMermaidToExcalidraw/u.test(content)) {
+      converterChunks.push(fileName);
+    }
+  }
+  assert.ok(
+    converterChunks.length > 0,
+    'expected excalidraw build to lazily reference the Mermaid-to-Excalidraw converter',
+  );
 });
