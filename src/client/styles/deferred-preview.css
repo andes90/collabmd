@@ -1,3 +1,4 @@
+@import 'katex/dist/katex.min.css';
 @import './features/media-lightbox.css';
 @import './features/embedded-preview.css';
 @import './features/diagram-preview.css';

@@ -1,3 +1,4 @@
+@import 'katex/dist/katex.min.css';
 @import './features/comments-drawer.css';
 @import './features/comment-overview.css';
 @import './features/comment-overlays.css';

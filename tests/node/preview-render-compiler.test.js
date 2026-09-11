@@ -569,3 +569,32 @@ test('large-document classification triggers on any configured threshold', () =>
   const largeByPlantUmlLongEmbed = analyzeMarkdownComplexity('![[diagram.plantuml]]\n'.repeat(12));
   assert.equal(isLargeDocumentStats(largeByPlantUmlLongEmbed), true);
 });
+
+test('compilePreviewDocument renders inline and display math with KaTeX', () => {
+  const { html } = compilePreviewDocument({
+    markdownText: 'Inline $E = mc^2$ here\n\n$$\n\\frac{a}{b}\n$$',
+  });
+
+  assert.match(html, /<span class="katex">/);
+  assert.match(html, /<p class="katex-block">/);
+  assert.match(html, /application\/x-tex/);
+});
+
+test('compilePreviewDocument leaves prices and code spans as literal dollars', () => {
+  const { html } = compilePreviewDocument({
+    markdownText: 'Price is $5 and $10 total\n\n`$not math$`',
+  });
+
+  assert.doesNotMatch(html, /class="katex/);
+  assert.match(html, /\$5 and \$10/);
+  assert.match(html, /<code>\$not math\$<\/code>/);
+});
+
+test('compilePreviewDocument degrades invalid math without throwing', () => {
+  const { html } = compilePreviewDocument({
+    markdownText: '$\\invalid{math$ and <script>alert(1)</script>',
+  });
+
+  assert.match(html, /katex-error/);
+  assert.doesNotMatch(html, /<script>/);
+});

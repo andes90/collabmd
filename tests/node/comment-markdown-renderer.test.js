@@ -31,3 +31,16 @@ test('escapes raw html instead of rendering it', () => {
   assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.doesNotMatch(html, /<script>/);
 });
+
+test('renders inline math with KaTeX', () => {
+  const html = renderCommentMarkdownToHtml('Review: $x^2$ looks right');
+
+  assert.match(html, /<span class="katex">/);
+});
+
+test('leaves dollar prices as literal text', () => {
+  const html = renderCommentMarkdownToHtml('Costs $5 total');
+
+  assert.doesNotMatch(html, /class="katex/);
+  assert.match(html, /\$5/);
+});

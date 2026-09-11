@@ -1,4 +1,5 @@
 import markdownIt from 'markdown-it';
+import { enableMarkdownMath } from '../domain/markdown-math.js';
 
 import { escapeHtml } from '../domain/vault-utils.js';
 
@@ -21,6 +22,7 @@ function createCommentMarkdownRenderer() {
     linkify: true,
     typographer: true,
   });
+  enableMarkdownMath(markdown);
 
   const fallbackLinkOpen = markdown.renderer.rules.link_open;
   const fallbackTableOpen = markdown.renderer.rules.table_open;
