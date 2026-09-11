@@ -26,7 +26,6 @@ function createBootstrapPayload({
   format,
   jobId,
   markdownText = '',
-  theme = 'light',
   title = '',
 }) {
   return {
@@ -39,7 +38,8 @@ function createBootstrapPayload({
     jobId,
     markdownText: String(markdownText ?? ''),
     source: EXPORT_HOST_SOURCE,
-    theme: theme === 'dark' ? 'dark' : 'light',
+    // Exports always render light so HTML, DOCX, and PDF output stays consistent.
+    theme: 'light',
     title: String(title ?? ''),
     type: 'bootstrap',
   };
@@ -154,11 +154,7 @@ async function startExport(payload) {
         notifyError: true,
       });
     }, EXPORT_JOB_CLOSE_POLL_MS),
-    payload: createBootstrapPayload({
-      ...payload,
-      jobId,
-      theme: document.documentElement.dataset.theme,
-    }),
+    payload: createBootstrapPayload({ ...payload, jobId }),
     timeoutId: window.setTimeout(() => {
       finishPendingJob(jobId, {
         message: 'Export timed out before it completed',

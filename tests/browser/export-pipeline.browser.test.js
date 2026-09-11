@@ -475,6 +475,19 @@ describe('export pipeline browser helpers', () => {
     expect(exportedDocument.querySelector('[data-export-docx-src]')).toBeNull();
   });
 
+  it('appends caller-supplied math styles to the standalone HTML document', () => {
+    const html = buildHtmlDocument(
+      {
+        html: '<p><span class="katex"><span class="katex-mathml">math</span></span></p>',
+        theme: 'light',
+        title: 'Math notes',
+      },
+      '.katex{font:1em KaTeX_Main;}',
+    );
+
+    expect(html).toContain('.katex{font:1em KaTeX_Main;}');
+  });
+
   it('reshapes DOCX tables, blockquotes, and figures into border-friendly markup', () => {
     const html = buildDocxHtmlDocument({
       html: [
@@ -504,6 +517,69 @@ describe('export pipeline browser helpers', () => {
     expect(html).toContain('&nbsp;&nbsp;&nbsp;&nbsp;"README"');
     expect(html).not.toContain('<pre><code>');
     expect(html).not.toContain('<figure><img');
+  });
+
+  it('replaces rendered math with OMML markers in DOCX markup', () => {
+    const html = buildDocxHtmlDocument({
+      html: [
+        '<p>Inline <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>E</mi></mrow><annotation encoding="application/x-tex">E = mc^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true">E = mc2</span></span> here.</p>',
+        '<ul><li><p class="katex-block"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mfrac><mi>a</mi><mi>b</mi></mfrac></mrow><annotation encoding="application/x-tex">\\frac{a}{b}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true">ba</span></span></span></p></li></ul>',
+      ].join('\n'),
+      title: 'Math notes',
+    });
+
+    expect(html).toContain('COLLABMD-MATH-0');
+    expect(html).toContain('COLLABMD-MATH-1');
+    expect(html).toContain('data-mml="%3Cmath');
+    expect(html).not.toContain('katex-html');
+    expect(html).not.toContain('katex-mathml');
+    expect(html).not.toContain('katex-display');
+    expect(html).not.toContain('katex-block');
+  });
+
+  it('flattens task list labels to ballot-box text in DOCX markup', () => {
+    const html = buildDocxHtmlDocument({
+      html: [
+        '<ul><li class="task-list-item"><label class="task-list-label"><input type="checkbox" checked data-task-checkbox="true"> Done task</label></li>',
+        '<li class="task-list-item"><label class="task-list-label"><input type="checkbox" data-task-checkbox="true"> Open task</label></li></ul>',
+      ].join('\n'),
+      title: 'Tasks',
+    });
+
+    expect(html).toContain('\u2611 Done task');
+    expect(html).toContain('\u2610 Open task');
+    expect(html).not.toContain('<label');
+    expect(html).not.toContain('<input');
+  });
+
+  it('drops insignificant whitespace but preserves pre blocks in DOCX markup', () => {
+    const html = buildDocxHtmlDocument({
+      html: [
+        '<h2>Title</h2>',
+        '<ul>',
+        '<li>First <em>item</em> here</li>',
+        '<li>Second</li>',
+        '</ul>',
+        '<pre><code>line one\n\nline three\n</code></pre>',
+      ].join('\n'),
+      title: 'Spacing',
+    });
+
+    expect(html).not.toMatch(/<\/h2>\s+<ul>/);
+    expect(html).not.toMatch(/<\/li>\s+<li>/);
+    expect(html).toContain('First <em>item</em> here');
+    expect(html).toContain('line&nbsp;one');
+    expect(html).toContain('line&nbsp;three');
+  });
+
+  it('emits a compact DOCX wrapper without phantom whitespace', () => {
+    const html = buildDocxHtmlDocument({ html: '<p>Hi</p>', title: 'A & B' });
+
+    expect(html).not.toContain('<!DOCTYPE');
+    expect(html).toContain('<title>A &amp; B</title>');
+    expect(html).not.toMatch(/<\/head>\s+<body>/);
+    expect(html).not.toMatch(/<body>\s+<main>/);
+    expect(html).not.toMatch(/<\/main>\s+<\/body>/);
   });
 
   it('builds one offline document for every markdown note in a folder', async () => {
@@ -560,7 +636,7 @@ describe('export pipeline browser helpers', () => {
       action: 'pdf',
       directoryPath: 'docs',
       fileList: ['docs/one.md'],
-      theme: 'dark',
+      theme: 'light',
     });
 
     window.dispatchEvent(new MessageEvent('message', {

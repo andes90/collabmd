@@ -5,6 +5,7 @@ import '../styles/foundation/themes.css';
 import '../styles/features/preview-markdown.css';
 import '../styles/overrides/highlightjs.css';
 import '../styles/export-document.css';
+import 'katex/dist/katex.min.css';
 
 function ensureHighlightThemeStylesheet() {
   let themeStylesheet = document.getElementById('hljs-theme');

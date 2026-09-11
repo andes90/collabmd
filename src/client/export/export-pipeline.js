@@ -5,6 +5,27 @@ import previewStyles from '../styles/features/preview-markdown.css?inline';
 import highlightOverrideStyles from '../styles/overrides/highlightjs.css?inline';
 import exportStyles from '../styles/export-document.css?inline';
 import highlightStyles from '../assets/vendor/highlight/github.min.css?inline';
+import katexExportCss from 'katex/dist/katex.min.css?inline';
+import katexFontAmsRegular from 'katex/dist/fonts/KaTeX_AMS-Regular.woff2?url';
+import katexFontCaligraphicBold from 'katex/dist/fonts/KaTeX_Caligraphic-Bold.woff2?url';
+import katexFontCaligraphicRegular from 'katex/dist/fonts/KaTeX_Caligraphic-Regular.woff2?url';
+import katexFontFrakturBold from 'katex/dist/fonts/KaTeX_Fraktur-Bold.woff2?url';
+import katexFontFrakturRegular from 'katex/dist/fonts/KaTeX_Fraktur-Regular.woff2?url';
+import katexFontMainBold from 'katex/dist/fonts/KaTeX_Main-Bold.woff2?url';
+import katexFontMainBoldItalic from 'katex/dist/fonts/KaTeX_Main-BoldItalic.woff2?url';
+import katexFontMainItalic from 'katex/dist/fonts/KaTeX_Main-Italic.woff2?url';
+import katexFontMainRegular from 'katex/dist/fonts/KaTeX_Main-Regular.woff2?url';
+import katexFontMathBoldItalic from 'katex/dist/fonts/KaTeX_Math-BoldItalic.woff2?url';
+import katexFontMathItalic from 'katex/dist/fonts/KaTeX_Math-Italic.woff2?url';
+import katexFontSansSerifBold from 'katex/dist/fonts/KaTeX_SansSerif-Bold.woff2?url';
+import katexFontSansSerifItalic from 'katex/dist/fonts/KaTeX_SansSerif-Italic.woff2?url';
+import katexFontSansSerifRegular from 'katex/dist/fonts/KaTeX_SansSerif-Regular.woff2?url';
+import katexFontScriptRegular from 'katex/dist/fonts/KaTeX_Script-Regular.woff2?url';
+import katexFontSize1Regular from 'katex/dist/fonts/KaTeX_Size1-Regular.woff2?url';
+import katexFontSize2Regular from 'katex/dist/fonts/KaTeX_Size2-Regular.woff2?url';
+import katexFontSize3Regular from 'katex/dist/fonts/KaTeX_Size3-Regular.woff2?url';
+import katexFontSize4Regular from 'katex/dist/fonts/KaTeX_Size4-Regular.woff2?url';
+import katexFontTypewriterRegular from 'katex/dist/fonts/KaTeX_Typewriter-Regular.woff2?url';
 import {
   encodeSvgDataUrl,
   loadImage,
@@ -16,6 +37,7 @@ import { resolveVaultRelativePath } from '../../domain/vault-paths.js';
 import { resolveWikiTargetPath } from '../../domain/wiki-link-resolver.js';
 import { createExcalidrawExportOptions, parseSceneJson } from '../domain/excalidraw-scene.js';
 import { escapeHtml } from '../domain/vault-utils.js';
+import { hasRenderedMath } from '../domain/markdown-math.js';
 import { downloadBlob } from '../browser-utils.js';
 import { resolveApiUrl, resolveAppUrl } from '../infrastructure/runtime-config.js';
 import { parseApiResponse } from '../infrastructure/api-client-utils.js';
@@ -37,6 +59,7 @@ const EXPORT_MERMAID_CONFIG = Object.freeze({
 const EXPORT_ASSET_FETCH_TIMEOUT_MS = 10_000;
 const EXPORT_ASSET_MAX_BYTES = 10 * 1024 * 1024;
 const EXPORT_RENDER_SETTLE_TIMEOUT_MS = 10_000;
+const EXPORT_PRINT_FONT_TIMEOUT_MS = 3000;
 const VIDEO_POSTER_CAPTURE_TIMEOUT_MS = 10_000;
 const VIDEO_POSTER_CAPTURE_SEEK_SECONDS = 1;
 const DOCX_COMPATIBLE_IMAGE_MIME_TYPES = new Set([
@@ -67,6 +90,61 @@ const HTML_EXPORT_STYLES = [
     overflow: visible;
   }`,
 ].join('\n');
+
+const KATEX_EXPORT_FONT_URLS = {
+  'KaTeX_AMS-Regular.woff2': katexFontAmsRegular,
+  'KaTeX_Caligraphic-Bold.woff2': katexFontCaligraphicBold,
+  'KaTeX_Caligraphic-Regular.woff2': katexFontCaligraphicRegular,
+  'KaTeX_Fraktur-Bold.woff2': katexFontFrakturBold,
+  'KaTeX_Fraktur-Regular.woff2': katexFontFrakturRegular,
+  'KaTeX_Main-Bold.woff2': katexFontMainBold,
+  'KaTeX_Main-BoldItalic.woff2': katexFontMainBoldItalic,
+  'KaTeX_Main-Italic.woff2': katexFontMainItalic,
+  'KaTeX_Main-Regular.woff2': katexFontMainRegular,
+  'KaTeX_Math-BoldItalic.woff2': katexFontMathBoldItalic,
+  'KaTeX_Math-Italic.woff2': katexFontMathItalic,
+  'KaTeX_SansSerif-Bold.woff2': katexFontSansSerifBold,
+  'KaTeX_SansSerif-Italic.woff2': katexFontSansSerifItalic,
+  'KaTeX_SansSerif-Regular.woff2': katexFontSansSerifRegular,
+  'KaTeX_Script-Regular.woff2': katexFontScriptRegular,
+  'KaTeX_Size1-Regular.woff2': katexFontSize1Regular,
+  'KaTeX_Size2-Regular.woff2': katexFontSize2Regular,
+  'KaTeX_Size3-Regular.woff2': katexFontSize3Regular,
+  'KaTeX_Size4-Regular.woff2': katexFontSize4Regular,
+  'KaTeX_Typewriter-Regular.woff2': katexFontTypewriterRegular,
+};
+
+// Standalone HTML exports must carry KaTeX fonts as data URLs to render
+// math offline. Fonts load once per session, only for math exports.
+let katexExportStylesPromise = null;
+
+// Bundler output rewrites the stylesheet's font paths (hashed names, absolute
+// URLs, sometimes pre-inlined), so match each font by basename instead.
+function loadKatexExportStyles() {
+  return (katexExportStylesPromise ??= (async () => {
+    let css = katexExportCss;
+    await Promise.all(
+      Object.entries(KATEX_EXPORT_FONT_URLS).map(async ([fontFile, fontUrl]) => {
+        const base = fontFile
+          .replace(/\.woff2$/, '')
+          .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const pattern = new RegExp(`url\\((?!data:)[^)]*${base}[^)]*?\\.woff2\\)`, 'g');
+        if (!pattern.test(css)) {
+          return;
+        }
+
+        const response = await fetch(fontUrl);
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        let binary = '';
+        for (let index = 0; index < bytes.length; index += 0x8000) {
+          binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+        }
+        css = css.replace(pattern, `url(data:font/woff2;base64,${btoa(binary)})`);
+      }),
+    );
+    return css.replace(/,url\((?!data:)[^)]+?\)\s*format\("(?:woff|truetype)"\)/gu, '');
+  })());
+}
 
 let mermaidLoaderPromise = null;
 let excalidrawLoaderPromise = null;
@@ -148,6 +226,47 @@ function rewriteDirectoryDocumentLinks(container, { fileList, sourceFilePath }) 
 function replaceChildrenFromHtml(target, html) {
   const parsed = new DOMParser().parseFromString(`<body>${String(html ?? '')}</body>`, 'text/html');
   target.replaceChildren(...parsed.body.childNodes);
+}
+
+const DOCX_WHITESPACE_BLOCK_TAGS = new Set([
+  'BLOCKQUOTE', 'BR', 'DD', 'DIV', 'DL', 'DT', 'FIGURE', 'H1', 'H2', 'H3',
+  'H4', 'H5', 'H6', 'HR', 'LI', 'OL', 'P', 'PRE', 'SECTION', 'TABLE',
+  'TBODY', 'TD', 'TH', 'THEAD', 'TR', 'UL',
+]);
+
+// The converter turns every surviving whitespace text node into document
+// content, so inter-block newlines become phantom empty paragraphs and empty
+// bullets. Collapse insignificant whitespace the way HTML rendering does.
+function normalizeDocxWhitespace(root) {
+  const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const whitespaceNodes = [];
+  while (walker.nextNode()) {
+    if (/^\s*$/.test(walker.currentNode.data)) {
+      whitespaceNodes.push(walker.currentNode);
+    }
+  }
+
+  for (const node of whitespaceNodes) {
+    if (node.parentElement?.closest('pre,textarea')) {
+      continue;
+    }
+
+    const siblings = node.parentElement ? Array.from(node.parentElement.childNodes) : [];
+    if (siblings[0] === node || siblings[siblings.length - 1] === node) {
+      node.remove();
+      continue;
+    }
+
+    const previousIsBlock = !!node.previousElementSibling
+      && DOCX_WHITESPACE_BLOCK_TAGS.has(node.previousElementSibling.tagName);
+    const nextIsBlock = !!node.nextElementSibling
+      && DOCX_WHITESPACE_BLOCK_TAGS.has(node.nextElementSibling.tagName);
+    if (previousIsBlock || nextIsBlock) {
+      node.remove();
+    } else {
+      node.data = ' ';
+    }
+  }
 }
 
 function encodeSvgBase64DataUrl(svgMarkup) {
@@ -1485,6 +1604,46 @@ export function buildDocxHtmlDocument(snapshot) {
   const template = document.createElement('template');
   replaceChildrenFromHtml(template.content, snapshot.html);
 
+
+  normalizeDocxWhitespace(template.content);
+
+  // The converter drops label content, which would erase every task list
+  // item. Flatten task labels to ballot-box text first.
+  Array.from(template.content.querySelectorAll('label.task-list-label')).forEach((label) => {
+    const checkbox = label.querySelector('input[data-task-checkbox]');
+    const box = checkbox?.hasAttribute('checked') ? '\u2611' : '\u2610';
+    const kept = Array.from(label.childNodes).filter((node) => node.tagName !== 'INPUT');
+    if (kept[0]?.nodeType === 3) {
+      kept[0].textContent = kept[0].textContent.replace(/^\s+/, '');
+    }
+    label.replaceWith(`${box} `, ...kept);
+  });
+
+  // KaTeX lays math out as positioned spans that read out of order as
+  // plain text (a stacked fraction extracts as "ba" instead of "a/b").
+  // The server swaps these markers for native OMML equations, so Word
+  // renders them as real editable math.
+  // A lone math block inside a list item would detach from its bullet,
+  // so hoist the marker to keep the equation on the bullet paragraph.
+  Array.from(template.content.querySelectorAll('.katex')).forEach((mathElement, docxMathIndex) => {
+    const mathml = mathElement.querySelector('.katex-mathml')?.innerHTML ?? '';
+    if (!mathml.includes('<math')) {
+      return;
+    }
+
+    const displayWrapper = mathElement.parentElement;
+    let replaceTarget = displayWrapper?.classList?.contains('katex-display') ? displayWrapper : mathElement;
+    const blockParagraph = mathElement.closest('p.katex-block');
+    if (blockParagraph && blockParagraph.parentElement?.tagName === 'LI') {
+      replaceTarget = blockParagraph;
+    }
+
+    const marker = template.content.ownerDocument.createElement('span');
+    marker.className = 'export-math';
+    marker.dataset.mml = encodeURIComponent(mathml);
+    marker.textContent = `COLLABMD-MATH-${docxMathIndex}`;
+    replaceTarget.replaceWith(marker);
+  });
   Array.from(template.content.querySelectorAll('.table-wrapper')).forEach((wrapper) => {
     const table = wrapper.querySelector(':scope > table');
     if (!table) {
@@ -1612,12 +1771,11 @@ export function buildDocxHtmlDocument(snapshot) {
     }));
   });
 
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>${snapshot.title}</title>
-  <style>
+  // Compact wrapper: with HTML minification skipped, the converter turns
+  // every surviving whitespace text node into document content, so the
+  // doctype and any inter-tag whitespace here would become phantom empty
+  // paragraphs. Body content is normalized by normalizeDocxWhitespace above.
+  return `<html lang="en"><head><meta charset="UTF-8"><title>${escapeHtml(snapshot.title)}</title><style>
     body { font-family: Arial, sans-serif; color: #111827; line-height: 1.6; }
     main { max-width: 760px; margin: 0 auto; }
     h1, h2, h3, h4, h5, h6 { color: #111827; margin: 1.3em 0 0.6em; line-height: 1.2; }
@@ -1640,15 +1798,10 @@ export function buildDocxHtmlDocument(snapshot) {
     .export-video-poster-meta { display: block; color: #6b7280; font-size: 12px; margin-top: 4px; }
     .export-video-link { display: block; margin-top: 8px; word-break: break-word; }
     .export-warning { color: #b45309; }
-  </style>
-</head>
-<body>
-  <main>${template.innerHTML}</main>
-</body>
-</html>`;
+  </style></head><body><main>${template.innerHTML}</main></body></html>`;
 }
 
-export function buildHtmlDocument(snapshot) {
+export function buildHtmlDocument(snapshot, extraStyles = '') {
   const template = document.createElement('template');
   replaceChildrenFromHtml(template.content, snapshot.html);
   Array.from(template.content.querySelectorAll('[data-export-docx-src]')).forEach((element) => {
@@ -1662,7 +1815,7 @@ export function buildHtmlDocument(snapshot) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(snapshot.title)}</title>
-  <style>${HTML_EXPORT_STYLES.replace(/<\/style/giu, '<\\/style')}</style>
+  <style>${HTML_EXPORT_STYLES.replace(/<\/style/giu, '<\\/style')}${extraStyles.replace(/<\/style/giu, '<\\/style')}</style>
 </head>
 <body data-theme="${theme}">
   <main class="export-page-shell">
@@ -1672,9 +1825,10 @@ export function buildHtmlDocument(snapshot) {
 </html>`;
 }
 
-export function htmlAdapter(snapshot) {
+export async function htmlAdapter(snapshot) {
+  const mathStyles = hasRenderedMath(snapshot.html) ? await loadKatexExportStyles() : '';
   downloadBlob(
-    new Blob([buildHtmlDocument(snapshot)], { type: 'text/html;charset=utf-8' }),
+    new Blob([buildHtmlDocument(snapshot, mathStyles)], { type: 'text/html;charset=utf-8' }),
     `${createDocumentTitle(snapshot.filePath, snapshot.title)}.html`,
     { removeDelayMs: 0, revokeDelayMs: 1000 },
   );
@@ -1705,10 +1859,26 @@ export async function docxAdapter(snapshot) {
   });
 }
 
-export async function printPdfAdapter() {
-  await waitForAnimationFrame();
-  await waitForAnimationFrame();
+// document.fonts.ready can resolve before lazy KaTeX faces start loading,
+// which prints blank glyphs. Force-load the families and bound the wait so
+// a missing font cannot hang the export.
+async function waitForKatexPrintFonts() {
+  if (!document.fonts) {
+    return;
+  }
 
+  const families = [...new Set(Object.keys(KATEX_EXPORT_FONT_URLS).map((file) => file.replace(/-[^-]+\.woff2$/u, '')))];
+  const loads = families.map((family) => document.fonts.load(`16px "${family}"`).catch(() => []));
+  await Promise.race([
+    Promise.allSettled(loads),
+    new Promise((resolve) => window.setTimeout(resolve, EXPORT_PRINT_FONT_TIMEOUT_MS)),
+  ]);
+}
+
+export async function printPdfAdapter() {
+  await waitForKatexPrintFonts();
+  await waitForAnimationFrame();
+  await waitForAnimationFrame();
   await new Promise((resolve) => {
     const timeoutId = window.setTimeout(resolve, 1500);
     const handleAfterPrint = () => {
