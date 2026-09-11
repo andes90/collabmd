@@ -109,12 +109,13 @@ const CAPABILITIES = Object.freeze({
     agentEditable: true,
     editable: true,
     extensions: [...MARKDOWN_FILE_EXTENSIONS],
-    guide: 'Markdown-it syntax with YAML frontmatter, headings, tables, task lists, fenced code, linkified URLs, [[wiki-links]], aliases, and embeds. Use ![[file.ext]] for Base, draw.io, Excalidraw, Mermaid, or PlantUML Vault embeds. Use ![Label](https://...) for public video embeds: valid YouTube URLs or direct public HTTPS URLs ending in .mp4, .webm, or .ogg. Use relative Markdown image paths for Vault image attachments. Raw HTML is disabled.',
+    guide: 'Markdown-it syntax with YAML frontmatter, headings, tables, task lists, fenced code, linkified URLs, [[wiki-links]], aliases, and embeds. Use $...$ for inline math and $$...$$ on its own lines for display math (KaTeX). Use ![[file.ext]] for Base, draw.io, Excalidraw, Mermaid, or PlantUML Vault embeds. Use ![Label](https://...) for public video embeds: valid YouTube URLs or direct public HTTPS URLs ending in .mp4, .webm, or .ogg. Use relative Markdown image paths for Vault image attachments. Raw HTML is disabled.',
     examples: [
       '---\ntags: [docs]\n---\n# Title\n\n- [ ] Task\n\n[[Other Note|Alias]]',
       '![[diagram.mmd]]\n![[diagram.puml]]\n![[drawing.excalidraw]]\n![[architecture.drawio]]\n![[query.base]]',
       '![Demo](https://www.youtube.com/watch?v=dQw4w9WgXcQ)\n![Demo](https://cdn.example.com/demo.webm)\n![Diagram](assets/diagram.png)',
       '```mermaid\nflowchart LR\n  A --> B\n```\n\n```plantuml\n@startuml\nAlice -> Bob\n@enduml\n```',
+      'Inline math $E = mc^2$ and display math:\n\n$$\n\\frac{a}{b}\n$$',
     ],
   },
   mermaid: {

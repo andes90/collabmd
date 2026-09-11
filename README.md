@@ -123,7 +123,7 @@ collabmd ~/my-vault --no-tunnel
 CollabMD starts a local server, scans the vault, and opens a browser-based editor with:
 
 - **File explorer sidebar** — upload, browse, create, rename, and delete `.md`, `.markdown`, `.mdx`, `.html`, `.htm`, `.base`, `.mmd`, `.mermaid`, `.puml`, `.plantuml`, `.dsl`, `.excalidraw`, `.drawio`, `.pdf`, and supported image files plus folders
-- **Live preview** — rendered as you type, with sandboxed static HTML, syntax-highlighted code blocks, public video embeds, plus Mermaid, PlantUML, and Structurizr diagrams
+- **Live preview** — rendered as you type, with sandboxed static HTML, syntax-highlighted code blocks, public video embeds, KaTeX math (`$...$` and `$$...$$`), plus Mermaid, PlantUML, and Structurizr diagrams
 - **Anchored comments and diagram links** — add comments from the editor or selected Excalidraw elements, reopen threads in context, and link Excalidraw elements to other vault diagrams with focused navigation
 - **`[[wiki-links]]` + backlinks** — jump between notes and inspect linked mentions
 - **Room chat** — discuss changes without leaving the workspace
