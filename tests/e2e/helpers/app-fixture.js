@@ -20,7 +20,6 @@ Welcome to the test vault. This is the top-level readme.
 - [[daily/2026-03-05]]
 - [[projects/collabmd]]
 `;
-let lateStatePrimePending = false;
 let runtimeVaultDir = getRuntimeVaultDir();
 const clientDistDir = resolve(import.meta.dirname, '../../../dist/client');
 
@@ -85,6 +84,28 @@ export const test = base.extend({
     runtimeVaultDir = e2eServer.vaultDir;
     await use(page);
   },
+  // Imported hooks register only in the first spec loaded by a reused worker.
+  // An automatic fixture resets state for every test in every spec.
+  resetAppState: [async ({ browser, page }, use) => {
+    const currentContext = page.context();
+    await Promise.all(
+      browser.contexts()
+        .filter((context) => context !== currentContext)
+        .map((context) => context.close().catch(() => {})),
+    );
+    await resetE2EAppState(page);
+    await seedStoredUserName(page);
+    try {
+      await use();
+    } finally {
+      try {
+        await page.goto('about:blank');
+        await page.request.post('/api/test/reset-state');
+      } catch {
+        // Ignore teardown navigation failures when the page is already closed.
+      }
+    }
+  }, { auto: true }],
 });
 
 async function getAvailablePort() {
@@ -143,27 +164,6 @@ async function stopServerProcess(serverProcess) {
   }
 }
 
-test.beforeEach(async ({ browser, page }) => {
-  const currentContext = page.context();
-  await Promise.all(
-    browser.contexts()
-      .filter((context) => context !== currentContext)
-      .map((context) => context.close().catch(() => {})),
-  );
-  await resetE2EAppState(page);
-  lateStatePrimePending = true;
-  await seedStoredUserName(page);
-});
-
-test.afterEach(async ({ page }) => {
-  try {
-    await page.goto('about:blank');
-    await page.request.post('/api/test/reset-state');
-  } catch {
-    // Ignore teardown navigation failures when the page is already closed.
-  }
-});
-
 export { expect };
 
 async function resetE2EAppState(page, { attempts = 5 } = {}) {
@@ -214,15 +214,6 @@ async function readmeSnapshotIsStable(readReadme, { requiredMatches = 2 } = {}) 
   return true;
 }
 
-async function ensureLateStatePrime(page) {
-  if (!lateStatePrimePending) {
-    return;
-  }
-
-  await resetE2EAppState(page);
-  lateStatePrimePending = false;
-}
-
 export async function seedStoredUserName(page, name = E2E_USER_NAME) {
   await page.addInitScript((storedName) => {
     window.localStorage.setItem('collabmd-user-name', storedName);
@@ -245,7 +236,6 @@ export async function waitForPreview(page) {
 }
 
 export async function openFile(page, filePath, { userName = E2E_USER_NAME, waitFor = 'editor' } = {}) {
-  await ensureLateStatePrime(page);
   await seedStoredUserName(page, userName);
   await page.goto(`/#file=${encodeURIComponent(filePath)}`);
   if (waitFor === 'preview') {
@@ -269,7 +259,6 @@ export async function openFile(page, filePath, { userName = E2E_USER_NAME, waitF
 }
 
 export async function openHome(page, { userName = E2E_USER_NAME } = {}) {
-  await ensureLateStatePrime(page);
   await seedStoredUserName(page, userName);
   await page.goto('/');
   await expect(page.locator('#displayNameDialog')).toBeHidden();
@@ -288,7 +277,6 @@ export async function setHydrateDelay(page, delayMs = 0) {
 }
 
 export async function writeVaultFileAndResetCollab(page, { path, content }) {
-  lateStatePrimePending = false;
   const resetResponseBeforeWrite = await page.request.post('/api/test/reset-state');
   if (!resetResponseBeforeWrite.ok()) {
     throw new Error(`reset-state failed before write: ${resetResponseBeforeWrite.status()} ${await resetResponseBeforeWrite.text()}`);

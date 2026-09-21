@@ -441,8 +441,9 @@ test('keeps basic markdown visually aligned between preview and HTML export', as
   });
 
   expect(exportPresentation).toEqual(previewPresentation);
-  await expect(previewContent).toHaveScreenshot('markdown-preview-parity-app.png', { animations: 'disabled' });
-  await expect(exportContent).toHaveScreenshot('markdown-preview-parity-export.png', { animations: 'disabled' });
+  // Allow a few glyph-edge rasterization pixels; keep layout and style checks strict.
+  await expect(previewContent).toHaveScreenshot('markdown-preview-parity-app.png', { animations: 'disabled', maxDiffPixels: 5 });
+  await expect(exportContent).toHaveScreenshot('markdown-preview-parity-export.png', { animations: 'disabled', maxDiffPixels: 5 });
   await restoreReadmeTestDocument(page);
 });
 

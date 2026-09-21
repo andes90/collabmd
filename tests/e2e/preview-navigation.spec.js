@@ -349,11 +349,14 @@ test('copies and restores file-plus-anchor deep links from preview headings', as
   await headingLinkButton.click();
 
 
+  const expectedUrl = new URL(page.url());
+  expect(expectedUrl.searchParams.get('vault')).toBeTruthy();
+  expectedUrl.hash = 'file=README.md&anchor=section-a';
   await expect.poll(async () => (
     page.evaluate(() => navigator.clipboard.readText())
-  )).toBe(`${new URL(page.url()).origin}/#file=README.md&anchor=section-a`);
+  )).toBe(expectedUrl.toString());
 
-  await page.goto('/#file=README.md&anchor=section-a');
+  await page.goto(await page.evaluate(() => navigator.clipboard.readText()));
   await expect(page).toHaveURL(/#file=README\.md&anchor=section-a$/);
   await expect(page.locator('#tabLockOverlay')).toBeHidden();
   await expect(page.locator('#previewContent h2#section-a')).toBeVisible();
@@ -412,11 +415,14 @@ test('copies and restores duplicate nested heading links using contextual anchor
   await headingLinkButton.click();
 
 
+  const expectedUrl = new URL(page.url());
+  expect(expectedUrl.searchParams.get('vault')).toBeTruthy();
+  expectedUrl.hash = 'file=README.md&anchor=approach-b-pros';
   await expect.poll(async () => (
     page.evaluate(() => navigator.clipboard.readText())
-  )).toBe(`${new URL(page.url()).origin}/#file=README.md&anchor=approach-b-pros`);
+  )).toBe(expectedUrl.toString());
 
-  await page.goto('/#file=README.md&anchor=approach-b-pros');
+  await page.goto(await page.evaluate(() => navigator.clipboard.readText()));
   await expect(page).toHaveURL(/#file=README\.md&anchor=approach-b-pros$/);
   await expect(page.locator('#previewContent h4#approach-b-pros')).toBeVisible();
 
