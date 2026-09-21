@@ -20,7 +20,6 @@ import {
 import { startTestServer, waitForCondition } from '../helpers/test-server.js';
 import {
   applySyncMessageToDoc,
-  collectMessages,
   encodeAwarenessMessage,
   encodeSyncStep1Message,
   encodeSyncUpdateMessage,
@@ -312,26 +311,41 @@ test('WebSocket collaboration preserves Yjs history across short reconnect gaps'
   assert.equal(diskContent, '# Test\n\nHello from test vault.\n\nReconnect-safe edit.\n');
 });
 
-test('WebSocket collaboration does not duplicate initial sync when client immediately sends SyncStep1', async (t) => {
-  const app = await startTestServer();
-  t.after(() => app.close());
+for (const waitForServerSync of [false, true]) {
+  test(`WebSocket collaboration preserves content when client syncs ${waitForServerSync ? 'after server sync' : 'immediately'}`, async (t) => {
+    const app = await startTestServer();
+    t.after(() => app.close());
 
-  const ws = new WebSocket(app.wsUrl('test.md'));
-  t.after(async () => {
-    ws.close();
-    await Promise.allSettled([waitForClose(ws)]);
+    const clientDoc = new Y.Doc();
+    t.after(() => clientDoc.destroy());
+    let syncMessageCount = 0;
+    const ws = new WebSocket(app.wsUrl('test.md'));
+    ws.on('message', (data) => {
+      if (getMessageType(data) === MSG_SYNC) {
+        syncMessageCount += 1;
+        applySyncMessageToDoc(data, clientDoc, ws);
+      }
+    });
+    t.after(async () => {
+      ws.close();
+      await Promise.allSettled([waitForClose(ws)]);
+    });
+
+    await waitForOpen(ws);
+    if (waitForServerSync) {
+      await waitForCondition(() => syncMessageCount === 1);
+    }
+    const ackPromise = waitForMessage(ws, (data) => getMessageType(data) === MSG_AGENT_FLUSH_ACK);
+    ws.send(encodeSyncStep1Message(clientDoc));
+    ws.send(encodeRoomFlushRequest('initial-sync'));
+    await ackPromise;
+
+    // The fallback can win the race with client SyncStep1; both updates must be safe to apply.
+    const room = app.server.roomRegistry.get('test.md');
+    assert.equal(syncMessageCount, room.debugMetrics.initialSyncCount + 1);
+    assert.equal(clientDoc.getText('codemirror').toString(), '# Test\n\nHello from test vault.\n');
   });
-
-  await waitForOpen(ws);
-  ws.send(encodeSyncStep1Message(new Y.Doc()));
-
-  const syncMessages = await collectMessages(ws, (data) => getMessageType(data) === MSG_SYNC, {
-    idleMs: 100,
-    timeoutMs: 2000,
-  });
-
-  assert.equal(syncMessages.length, 1);
-});
+}
 
 test('Renaming an active room keeps persistence on the new path', async (t) => {
   const app = await startTestServer();

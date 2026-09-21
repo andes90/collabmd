@@ -25,7 +25,8 @@ function createSocket() {
   return socket;
 }
 
-test('ClientSocketSession flushes queued messages and skips server-initiated initial sync after client sync', async () => {
+test('ClientSocketSession flushes queued messages and skips server-initiated initial sync after client sync', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   const socket = createSocket();
   const handledPayloads = [];
   let addClientResolved;
@@ -58,10 +59,39 @@ test('ClientSocketSession flushes queued messages and skips server-initiated ini
   socket.emit('message', queuedPayload);
   addClientResolved();
   await initialization;
-  await new Promise((resolve) => setTimeout(resolve, 10));
+  t.mock.timers.tick(1);
 
   assert.deepEqual(handledPayloads, [createSyncMessage(), queuedPayload]);
 });
+
+for (const clientSyncFirst of [true, false]) {
+  test(`ClientSocketSession handles client sync ${clientSyncFirst ? 'before' : 'after'} the initial sync timer`, async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const socket = createSocket();
+    const handledPayloads = [];
+    let initialSyncCount = 0;
+    const room = {
+      clients: new Set([socket]),
+      addClient: async () => {},
+      handleMessage: (_ws, payload) => handledPayloads.push(payload),
+      removeClient: () => {},
+      sendInitialSync: () => { initialSyncCount += 1; },
+    };
+    const session = new ClientSocketSession({ room, roomName: 'notes.md', ws: socket });
+    t.after(() => session.detach());
+    await session.initialize();
+
+    if (!clientSyncFirst) {
+      t.mock.timers.tick(1);
+      assert.equal(initialSyncCount, 1);
+    }
+    socket.emit('message', createSyncMessage());
+    t.mock.timers.tick(1);
+
+    assert.equal(initialSyncCount, clientSyncFirst ? 0 : 1);
+    assert.deepEqual(handledPayloads, [createSyncMessage()]);
+  });
+}
 
 test('ClientSocketSession removes room client when socket closes before room initialization finishes', async () => {
   const socket = createSocket();
