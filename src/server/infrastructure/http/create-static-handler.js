@@ -59,6 +59,7 @@ function buildRuntimeConfig({
   wikiLinkAutoCreate,
   wsBasePath,
   vaults,
+  vaultDashboard,
 }) {
   return `window.__COLLABMD_CONFIG__ = ${JSON.stringify({
     activeVault: vaults?.[0]?.id ?? '',
@@ -81,7 +82,8 @@ function buildRuntimeConfig({
     structurizrEnabled: Boolean(structurizr?.enabled ?? structurizr?.serverUrl),
     wikiLinkAutoCreate,
     wsBasePath,
-    vaults: (vaults ?? []).map(({ id }) => ({ id })),
+    vaults: (vaults ?? []).map(({ id, name }) => ({ id, name: name || id })),
+    vaultDashboard: Boolean(vaultDashboard && !hosted?.enabled),
   })};\n`;
 }
 

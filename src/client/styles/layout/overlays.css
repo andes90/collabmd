@@ -99,6 +99,11 @@
   font-size: var(--text-ui-sm);
 }
 
+.file-context-item[hidden],
+.file-action-sheet-item[hidden] {
+  display: none;
+}
+
 .file-context-item:hover {
   background: var(--color-surface-offset);
 }

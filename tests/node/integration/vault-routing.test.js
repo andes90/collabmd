@@ -76,7 +76,7 @@ test('vault routing lists vaults and isolates file trees', async (t) => {
   assert.equal(listResponse.statusCode, 200);
   assert.deepEqual(JSON.parse(listResponse.body), {
     activeVault: 'alpha',
-    vaults: [{ id: 'alpha' }, { id: 'beta' }],
+    vaults: [{ id: 'alpha', name: 'alpha' }, { id: 'beta', name: 'beta' }],
   });
 
   const alphaResponse = await httpRequest(`${app.baseUrl}/api/v/alpha/files`);

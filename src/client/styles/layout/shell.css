@@ -1,5 +1,157 @@
 /* ===== APP SHELL ===== */
 
+html[data-workspace-loading] .app-shell,
+html[data-workspace-loading] .skip-link {
+  visibility: hidden;
+}
+
+.workspace-loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  padding: var(--space-6);
+  overflow: auto;
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+}
+
+.vault-dashboard {
+  place-items: center;
+  place-content: normal;
+}
+
+.vault-dashboard-card {
+  width: min(100%, 520px);
+  padding: clamp(var(--space-5), 4vw, var(--space-8));
+  border: 1px solid var(--border-accent-soft);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-card-strong);
+}
+
+.vault-dashboard-header .sidebar-brand {
+  margin-bottom: var(--space-6);
+}
+
+.vault-dashboard-header h1 {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  line-height: 1.15;
+  letter-spacing: -0.035em;
+}
+
+.vault-dashboard-header p {
+  margin: 0 0 var(--space-6);
+  color: var(--color-text-muted);
+  font-size: var(--text-ui-md);
+  line-height: 1.5;
+}
+
+.vault-dashboard-search {
+  position: relative;
+}
+
+.vault-dashboard-search > svg {
+  position: absolute;
+  top: 50%;
+  left: var(--space-3);
+  color: var(--color-text-faint);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.vault-dashboard-search .ui-input {
+  min-height: var(--control-h-lg);
+  padding-left: var(--space-10);
+  background: var(--color-surface-offset);
+}
+
+.vault-dashboard-list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: var(--space-6) 0 var(--space-3);
+}
+
+.vault-dashboard-list-heading h2 {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-ui-sm);
+  font-weight: 600;
+}
+
+.vault-dashboard-card nav {
+  display: grid;
+  gap: var(--space-2);
+  max-height: 40dvh;
+  padding: var(--space-1);
+  margin: calc(-1 * var(--space-1));
+  overflow: auto;
+}
+
+.vault-dashboard-link.ui-record-surface {
+  --ui-record-gap: var(--space-3);
+  --ui-record-border-hover: var(--border-accent-soft);
+  flex-direction: row;
+  align-items: center;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.vault-dashboard-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-highlight);
+  color: var(--color-primary);
+}
+
+.vault-dashboard-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--text-ui-md);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.vault-dashboard-arrow {
+  flex-shrink: 0;
+  color: var(--color-text-faint);
+}
+
+.vault-dashboard-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-divider);
+  color: var(--color-text-faint);
+  font-size: var(--text-caption);
+}
+
+.vault-dashboard-footer kbd {
+  padding: 1px var(--space-1);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-offset);
+  font: inherit;
+}
+
+.vault-dashboard-link[hidden],
+.vault-dashboard-card [role='status'][hidden] {
+  display: none;
+}
+
 .app-shell {
   position: fixed;
   top: var(--app-viewport-offset-top, 0px);

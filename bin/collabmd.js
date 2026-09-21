@@ -70,8 +70,9 @@ const useLocalPlantUml = values['local-plantuml'];
 const useLocalStructurizr = values['local-structurizr'];
 
 const { resolveCliVaultDir, resolveConfiguredVaults, loadConfig } = await import('../src/server/config/env.js');
-// ponytail: explicit directory wins; COLLABMD_VAULTS only applies with no positional
-const useVaultList = positionals.length === 0 && String(process.env.COLLABMD_VAULTS ?? '').trim() !== '';
+// An explicit directory wins over both the list and discovery.
+const useVaultList = positionals.length === 0
+  && [process.env.COLLABMD_VAULTS, process.env.COLLABMD_VAULT_DISCOVERY].some((value) => String(value ?? '').trim() !== '');
 const vaultPath = useVaultList ? '' : resolveCliVaultDir(positionals);
 // ponytail: primary vault known before loadConfig so local services mirror the right dir
 const primaryVaultDir = useVaultList ? resolveConfiguredVaults({}, process.env)[0].dir : vaultPath;

@@ -1,5 +1,5 @@
 import { basename, isAbsolute, relative, resolve } from 'path';
-import { readFileSync } from 'node:fs';
+import { lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'url';
 
 import {
@@ -222,11 +222,11 @@ export function parseVaultList(rawValue) {
 
 export function resolveConfiguredVaults(overrides = {}, env = process.env) {
   if (Array.isArray(overrides.vaults)) {
-    return overrides.vaults.map(({ id, dir, repoUrl }) => {
+    return overrides.vaults.map(({ id, dir, name, repoUrl }) => {
       if (!VAULT_ID_PATTERN.test(String(id ?? ''))) {
         throw new Error(`Invalid vault id "${id}". ${VAULT_ID_HINT}`);
       }
-      return { id, dir: resolve(dir), repoUrl: normalizeOptionalString(repoUrl) };
+      return { id, dir: resolve(dir), ...(name ? { name: normalizeOptionalString(name) } : {}), repoUrl: normalizeOptionalString(repoUrl) };
     });
   }
   // ponytail: explicit directory (CLI positional) wins over the operator list
@@ -235,13 +235,34 @@ export function resolveConfiguredVaults(overrides = {}, env = process.env) {
     return [{ id: basename(dir), dir }];
   }
   const rawList = normalizeOptionalString(env.COLLABMD_VAULTS);
-  if (!rawList) {
+  const discovery = normalizeOptionalString(env.COLLABMD_VAULT_DISCOVERY);
+  if (!rawList && !discovery) {
     const dir = resolveConfiguredVaultDir(overrides, env);
     return [{ id: basename(dir), dir }];
   }
-  const vaults = parseVaultList(rawList);
+  let vaults;
+  if (rawList) {
+    vaults = parseVaultList(rawList);
+  } else {
+    if (!['all', 'marked'].includes(discovery)) {
+      throw new Error('COLLABMD_VAULT_DISCOVERY must be "all" or "marked".');
+    }
+    const root = resolve(env.COLLABMD_VAULT_DIR || '.');
+    // ponytail: discover immediate real directories at startup; restart to pick up additions.
+    vaults = readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.')
+        && (discovery === 'all' || lstatSync(resolve(root, entry.name, '.collabmd'), { throwIfNoEntry: false })?.isDirectory()))
+      .sort((a, b) => a.name.localeCompare(b.name, 'en'))
+      .map((entry) => ({ id: entry.name, dir: resolve(root, entry.name) }));
+    if (vaults.length === 0) {
+      throw new Error('No vaults found. Check COLLABMD_VAULT_DIR and COLLABMD_VAULT_DISCOVERY.');
+    }
+  }
   const seenIds = new Set();
   for (const vault of vaults) {
+    if (!VAULT_ID_PATTERN.test(vault.id)) {
+      throw new Error(`Invalid vault id "${vault.id}". ${VAULT_ID_HINT}`);
+    }
     if (seenIds.has(vault.id)) {
       throw new Error(`Duplicate vault id "${vault.id}" in COLLABMD_VAULTS.`);
     }
@@ -260,6 +281,17 @@ export function resolveConfiguredVaults(overrides = {}, env = process.env) {
 
 export function mangleVaultIdForEnv(vaultId) {
   return String(vaultId ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '_');
+}
+
+export function resolveVaultNames(vaults, env = process.env) {
+  return vaults.map((vault) => {
+    const suffix = mangleVaultIdForEnv(vault.id);
+    const name = normalizeOptionalString(env[`COLLABMD_VAULT_NAME_${suffix}`]);
+    if (name && vaults.filter((entry) => mangleVaultIdForEnv(entry.id) === suffix).length > 1) {
+      throw new Error(`Ambiguous vault name: multiple vaults share COLLABMD_VAULT_NAME_${suffix}.`);
+    }
+    return { ...vault, name: vault.name || name || vault.id };
+  });
 }
 
 // ponytail: explicit repoUrl wins, then COLLABMD_GIT_REPO_URL_<ID>, then the shared URL for the primary
@@ -540,7 +572,7 @@ function resolvePublicDir(nodeEnv) {
 
 export function loadConfig(overrides = {}) {
   const nodeEnv = process.env.NODE_ENV || 'development';
-  const vaults = resolveVaultRepoUrls(resolveConfiguredVaults(overrides), overrides);
+  const vaults = resolveVaultNames(resolveVaultRepoUrls(resolveConfiguredVaults(overrides), overrides));
   // ponytail: vaultDir stays the primary vault; other vaults resolve through the registry
   const vaultDir = overrides.vaultDir || vaults[0].dir;
   const basePath = normalizeAppBasePath(process.env.BASE_PATH || '');
@@ -622,6 +654,7 @@ export function loadConfig(overrides = {}) {
     publicDir,
     vaultDir,
     vaults,
+    vaultDashboard: overrides.vaultDashboard ?? parseBooleanFlag(process.env.COLLABMD_VAULT_DASHBOARD),
     publicWsBaseUrl: process.env.PUBLIC_WS_BASE_URL || '',
     testWsRoomHydrateDelayMs: parsePositiveInt(process.env.TEST_WS_ROOM_HYDRATE_DELAY_MS, 0),
     wikiLinkAutoCreate: process.env.COLLABMD_WIKI_LINK_AUTO_CREATE !== 'false',

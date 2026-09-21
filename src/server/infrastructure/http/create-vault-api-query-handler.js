@@ -454,7 +454,7 @@ async function handleSearch(req, res, requestUrl, { searchService }) {
 
 async function handleVaultList(req, res, _requestUrl, { config }) {
   // ponytail: ids only — absolute vault dirs are operator internals
-  const vaults = (config?.vaults ?? []).map(({ id }) => ({ id }));
+  const vaults = (config?.vaults ?? []).map(({ id, name }) => ({ id, name: name || id }));
   jsonResponse(req, res, 200, { activeVault: vaults[0]?.id ?? null, vaults });
 }
 

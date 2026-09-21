@@ -7,6 +7,16 @@
   <title>CollabMD — Collaborative Markdown Vault</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none'><rect x='3' y='4' width='17' height='24' rx='3' stroke='%232563eb' stroke-width='2'/><rect x='12' y='4' width='17' height='24' rx='3' fill='%232563eb'/><path d='M17 12h7m-7 4h7m-7 4h4' stroke='white' stroke-width='1.5'/></svg>">
   <script>
+    let preferredTheme;
+    try {
+      preferredTheme = window.localStorage.getItem('collabmd-theme');
+    } catch {
+      // Storage may be unavailable in restricted browser contexts.
+    }
+    document.documentElement.dataset.theme = ['light', 'dark'].includes(preferredTheme)
+      ? preferredTheme
+      : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    document.documentElement.dataset.workspaceLoading = 'true';
     if (
       window.location.hash.includes('file=')
       || window.location.hash.includes('git-diff=')
@@ -18,6 +28,7 @@
   <script vite-ignore defer src="./app-config.js"></script>
 </head>
 <body>
+    <div class="workspace-loading" id="workspaceLoading" role="status">Opening workspace…</div>
 
     <a href="#editorContainer" class="sr-only skip-link" id="skipToEditor">Skip to editor</a>
 

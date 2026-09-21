@@ -123,6 +123,9 @@ See [Multi-vault](#multi-vault) below for the `COLLABMD_VAULTS` format and per-v
 |----------|-------------|---------|----------|
 | `COLLABMD_VAULT_DIR` | Vault directory path | CLI: current directory, server entrypoint: `data/vault`, Docker: `/data` | No |
 | `COLLABMD_VAULTS` | Multi-vault list (`id=path`, comma-separated; bare paths use the folder name). An explicit CLI directory wins. | | No |
+| `COLLABMD_VAULT_NAME_<VAULT_ID>` | Display name; uppercase the ID and replace punctuation with `_`, as for per-vault git remotes | Vault ID | No |
+| `COLLABMD_VAULT_DISCOVERY` | Discover immediate subfolders: `all` or `marked` (requires `.collabmd`). Explicit list or CLI directory wins. | Disabled | No |
+| `COLLABMD_VAULT_DASHBOARD` | Show the vault chooser at the root URL when multiple vaults are configured (self-hosted only) | `false` | No |
 | `COLLABMD_GIT_ENABLED` | Enable or disable git integration in the UI and API | `true` | No |
 | `COLLABMD_GIT_REPO_URL` | Remote git repository used to bootstrap the vault checkout | | Only to bootstrap from a remote |
 | `COLLABMD_GIT_REPO_URL_<VAULT_ID>` | Per-vault remote; id uppercased with non-alphanumerics as `_`. Wins over the shared URL for that vault; the shared URL stays the primary vault's fallback. | | Only to bootstrap that vault from a remote |
@@ -217,6 +220,32 @@ See [Multi-vault](#multi-vault) below for the `COLLABMD_VAULTS` format and per-v
 | `CLOUDFLARED_EXTRA_ARGS` | Extra `cloudflared` flags | | No |
 
 ### Multi-vault
+
+Use display names without changing vault IDs or existing links:
+
+```bash
+COLLABMD_VAULTS="cool-project=/data/cool-project, notes=/data/notes"
+COLLABMD_VAULT_NAME_COOL_PROJECT="Cool project"
+COLLABMD_VAULT_DASHBOARD=true
+```
+
+The switcher popup searches names and IDs, including fuzzy matches; press Enter
+to open the first match. The optional dashboard lets collaborators choose a vault
+before the editor starts. Direct vault/file links bypass it, and it is disabled
+for hosted workspaces. Without the dashboard, remembered-vault behavior remains.
+
+To discover vaults at startup, omit `COLLABMD_VAULTS`, set
+`COLLABMD_VAULT_DISCOVERY=marked`, and set `COLLABMD_VAULT_DIR` to the parent
+directory (defaults to the current directory for discovery). `marked` includes
+only immediate subfolders containing a real `.collabmd` directory (create it with
+`mkdir .collabmd`; this directory also holds collaboration sidecars);
+`all` includes every immediate non-hidden directory. Symlinked folders are skipped.
+Folder names become vault IDs and must use letters, numbers, `.`, `_`, or `-`,
+starting with a letter or number; use an explicit list to map other folder names.
+Results are sorted by folder name; no matches fail startup rather than serving
+the parent. Restart to discover additions. A positional CLI directory always
+serves that one vault, and an explicit vault list takes precedence over discovery.
+All discovered vaults share the configured authentication, just like listed vaults.
 
 Vault APIs live at `/api/v/:vaultId/...` and realtime rooms at `/ws/v/:vaultId/:file`; unprefixed paths keep serving the first vault. With more than one vault the sidebar shows a vault switcher that reloads the workspace into the chosen vault (the open-file hash is preserved). Files, search, git status/commit, and git remote bootstrap (via `COLLABMD_GIT_REPO_URL_<VAULT_ID>`) are per-vault. Same auth and SSH key for every vault; agent, hosted, and Structurizr stay on the first vault. A primary-vault file literally at `v/<vaultId>/...` is shadowed by vault routing.
 

@@ -1,8 +1,43 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 
-import { mangleVaultIdForEnv, parseVaultList, resolveCliVaultDir, resolveConfiguredVaultDir, resolveConfiguredVaults, resolveVaultRepoUrls } from '../../src/server/config/env.js';
+import { mangleVaultIdForEnv, parseVaultList, resolveCliVaultDir, resolveConfiguredVaultDir, resolveConfiguredVaults, resolveVaultNames, resolveVaultRepoUrls } from '../../src/server/config/env.js';
+
+test('vault discovery lists immediate real folders, optionally requiring a marker', (t) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'collabmd-discovery-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  for (const name of ['beta/.collabmd', 'alpha/nested', 'file-marker', '.hidden']) {
+    mkdirSync(resolve(root, name), { recursive: true });
+  }
+  writeFileSync(resolve(root, 'note.md'), '# Not a vault');
+  writeFileSync(resolve(root, 'file-marker/.collabmd'), '');
+  symlinkSync(resolve(root, 'beta'), resolve(root, 'linked'));
+  const env = { COLLABMD_VAULT_DIR: root, COLLABMD_VAULT_DISCOVERY: 'all' };
+  assert.deepEqual(resolveConfiguredVaults({}, env).map(({ id }) => id), ['alpha', 'beta', 'file-marker']);
+  env.COLLABMD_VAULT_DISCOVERY = 'marked';
+  assert.deepEqual(resolveConfiguredVaults({}, env), [{ id: 'beta', dir: resolve(root, 'beta') }]);
+  env.COLLABMD_VAULT_DISCOVERY = 'invalid';
+  assert.throws(() => resolveConfiguredVaults({}, env), /must be "all" or "marked"/);
+  env.COLLABMD_VAULTS = `chosen=${root}`;
+  assert.equal(resolveConfiguredVaults({}, env)[0].id, 'chosen');
+  assert.equal(resolveConfiguredVaults({ vaultDir: resolve(root, 'alpha') }, env)[0].id, 'alpha');
+  delete env.COLLABMD_VAULTS;
+  env.COLLABMD_VAULT_DISCOVERY = 'marked';
+  env.COLLABMD_VAULT_DIR = resolve(root, 'alpha');
+  assert.throws(() => resolveConfiguredVaults({}, env), /No vaults found/);
+});
+
+test('vault display names preserve IDs, fall back to IDs, and reject ambiguous settings', () => {
+  assert.deepEqual(resolveVaultNames([{ id: 'cool-project' }, { id: 'other' }], {
+    COLLABMD_VAULT_NAME_COOL_PROJECT: ' Cool project ',
+  }), [{ id: 'cool-project', name: 'Cool project' }, { id: 'other', name: 'other' }]);
+  assert.throws(() => resolveVaultNames([{ id: 'a-b' }, { id: 'a_b' }], {
+    COLLABMD_VAULT_NAME_A_B: 'Ambiguous',
+  }), /Ambiguous vault name/);
+});
 
 test('resolveCliVaultDir prefers the positional directory over COLLABMD_VAULT_DIR', () => {
   const positionals = ['./docs/vault'];

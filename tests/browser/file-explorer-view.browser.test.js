@@ -663,12 +663,12 @@ describe('FileExplorerView vault menu placement and filter', () => {
     view.removeContextMenu();
   });
 
-  it('omits the filter for short vault lists', () => {
+  it('includes the filter for short vault lists', () => {
     const view = createView({ mobileBreakpointQuery: { matches: false } });
     view.renderVaultSwitcher({ activeVaultId: 'alpha', onVaultSelect: vi.fn(), vaults: [{ id: 'alpha' }, { id: 'beta' }] });
 
     document.getElementById('vaultSwitcher').dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 10, clientY: 10 }));
-    expect(document.querySelector('.file-context-search')).toBeNull();
+    expect(document.querySelector('.file-context-search')).not.toBeNull();
     view.removeContextMenu();
   });
 });

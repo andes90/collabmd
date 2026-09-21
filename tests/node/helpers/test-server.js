@@ -39,7 +39,7 @@ export async function startTestServer(overrides = {}) {
       const dir = join(tempRoot, entry.id);
       await mkdir(dir, { recursive: true });
       await writeFile(join(dir, 'test.md'), entry.seed ?? `# ${entry.id}\n`, 'utf-8');
-      vaultsOverride.push({ dir, id: entry.id });
+      vaultsOverride.push({ dir, id: entry.id, ...(entry.name ? { name: entry.name } : {}) });
     }
   }
   const baseConfig = loadConfig({

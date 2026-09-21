@@ -4,6 +4,7 @@ import {
   stripVaultFileExtension,
 } from '../../domain/file-kind.js';
 import { escapeHtml } from '../domain/vault-utils.js';
+import { findFuzzyMatch } from '../domain/file-search.js';
 import { getVaultPathLeaf, getVaultPathParent } from '../domain/vault-paths.js';
 import { buttonClassNames } from './components/ui/button.js';
 
@@ -43,8 +44,16 @@ function createMenuFilterInput({ container, itemSelector, placeholder, skipLabel
       if (skipLabels.includes(button.textContent)) {
         return;
       }
-      button.hidden = query.length > 0 && !(button.textContent ?? '').toLowerCase().includes(query);
+      const text = (button.dataset.searchText ?? button.textContent ?? '').toLowerCase();
+      button.hidden = query.length > 0 && !text.includes(query) && !findFuzzyMatch(text, query);
     });
+  });
+  searchInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      Array.from(container.querySelectorAll(itemSelector))
+        .find((button) => !button.hidden && !skipLabels.includes(button.textContent))?.click();
+    }
   });
   container.appendChild(searchInput);
   return searchInput;
@@ -117,17 +126,17 @@ export class FileExplorerView {
     button.className = 'vault-switcher-button';
     button.id = 'vaultSwitcher';
     button.setAttribute('aria-haspopup', 'menu');
-    button.setAttribute('aria-label', `Switch vault (current: ${active.id})`);
+    button.setAttribute('aria-label', `Switch vault (current: ${active.name || active.id})`);
     button.title = 'Switch vault';
-    button.innerHTML = `<span class="vault-switcher-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></span><span class="vault-switcher-name">${escapeHtml(active.id)}</span><span class="vault-switcher-chevron" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></span>`;
+    button.innerHTML = `<span class="vault-switcher-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></span><span class="vault-switcher-name">${escapeHtml(active.name || active.id)}</span><span class="vault-switcher-chevron" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></span>`;
     button.addEventListener('click', (event) => {
       this.showContextMenu(event, entries.map((vault) => ({
-        label: vault.id,
+        label: vault.name || vault.id,
+        searchText: `${vault.name || vault.id} ${vault.id}`,
         onSelect: () => (onVaultSelect ?? this.onVaultSelect)?.(vault.id),
       })), {
         alignToAnchor: true,
-        // ponytail: filter only pays off for long vault lists
-        searchPlaceholder: entries.length > 8 ? 'Filter vaults…' : '',
+        searchPlaceholder: 'Filter vaults…',
       });
     });
     wrapper.appendChild(button);
@@ -1093,6 +1102,7 @@ export class FileExplorerView {
       button.className = `file-context-item${item.danger ? ' file-context-danger' : ''}`;
       button.setAttribute('role', 'menuitem');
       button.textContent = item.label;
+      if (item.searchText) button.dataset.searchText = item.searchText;
       button.addEventListener('click', () => {
         this.removeContextMenu();
         item.onSelect?.({ anchor: contextAnchor });
@@ -1184,6 +1194,7 @@ export class FileExplorerView {
         extra: ['file-action-sheet-item', item.danger ? 'file-context-danger' : ''],
       });
       button.textContent = item.label;
+      if (item.searchText) button.dataset.searchText = item.searchText;
       button.addEventListener('click', () => {
         this.removeContextMenu();
         item.onSelect?.();
@@ -1203,6 +1214,13 @@ export class FileExplorerView {
     });
     sheet.appendChild(cancelButton);
 
+    sheet.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        // A search input otherwise consumes Escape before the dialog can cancel.
+        event.preventDefault();
+        this.removeContextMenu();
+      }
+    });
     sheet.addEventListener('cancel', (event) => {
       event.preventDefault();
       this.removeContextMenu();

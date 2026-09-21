@@ -4,7 +4,7 @@ function createRangeIndices(start, length) {
   return Array.from({ length }, (_, index) => start + index);
 }
 
-function findFuzzyMatch(text, query) {
+export function findFuzzyMatch(text, query) {
   const indices = [];
   let queryIndex = 0;
   let score = 0;
