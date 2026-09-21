@@ -220,3 +220,15 @@ See [Multi-vault](#multi-vault) below for the `COLLABMD_VAULTS` format and per-v
 
 Vault APIs live at `/api/v/:vaultId/...` and realtime rooms at `/ws/v/:vaultId/:file`; unprefixed paths keep serving the first vault. With more than one vault the sidebar shows a vault switcher that reloads the workspace into the chosen vault (the open-file hash is preserved). Files, search, git status/commit, and git remote bootstrap (via `COLLABMD_GIT_REPO_URL_<VAULT_ID>`) are per-vault. Same auth and SSH key for every vault; agent, hosted, and Structurizr stay on the first vault. A primary-vault file literally at `v/<vaultId>/...` is shadowed by vault routing.
 
+
+Open a vault directly with `http://host/?vault=obsidian`, using its configured ID.
+Open a note with `http://host/?vault=obsidian&file=notes/example.md` (use `&`,
+not a second `?`). The app normalizes file queries to the existing
+`?vault=obsidian#file=notes%2Fexample.md` format; an existing hash route takes
+precedence. Include the deployment base path when configured, for example
+`http://host/docs/?vault=obsidian`.
+
+The URL vault takes precedence over the remembered selection. Missing or unknown
+IDs fall back to the remembered valid vault, then the server default. The selected
+vault is written into the URL so links and other open tabs keep their own vault.
+Right-click a file and choose **Copy as URL** to copy its full vault-specific link.

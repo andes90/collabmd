@@ -420,7 +420,7 @@ test('FileActionController exposes download actions for files and directories', 
   const fileItems = controller.getFileContextMenuItems('README.md');
   const directoryItems = controller.getDirectoryContextMenuItems('notes');
 
-  assert.deepEqual(fileItems.map((item) => item.label), ['Rename / move', 'Download', 'Delete']);
+  assert.deepEqual(fileItems.map((item) => item.label), ['Copy as URL', 'Rename / move', 'Download', 'Delete']);
   assert.deepEqual(
     directoryItems.map((item) => item.label),
     ['New…', 'Rename / move', 'Download source ZIP', 'Export HTML', 'Print / save PDF', 'Delete'],

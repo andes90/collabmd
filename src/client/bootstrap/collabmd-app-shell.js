@@ -282,7 +282,9 @@ export class CollabMdAppShell {
             return;
           }
           setActiveVaultId(vaultId);
-          window.location.reload();
+          const url = new URL(window.location.href);
+          url.searchParams.set('vault', vaultId);
+          window.location.assign(url.toString());
         },
       },
     });

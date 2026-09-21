@@ -406,13 +406,13 @@ test('prepareFileDisconnect requires explicit discard after reconnect timeout', 
   }
 });
 
-test('iframe URLs forward the opt-in Excalidraw diagnostic flag', () => {
+test('iframe URLs forward the selected vault and opt-in Excalidraw diagnostic flag', () => {
   const originalWindow = globalThis.window;
   globalThis.window = {
-    __COLLABMD_CONFIG__: { basePath: '' },
+    __COLLABMD_CONFIG__: { basePath: '', vaults: [{ id: 'alpha' }, { id: 'beta' }] },
     location: {
       origin: 'http://localhost:4173',
-      search: '?excalidrawDebug=1',
+      search: '?vault=beta&excalidrawDebug=1',
     },
   };
 
@@ -429,6 +429,7 @@ test('iframe URLs forward the opt-in Excalidraw diagnostic flag', () => {
     });
 
     assert.equal(iframeUrl.searchParams.get('excalidrawDebug'), '1');
+    assert.equal(iframeUrl.searchParams.get('vault'), 'beta');
   } finally {
     globalThis.window = originalWindow;
   }

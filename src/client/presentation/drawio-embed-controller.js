@@ -1,6 +1,6 @@
 import { createDrawioLeaseRoomName } from '../../domain/drawio-room.js';
 import { setDiagramActionButtonIcon } from '../domain/diagram-action-icons.js';
-import { resolveAppUrl } from '../domain/runtime-paths.js';
+import { getActiveVaultId, resolveAppUrl } from '../domain/runtime-paths.js';
 import { renderDrawioViewer } from './drawio-viewer.js';
 import {
   cancelIdleRender,
@@ -363,6 +363,8 @@ export class DrawioEmbedController {
   buildIframeUrl(entry) {
     const url = new URL(resolveAppUrl('/drawio-editor.html'));
     const localUser = this.getLocalUser?.() ?? {};
+    const vaultId = getActiveVaultId();
+    if (vaultId) url.searchParams.set('vault', vaultId);
     url.searchParams.set('file', entry.filePath);
     url.searchParams.set('hostMode', entry.mode === 'edit' ? 'file-preview' : 'embed');
     url.searchParams.set('instanceId', entry.instanceId);

@@ -119,3 +119,24 @@ export function parseDownloadFileName(contentDisposition = '', fallbackName = 'd
   const asciiMatch = String(contentDisposition).match(/filename="([^"]+)"/iu);
   return asciiMatch?.[1] || fallbackName;
 }
+
+export async function copyTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  // HTTP LAN workspaces do not expose the Clipboard API.
+  const previousFocus = document.activeElement;
+  const input = document.createElement('textarea');
+  input.value = text;
+  input.className = 'clipboard-fallback';
+  document.body.appendChild(input);
+  input.select();
+  try {
+    if (!document.execCommand('copy')) throw new Error('Copy failed');
+  } finally {
+    input.remove();
+    previousFocus?.focus();
+  }
+}

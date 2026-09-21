@@ -1,7 +1,7 @@
 import { setDiagramActionButtonIcon } from '../domain/diagram-action-icons.js';
 import { parseExcalidrawElementLink } from '../domain/excalidraw-element-link.js';
 import { reconcileEmbedEntries } from './excalidraw-embed-reconciler.js';
-import { resolveAppPath, resolveAppUrl, resolveWsServerOverride } from '../domain/runtime-paths.js';
+import { getActiveVaultId, resolveAppPath, resolveAppUrl, resolveWsServerOverride } from '../domain/runtime-paths.js';
 import {
   cancelIdleRender,
   isNearViewport,
@@ -762,6 +762,8 @@ export class ExcalidrawEmbedController {
     }
     const theme = this.getTheme?.() || 'dark';
 
+    const vaultId = getActiveVaultId();
+    if (vaultId) iframeUrl.searchParams.set('vault', vaultId);
     iframeUrl.searchParams.set('file', entry.filePath);
     iframeUrl.searchParams.set('theme', theme);
     iframeUrl.searchParams.set('boot', entry.instanceId || '');

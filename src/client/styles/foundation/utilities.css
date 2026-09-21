@@ -34,3 +34,5 @@ html[data-initial-file-requested="true"] .editor-page.hidden {
   clip: auto;
   transform: translateY(0);
 }
+
+.clipboard-fallback { position: fixed; left: -9999px; opacity: 0; }

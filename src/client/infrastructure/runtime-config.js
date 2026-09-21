@@ -21,6 +21,20 @@ export function getRuntimeConfig() {
 export { getActiveVaultId, resolveApiUrl, resolveAppPath, resolveAppUrl, resolveWsBaseUrl, setActiveVaultId };
 export { createFileRouteHash, isCollabMdHashRoute };
 
+export function initializeWorkspaceUrl() {
+  const url = new URL(window.location.href);
+  const vaultId = getActiveVaultId();
+  if (vaultId) {
+    url.searchParams.set('vault', vaultId);
+  }
+  const filePath = url.searchParams.get('file');
+  if (filePath && !url.hash) {
+    url.hash = createFileRouteHash(filePath);
+  }
+  url.searchParams.delete('file');
+  window.history.replaceState(window.history.state, '', url);
+}
+
 function getHashParams() {
   return getHashParamsFromRaw(window.location.hash);
 }

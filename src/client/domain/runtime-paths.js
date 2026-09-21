@@ -76,6 +76,10 @@ export function getActiveVaultId(config = getClientRuntimeConfig()) {
   if (vaults.length === 0) {
     return null;
   }
+  const requested = new URLSearchParams(globalThis.window?.location?.search ?? '').get('vault');
+  if (requested && vaults.includes(requested)) {
+    return requested;
+  }
   try {
     const stored = globalThis.window?.localStorage?.getItem(ACTIVE_VAULT_STORAGE_KEY);
     if (stored && vaults.includes(stored)) {

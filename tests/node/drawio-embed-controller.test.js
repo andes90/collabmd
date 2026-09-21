@@ -471,3 +471,21 @@ test('ignores draw.io quick switcher requests from same-origin non-entry senders
     globalThis.window = originalWindow;
   }
 });
+
+
+test('draw.io editor URLs preserve the URL vault over stored selection', () => {
+  const originalWindow = globalThis.window;
+  globalThis.window = {
+    __COLLABMD_CONFIG__: { vaults: [{ id: 'alpha' }, { id: 'beta' }] },
+    localStorage: { getItem: () => 'alpha' },
+    location: { origin: 'https://example.test', search: '?vault=beta' },
+  };
+  try {
+    const url = new URL(DrawioEmbedController.prototype.buildIframeUrl.call({}, {
+      filePath: 'test.drawio', mode: 'edit', instanceId: 'test',
+    }));
+    assert.equal(url.searchParams.get('vault'), 'beta');
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});

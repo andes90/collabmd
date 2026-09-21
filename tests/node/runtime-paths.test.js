@@ -114,3 +114,21 @@ test('resolveWsBaseUrl appends the active vault segment', () => {
     globalThis.window = originalWindow;
   }
 });
+
+test('URL vault wins over storage for HTTP and WebSocket routing, with valid fallback', () => {
+  const originalWindow = globalThis.window;
+  globalThis.window = {
+    location: { search: '?vault=beta', host: 'example.test', protocol: 'https:' },
+    localStorage: { getItem: () => 'alpha' },
+  };
+  const config = { basePath: '/docs', environment: 'production', vaults: [{ id: 'alpha' }, { id: 'beta' }], activeVault: 'alpha', wsBasePath: '/ws' };
+  try {
+    assert.equal(getActiveVaultId(config), 'beta');
+    assert.equal(resolveApiUrl('/files', config), '/docs/api/v/beta/files');
+    assert.equal(resolveWsBaseUrl(config), 'wss://example.test/docs/ws/v/beta');
+    globalThis.window.location.search = '?vault=unknown';
+    assert.equal(getActiveVaultId(config), 'alpha');
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});

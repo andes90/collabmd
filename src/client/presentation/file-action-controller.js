@@ -3,7 +3,7 @@ import {
   isVaultFilePath,
   VAULT_FILE_EXTENSIONS,
 } from '../../domain/file-kind.js';
-import { pickFiles } from '../browser-utils.js';
+import { copyTextToClipboard, pickFiles } from '../browser-utils.js';
 import {
   createBaseStarter,
   composeVaultChildPath,
@@ -17,6 +17,8 @@ import {
   getVaultPathParent,
   normalizeVaultPathInput,
 } from '../domain/vault-paths.js';
+import { createFileRouteHash } from '../domain/hash-routes.js';
+import { getActiveVaultId } from '../domain/runtime-paths.js';
 import { buttonClassNames } from './components/ui/button.js';
 import { CreateMenuPresenter } from './create-menu-presenter.js';
 
@@ -259,6 +261,10 @@ export class FileActionController {
   getFileContextMenuItems(filePath) {
     return [
       {
+        label: 'Copy as URL',
+        onSelect: () => this.copyFileUrl(filePath),
+      },
+      {
         label: 'Rename / move',
         onSelect: () => this.handleRenameFile(filePath),
       },
@@ -272,6 +278,20 @@ export class FileActionController {
         onSelect: () => this.handleDelete(filePath),
       },
     ];
+  }
+
+  async copyFileUrl(filePath) {
+    const url = new URL(window.location.href);
+    url.search = '';
+    const vaultId = getActiveVaultId();
+    if (vaultId) url.searchParams.set('vault', vaultId);
+    url.hash = createFileRouteHash(filePath);
+    try {
+      await copyTextToClipboard(url.toString());
+      this.showToast('Link copied');
+    } catch {
+      this.showToast('Failed to copy link');
+    }
   }
 
   showToast(message) {

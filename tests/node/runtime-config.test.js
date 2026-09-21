@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   createFileRouteHash,
   getRuntimeConfig,
+  initializeWorkspaceUrl,
   getHashRoute,
   isCollabMdHashRoute,
   navigateToGitCommit,
@@ -225,3 +226,28 @@ test('runtime-config distinguishes app-owned hash routes from document fragments
   assert.equal(isGitHashRouteType('file'), false);
 });
 
+
+
+test('workspace URLs pin the selected vault and normalize encoded file queries once', () => {
+  const originalWindow = globalThis.window;
+  const filePath = 'notes/日本語 & #?.md';
+  let normalized;
+  globalThis.window = {
+    __COLLABMD_CONFIG__: { vaults: [{ id: 'alpha' }, { id: 'beta' }], activeVault: 'alpha' },
+    localStorage: { getItem: () => 'alpha' },
+    location: new URL(`https://example.test/docs/?vault=beta&file=${encodeURIComponent(filePath)}`),
+    history: { state: null, replaceState: (_state, _title, url) => { normalized = url; } },
+  };
+  try {
+    initializeWorkspaceUrl();
+    assert.equal(normalized.pathname, '/docs/');
+    assert.equal(normalized.search, '?vault=beta');
+    assert.equal(new URLSearchParams(normalized.hash.slice(1)).get('file'), filePath);
+    window.location = new URL('https://example.test/docs/?file=old.md#file=new.md&anchor=heading');
+    initializeWorkspaceUrl();
+    assert.equal(normalized.search, '?vault=alpha');
+    assert.equal(normalized.hash, '#file=new.md&anchor=heading');
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
