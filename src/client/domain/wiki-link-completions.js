@@ -2,6 +2,11 @@ import { createFileSearchEntry, findFileSearchMatch } from './file-search.js';
 
 const MAX_VISIBLE_RESULTS = 30;
 
+function compareMatches(left, right) {
+  return right.match.score - left.match.score
+    || left.entry.lowerPath.localeCompare(right.entry.lowerPath);
+}
+
 /**
  * CodeMirror autocomplete source for [[wiki-links]].
  *
@@ -12,10 +17,13 @@ const MAX_VISIBLE_RESULTS = 30;
 /**
  * Creates a wiki-link completion source.
  *
- * @param {() => string[]} getFileList — returns the current list of vault file paths
+ * @param {() => string[]} getFileList — returns the current list, replaced when vault file paths change
  * @returns {import('@codemirror/autocomplete').CompletionSource}
  */
 export function wikiLinkCompletions(getFileList) {
+  let lastFileList = null;
+  let cachedEntries = null;
+
   return (context) => {
     // Look backwards from the cursor for `[[` that hasn't been closed
     const line = context.state.doc.lineAt(context.pos);
@@ -35,17 +43,41 @@ export function wikiLinkCompletions(getFileList) {
 
     const query = afterOpen.trim().toLowerCase().replace(/\s+/gu, ' ');
     const from = line.from + openIndex + 2;
-    const entries = getFileList().map((filePath) => createFileSearchEntry(filePath));
-    const matches = query
-      ? entries
-        .map((entry) => ({ entry, match: findFileSearchMatch(entry, query) }))
-        .filter(({ match }) => match)
-        .sort((left, right) => right.match.score - left.match.score
-          || left.entry.lowerPath.localeCompare(right.entry.lowerPath))
-      : entries.map((entry) => ({ entry, match: null }));
+    const fileList = getFileList();
+    if (fileList !== lastFileList) {
+      lastFileList = fileList;
+      cachedEntries = null;
+    }
+
+    const matches = query ? [] : fileList.slice(0, MAX_VISIBLE_RESULTS)
+      .map((filePath) => ({ entry: createFileSearchEntry(filePath) }));
+    if (query) {
+      cachedEntries ??= fileList.map((filePath) => createFileSearchEntry(filePath));
+      for (const entry of cachedEntries) {
+        const match = findFileSearchMatch(entry, query);
+        if (!match) {
+          continue;
+        }
+
+        const candidate = { entry, match };
+        if (matches.length === MAX_VISIBLE_RESULTS
+          && compareMatches(candidate, matches[MAX_VISIBLE_RESULTS - 1]) >= 0) {
+          continue;
+        }
+
+        const index = matches.findIndex((current) => compareMatches(candidate, current) < 0);
+        if (index === -1) {
+          matches.push(candidate);
+        } else {
+          matches.splice(index, 0, candidate);
+        }
+        if (matches.length > MAX_VISIBLE_RESULTS) {
+          matches.pop();
+        }
+      }
+    }
 
     const options = matches
-      .slice(0, MAX_VISIBLE_RESULTS)
       .map(({ entry }) => ({
         label: entry.filePath,
         displayLabel: entry.filePath.split('/').pop(),

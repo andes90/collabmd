@@ -1,4 +1,3 @@
-import { isImageAttachmentFilePath } from '../../domain/file-kind.js';
 import { FileActionController } from './file-action-controller.js';
 import { FileTreeState } from './file-tree-state.js';
 import { FileExplorerView } from './file-explorer-view.js';
@@ -143,7 +142,7 @@ export class FileExplorerController {
   }
 
   get flatDocumentFiles() {
-    return this.state.flatFiles.filter((path) => !isImageAttachmentFilePath(path));
+    return this.state.flatDocumentFiles;
   }
 
   renderTree({

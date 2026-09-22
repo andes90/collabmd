@@ -1,3 +1,4 @@
+import { isImageAttachmentFilePath } from '../../domain/file-kind.js';
 import { normalizeVaultPathInput } from '../domain/vault-paths.js';
 
 function flattenTree(nodes, files = [], searchEntries = [], fileEntries = []) {
@@ -78,6 +79,7 @@ export class FileTreeState {
   constructor() {
     this.tree = [];
     this.flatFiles = [];
+    this.flatDocumentFiles = [];
     this.flatFileEntries = [];
     this.flatSearchEntries = [];
     this.activeFilePath = null;
@@ -89,6 +91,7 @@ export class FileTreeState {
     this.tree = Array.isArray(tree) ? tree : [];
     const flattened = flattenTree(this.tree, [], [], []);
     this.flatFiles = flattened.files;
+    this.flatDocumentFiles = flattened.files.filter((path) => !isImageAttachmentFilePath(path));
     this.flatFileEntries = flattened.fileEntries;
     this.flatSearchEntries = flattened.searchEntries;
   }

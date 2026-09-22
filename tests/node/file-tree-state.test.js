@@ -34,6 +34,7 @@ test('FileTreeState flattens tree nodes and filters search matches for files and
     'docs/guide.pdf',
     'sketch.excalidraw',
   ]);
+  assert.deepEqual(state.flatDocumentFiles, state.flatFiles.filter((path) => path !== 'docs/diagram.png'));
   assert.deepEqual(state.getSearchMatches(), [
     { name: 'diagram.puml', path: 'docs/diagram.puml', type: 'plantuml' },
     { name: 'diagram.png', path: 'docs/diagram.png', type: 'image' },
@@ -135,6 +136,8 @@ test('FileTreeState refreshes cached search fields when the tree changes', () =>
     { name: 'guide.md', path: 'docs/guide.md', type: 'file' },
   ]);
   state.setSearchQuery('guide');
+  const documentFiles = state.flatDocumentFiles;
+  assert.equal(state.flatDocumentFiles, documentFiles);
   assert.deepEqual(state.getSearchMatches(), [
     { name: 'guide.md', path: 'docs/guide.md', type: 'file' },
   ]);
@@ -143,6 +146,8 @@ test('FileTreeState refreshes cached search fields when the tree changes', () =>
     { name: 'reference.md', path: 'docs/reference.md', type: 'file' },
   ]);
   state.setSearchQuery('reference');
+  assert.notEqual(state.flatDocumentFiles, documentFiles);
+  assert.deepEqual(state.flatDocumentFiles, ['docs/reference.md']);
   assert.deepEqual(state.getSearchMatches(), [
     { name: 'reference.md', path: 'docs/reference.md', type: 'file' },
   ]);

@@ -494,6 +494,7 @@ describe('File explorer reveal behavior', () => {
 
     expect(controller.flatFiles).toEqual(['docs/guide.pdf']);
     expect(controller.flatDocumentFiles).toEqual(['docs/guide.pdf']);
+    expect(controller.flatDocumentFiles).toBe(controller.flatDocumentFiles);
     controller.state.setSearchQuery('guide');
     expect(controller.state.getSearchMatches()).toEqual([
       { name: 'guide.pdf', path: 'docs/guide.pdf', type: 'pdf' },
