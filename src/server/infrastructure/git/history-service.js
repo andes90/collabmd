@@ -16,6 +16,8 @@ import {
 const EMPTY_TREE_HASH = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 const DEFAULT_HISTORY_LIMIT = 30;
 const HISTORY_LIMIT_CAP = 50;
+const RESPONSE_CACHE_LIMIT = 50;
+const MAX_CACHED_RESPONSE_BYTES = 256 * 1024;
 
 function clampHistoryLimit(limit) {
   const parsedLimit = Number.parseInt(String(limit ?? DEFAULT_HISTORY_LIMIT), 10);
@@ -77,8 +79,22 @@ function getCachedValue(cache, key) {
 }
 
 function setCachedValue(cache, key, value, ttlMs) {
+  const now = Date.now();
+  for (const [cachedKey, cached] of cache) {
+    if (now >= cached.expiresAt) cache.delete(cachedKey);
+  }
+  cache.delete(key);
+  const payloadBytes = Buffer.isBuffer(value.content)
+    ? value.content.byteLength
+    : Buffer.byteLength(JSON.stringify(value));
+  if (ttlMs <= 0 || payloadBytes + Buffer.byteLength(key) > MAX_CACHED_RESPONSE_BYTES) {
+    return value;
+  }
+  while (cache.size >= RESPONSE_CACHE_LIMIT) {
+    cache.delete(cache.keys().next().value);
+  }
   cache.set(key, {
-    expiresAt: Date.now() + ttlMs,
+    expiresAt: now + ttlMs,
     value,
   });
   return value;
