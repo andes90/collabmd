@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 
 import { serializeBaseDefinition, BaseQueryService } from '../../src/server/domain/bases/base-query-service.js';
 import { normalizeBaseDefinition } from '../../src/server/domain/bases/base-definition.js';
+import { createWorkspaceEntry, createWorkspaceStateSnapshot } from '../../src/server/domain/workspace-state.js';
 import { VaultFileStore } from '../../src/server/infrastructure/persistence/vault-file-store.js';
 
 async function createBaseWorkspace() {
@@ -24,6 +25,136 @@ async function createBaseWorkspace() {
     writeVaultFile,
   };
 }
+
+function createBaseSnapshot(filePaths, scannedAt = 1) {
+  return createWorkspaceStateSnapshot(
+    new Map(filePaths.map((path) => [path, createWorkspaceEntry(path, 'file')])),
+    new Map(filePaths.map((path) => [path, { path, type: 'file', mtimeMs: 1, size: 10 }])),
+    { scannedAt },
+  );
+}
+
+test('Base row cache storage stays proportional to the number of files', async () => {
+  const paths = Array.from({ length: 512 }, (_, index) => `note-${index}.md`);
+  const service = new BaseQueryService({
+    vaultFileStore: { readMarkdownFile: async () => '# Note\n' },
+  });
+  await service.snapshotStore.buildIndexSnapshot(createBaseSnapshot(paths));
+
+  const cacheBytes = Buffer.byteLength(JSON.stringify([...service.snapshotStore.rowRecordCache]));
+  assert.equal(service.snapshotStore.rowRecordCache.size, paths.length);
+  assert.ok(cacheBytes < paths.length * 1500, `Row cache retained ${cacheBytes} bytes for ${paths.length} tiny files`);
+});
+
+test('Base row cache refreshes link resolution when target membership changes', async () => {
+  const service = new BaseQueryService({
+    vaultFileStore: { readMarkdownFile: async (path) => path === 'source.md' ? '[[target]]\n' : '# Target\n' },
+  });
+  for (const target of [null, 'target.md', 'archive/target.md', null]) {
+    const paths = ['source.md', ...(target ? [target] : [])];
+    const snapshot = await service.snapshotStore.buildIndexSnapshot(createBaseSnapshot(paths));
+    const link = snapshot.rowsByPath.get('source.md').file.links[0];
+    assert.equal(link.exists, Boolean(target));
+    assert.equal(link.path, target || 'target');
+    assert.equal(service.snapshotStore.rowRecordCache.size, paths.length);
+  }
+});
+
+test('Base row cache cannot reuse an overlapping build from an older file set', async () => {
+  const started = Promise.withResolvers();
+  const resume = Promise.withResolvers();
+  let reads = 0;
+  const service = new BaseQueryService({
+    vaultFileStore: {
+      readMarkdownFile: async (path) => {
+        if (reads++ === 0) {
+          started.resolve();
+          await resume.promise;
+        }
+        return path === 'source.md' ? '[[target]]\n' : '# Target\n';
+      },
+    },
+  });
+  const oldBuild = service.snapshotStore.buildIndexSnapshot(createBaseSnapshot(['source.md']));
+  await started.promise;
+  const nextState = createBaseSnapshot(['source.md', 'target.md'], 2);
+  await service.snapshotStore.buildIndexSnapshot(nextState);
+  resume.resolve();
+  await oldBuild;
+
+  const snapshot = await service.snapshotStore.buildIndexSnapshot(nextState);
+  assert.equal(snapshot.rowsByPath.get('source.md').file.links[0].exists, true);
+});
+
+test('Base row cache preserves reused rows while overlapping builds change membership', async () => {
+  const oldStarted = Promise.withResolvers();
+  const oldResume = Promise.withResolvers();
+  const nextStarted = Promise.withResolvers();
+  const nextResume = Promise.withResolvers();
+  let otherReads = 0;
+  const service = new BaseQueryService({
+    vaultFileStore: {
+      readMarkdownFile: async (path) => {
+        if (path === 'other.md' && ++otherReads === 2) {
+          oldStarted.resolve();
+          await oldResume.promise;
+        }
+        if (path === 'target.md') {
+          nextStarted.resolve();
+          await nextResume.promise;
+        }
+        return path === 'source.md' ? '---\nstatus: open\n---\n[[target]]\n' : '# Note\n';
+      },
+    },
+  });
+  await service.snapshotStore.buildIndexSnapshot(createBaseSnapshot(['other.md', 'source.md']));
+  const oldState = createBaseSnapshot(['other.md', 'source.md'], 2);
+  oldState.metadata.set('other.md', { ...oldState.metadata.get('other.md'), mtimeMs: 2 });
+  const oldBuild = service.snapshotStore.buildIndexSnapshot(oldState);
+  await oldStarted.promise;
+  const nextBuild = service.snapshotStore.buildIndexSnapshot(createBaseSnapshot(['other.md', 'source.md', 'target.md'], 3));
+  await nextStarted.promise;
+  oldResume.resolve();
+  const oldSnapshot = await oldBuild;
+  nextResume.resolve();
+  const nextSnapshot = await nextBuild;
+
+  assert.equal(oldSnapshot.rowsByPath.get('source.md').noteProperties.status, 'open');
+  assert.equal(oldSnapshot.rowsByPath.get('source.md').file.links[0].exists, false);
+  assert.equal(nextSnapshot.rowsByPath.get('source.md').file.links[0].exists, true);
+});
+
+test('Base sorted result limits preserve ranking and path ties for different input orders', async () => {
+  const paths = Array.from({ length: 180 }, (_, index) => `note-${String(index).padStart(3, '0')}.md`);
+  for (const order of ['ascending', 'descending', 'mixed']) {
+    const ranks = new Map(paths.map((path, index) => [path, Math.floor((order === 'ascending'
+      ? index
+      : order === 'descending' ? paths.length - index - 1 : (index * 79) % paths.length) / 3)]));
+    const service = new BaseQueryService({
+      maxResultRows: 7,
+      vaultFileStore: {
+        scanWorkspaceState: async () => createBaseSnapshot(paths),
+        readMarkdownFile: async (path) => `---\nrank: ${ranks.get(path)}\n---\n`,
+      },
+    });
+    for (const direction of ['asc', 'desc']) {
+      const result = await service.query({ source: [
+        'views:',
+        '  - type: table',
+        '    order: [file.path, note.rank]',
+        '    limit: 5',
+        '    sort:',
+        '      - property: note.rank',
+        `        direction: ${direction}`,
+      ].join('\n') });
+      const expected = [...paths].sort((left, right) => (
+        (ranks.get(left) - ranks.get(right)) * (direction === 'desc' ? -1 : 1)
+        || left.localeCompare(right)
+      )).slice(0, 5);
+      assert.deepEqual(result.rows.map((row) => row.path), expected, `${order}/${direction}`);
+    }
+  }
+});
 
 test('BaseQueryService evaluates base filters, formulas, groups, summaries, and optional csv output', async (t) => {
   const { cleanup, service, writeVaultFile } = await createBaseWorkspace();

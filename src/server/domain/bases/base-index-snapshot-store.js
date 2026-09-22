@@ -26,17 +26,11 @@ function cloneSnapshotRowRecord(rowRecord) {
   };
 }
 
-function createWorkspaceFileSetSignature(fileEntries = []) {
-  return fileEntries.join('\n');
-}
-
-function createRowCacheKey(filePath, workspaceState, fileSetSignature) {
+function createRowMetadataSignature(filePath, workspaceState) {
   const metadata = workspaceState?.metadata?.get(filePath) ?? null;
   return [
-    filePath,
     Number.isFinite(metadata?.mtimeMs) ? metadata.mtimeMs : '',
     Number.isFinite(metadata?.size) ? metadata.size : '',
-    fileSetSignature,
   ].join('\0');
 }
 
@@ -139,6 +133,8 @@ export class BaseIndexSnapshotStore {
     this.indexSnapshot = null;
     this.lastWorkspaceState = null;
     this.rowRecordCache = new Map();
+    this.rowRecordCacheFileSetSignature = '';
+    this.rowRecordCacheGeneration = 0;
   }
 
   async getWorkspaceState() {
@@ -305,13 +301,16 @@ export class BaseIndexSnapshotStore {
   async buildIndexSnapshot(workspaceState = null) {
     const resolvedWorkspaceState = workspaceState ?? await this.getWorkspaceState();
     const fileEntries = listWorkspaceFilePaths(resolvedWorkspaceState);
-    const fileSetSignature = createWorkspaceFileSetSignature(fileEntries);
+    const cacheGeneration = this.prepareRowRecordCache(fileEntries);
     const wikiTargetIndex = createWikiTargetIndex(fileEntries);
     const markdownContents = new Map();
+    // Keep reused rows available if another build replaces the shared cache during I/O.
+    const cachedRowRecords = new Map(fileEntries.map((filePath) => [
+      filePath, this.getCachedRowRecord(filePath, resolvedWorkspaceState, cacheGeneration),
+    ]));
 
     await mapWithConcurrency(resolvedWorkspaceState.markdownPaths ?? [], INDEX_READ_CONCURRENCY, async (filePath) => {
-      const cacheKey = createRowCacheKey(filePath, resolvedWorkspaceState, fileSetSignature);
-      if (!this.rowRecordCache.has(cacheKey)) {
+      if (!cachedRowRecords.get(filePath)) {
         markdownContents.set(filePath, await this.vaultFileStore.readMarkdownFile(filePath));
       }
     });
@@ -322,13 +321,16 @@ export class BaseIndexSnapshotStore {
     const rawTargetSourcesByKey = new Map();
     const nextRowRecordCache = new Map();
     fileEntries.forEach((filePath) => {
-      const cacheKey = createRowCacheKey(filePath, resolvedWorkspaceState, fileSetSignature);
-      const cachedRowRecord = this.rowRecordCache.get(cacheKey);
+      const cachedRowRecord = cachedRowRecords.get(filePath);
       const markdownContent = markdownContents.get(filePath) ?? null;
       const rowRecord = cachedRowRecord
         ? cloneSnapshotRowRecord(cachedRowRecord)
         : this.createSnapshotRow(filePath, resolvedWorkspaceState, wikiTargetIndex, markdownContent);
-      nextRowRecordCache.set(cacheKey, cloneSnapshotRowRecord(rowRecord));
+      nextRowRecordCache.set(filePath, {
+        generation: cacheGeneration,
+        metadataSignature: createRowMetadataSignature(filePath, resolvedWorkspaceState),
+        rowRecord: cloneSnapshotRowRecord(rowRecord),
+      });
       rowsByPath.set(filePath, rowRecord.row);
       forwardLinksByPath.set(filePath, rowRecord.forwardLinks);
       rawTargetKeysBySourcePath.set(filePath, rowRecord.rawTargetKeys);
@@ -411,7 +413,7 @@ export class BaseIndexSnapshotStore {
         return pathValue && isWorkspaceFileEntry(entry);
       });
 
-    const fileSetSignature = createWorkspaceFileSetSignature(snapshot.filePaths);
+    const cacheGeneration = this.prepareRowRecordCache(snapshot.filePaths);
     await mapWithConcurrency(filePathsToRefresh, INDEX_READ_CONCURRENCY, async (filePath) => {
       const markdownContent = isMarkdownFilePath(filePath)
         ? await this.vaultFileStore.readMarkdownFile(filePath)
@@ -419,11 +421,11 @@ export class BaseIndexSnapshotStore {
       const rowRecord = this.createSnapshotRow(filePath, workspaceState, snapshot.wikiTargetIndex, markdownContent, {
         targetPathAliases,
       });
-      this.invalidateRowRecordCachePath(filePath);
-      this.rowRecordCache.set(
-        createRowCacheKey(filePath, workspaceState, fileSetSignature),
-        cloneSnapshotRowRecord(rowRecord),
-      );
+      this.rowRecordCache.set(filePath, {
+        generation: cacheGeneration,
+        metadataSignature: createRowMetadataSignature(filePath, workspaceState),
+        rowRecord: cloneSnapshotRowRecord(rowRecord),
+      });
       this.removeRawTargetSourceContributions(snapshot, filePath);
       snapshot.rowsByPath.set(filePath, rowRecord.row);
       snapshot.forwardLinksByPath.set(filePath, rowRecord.forwardLinks);
@@ -431,12 +433,27 @@ export class BaseIndexSnapshotStore {
     });
   }
 
+  prepareRowRecordCache(filePaths) {
+    const signature = JSON.stringify(filePaths);
+    if (signature !== this.rowRecordCacheFileSetSignature) {
+      // Link resolution depends on every target path, including previously missing files.
+      this.rowRecordCache.clear();
+      this.rowRecordCacheFileSetSignature = signature;
+      this.rowRecordCacheGeneration += 1;
+    }
+    return this.rowRecordCacheGeneration;
+  }
+
+  getCachedRowRecord(filePath, workspaceState, generation) {
+    const cached = this.rowRecordCache.get(filePath);
+    return cached?.generation === generation
+      && cached.metadataSignature === createRowMetadataSignature(filePath, workspaceState)
+      ? cached.rowRecord
+      : null;
+  }
+
   invalidateRowRecordCachePath(filePath) {
-    Array.from(this.rowRecordCache.keys()).forEach((cacheKey) => {
-      if (cacheKey === filePath || cacheKey.startsWith(`${filePath}\0`)) {
-        this.rowRecordCache.delete(cacheKey);
-      }
-    });
+    this.rowRecordCache.delete(filePath);
   }
 
   async ensureIndexSnapshot({ basePath = '', sourcePath = '' } = {}) {

@@ -56,32 +56,6 @@ function sortRows(rows, sortChain = []) {
   });
 }
 
-function compareRowsBySortChain(left, right, sortChain = []) {
-  for (const sortConfig of sortChain) {
-    const delta = compareValues(left.rawCells[sortConfig.property], right.rawCells[sortConfig.property]);
-    if (delta !== 0) {
-      return sortConfig.direction === 'desc' ? -delta : delta;
-    }
-  }
-
-  return String(left.file.path ?? '').localeCompare(String(right.file.path ?? ''));
-}
-
-function insertSortedBounded(rows, row, {
-  limit,
-  sortChain = [],
-}) {
-  let insertIndex = rows.findIndex((existingRow) => compareRowsBySortChain(row, existingRow, sortChain) < 0);
-  if (insertIndex === -1) {
-    insertIndex = rows.length;
-  }
-
-  rows.splice(insertIndex, 0, row);
-  if (rows.length > limit) {
-    rows.pop();
-  }
-}
-
 function pruneFilterNodeForProperty(filterNode, propertyId = '') {
   if (!propertyId || !filterNode) {
     return filterNode;
@@ -225,21 +199,12 @@ export class BaseQueryService {
     columns = [],
     definition,
     evaluatedPropertyIds,
-    limit = null,
-    maxRows = this.maxResultRows,
     snapshot,
-    sortChain = [],
     search = '',
     thisFile,
   }) {
+    // ponytail: retain matching rows for one native sort; use bounded selection if heap profiles require it.
     const rows = [];
-    const effectiveMaxRows = Number.isInteger(maxRows) && maxRows > 0 ? maxRows : Infinity;
-    const effectiveLimit = Number.isInteger(limit) && limit > 0 ? limit : Infinity;
-    const canBoundDuringCollection = Number.isFinite(Math.min(effectiveLimit, effectiveMaxRows))
-      && sortChain.length > 0
-      && !activeView.groupBy?.property
-      && (activeView.summaries?.length ?? 0) === 0;
-    const hardLimit = Math.min(effectiveLimit, effectiveMaxRows);
 
     const filePaths = snapshot.filePaths ?? [];
     for (let chunkStart = 0; chunkStart < filePaths.length; chunkStart += BASE_QUERY_ROW_CHUNK_SIZE) {
@@ -272,14 +237,6 @@ export class BaseQueryService {
           rawCells,
         };
         if (!rowMatchesSearch(candidateRow, columns, search)) {
-          continue;
-        }
-
-        if (canBoundDuringCollection) {
-          insertSortedBounded(rows, candidateRow, {
-            limit: hardLimit,
-            sortChain,
-          });
           continue;
         }
 
@@ -390,10 +347,7 @@ export class BaseQueryService {
     let rows = await this.collectCandidateRows({
       ...context,
       astCache,
-      limit: requestedLimit,
-      maxRows: this.maxResultRows,
       search,
-      sortChain,
     });
     rows = sortRows(rows, sortChain);
 
