@@ -287,3 +287,31 @@ test('hosted API completes setup without a vault source for admins only', async 
   assert.equal(response.statusCode, 200);
   assert.equal(response.body.invitation.email, 'writer@example.com');
 });
+
+test('hosted audit API passes bounded cursor pages and keeps admin authorization', async (t) => {
+  const api = await createHostedApi(t);
+  const service = api.hostedWorkspaceService;
+  const admin = googleUser('admin@example.com');
+  await service.claimWorkspace({ token: 'claim-secret', user: admin });
+  await service.completeWorkspaceSetup();
+  await service.createInvitation({ email: 'writer@example.com', role: 'collaborator', user: admin });
+  await service.acceptInvitation(googleUser('writer@example.com'));
+  const expected = (await service.listAuditEvents(admin)).events.map((event) => event.id);
+
+  const first = await invoke(api.handler, { path: '/api/hosted/audit?limit=2' });
+  assert.equal(first.statusCode, 200);
+  assert.equal(first.body.events.length, 2);
+  assert.equal(typeof first.body.nextCursor, 'string');
+  const second = await invoke(api.handler, { path: `/api/hosted/audit?limit=2&cursor=${encodeURIComponent(first.body.nextCursor)}` });
+  assert.equal(second.statusCode, 200);
+  assert.equal(second.body.nextCursor, null);
+  assert.deepEqual([...first.body.events, ...second.body.events].map((event) => event.id), expected);
+
+  const invalid = await invoke(api.handler, { path: '/api/hosted/audit?cursor=bad!' });
+  assert.equal(invalid.statusCode, 400);
+  assert.equal(invalid.body.code, 'HOSTED_AUDIT_CURSOR_INVALID');
+  api.setUser(googleUser('writer@example.com'));
+  const denied = await invoke(api.handler, { path: `/api/hosted/audit?cursor=${first.body.nextCursor}` });
+  assert.equal(denied.statusCode, 403);
+  assert.equal(denied.body.code, 'HOSTED_ADMIN_REQUIRED');
+});

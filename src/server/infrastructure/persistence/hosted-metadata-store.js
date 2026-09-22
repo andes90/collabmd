@@ -174,6 +174,8 @@ export class HostedMetadataStore {
         metadata_json TEXT NOT NULL,
         created_at INTEGER NOT NULL
       );
+      CREATE INDEX IF NOT EXISTS audit_events_created_id_idx
+        ON audit_events(created_at DESC, id DESC);
 
       CREATE TABLE IF NOT EXISTS operational_security_events (
         id TEXT PRIMARY KEY,
@@ -514,11 +516,18 @@ export class HostedMetadataStore {
     );
   }
 
-  async listAuditEvents() {
+  async listAuditEvents({ before = null, limit = 51 } = {}) {
+    if (before) {
+      return this.prepare(
+        'listAuditEventsBefore',
+        `SELECT * FROM audit_events WHERE (created_at, id) < (?, ?)
+         ORDER BY created_at DESC, id DESC LIMIT ?`,
+      ).all(before.createdAt, before.id, limit).map(rowToAuditEvent);
+    }
     return this.prepare(
       'listAuditEvents',
-      'SELECT * FROM audit_events ORDER BY created_at DESC',
-    ).all().map(rowToAuditEvent);
+      'SELECT * FROM audit_events ORDER BY created_at DESC, id DESC LIMIT ?',
+    ).all(limit).map(rowToAuditEvent);
   }
 
   async createOperationalSecurityEvent(event) {

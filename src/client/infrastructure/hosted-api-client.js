@@ -30,8 +30,10 @@ export const hostedApiClient = {
     return request('/hosted/status', { fallback: 'Failed to load workspace status' });
   },
 
-  listAuditEvents() {
-    return request('/hosted/audit', { fallback: 'Failed to load access history' });
+  listAuditEvents({ cursor = '', limit = 50 } = {}) {
+    const query = new URLSearchParams({ limit: String(limit) });
+    if (cursor) query.set('cursor', cursor);
+    return request(`/hosted/audit?${query}`, { fallback: 'Failed to load access history' });
   },
 
   listInvitations() {

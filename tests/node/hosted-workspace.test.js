@@ -151,7 +151,7 @@ test('hosted workspace claim is email-bound and creates first Team Admin', async
   assert.equal(status.setupComplete, false);
   assert.equal(status.membership.role, HOSTED_ROLE_ADMIN);
 
-  const auditEvents = await service.listAuditEvents(googleUser('admin@example.com', 'Admin User'));
+  const { events: auditEvents } = await service.listAuditEvents(googleUser('admin@example.com', 'Admin User'));
   assert.equal(auditEvents[0].type, 'workspace_claimed');
 });
 
@@ -288,8 +288,61 @@ test('hosted membership enforces last-admin rule, removal, leave, and audit even
   );
   assert.equal(remainingMemberships[0].id, secondAdminMembership.id);
 
-  const auditTypes = (await service.listAuditEvents(secondAdmin)).map((event) => event.type);
+  const auditTypes = (await service.listAuditEvents(secondAdmin)).events.map((event) => event.type);
   assert.ok(auditTypes.includes('membership_role_changed'));
   assert.ok(auditTypes.includes('membership_removed'));
   assert.ok(auditTypes.includes('membership_left'));
+});
+
+test('hosted audit pages retain all events and stay stable across ties and new events', async (t) => {
+  const service = await createHostedService(t);
+  const admin = googleUser('admin@example.com');
+  await service.claimWorkspace({ token: 'claim-secret', user: admin });
+  const claimEvent = (await service.listAuditEvents(admin)).events[0];
+  const eventIds = [];
+  for (let index = 0; index < 120; index += 1) {
+    const id = `event-${String(index).padStart(3, '0')}`;
+    eventIds.unshift(id);
+    await service.store.createAuditEvent({
+      actorEmail: admin.email, actorName: 'Admin', createdAt: 4_000_000_000_000,
+      id, targetEmail: '', targetRole: '', type: 'published',
+    });
+  }
+  assert.equal((await service.listAuditEvents(admin)).events.length, 50);
+  assert.equal((await service.listAuditEvents(admin, { limit: 10_000 })).events.length, 100);
+
+  let page = await service.listAuditEvents(admin, { limit: 17 });
+  const seen = page.events.map((event) => event.id);
+  await service.store.createAuditEvent({
+    actorEmail: admin.email, actorName: 'Admin', createdAt: 4_000_000_000_001,
+    id: 'newer-event', targetEmail: '', targetRole: '', type: 'published',
+  });
+  while (page.nextCursor) {
+    page = await service.listAuditEvents(admin, { cursor: page.nextCursor, limit: 17 });
+    assert.ok(page.events.length <= 17);
+    seen.push(...page.events.map((event) => event.id));
+  }
+  assert.deepEqual(seen, [...eventIds, claimEvent.id]);
+  assert.equal((await service.listAuditEvents(admin)).events[0].id, 'newer-event');
+  assert.equal(service.store.db.prepare('SELECT COUNT(*) AS count FROM audit_events').get().count, 122);
+  const plan = service.store.db.prepare(
+    'EXPLAIN QUERY PLAN SELECT * FROM audit_events WHERE (created_at, id) < (?, ?) ORDER BY created_at DESC, id DESC LIMIT ?',
+  ).all(4_000_000_000_000, 'event-100', 17).map((row) => row.detail).join('\n');
+  assert.match(plan, /USING INDEX audit_events_created_id_idx/u);
+  assert.doesNotMatch(plan, /TEMP B-TREE/u);
+});
+
+test('hosted audit paging validates cursors after checking current admin access', async (t) => {
+  const service = await createHostedService(t);
+  const admin = googleUser('admin@example.com');
+  const writer = googleUser('writer@example.com');
+  await service.claimWorkspace({ token: 'claim-secret', user: admin });
+  await service.completeWorkspaceSetup();
+  await service.createInvitation({ email: writer.email, role: HOSTED_ROLE_COLLABORATOR, user: admin });
+  await service.acceptInvitation(writer);
+
+  for (const cursor of ['invalid!', 'a'.repeat(300), Buffer.from('[1,{}]').toString('base64url')]) {
+    await assert.rejects(service.listAuditEvents(admin, { cursor }), { code: 'HOSTED_AUDIT_CURSOR_INVALID', statusCode: 400 });
+  }
+  await assert.rejects(service.listAuditEvents(writer, { cursor: 'invalid!' }), { code: 'HOSTED_ADMIN_REQUIRED', statusCode: 403 });
 });

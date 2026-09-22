@@ -102,6 +102,24 @@ function publicAuditEvent(record = null) {
   };
 }
 
+function parseAuditCursor(cursor) {
+  if (!cursor) return null;
+  try {
+    if (typeof cursor !== 'string' || cursor.length > 256 || !/^[A-Za-z0-9_-]+$/u.test(cursor)) {
+      throw new Error('Invalid cursor');
+    }
+    const value = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+    if (!Array.isArray(value) || value.length !== 2
+      || !Number.isSafeInteger(value[0]) || value[0] < 0
+      || typeof value[1] !== 'string' || !value[1] || value[1].length > 128) {
+      throw new Error('Invalid cursor');
+    }
+    return { createdAt: value[0], id: value[1] };
+  } catch {
+    throw createHostedError(400, 'Invalid access history cursor.', 'HOSTED_AUDIT_CURSOR_INVALID');
+  }
+}
+
 function publicVaultSource(record = null) {
   if (!record) {
     return null;
@@ -734,8 +752,17 @@ export class HostedWorkspaceService {
     }));
   }
 
-  async listAuditEvents(user) {
+  async listAuditEvents(user, { cursor = '', limit = 50 } = {}) {
     await this.requireAdmin(user);
-    return (await this.store.listAuditEvents()).map(publicAuditEvent);
+    const pageSize = Math.min(100, Math.max(1, Number.parseInt(limit, 10) || 50));
+    const rows = await this.store.listAuditEvents({ before: parseAuditCursor(cursor), limit: pageSize + 1 });
+    const events = rows.slice(0, pageSize).map(publicAuditEvent);
+    const last = events.at(-1);
+    return {
+      events,
+      nextCursor: rows.length > pageSize
+        ? Buffer.from(JSON.stringify([last.createdAt, last.id])).toString('base64url')
+        : null,
+    };
   }
 }

@@ -112,6 +112,14 @@ Current backend endpoints include:
 - `POST /api/hosted/invitations/accept`
 - `GET /api/hosted/audit`
 
+The admin-only audit endpoint returns `{ events, nextCursor }`, newest first, with
+50 events by default (`limit` accepts 1–100). Pass `nextCursor` as the next
+request's `cursor` to read older events; `null` marks the end. Equal timestamps
+are ordered by event ID so pagination stays consistent. Newly added events
+appear when refreshing the first page. Team Settings loads older events through
+**Load more history**. Paging does not remove events; audit history is retained
+indefinitely.
+
 The workspace also ships a basic hosted onboarding surface: a claim screen for the first Team Admin, a setup screen (Team Admins complete setup without a vault source for now), an invitation-acceptance prompt for signed-in invitees, and a Team Settings dialog in the toolbar overflow menu for admins with collaborators, pending invitations, roles, and the access audit trail. Setup completion and invitations stay gated until the Team Admin completes workspace setup; invitation email delivery is still pending, so share the workspace URL manually with invited people.
 
 
@@ -141,4 +149,3 @@ CLOUDFLARED_EXTRA_ARGS="--loglevel info" collabmd
 ```
 
 For the full runtime env var reference, see the `Environment variables` details block in the Development section below.
-

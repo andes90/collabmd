@@ -107,8 +107,11 @@ export function createHostedApiHandler({
         membership: await hostedWorkspaceService.acceptInvitation(user),
       });
     }],
-    ['GET /api/hosted/audit', async ({ req, res, user }) => {
-      jsonResponse(req, res, 200, { events: await hostedWorkspaceService.listAuditEvents(user) });
+    ['GET /api/hosted/audit', async ({ req, requestUrl, res, user }) => {
+      jsonResponse(req, res, 200, await hostedWorkspaceService.listAuditEvents(user, {
+        cursor: requestUrl.searchParams.get('cursor') || '',
+        limit: requestUrl.searchParams.get('limit') || 50,
+      }));
     }],
   ]);
 

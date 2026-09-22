@@ -10,6 +10,17 @@ function roleOptions(currentRole) {
   )).join('');
 }
 
+function auditEventsMarkup(events) {
+  return events.map((event) => `
+    <li class="team-settings-row team-settings-row--audit">
+      <div class="team-settings-row-main">
+        <strong>${escapeHtml(event.type)}</strong>
+        <span>${escapeHtml(event.targetEmail || '')}${event.targetRole ? ` · ${escapeHtml(event.targetRole)}` : ''}</span>
+        <small>By ${escapeHtml(event.actorName || event.actorEmail)} · ${formatDate(event.createdAt)}</small>
+      </div>
+    </li>`).join('');
+}
+
 export class TeamSettingsController {
   constructor({ apiClient, closeToolbarMenu, content, dialog, toastController, trigger }) {
     this.apiClient = apiClient;
@@ -50,6 +61,7 @@ export class TeamSettingsController {
       auditEvents: auditResult.events ?? [],
       invitations: invitationsResult.invitations ?? [],
       memberships: membershipsResult.memberships ?? [],
+      nextAuditCursor: auditResult.nextCursor ?? null,
     });
   }
 
@@ -58,7 +70,7 @@ export class TeamSettingsController {
     this.content.replaceChildren(createFragment(`<p class="team-settings-status${error ? ' is-error' : ''}" role="status">${escapeHtml(message)}</p>`));
   }
 
-  renderOverview({ auditEvents = [], invitations = [], memberships = [] }) {
+  renderOverview({ auditEvents = [], invitations = [], memberships = [], nextAuditCursor = null }) {
     if (!this.content) return;
     const memberMarkup = memberships.length > 0
       ? memberships.map((membership) => `
@@ -93,14 +105,7 @@ export class TeamSettingsController {
         </li>`).join('')
       : '<p class="team-settings-empty">No pending invitations.</p>';
     const auditMarkup = auditEvents.length > 0
-      ? auditEvents.map((event) => `
-        <li class="team-settings-row team-settings-row--audit">
-          <div class="team-settings-row-main">
-            <strong>${escapeHtml(event.type)}</strong>
-            <span>${escapeHtml(event.targetEmail || '')}${event.targetRole ? ` · ${escapeHtml(event.targetRole)}` : ''}</span>
-            <small>By ${escapeHtml(event.actorName || event.actorEmail)} · ${formatDate(event.createdAt)}</small>
-          </div>
-        </li>`).join('')
+      ? auditEventsMarkup(auditEvents)
       : '<p class="team-settings-empty">No access history yet.</p>';
     this.content.replaceChildren(createFragment(`
       <section class="team-settings-section">
@@ -128,7 +133,8 @@ export class TeamSettingsController {
       </section>
       <section class="team-settings-section">
         <h3>Access history</h3>
-        <ul class="team-settings-list team-settings-list--audit">${auditMarkup}</ul>
+        <ul class="team-settings-list team-settings-list--audit" tabindex="-1" aria-label="Access history">${auditMarkup}</ul>
+        ${nextAuditCursor ? `<button class="ui-button ui-button--secondary ui-button--compact" type="button" data-audit-more="${escapeHtml(nextAuditCursor)}">Load more history</button>` : ''}
       </section>
       <div class="team-settings-actions">
         <button class="ui-button ui-button--ghost" type="button" data-team-close>Close</button>
@@ -150,11 +156,39 @@ export class TeamSettingsController {
     }
   }
 
+  async loadMoreAuditEvents(button) {
+    if (button.disabled) return;
+    button.disabled = true;
+    try {
+      const page = await this.apiClient.listAuditEvents({ cursor: button.dataset.auditMore });
+      if (!this.content?.contains(button)) return;
+      const list = this.content.querySelector('.team-settings-list--audit');
+      list.append(createFragment(auditEventsMarkup(page.events ?? [])));
+      if (page.nextCursor) {
+        button.dataset.auditMore = page.nextCursor;
+      } else {
+        if (document.activeElement === button) list.focus();
+        button.remove();
+      }
+      this.setLiveMessage('More access history loaded');
+    } catch (error) {
+      if (this.content?.contains(button)) {
+        this.setLiveMessage(error.message || 'Failed to load access history');
+      }
+    } finally {
+      button.disabled = false;
+    }
+  }
+
   async handleClick(event) {
     const target = event.target.closest('button');
     if (!target) return;
     if (target.dataset.teamClose != null) {
       this.dialog.close();
+      return;
+    }
+    if (target.dataset.auditMore != null) {
+      await this.loadMoreAuditEvents(target);
       return;
     }
     if (target.dataset.membershipRemove) {
