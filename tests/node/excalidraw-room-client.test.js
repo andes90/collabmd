@@ -458,6 +458,43 @@ test('ExcalidrawRoomClient builds live sync deltas with only changed elements an
   assert.deepEqual(Object.keys(delta.scene.files), ['imageB']);
 });
 
+test('ExcalidrawRoomClient materializes a local delta once and preserves unchanged attachments', async () => {
+  const { client, ydoc } = await createConnectedClient();
+  const scene = JSON.parse(createScene('shape'));
+  scene.files.image = { id: 'image', mimeType: 'image/png', dataURL: `data:image/png;base64,${'a'.repeat(100000)}` };
+  client.commitSceneJson(JSON.stringify(scene));
+  const file = ydoc.getMap('excalidraw-files').get('image');
+  const readScene = client.getStructuredSceneJson.bind(client);
+  let materializations = 0;
+  client.getStructuredSceneJson = () => {
+    materializations += 1;
+    return readScene();
+  };
+  const elements = [{ ...scene.elements[0], version: 2, x: 50 }];
+  client.pendingSceneSyncPayload = {
+    appState: scene.appState,
+    baseSceneJson: client.getLastSceneJson(),
+    elements,
+    files: scene.files,
+  };
+  assert.equal(client.flushSceneSync(), true);
+  assert.equal(materializations, 1);
+  assert.equal(ydoc.getMap('excalidraw-files').get('image'), file);
+  assert.deepEqual(JSON.parse(client.getLastSceneJson()), { ...scene, elements });
+
+  const snapshot = Y.encodeStateAsUpdate(ydoc);
+  client.pendingSceneSyncPayload = {
+    appState: scene.appState,
+    baseSceneJson: client.getLastSceneJson(),
+    elements,
+    files: scene.files,
+  };
+  assert.equal(client.flushSceneSync(), false);
+  assert.equal(materializations, 1);
+  assert.deepEqual(Y.encodeStateAsUpdate(ydoc), snapshot);
+  client.disconnect();
+});
+
 test('ExcalidrawRoomClient ignores restored same-version element object differences in live deltas', async () => {
   const { client } = await createConnectedClient();
   const seededElement = JSON.parse(createScene('shape-1', { version: 3, versionNonce: 10 })).elements[0];

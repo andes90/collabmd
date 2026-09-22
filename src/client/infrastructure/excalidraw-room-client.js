@@ -644,11 +644,13 @@ export class ExcalidrawRoomClient {
     replaceExcalidrawRoomScene(this.ydoc, nextScene);
   }
 
-  mergeLocallyChangedAppState(appState, baseSceneJson) {
-    const baseScene = parseSceneJson(baseSceneJson);
-    const roomScene = parseSceneJson(this.lastSceneJson || this.getStructuredSceneJson());
+  mergeLocallyChangedAppState(appState, baseSceneJson, roomScene = null) {
+    const currentScene = roomScene ?? parseSceneJson(this.lastSceneJson || this.getStructuredSceneJson());
+    const baseScene = baseSceneJson && baseSceneJson === this.lastSceneJson
+      ? currentScene
+      : parseSceneJson(baseSceneJson);
     const nextAppState = {
-      ...roomScene.appState,
+      ...currentScene.appState,
     };
 
     ['gridSize', 'viewBackgroundColor'].forEach((key) => {
@@ -670,7 +672,7 @@ export class ExcalidrawRoomClient {
   } = {}) {
     const roomSceneJson = this.lastSceneJson || this.getStructuredSceneJson() || baseSceneJson;
     const roomScene = parseSceneJson(roomSceneJson);
-    const nextAppState = this.mergeLocallyChangedAppState(appState, baseSceneJson);
+    const nextAppState = this.mergeLocallyChangedAppState(appState, baseSceneJson, roomScene);
     const roomElementsById = new Map(roomScene.elements.map((element) => [element.id, element]));
     const changedElements = (Array.isArray(elements) ? elements : []).filter((element) => (
       shouldSyncElementToRoom(element, roomElementsById.get(element?.id))
@@ -781,9 +783,8 @@ export class ExcalidrawRoomClient {
       return false;
     }
 
-    const json = JSON.stringify(sceneData);
     this.lastSceneSyncAt = this.now();
-    this.commitSceneJson(json, {
+    this.commitSceneDelta(sceneData, {
       origin: 'excalidraw-local-change',
     });
 
@@ -947,7 +948,8 @@ export class ExcalidrawRoomClient {
       return false;
     }
 
-    const normalizedJson = JSON.stringify(parseSceneJson(nextJson));
+    const scene = parseSceneJson(nextJson);
+    const normalizedJson = JSON.stringify(scene);
     if (!this.ydoc) {
       const didChange = normalizedJson !== this.lastSceneJson;
       this.lastSceneJson = normalizedJson;
@@ -959,17 +961,27 @@ export class ExcalidrawRoomClient {
       return false;
     }
 
+    return this.commitSceneDelta(scene, { origin });
+  }
+
+  commitSceneDelta(scene, {
+    origin = 'excalidraw-room-write',
+  } = {}) {
+    if (!this.canWriteToRoom || !this.ydoc) {
+      return false;
+    }
+
     let didChange = false;
     this.suppressStructuredSceneUpdateDepth += 1;
     try {
       this.ydoc.transact(() => {
-        didChange = applySceneDiffToExcalidrawRoom(this.ydoc, parseSceneJson(normalizedJson));
+        didChange = applySceneDiffToExcalidrawRoom(this.ydoc, scene);
       }, origin);
     } finally {
       this.suppressStructuredSceneUpdateDepth = Math.max(0, this.suppressStructuredSceneUpdateDepth - 1);
     }
 
-    this.lastSceneJson = JSON.stringify(parseSceneJson(this.getStructuredSceneJson() || normalizedJson));
+    this.lastSceneJson = this.getStructuredSceneJson();
     return didChange;
   }
 
