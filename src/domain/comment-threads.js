@@ -6,6 +6,7 @@ export const COMMENT_ANCHOR_QUOTE_MAX_LENGTH = 280;
 export const COMMENT_REACTION_EMOJI_MAX_LENGTH = 16;
 
 const COMMENT_ANCHOR_KINDS = new Set(['diagram-element', 'line', 'text']);
+const REACTION_KEY_PREFIX = 'reaction:';
 
 function asFiniteNumber(value) {
   return Number.isFinite(value) ? value : null;
@@ -125,10 +126,14 @@ export function summarizeCommentExcerpt(value, maxLength = COMMENT_EXCERPT_MAX_L
   return `${normalized.slice(0, Math.max(maxLength - 1, 1)).trimEnd()}…`;
 }
 
-function normalizeReactionEmoji(value) {
+export function normalizeCommentReactionEmoji(value) {
   return Array.from(String(value ?? '').trim())
     .slice(0, COMMENT_REACTION_EMOJI_MAX_LENGTH)
     .join('');
+}
+
+export function createCommentReactionKey(messageId, emoji, userId) {
+  return `${REACTION_KEY_PREFIX}${JSON.stringify([messageId, emoji, userId])}`;
 }
 
 function createReactionUserRecord(user) {
@@ -146,7 +151,7 @@ function createReactionUserRecord(user) {
 }
 
 function createReactionGroupRecord(group) {
-  const emoji = normalizeReactionEmoji(readRecordValue(group, 'emoji'));
+  const emoji = normalizeCommentReactionEmoji(readRecordValue(group, 'emoji'));
   if (!emoji) {
     return null;
   }
@@ -212,10 +217,49 @@ function createMessageRecord(message) {
   };
 }
 
-function serializeMessages(messages) {
-  return asArray(messages)
+function serializeMessages(messages, thread) {
+  const records = asArray(messages)
     .map((message) => createMessageRecord(message))
     .filter(Boolean);
+  if (!(thread instanceof Y.Map)) {
+    return records;
+  }
+
+  const byId = new Map(records.map((message) => [message.id, message]));
+  const overrides = [...thread.entries()]
+    .filter(([key]) => key.startsWith(REACTION_KEY_PREFIX))
+    .sort(([left], [right]) => left.localeCompare(right));
+  for (const [key, value] of overrides) {
+    let identity;
+    try {
+      identity = JSON.parse(key.slice(REACTION_KEY_PREFIX.length));
+    } catch {
+      continue;
+    }
+    if (!Array.isArray(identity) || identity.length !== 3 || !identity.every((part) => typeof part === 'string')) {
+      continue;
+    }
+    const [messageId, rawEmoji, userId] = identity;
+    const emoji = normalizeCommentReactionEmoji(rawEmoji);
+    const message = byId.get(messageId);
+    const user = value === null ? null : createReactionUserRecord(value);
+    if (!message || !emoji || !userId || (value !== null && user?.userId !== userId)) {
+      continue;
+    }
+
+    const groupIndex = message.reactions.findIndex((group) => group.emoji === emoji);
+    const users = new Map((message.reactions[groupIndex]?.users ?? []).map((entry) => [entry.userId, entry]));
+    if (user) users.set(userId, user);
+    else users.delete(userId);
+    if (users.size > 0) {
+      const group = { emoji, users: [...users.values()] };
+      if (groupIndex < 0) message.reactions.push(group);
+      else message.reactions[groupIndex] = group;
+    } else if (groupIndex >= 0) {
+      message.reactions.splice(groupIndex, 1);
+    }
+  }
+  return records;
 }
 
 export function createCommentId(prefix = 'comment') {
@@ -323,7 +367,7 @@ export function serializeCommentThread(thread) {
     anchorSnapshot: readThreadValue(thread, 'anchorSnapshot'),
     elementId: readThreadValue(thread, 'elementId'),
   });
-  const messages = serializeMessages(readThreadValue(thread, 'messages'));
+  const messages = serializeMessages(readThreadValue(thread, 'messages'), thread);
 
   if (!anchor || messages.length === 0) {
     return null;

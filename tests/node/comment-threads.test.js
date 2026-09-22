@@ -217,6 +217,11 @@ test('comment thread serialization ignores malformed reactions', () => {
   });
 
   threads.push([thread]);
+  thread.set('reaction:{', {});
+  thread.set('reaction:[]', {});
+  thread.set('reaction:["comment-malformed-reactions",42,"user-1"]', {});
+  thread.set('reaction:["comment-malformed-reactions","🎉","user-1"]', { userId: 'different-user' });
+  thread.set('reaction:["missing-comment","🎉","user-1"]', { userId: 'user-1' });
 
   const [serialized] = serializeCommentThreads(threads);
   assert.deepEqual(serialized.messages[0].reactions, []);

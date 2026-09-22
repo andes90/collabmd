@@ -2,10 +2,13 @@ import * as Y from 'yjs';
 
 import {
   createCommentId,
+  createCommentReactionKey,
   createCommentThreadSharedType,
   normalizeCommentAnchor,
   normalizeCommentBody,
   normalizeCommentQuote,
+  normalizeCommentReactionEmoji,
+  serializeCommentThread,
   serializeCommentThreads,
   summarizeCommentExcerpt,
 } from '../../domain/comment-threads.js';
@@ -20,30 +23,6 @@ function createCommentMessage({ body, user }) {
     userColor: user?.color ?? '',
     userName: user?.name ?? 'Anonymous',
   };
-}
-
-function readRecordValue(record, key) {
-  if (record instanceof Y.Map) {
-    return record.get(key);
-  }
-
-  return record?.[key];
-}
-
-function cloneReactionGroups(source = []) {
-  return Array.isArray(source)
-    ? source.map((group) => ({
-      emoji: typeof group?.emoji === 'string' ? group.emoji : '',
-      users: Array.isArray(group?.users)
-        ? group.users.map((user) => ({
-          reactedAt: Number.isFinite(user?.reactedAt) ? user.reactedAt : Date.now(),
-          userColor: typeof user?.userColor === 'string' ? user.userColor : '',
-          userId: typeof user?.userId === 'string' ? user.userId : '',
-          userName: typeof user?.userName === 'string' && user.userName ? user.userName : 'Anonymous',
-        })).filter((user) => user.userId)
-        : [],
-    })).filter((group) => group.emoji && group.users.length > 0)
-    : [];
 }
 
 function normalizeSelectionAnchorPayload(payload, state) {
@@ -239,7 +218,11 @@ export class CommentThreadStore {
   }
 
   toggleCommentReaction(threadId, messageId, emoji) {
-    if (!this.ydoc || !threadId || !messageId || typeof emoji !== 'string' || !emoji.trim()) {
+    if (!this.canWrite() || !this.ydoc || !threadId || !messageId || typeof emoji !== 'string') {
+      return false;
+    }
+    const normalizedEmoji = normalizeCommentReactionEmoji(emoji);
+    if (!normalizedEmoji) {
       return false;
     }
 
@@ -250,62 +233,21 @@ export class CommentThreadStore {
     }
 
     const thread = this.findSharedCommentThread(threadId);
-    const messages = thread?.get('messages');
-    if (!(messages instanceof Y.Array)) {
+    const message = serializeCommentThread(thread)?.messages.find((entry) => entry.id === messageId);
+    if (!message) {
       return false;
     }
-
-    const items = messages.toArray();
-    const messageIndex = items.findIndex((message) => readRecordValue(message, 'id') === messageId);
-    if (messageIndex < 0) {
-      return false;
-    }
-
-    const messageRecord = items[messageIndex] instanceof Y.Map
-      ? items[messageIndex].toJSON()
-      : { ...items[messageIndex] };
-    const reactions = cloneReactionGroups(messageRecord.reactions);
-    const reactionIndex = reactions.findIndex((reaction) => reaction.emoji === emoji);
-
-    if (reactionIndex >= 0) {
-      const nextUsers = reactions[reactionIndex].users.filter((user) => user.userId !== localUserId);
-      if (nextUsers.length === reactions[reactionIndex].users.length) {
-        nextUsers.push({
-          reactedAt: Date.now(),
-          userColor: localUser?.color ?? '',
-          userId: localUserId,
-          userName: localUser?.name ?? 'Anonymous',
-        });
-      }
-
-      if (nextUsers.length === 0) {
-        reactions.splice(reactionIndex, 1);
-      } else {
-        reactions[reactionIndex] = {
-          ...reactions[reactionIndex],
-          users: nextUsers,
-        };
-      }
-    } else {
-      reactions.push({
-        emoji,
-        users: [{
-          reactedAt: Date.now(),
-          userColor: localUser?.color ?? '',
-          userId: localUserId,
-          userName: localUser?.name ?? 'Anonymous',
-        }],
-      });
-    }
-
-    const nextMessage = {
-      ...messageRecord,
-      reactions,
-    };
+    const hasReaction = message.reactions.some((group) => group.emoji === normalizedEmoji
+      && group.users.some((user) => user.userId === localUserId));
 
     this.ydoc.transact(() => {
-      messages.delete(messageIndex, 1);
-      messages.insert(messageIndex, [nextMessage]);
+      // Keep the message identity intact; different users change independent keys.
+      thread.set(createCommentReactionKey(messageId, normalizedEmoji, localUserId), hasReaction ? null : {
+        reactedAt: Date.now(),
+        userColor: localUser?.color ?? '',
+        userId: localUserId,
+        userName: localUser?.name ?? 'Anonymous',
+      });
     }, 'comment-reaction-toggle');
 
     return true;
