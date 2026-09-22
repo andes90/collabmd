@@ -12,6 +12,8 @@ import {
   sanitizeSvgMarkup,
 } from './preview-diagram-utils.js';
 
+const SVG_CACHE_LIMIT = 30;
+
 export class PlantUmlPreviewHydrator extends DiagramPreviewHydrator {
   constructor(renderer, { loadFileSource = null, renderClient = null } = {}) {
     super(renderer, {
@@ -135,6 +137,10 @@ export class PlantUmlPreviewHydrator extends DiagramPreviewHydrator {
     const request = this.renderClient.renderSvg(source)
       .then((svgMarkup) => {
         const sanitized = sanitizeSvgMarkup(svgMarkup);
+        this.svgCache.delete(cacheKey);
+        while (this.svgCache.size >= SVG_CACHE_LIMIT) {
+          this.svgCache.delete(this.svgCache.keys().next().value);
+        }
         this.svgCache.set(cacheKey, sanitized);
         return sanitized;
       })
