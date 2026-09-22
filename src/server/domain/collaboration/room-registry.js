@@ -61,12 +61,6 @@ export class RoomRegistry {
     return Array.from(this.rooms.entries());
   }
 
-  async reloadAllFromDisk() {
-    await Promise.allSettled(
-      Array.from(this.rooms.values(), (room) => room.reloadFromDisk?.()),
-    );
-  }
-
   async reconcileWorkspaceChange(workspaceChange = {}) {
     const deletedPaths = new Set(workspaceChange.deletedPaths ?? []);
     const renamedPaths = Array.isArray(workspaceChange.renamedPaths) ? workspaceChange.renamedPaths : [];

@@ -55,7 +55,6 @@ export class WorkspacePreviewController {
     outlineController,
     previewRenderer,
     pdfPreview = null,
-    schedulePreviewLayoutSync,
     scrollSyncController,
     structurizrPreview = null,
     videoEmbed,
@@ -94,7 +93,9 @@ export class WorkspacePreviewController {
     this.outlineController = outlineController;
     this.previewRenderer = previewRenderer;
     this.pdfPreview = pdfPreview ?? { cancel() {}, render() {} };
-    this.schedulePreviewLayoutSyncCallback = schedulePreviewLayoutSync;
+    this.previewHydrationPaused = false;
+    this.pendingPreviewLayoutSync = false;
+    this.previewLayoutSyncTimer = null;
     this.scrollSyncController = scrollSyncController;
     this.structurizrPreview = structurizrPreview ?? {
       queueSync() {},
@@ -201,19 +202,31 @@ export class WorkspacePreviewController {
     }
   }
 
-  renderExcalidrawFilePreview(filePath) {
+  prepareFilePreview(className) {
     const previewElement = this.elements.previewContent;
-    if (!previewElement) {
-      return;
-    }
+    if (!previewElement) return null;
 
     this.videoEmbed?.detachForCommit();
     this.drawioEmbed.detachForCommit();
     this.excalidrawEmbed.detachForCommit();
     this.resetPreviewMode();
-    previewElement.classList.add('is-excalidraw-file-preview');
+    if (className) previewElement.classList.add(className);
     const renderHost = this.previewRenderer.ensureRenderHost();
     this.previewRenderer.normalizePreviewChildren(renderHost);
+    return { previewElement, renderHost };
+  }
+
+  commitFilePreview(renderHost, content) {
+    if (renderHost) {
+      renderHost.replaceChildren(content);
+      renderHost.style.minHeight = '';
+    }
+  }
+
+  renderExcalidrawFilePreview(filePath) {
+    const preview = this.prepareFilePreview('is-excalidraw-file-preview');
+    if (!preview) return;
+    const { previewElement, renderHost } = preview;
 
     const placeholder = document.createElement('div');
     placeholder.className = 'excalidraw-embed-placeholder';
@@ -224,10 +237,7 @@ export class WorkspacePreviewController {
     loadingShell.className = 'preview-shell';
     loadingShell.textContent = 'Loading Excalidraw preview…';
     placeholder.appendChild(loadingShell);
-    if (renderHost) {
-      renderHost.replaceChildren(placeholder);
-      renderHost.style.minHeight = '';
-    }
+    this.commitFilePreview(renderHost, placeholder);
 
     previewElement.dataset.renderPhase = 'ready';
     this.outlineController.refresh();
@@ -238,22 +248,13 @@ export class WorkspacePreviewController {
     this.excalidrawEmbed.reconcileEmbeds(previewElement, { isLargeDocument: false });
     this.drawioEmbed.hydrateVisibleEmbeds();
     this.excalidrawEmbed.hydrateVisibleEmbeds();
-    this.schedulePreviewLayoutSyncCallback({ delayMs: 0 });
+    this.schedulePreviewLayoutSync({ delayMs: 0 });
   }
 
   renderDrawioFilePreview(filePath) {
-    const previewElement = this.elements.previewContent;
-    if (!previewElement) {
-      return;
-    }
-
-    this.videoEmbed?.detachForCommit();
-    this.drawioEmbed.detachForCommit();
-    this.excalidrawEmbed.detachForCommit();
-    this.resetPreviewMode();
-    previewElement.classList.add('is-drawio-file-preview');
-    const renderHost = this.previewRenderer.ensureRenderHost();
-    this.previewRenderer.normalizePreviewChildren(renderHost);
+    const preview = this.prepareFilePreview('is-drawio-file-preview');
+    if (!preview) return;
+    const { previewElement, renderHost } = preview;
 
     const placeholder = document.createElement('div');
     placeholder.className = 'drawio-embed-placeholder';
@@ -266,10 +267,7 @@ export class WorkspacePreviewController {
     loadingShell.textContent = 'Loading draw.io preview…';
     placeholder.appendChild(loadingShell);
 
-    if (renderHost) {
-      renderHost.replaceChildren(placeholder);
-      renderHost.style.minHeight = '';
-    }
+    this.commitFilePreview(renderHost, placeholder);
 
     previewElement.dataset.renderPhase = 'ready';
     this.outlineController.refresh();
@@ -278,22 +276,13 @@ export class WorkspacePreviewController {
     this.videoEmbed?.reconcileEmbeds(previewElement);
     this.drawioEmbed.reconcileEmbeds(previewElement);
     this.drawioEmbed.hydrateVisibleEmbeds();
-    this.schedulePreviewLayoutSyncCallback({ delayMs: 0 });
+    this.schedulePreviewLayoutSync({ delayMs: 0 });
   }
 
   renderImageFilePreview(filePath) {
-    const previewElement = this.elements.previewContent;
-    if (!previewElement) {
-      return;
-    }
-
-    this.videoEmbed?.detachForCommit();
-    this.drawioEmbed.detachForCommit();
-    this.excalidrawEmbed.detachForCommit();
-    this.resetPreviewMode();
-    previewElement.classList.add('is-image-file-preview');
-    const renderHost = this.previewRenderer.ensureRenderHost();
-    this.previewRenderer.normalizePreviewChildren(renderHost);
+    const preview = this.prepareFilePreview('is-image-file-preview');
+    if (!preview) return;
+    const { previewElement, renderHost } = preview;
 
     const shell = document.createElement('figure');
     shell.className = 'image-file-preview-shell';
@@ -304,32 +293,20 @@ export class WorkspacePreviewController {
     image.src = resolveApiUrl(`/attachment?path=${encodeURIComponent(filePath)}`);
     shell.appendChild(image);
 
-    if (renderHost) {
-      renderHost.replaceChildren(shell);
-      renderHost.style.minHeight = '';
-    }
+    this.commitFilePreview(renderHost, shell);
 
     previewElement.dataset.renderPhase = 'ready';
     this.outlineController.refresh();
     this.scrollSyncController.setLargeDocumentMode(false);
     this.scrollSyncController.invalidatePreviewBlocks();
     this.videoEmbed?.reconcileEmbeds(previewElement);
-    this.schedulePreviewLayoutSyncCallback({ delayMs: 0 });
+    this.schedulePreviewLayoutSync({ delayMs: 0 });
   }
 
   renderPdfFilePreview(filePath) {
-    const previewElement = this.elements.previewContent;
-    if (!previewElement) {
-      return;
-    }
-
-    this.videoEmbed?.detachForCommit();
-    this.drawioEmbed.detachForCommit();
-    this.excalidrawEmbed.detachForCommit();
-    this.resetPreviewMode();
-    previewElement.classList.add('is-pdf-file-preview');
-    const renderHost = this.previewRenderer.ensureRenderHost();
-    this.previewRenderer.normalizePreviewChildren(renderHost);
+    const preview = this.prepareFilePreview('is-pdf-file-preview');
+    if (!preview) return;
+    const { previewElement, renderHost } = preview;
 
     if (renderHost) {
       this.pdfPreview.render({
@@ -345,23 +322,14 @@ export class WorkspacePreviewController {
     this.scrollSyncController.setLargeDocumentMode(false);
     this.scrollSyncController.invalidatePreviewBlocks();
     this.videoEmbed?.reconcileEmbeds(previewElement);
-    this.schedulePreviewLayoutSyncCallback({ delayMs: 0 });
+    this.schedulePreviewLayoutSync({ delayMs: 0 });
   }
 
   renderHtmlFilePreview({ content = '' } = {}) {
-    const previewElement = this.elements.previewContent;
-    if (!previewElement) {
-      return;
-    }
-
     const wasMaximized = this.htmlPreviewShell?.classList.contains('is-maximized') ?? false;
-    this.videoEmbed?.detachForCommit();
-    this.drawioEmbed.detachForCommit();
-    this.excalidrawEmbed.detachForCommit();
-    this.resetPreviewMode();
-    previewElement.classList.add('is-html-file-preview');
-    const renderHost = this.previewRenderer.ensureRenderHost();
-    this.previewRenderer.normalizePreviewChildren(renderHost);
+    const preview = this.prepareFilePreview('is-html-file-preview');
+    if (!preview) return;
+    const { previewElement, renderHost } = preview;
 
     const source = String(content ?? '');
     const iframe = document.createElement('iframe');
@@ -397,32 +365,20 @@ export class WorkspacePreviewController {
     this.htmlPreviewShell = shell;
     this.setHtmlPreviewMaximized(wasMaximized);
 
-    if (renderHost) {
-      renderHost.replaceChildren(shell);
-      renderHost.style.minHeight = '';
-    }
+    this.commitFilePreview(renderHost, shell);
 
     previewElement.dataset.renderPhase = 'ready';
     this.outlineController.close();
     this.backlinksPanel.clear();
     this.scrollSyncController.setLargeDocumentMode(false);
     this.scrollSyncController.invalidatePreviewBlocks();
-    this.schedulePreviewLayoutSyncCallback({ delayMs: 0 });
+    this.schedulePreviewLayoutSync({ delayMs: 0 });
   }
 
   async renderBaseFilePreview(filePath, { source = null } = {}) {
-    const previewElement = this.elements.previewContent;
-    if (!previewElement) {
-      return;
-    }
-
-    this.videoEmbed?.detachForCommit();
-    this.drawioEmbed.detachForCommit();
-    this.excalidrawEmbed.detachForCommit();
-    this.resetPreviewMode();
-    previewElement.classList.add('is-base-file-preview');
-    const renderHost = this.previewRenderer.ensureRenderHost();
-    this.previewRenderer.normalizePreviewChildren(renderHost);
+    const preview = this.prepareFilePreview('is-base-file-preview');
+    if (!preview) return;
+    const { previewElement, renderHost } = preview;
 
     if (renderHost) {
       renderHost.style.minHeight = '';
@@ -441,22 +397,13 @@ export class WorkspacePreviewController {
     this.scrollSyncController.setLargeDocumentMode(false);
     this.scrollSyncController.invalidatePreviewBlocks();
     this.videoEmbed?.reconcileEmbeds(previewElement);
-    this.schedulePreviewLayoutSyncCallback({ delayMs: 0 });
+    this.schedulePreviewLayoutSync({ delayMs: 0 });
   }
 
   async renderStructurizrFilePreview(filePath, { source = null } = {}) {
-    const previewElement = this.elements.previewContent;
-    if (!previewElement) {
-      return;
-    }
-
-    this.videoEmbed?.detachForCommit();
-    this.drawioEmbed.detachForCommit();
-    this.excalidrawEmbed.detachForCommit();
-    this.resetPreviewMode();
-    previewElement.classList.add('is-structurizr-file-preview');
-    const renderHost = this.previewRenderer.ensureRenderHost();
-    this.previewRenderer.normalizePreviewChildren(renderHost);
+    const preview = this.prepareFilePreview('is-structurizr-file-preview');
+    if (!preview) return;
+    const { previewElement, renderHost } = preview;
     if (renderHost) {
       renderHost.style.minHeight = '';
     }
@@ -473,21 +420,13 @@ export class WorkspacePreviewController {
     this.scrollSyncController.setLargeDocumentMode(false);
     this.scrollSyncController.invalidatePreviewBlocks();
     this.videoEmbed?.reconcileEmbeds(previewElement);
-    this.schedulePreviewLayoutSyncCallback({ delayMs: 0 });
+    this.schedulePreviewLayoutSync({ delayMs: 0 });
   }
 
   renderTextFilePreview({ content = '' } = {}) {
-    const previewElement = this.elements.previewContent;
-    if (!previewElement) {
-      return;
-    }
-
-    this.videoEmbed?.detachForCommit();
-    this.drawioEmbed.detachForCommit();
-    this.excalidrawEmbed.detachForCommit();
-    this.resetPreviewMode();
-    const renderHost = this.previewRenderer.ensureRenderHost();
-    this.previewRenderer.normalizePreviewChildren(renderHost);
+    const preview = this.prepareFilePreview();
+    if (!preview) return;
+    const { previewElement, renderHost } = preview;
 
     const shell = document.createElement('div');
     shell.className = 'preview-shell';
@@ -497,10 +436,7 @@ export class WorkspacePreviewController {
     pre.appendChild(code);
     shell.appendChild(pre);
 
-    if (renderHost) {
-      renderHost.replaceChildren(shell);
-      renderHost.style.minHeight = '';
-    }
+    this.commitFilePreview(renderHost, shell);
 
     previewElement.dataset.renderPhase = 'ready';
     this.outlineController.close();
@@ -508,7 +444,7 @@ export class WorkspacePreviewController {
     this.scrollSyncController.setLargeDocumentMode(false);
     this.scrollSyncController.invalidatePreviewBlocks();
     this.videoEmbed?.reconcileEmbeds(previewElement);
-    this.schedulePreviewLayoutSyncCallback({ delayMs: 0 });
+    this.schedulePreviewLayoutSync({ delayMs: 0 });
   }
 
   createResizeHandler(restoreSidebarState) {
@@ -517,7 +453,7 @@ export class WorkspacePreviewController {
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
         restoreSidebarState?.();
-        this.schedulePreviewLayoutSyncCallback({ delayMs: 0 });
+        this.schedulePreviewLayoutSync({ delayMs: 0 });
       }, 100);
     };
   }
@@ -534,22 +470,23 @@ export class WorkspacePreviewController {
     return observer;
   }
 
-  schedulePreviewLayoutSync({
-    hydrationPaused,
-    previewLayoutSyncTimer,
-    setPendingPreviewLayoutSync,
-    setPreviewLayoutSyncTimer,
-    delayMs = 120,
-  }) {
-    if (hydrationPaused) {
-      setPendingPreviewLayoutSync(true);
+  resetPreviewLayoutSync() {
+    clearTimeout(this.previewLayoutSyncTimer);
+    this.previewLayoutSyncTimer = null;
+    this.pendingPreviewLayoutSync = false;
+    this.previewHydrationPaused = false;
+  }
+
+  schedulePreviewLayoutSync({ delayMs = 120 } = {}) {
+    if (this.previewHydrationPaused) {
+      this.pendingPreviewLayoutSync = true;
       return;
     }
 
-    clearTimeout(previewLayoutSyncTimer);
+    clearTimeout(this.previewLayoutSyncTimer);
 
-    const nextTimer = setTimeout(() => {
-      setPreviewLayoutSyncTimer(null);
+    this.previewLayoutSyncTimer = setTimeout(() => {
+      this.previewLayoutSyncTimer = null;
 
       const hasSession = Boolean(this.getSession());
       const isDrawioPreview = this.elements.previewContent?.classList?.contains?.('is-drawio-file-preview') ?? false;
@@ -562,8 +499,8 @@ export class WorkspacePreviewController {
         return;
       }
 
-      if (hydrationPaused) {
-        setPendingPreviewLayoutSync(true);
+      if (this.previewHydrationPaused) {
+        this.pendingPreviewLayoutSync = true;
         return;
       }
 
@@ -586,40 +523,25 @@ export class WorkspacePreviewController {
         },
       });
     }, delayMs);
-
-    setPreviewLayoutSyncTimer(nextTimer);
   }
 
-  handleEditorScrollActivityChange({
-    isActive,
-    pendingPreviewLayoutSync,
-    previewLayoutSyncTimer,
-    setHydrationPaused,
-    setPendingPreviewLayoutSync,
-    setPreviewLayoutSyncTimer,
-  }) {
+  handleEditorScrollActivityChange(isActive) {
     const nextPaused = Boolean(isActive);
-    setHydrationPaused(nextPaused);
+    this.previewHydrationPaused = nextPaused;
     this.previewRenderer.setHydrationPaused(nextPaused);
     this.drawioEmbed.setHydrationPaused(nextPaused);
     this.excalidrawEmbed.setHydrationPaused(nextPaused);
 
     if (nextPaused) {
-      clearTimeout(previewLayoutSyncTimer);
-      setPreviewLayoutSyncTimer(null);
-      setPendingPreviewLayoutSync(true);
+      clearTimeout(this.previewLayoutSyncTimer);
+      this.previewLayoutSyncTimer = null;
+      this.pendingPreviewLayoutSync = true;
       return;
     }
 
-    if (pendingPreviewLayoutSync) {
-      setPendingPreviewLayoutSync(false);
-      this.schedulePreviewLayoutSync({
-        delayMs: 0,
-        hydrationPaused: false,
-        previewLayoutSyncTimer: null,
-        setPendingPreviewLayoutSync,
-        setPreviewLayoutSyncTimer,
-      });
+    if (this.pendingPreviewLayoutSync) {
+      this.pendingPreviewLayoutSync = false;
+      this.schedulePreviewLayoutSync({ delayMs: 0 });
     }
   }
 }

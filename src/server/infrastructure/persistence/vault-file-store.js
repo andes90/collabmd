@@ -6,7 +6,6 @@ import sharp from 'sharp';
 
 import {
   getVaultFileKind,
-  getVaultTreeNodeType,
   isImageAttachmentFilePath,
   isMarkdownFilePath,
   isVaultFilePath,
@@ -323,56 +322,6 @@ export class VaultFileStore {
     }
 
     return this.managedWriteTracker.runManagedWrite(paths, operation);
-  }
-
-  async tree() {
-    return this.readDirectory(this.vaultDir);
-  }
-
-  async readDirectory(dirPath) {
-    const entries = [];
-
-    let dirEntries;
-    try {
-      dirEntries = await readdir(dirPath, { withFileTypes: true });
-    } catch {
-      return entries;
-    }
-
-    const sorted = dirEntries.sort((a, b) => {
-      if (a.isDirectory() && !b.isDirectory()) return -1;
-      if (!a.isDirectory() && b.isDirectory()) return 1;
-      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
-    });
-
-    for (const entry of sorted) {
-      if (isIgnoredVaultEntry(entry.name) || entry.isSymbolicLink()) {
-        continue;
-      }
-
-      const fullPath = join(dirPath, entry.name);
-      const relativePath = toVaultRelativePath(this.vaultDir, fullPath);
-
-      if (entry.isDirectory()) {
-        entries.push({
-          children: await this.readDirectory(fullPath),
-          name: entry.name,
-          path: relativePath,
-          type: 'directory',
-        });
-        continue;
-      }
-
-      if (isVaultFilePath(entry.name)) {
-        entries.push({
-          name: entry.name,
-          path: relativePath,
-          type: getVaultTreeNodeType(entry.name),
-        });
-      }
-    }
-
-    return entries;
   }
 
   resolveContentPath(filePath, { requireVaultFile = true } = {}) {

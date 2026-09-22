@@ -8,7 +8,9 @@ import {
   normalizeScene,
   parseSceneJson,
   sceneToInitialData,
+  tryParseSceneJson,
 } from '../../src/client/domain/excalidraw-scene.js';
+import { tryParseExcalidrawSceneJson } from '../../src/domain/excalidraw-room-codec.js';
 import { normalizeUserName } from '../../src/client/domain/room.js';
 
 test('normalizeUserName trims whitespace and caps the visible length', () => {
@@ -20,6 +22,20 @@ test('normalizeUserName trims whitespace and caps the visible length', () => {
 test('parseSceneJson and normalizeScene fall back to an empty scene shape', () => {
   assert.deepEqual(parseSceneJson('not-json'), createEmptyScene());
   assert.deepEqual(normalizeScene({ elements: 'bad', files: null }), createEmptyScene());
+});
+
+test('scene parsers preserve nullable and empty-scene fallbacks', () => {
+  for (const source of [undefined, null, '', 'not-json']) {
+    assert.equal(tryParseSceneJson(source), null);
+    assert.equal(tryParseExcalidrawSceneJson(source), null);
+    assert.deepEqual(parseSceneJson(source), createEmptyScene());
+  }
+
+  for (const source of ['null', 'false', '0', '[]', '{}']) {
+    assert.deepEqual(tryParseSceneJson(source), createEmptyScene());
+    assert.deepEqual(tryParseExcalidrawSceneJson(source), createEmptyScene());
+    assert.deepEqual(parseSceneJson(source), createEmptyScene());
+  }
 });
 
 test('Excalidraw scene helpers preserve supported fields', () => {

@@ -8,18 +8,6 @@ class StubVaultStore {
     this.files = new Map(files);
     this.readCount = 0;
     this.scanCount = 0;
-    this.treeCount = 0;
-  }
-
-  async tree() {
-    this.treeCount += 1;
-    return [...this.files.keys()]
-      .sort((left, right) => left.localeCompare(right))
-      .map((path) => ({
-        name: path.split('/').pop(),
-        path,
-        type: 'file',
-      }));
   }
 
   async scanWorkspaceState() {
@@ -113,7 +101,7 @@ test('BacklinkIndex flushes scheduled rebuilds when backlinks are queried', asyn
   assert.deepEqual(backlinks, []);
 });
 
-test('BacklinkIndex full builds source file lists from scanWorkspaceState instead of tree()', async () => {
+test('BacklinkIndex builds source file lists from a workspace scan', async () => {
   const vaultFileStore = new StubVaultStore([
     ['source.md', '# Source\n\nSee [[target]].'],
     ['target.md', '# Target'],
@@ -124,7 +112,6 @@ test('BacklinkIndex full builds source file lists from scanWorkspaceState instea
   await index.build();
 
   assert.equal(vaultFileStore.scanCount, 1);
-  assert.equal(vaultFileStore.treeCount, 0);
   assert.equal(vaultFileStore.readCount, 2);
   assert.deepEqual(await index.getBacklinks('target.md'), [
     {
@@ -150,7 +137,6 @@ test('BacklinkIndex honors provided markdownPaths without reading non-markdown t
   });
 
   assert.equal(vaultFileStore.scanCount, 0);
-  assert.equal(vaultFileStore.treeCount, 0);
   assert.equal(vaultFileStore.readCount, 2);
   assert.deepEqual(index._sourceFileList, ['source.md', 'target.md']);
 });

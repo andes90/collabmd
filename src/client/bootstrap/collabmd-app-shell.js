@@ -137,10 +137,7 @@ export class CollabMdAppShell {
     this._hasPromptedForDisplayName = false;
     this._basePreviewRenderTimer = null;
     this._backlinkRefreshTimer = null;
-    this._pendingPreviewLayoutSync = false;
-    this._previewHydrationPaused = false;
     this._previewLayoutResizeObserver = null;
-    this._previewLayoutSyncTimer = null;
     this._reloadPromptShown = false;
     this._staticPreviewDocument = null;
     this.pendingGitResetPath = null;
@@ -517,7 +514,6 @@ export class CollabMdAppShell {
       outlineController: this.outlineController,
       pdfPreview: this.pdfPreview,
       previewRenderer: this.previewRenderer,
-      schedulePreviewLayoutSync: (options) => this.schedulePreviewLayoutSync(options),
       scrollSyncController: this.scrollSyncController,
       videoEmbed: this.videoEmbed,
     });

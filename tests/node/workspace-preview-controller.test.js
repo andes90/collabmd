@@ -7,7 +7,7 @@ function createController(overrides = {}) {
   const getSession = overrides.getSession
     ?? (() => (Object.hasOwn(overrides, 'session') ? overrides.session : { getText: () => 'graph TD\nA-->B' }));
 
-  return new WorkspacePreviewController({
+  const controller = new WorkspacePreviewController({
     backlinksPanel: { clear() {}, setDisplayMode() {}, ...(overrides.backlinksPanel || {}) },
     basesPreview: overrides.basesPreview,
     drawioEmbed: {
@@ -52,10 +52,13 @@ function createController(overrides = {}) {
       setHydrationPaused() {},
       ...(overrides.previewRenderer || {}),
     },
-    schedulePreviewLayoutSync: overrides.schedulePreviewLayoutSync ?? (() => {}),
     scrollSyncController: { invalidatePreviewBlocks() {}, warmPreviewBlocks() {}, ...(overrides.scrollSyncController || {}) },
     structurizrPreview: overrides.structurizrPreview,
   });
+  if (overrides.schedulePreviewLayoutSync) {
+    controller.schedulePreviewLayoutSync = overrides.schedulePreviewLayoutSync;
+  }
+  return controller;
 }
 
 test('WorkspacePreviewController wraps Mermaid and PlantUML file content for preview rendering', () => {
@@ -103,12 +106,19 @@ test('WorkspacePreviewController labels PlantUML formatting as indentation', () 
   assert.equal(label.textContent, 'Indent');
 });
 
-test('WorkspacePreviewController pauses preview hydration during editor scroll activity', () => {
+test('WorkspacePreviewController pauses, resumes, and resets pending preview layout work', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   const events = [];
   const controller = createController({
+    elements: {
+      previewContent: { classList: { contains: () => false }, dataset: { renderPhase: 'ready' } },
+    },
     excalidrawEmbed: {
       setHydrationPaused(value) {
         events.push(['embed', value]);
+      },
+      syncLayout() {
+        events.push(['sync-layout']);
       },
     },
     previewRenderer: {
@@ -118,32 +128,34 @@ test('WorkspacePreviewController pauses preview hydration during editor scroll a
     },
   });
 
-  let hydrationPaused = false;
-  let pendingPreviewLayoutSync = false;
-  let previewLayoutSyncTimer = 123;
-
-  controller.handleEditorScrollActivityChange({
-    isActive: true,
-    pendingPreviewLayoutSync,
-    previewLayoutSyncTimer,
-    setHydrationPaused: (value) => {
-      hydrationPaused = value;
-    },
-    setPendingPreviewLayoutSync: (value) => {
-      pendingPreviewLayoutSync = value;
-    },
-    setPreviewLayoutSyncTimer: (value) => {
-      previewLayoutSyncTimer = value;
-    },
-  });
-
-  assert.equal(hydrationPaused, true);
-  assert.equal(pendingPreviewLayoutSync, true);
-  assert.equal(previewLayoutSyncTimer, null);
+  controller.schedulePreviewLayoutSync({ delayMs: 20 });
+  controller.handleEditorScrollActivityChange(true);
+  controller.schedulePreviewLayoutSync({ delayMs: 0 });
+  t.mock.timers.tick(20);
   assert.deepEqual(events, [
     ['preview', true],
     ['embed', true],
   ]);
+
+  controller.handleEditorScrollActivityChange(false);
+  t.mock.timers.tick(1);
+  assert.deepEqual(events, [
+    ['preview', true],
+    ['embed', true],
+    ['preview', false],
+    ['embed', false],
+    ['sync-layout'],
+  ]);
+
+  controller.schedulePreviewLayoutSync({ delayMs: 20 });
+  controller.resetPreviewLayoutSync();
+  t.mock.timers.tick(20);
+  assert.equal(events.filter(([type]) => type === 'sync-layout').length, 1);
+  controller.handleEditorScrollActivityChange(true);
+  controller.resetPreviewLayoutSync();
+  assert.equal(controller.previewHydrationPaused, false);
+  assert.equal(controller.pendingPreviewLayoutSync, false);
+  assert.equal(controller.previewLayoutSyncTimer, null);
 });
 
 test('WorkspacePreviewController forces Excalidraw files into preview without overwriting layout preference', () => {
@@ -545,13 +557,7 @@ test('WorkspacePreviewController still syncs Excalidraw preview layout without a
   });
 
   await new Promise((resolve) => {
-    controller.schedulePreviewLayoutSync({
-      delayMs: 0,
-      hydrationPaused: false,
-      previewLayoutSyncTimer: null,
-      setPendingPreviewLayoutSync() {},
-      setPreviewLayoutSyncTimer() {},
-    });
+    controller.schedulePreviewLayoutSync({ delayMs: 0 });
     setTimeout(resolve, 0);
   });
 

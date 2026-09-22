@@ -1,8 +1,8 @@
 import * as Y from 'yjs';
 
-const EXCALIDRAW_TYPE = 'excalidraw';
-const EXCALIDRAW_VERSION = 2;
-const EXCALIDRAW_SOURCE = 'collabmd';
+import { createEmptyScene, normalizeScene, tryParseSceneJson } from './excalidraw-scene.js';
+
+export { tryParseSceneJson as tryParseExcalidrawSceneJson } from './excalidraw-scene.js';
 
 export const EXCALIDRAW_APP_STATE_KEY = 'excalidraw-app-state';
 export const EXCALIDRAW_ELEMENTS_KEY = 'excalidraw-elements';
@@ -12,54 +12,6 @@ export const EXCALIDRAW_ROOM_SCHEMA_VERSION = 1;
 export const EXCALIDRAW_ROOM_TEXT_KEY = 'codemirror';
 export const EXCALIDRAW_SCHEMA_VERSION_KEY = 'schemaVersion';
 export const EXCALIDRAW_REPLACE_GENERATION_KEY = 'replaceGeneration';
-
-function createEmptyScene() {
-  return {
-    type: EXCALIDRAW_TYPE,
-    version: EXCALIDRAW_VERSION,
-    source: EXCALIDRAW_SOURCE,
-    elements: [],
-    appState: {
-      gridSize: null,
-      viewBackgroundColor: '#ffffff',
-    },
-    files: {},
-  };
-}
-
-function normalizeAppState(appState = {}) {
-  return {
-    gridSize: appState?.gridSize ?? null,
-    viewBackgroundColor: appState?.viewBackgroundColor ?? '#ffffff',
-  };
-}
-
-function normalizeScene(raw) {
-  if (!raw || typeof raw !== 'object') {
-    return createEmptyScene();
-  }
-
-  return {
-    type: EXCALIDRAW_TYPE,
-    version: EXCALIDRAW_VERSION,
-    source: EXCALIDRAW_SOURCE,
-    elements: Array.isArray(raw.elements) ? raw.elements : [],
-    appState: normalizeAppState(raw.appState),
-    files: raw.files && typeof raw.files === 'object' ? raw.files : {},
-  };
-}
-
-function parseSceneJson(rawJson, { fallbackToEmpty = true } = {}) {
-  if (!rawJson) {
-    return fallbackToEmpty ? createEmptyScene() : null;
-  }
-
-  try {
-    return normalizeScene(JSON.parse(rawJson));
-  } catch {
-    return fallbackToEmpty ? createEmptyScene() : null;
-  }
-}
 
 function cloneJsonValue(value) {
   return structuredClone(value);
@@ -328,7 +280,7 @@ export function replaceExcalidrawRoomScene(ydoc, rawScene, {
     filesMap.set(key, cloneJsonValue(value));
   });
 
-  const nextAppState = normalizeAppState(scene.appState);
+  const nextAppState = scene.appState;
   appStateMap.set('gridSize', nextAppState.gridSize);
   appStateMap.set('viewBackgroundColor', nextAppState.viewBackgroundColor);
   meta.set(EXCALIDRAW_REPLACE_GENERATION_KEY, readExcalidrawReplaceGeneration(ydoc) + 1);
@@ -372,7 +324,7 @@ export function applySceneDiffToExcalidrawRoom(ydoc, rawScene, {
     changed = true;
   });
 
-  const nextAppState = normalizeAppState(scene.appState);
+  const nextAppState = scene.appState;
   Object.entries(nextAppState).forEach(([key, value]) => {
     if (appStateMap.get(key) === value) {
       return;
@@ -398,15 +350,11 @@ export function readLegacyExcalidrawRoomScene(ydoc) {
   }
 
   const rawJson = ydoc.getText(EXCALIDRAW_ROOM_TEXT_KEY).toString();
-  return parseSceneJson(rawJson, { fallbackToEmpty: false });
+  return tryParseSceneJson(rawJson);
 }
 
 export function migrateLegacyExcalidrawRoomData(ydoc, rawScene, options = {}) {
   const scene = normalizeScene(rawScene);
   replaceExcalidrawRoomScene(ydoc, scene, options);
   return scene;
-}
-
-export function tryParseExcalidrawSceneJson(rawJson) {
-  return parseSceneJson(rawJson, { fallbackToEmpty: false });
 }

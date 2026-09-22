@@ -225,9 +225,9 @@ async function handleBaseExport(req, res, _requestUrl, { baseQueryService }) {
   }
 }
 
-async function handleFileTree(req, res, _requestUrl, { vaultFileStore, workspaceMutationCoordinator }) {
+async function handleFileTree(req, res, _requestUrl, { workspaceMutationCoordinator }) {
   try {
-    const tree = workspaceMutationCoordinator?.getWorkspaceTree?.() ?? await vaultFileStore.tree();
+    const tree = workspaceMutationCoordinator.getWorkspaceTree();
     jsonResponse(req, res, 200, { tree });
   } catch (error) {
     console.error('[api] Failed to read file tree:', error.message);

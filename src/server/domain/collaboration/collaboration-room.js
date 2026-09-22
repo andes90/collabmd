@@ -712,10 +712,6 @@ export class CollaborationRoom {
     }
   }
 
-  unmarkDeleted() {
-    this.deleted = false;
-  }
-
   isDeleted() {
     return this.deleted;
   }

@@ -107,21 +107,3 @@
 .comment-markdown th {
   background: var(--surface-comment-offset);
 }
-
-.comment-markdown-preview > :not(pre):not(blockquote):not(.comment-markdown-table) {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
-  overflow: hidden;
-}
-
-.comment-markdown-preview pre code {
-  width: 100%;
-  min-width: 0;
-  max-height: 6.6rem;
-  overflow: hidden;
-}
-
-.comment-markdown-preview .comment-markdown-table {
-  display: none;
-}

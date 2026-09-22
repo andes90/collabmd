@@ -21,7 +21,6 @@ Welcome to the test vault. This is the top-level readme.
 - [[projects/collabmd]]
 `;
 let runtimeVaultDir = getRuntimeVaultDir();
-const clientDistDir = resolve(import.meta.dirname, '../../../dist/client');
 
 export const test = base.extend({
   e2eServer: [async ({ browserName }, use, workerInfo) => {
@@ -34,7 +33,7 @@ export const test = base.extend({
       resetE2EVaultSnapshot(vaultDir),
       rm(publicDir, { force: true, recursive: true }),
     ]);
-    await cp(clientDistDir, publicDir, { recursive: true });
+    await cp(process.env.COLLABMD_E2E_PUBLIC_DIR, publicDir, { recursive: true });
     const serverProcess = spawn(process.execPath, [
       'bin/collabmd.js',
       '--no-tunnel',

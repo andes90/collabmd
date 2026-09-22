@@ -60,6 +60,28 @@ test('creates a video markdown node from a selected URL and selects the label pl
   assert.deepEqual(result.selection, { anchor: 2, head: 7 });
 });
 
+test('link, image, and video edits preserve placeholders and selection offsets inside a document', () => {
+  const cases = [
+    ['link', '', '[link text](https://)', 4, 13],
+    ['link', '日本語', '[日本語](https://)', 9, 17],
+    ['link', ' HTTPS://x ', '[link text]( HTTPS://x )', 4, 13],
+    ['image', '', '![alt text](https://)', 5, 13],
+    ['image', '日本語', '![日本語](https://)', 10, 18],
+    ['image', ' HTTPS://x ', '![alt text]( HTTPS://x )', 5, 13],
+    ['video', '', '![Video](https://)', 5, 10],
+    ['video', '日本語', '![日本語](https://)', 10, 18],
+    ['video', ' HTTPS://x ', '![Video]( HTTPS://x )', 5, 10],
+  ];
+
+  for (const [action, selected, markup, anchor, head] of cases) {
+    const result = applyEdit(`😀 ${selected} tail`, { from: 3 + selected.length, to: 3 }, action);
+    assert.deepEqual(result, {
+      nextText: `😀 ${markup} tail`,
+      selection: { anchor, head },
+    }, `${action}: ${selected}`);
+  }
+});
+
 test('toggles bullet list prefixes for a multiline selection', () => {
   const added = applyEdit('first\nsecond', { from: 0, to: 12 }, 'bullet-list');
   assert.equal(added.nextText, '- first\n- second');

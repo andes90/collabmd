@@ -935,36 +935,6 @@ export class EditorViewAdapter {
     };
   }
 
-  normalizeLineRange({ endLine, startLine }) {
-    const state = this.editorView?.state;
-    if (!state) {
-      return { endLine: 1, startLine: 1 };
-    }
-
-    const lineCount = state.doc.lines;
-    const normalizedStart = Math.min(Math.max(Math.round(startLine ?? 1), 1), lineCount);
-    const normalizedEnd = Math.min(Math.max(Math.round(endLine ?? normalizedStart), normalizedStart), lineCount);
-
-    return {
-      endLine: normalizedEnd,
-      startLine: normalizedStart,
-    };
-  }
-
-  getLineInfoAt(position) {
-    const state = this.editorView?.state;
-    if (!state) {
-      return null;
-    }
-
-    const clampedPosition = Math.min(Math.max(position, 0), state.doc.length);
-    const line = state.doc.lineAt(clampedPosition);
-    return {
-      line,
-      lineNumber: line.number,
-    };
-  }
-
   getAnchorClientRect(anchor) {
     const state = this.editorView?.state;
     const editorView = this.editorView;

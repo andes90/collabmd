@@ -239,24 +239,6 @@
   background: transparent;
 }
 
-.drawio-embed-image-shell {
-  display: flex;
-  align-items: stretch;
-  justify-content: center;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: var(--surface-embed-canvas);
-  cursor: pointer;
-}
-
-.drawio-embed-image {
-  display: block;
-  width: 100%;
-  height: auto;
-  background: transparent;
-}
-
 .drawio-export-iframe {
   position: absolute;
   width: 0;

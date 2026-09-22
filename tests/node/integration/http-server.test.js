@@ -599,8 +599,8 @@ test('HTTP server serves /api/files from the cached workspace tree', async (t) =
   });
   assert.equal(createResponse.statusCode, 201);
 
-  app.server.vaultFileStore.tree = async () => {
-    throw new Error('tree() should not be called for /api/files');
+  app.server.vaultFileStore.scanWorkspaceState = async () => {
+    throw new Error('scanWorkspaceState() should not be called for /api/files');
   };
 
   const treeResponse = await httpRequest(`${app.baseUrl}/api/files`);
@@ -826,6 +826,60 @@ test('HTTP server exposes git status and diff endpoints for git-backed vaults', 
   const cleanStatusResponse = await httpRequest(`${app.baseUrl}/api/git/status?force=true`);
   assert.equal(cleanStatusResponse.statusCode, 200);
   assert.match(cleanStatusResponse.body, /"changedFiles":0/);
+});
+
+test('HTTP git commands preserve author, managed scope, and reconciliation metadata', async (t) => {
+  const app = await startTestServer();
+  t.after(() => app.close());
+  const author = { email: 'author@example.com', name: 'Request Author' };
+  const calls = [];
+  const observations = [];
+  const workspaceChange = { changedPaths: ['test.md'] };
+  app.server.authService.getAuthenticatedUser = () => author;
+  app.server.gitService.commitStaged = async (options) => {
+    assert.equal(app.server.workspaceMutationCoordinator.isGloballySuppressed(), true);
+    calls.push(['commit', options]);
+    return { ok: true };
+  };
+  app.server.gitService.pullBranch = async (options) => {
+    assert.equal(app.server.workspaceMutationCoordinator.isGloballySuppressed(), true);
+    calls.push(['pull', options]);
+    return { ok: true, sourceRef: 'test-ref', workspaceChange };
+  };
+  app.server.workspaceMutationCoordinator.reconcileVaultChangeObservation = async (observation) => {
+    observations.push(observation);
+  };
+
+  for (const [action, body] of [['commit', { message: 'Saved work' }], ['pull', undefined]]) {
+    const response = await httpRequest(`${app.baseUrl}/api/git/${action}`, {
+      body: body && JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json', 'x-collabmd-request-id': 'request-123' },
+      method: 'POST',
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(JSON.parse(response.body).ok, true);
+  }
+  assert.deepEqual(calls, [
+    ['commit', { author, message: 'Saved work' }],
+    ['pull', { author }],
+  ]);
+  assert.deepEqual(observations, [{
+    action: 'pull', origin: 'git', requestId: 'request-123', sourceRef: 'test-ref', workspaceChange,
+  }]);
+
+  for (const action of ['stage', 'unstage', 'reset-file', 'commit']) {
+    const response = await httpRequest(`${app.baseUrl}/api/git/${action}`, {
+      body: '{}', headers: { 'Content-Type': 'application/json' }, method: 'POST',
+    });
+    assert.equal(response.statusCode, 400);
+    assert.deepEqual(JSON.parse(response.body), { error: `Missing ${action === 'commit' ? 'message' : 'path'}` });
+  }
+  for (const action of ['stage', 'unstage', 'stage-all', 'unstage-all', 'commit', 'push', 'pull', 'reset-file']) {
+    const response = await httpRequest(`${app.baseUrl}/api/git/${action}`, { method: 'DELETE' });
+    assert.equal(response.statusCode, 404);
+  }
+  assert.equal(calls.length, 2);
+  assert.equal(observations.length, 1);
 });
 
 test('HTTP server exposes git push and pull endpoints for repos with an upstream', async (t) => {

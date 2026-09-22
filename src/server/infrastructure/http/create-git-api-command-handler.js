@@ -41,160 +41,71 @@ export function createGitApiCommandHandler({
   gitService,
   workspaceMutationCoordinator = null,
 }) {
+  const routes = [
+    {
+      action: 'stage', bodyField: 'path', errorMessage: 'Failed to stage git file',
+      run: (body) => gitService.stageFile(body.path),
+    },
+    {
+      action: 'unstage', bodyField: 'path', errorMessage: 'Failed to unstage git file',
+      run: (body) => gitService.unstageFile(body.path),
+    },
+    {
+      action: 'stage-all', errorMessage: 'Failed to stage all git changes',
+      run: () => gitService.stageAll(),
+    },
+    {
+      action: 'unstage-all', errorMessage: 'Failed to unstage all git changes',
+      run: () => gitService.unstageAll(),
+    },
+    {
+      action: 'commit', bodyField: 'message', errorMessage: 'Failed to commit staged changes',
+      run: (body, req) => gitService.commitStaged({
+        author: authService?.getAuthenticatedUser?.(req) ?? null,
+        message: body.message,
+      }),
+    },
+    {
+      action: 'push', errorMessage: 'Failed to push git branch',
+      run: () => gitService.pushBranch(),
+    },
+    {
+      action: 'pull', errorMessage: 'Failed to pull git branch',
+      run: (_body, req) => gitService.pullBranch({
+        author: authService?.getAuthenticatedUser?.(req) ?? null,
+      }),
+    },
+    {
+      action: 'reset-file', bodyField: 'path', errorMessage: 'Failed to reset git file',
+      run: (body) => gitService.resetFileToHead(body.path),
+    },
+  ];
+
   return async function handleGitApiCommand(req, res, requestUrl) {
-    if (requestUrl.pathname === '/api/git/stage' && req.method === 'POST') {
-      try {
-        const body = await parseRequiredBody(req, res, 'path');
-        if (!body) {
-          return true;
-        }
-
-        jsonResponse(req, res, 200, await applyWorkspaceMutationEffects({
-          action: 'stage',
-          req,
-          responsePayload: await workspaceMutationCoordinator.runManagedWorkspaceMutation(
-            () => gitService.stageFile(body.path),
-          ),
-          workspaceMutationCoordinator,
-        }));
-      } catch (error) {
-        handleApiError(req, res, error, '[api] Failed to stage git file:', 'Failed to stage git file');
-      }
-      return true;
+    const route = req.method === 'POST'
+      ? routes.find(({ action }) => requestUrl.pathname === `/api/git/${action}`)
+      : null;
+    if (!route) {
+      return false;
     }
 
-    if (requestUrl.pathname === '/api/git/unstage' && req.method === 'POST') {
-      try {
-        const body = await parseRequiredBody(req, res, 'path');
-        if (!body) {
-          return true;
-        }
-
-        jsonResponse(req, res, 200, await applyWorkspaceMutationEffects({
-          action: 'unstage',
-          req,
-          responsePayload: await workspaceMutationCoordinator.runManagedWorkspaceMutation(
-            () => gitService.unstageFile(body.path),
-          ),
-          workspaceMutationCoordinator,
-        }));
-      } catch (error) {
-        handleApiError(req, res, error, '[api] Failed to unstage git file:', 'Failed to unstage git file');
+    try {
+      const body = route.bodyField ? await parseRequiredBody(req, res, route.bodyField) : {};
+      if (!body) {
+        return true;
       }
-      return true;
+
+      jsonResponse(req, res, 200, await applyWorkspaceMutationEffects({
+        action: route.action,
+        req,
+        responsePayload: await workspaceMutationCoordinator.runManagedWorkspaceMutation(
+          () => route.run(body, req),
+        ),
+        workspaceMutationCoordinator,
+      }));
+    } catch (error) {
+      handleApiError(req, res, error, `[api] ${route.errorMessage}:`, route.errorMessage);
     }
-
-    if (requestUrl.pathname === '/api/git/stage-all' && req.method === 'POST') {
-      try {
-        jsonResponse(req, res, 200, await applyWorkspaceMutationEffects({
-          action: 'stage-all',
-          req,
-          responsePayload: await workspaceMutationCoordinator.runManagedWorkspaceMutation(
-            () => gitService.stageAll(),
-          ),
-          workspaceMutationCoordinator,
-        }));
-      } catch (error) {
-        handleApiError(req, res, error, '[api] Failed to stage all git changes:', 'Failed to stage all git changes');
-      }
-      return true;
-    }
-
-    if (requestUrl.pathname === '/api/git/unstage-all' && req.method === 'POST') {
-      try {
-        jsonResponse(req, res, 200, await applyWorkspaceMutationEffects({
-          action: 'unstage-all',
-          req,
-          responsePayload: await workspaceMutationCoordinator.runManagedWorkspaceMutation(
-            () => gitService.unstageAll(),
-          ),
-          workspaceMutationCoordinator,
-        }));
-      } catch (error) {
-        handleApiError(req, res, error, '[api] Failed to unstage all git changes:', 'Failed to unstage all git changes');
-      }
-      return true;
-    }
-
-    if (requestUrl.pathname === '/api/git/commit' && req.method === 'POST') {
-      try {
-        const body = await parseRequiredBody(req, res, 'message');
-        if (!body) {
-          return true;
-        }
-
-        jsonResponse(req, res, 200, await applyWorkspaceMutationEffects({
-          action: 'commit',
-          req,
-          responsePayload: await workspaceMutationCoordinator.runManagedWorkspaceMutation(
-            () => gitService.commitStaged({
-              author: authService?.getAuthenticatedUser?.(req) ?? null,
-              message: body.message,
-            }),
-          ),
-          workspaceMutationCoordinator,
-        }));
-      } catch (error) {
-        handleApiError(req, res, error, '[api] Failed to commit staged changes:', 'Failed to commit staged changes');
-      }
-      return true;
-    }
-
-    if (requestUrl.pathname === '/api/git/push' && req.method === 'POST') {
-      try {
-        jsonResponse(req, res, 200, await applyWorkspaceMutationEffects({
-          action: 'push',
-          req,
-          responsePayload: await workspaceMutationCoordinator.runManagedWorkspaceMutation(
-            () => gitService.pushBranch(),
-          ),
-          workspaceMutationCoordinator,
-        }));
-      } catch (error) {
-        handleApiError(req, res, error, '[api] Failed to push git branch:', 'Failed to push git branch');
-      }
-      return true;
-    }
-
-    if (requestUrl.pathname === '/api/git/pull' && req.method === 'POST') {
-      try {
-        jsonResponse(req, res, 200, await applyWorkspaceMutationEffects({
-          action: 'pull',
-          req,
-          responsePayload: await workspaceMutationCoordinator.runManagedWorkspaceMutation(
-            () => gitService.pullBranch({
-              author: authService?.getAuthenticatedUser?.(req) ?? null,
-            }),
-          ),
-          workspaceMutationCoordinator,
-        }));
-      } catch (error) {
-        handleApiError(req, res, error, '[api] Failed to pull git branch:', 'Failed to pull git branch');
-      }
-      return true;
-    }
-
-    if (requestUrl.pathname === '/api/git/reset-file' && req.method === 'POST') {
-      try {
-        const body = await parseRequiredBody(req, res, 'path');
-        if (!body) {
-          return true;
-        }
-
-        jsonResponse(req, res, 200, await applyWorkspaceMutationEffects({
-          action: 'reset-file',
-          req,
-          responsePayload: await workspaceMutationCoordinator.runManagedWorkspaceMutation(
-            () => gitService.resetFileToHead(body.path),
-          ),
-          workspaceMutationCoordinator,
-        }));
-      } catch (error) {
-        handleApiError(req, res, error, '[api] Failed to reset git file:', 'Failed to reset git file');
-      }
-      return true;
-    }
-
-    return false;
+    return true;
   };
 }

@@ -8,9 +8,7 @@ const INLINE_PLACEHOLDERS = Object.freeze({
 const LINK_LABEL_PLACEHOLDER = 'link text';
 const LINK_URL_PLACEHOLDER = 'https://';
 const IMAGE_ALT_PLACEHOLDER = 'alt text';
-const IMAGE_URL_PLACEHOLDER = 'https://';
 const VIDEO_LABEL_PLACEHOLDER = 'Video';
-const VIDEO_URL_PLACEHOLDER = 'https://';
 const CODE_BLOCK_PLACEHOLDER = 'code';
 const TABLE_HEADERS = Object.freeze(['Column 1', 'Column 2']);
 const TABLE_CELL_PLACEHOLDER = 'Value';
@@ -98,99 +96,19 @@ function looksLikeUrl(value) {
   return /^https?:\/\//i.test(value.trim());
 }
 
-function formatLink(text, range) {
+function formatLink(text, range, prefix, labelPlaceholder) {
   const selected = text.slice(range.from, range.to);
-  if (selected.length > 0 && looksLikeUrl(selected)) {
-    return {
-      anchor: range.from + 1,
-      from: range.from,
-      head: range.from + 1 + LINK_LABEL_PLACEHOLDER.length,
-      insert: `[${LINK_LABEL_PLACEHOLDER}](${selected})`,
-      to: range.to,
-    };
-  }
-
-  if (selected.length > 0) {
-    const prefix = `[${selected}](`;
-    return {
-      anchor: range.from + prefix.length,
-      from: range.from,
-      head: range.from + prefix.length + LINK_URL_PLACEHOLDER.length,
-      insert: `${prefix}${LINK_URL_PLACEHOLDER})`,
-      to: range.to,
-    };
-  }
+  const selectedIsUrl = looksLikeUrl(selected);
+  const selectUrl = selected.length > 0 && !selectedIsUrl;
+  const label = selectUrl ? selected : labelPlaceholder;
+  const url = selectedIsUrl ? selected : LINK_URL_PLACEHOLDER;
+  const anchor = range.from + prefix.length + (selectUrl ? label.length + 2 : 0);
 
   return {
-    anchor: range.from + 1,
+    anchor,
     from: range.from,
-    head: range.from + 1 + LINK_LABEL_PLACEHOLDER.length,
-    insert: `[${LINK_LABEL_PLACEHOLDER}](${LINK_URL_PLACEHOLDER})`,
-    to: range.to,
-  };
-}
-
-function formatImage(text, range) {
-  const selected = text.slice(range.from, range.to);
-  if (selected.length > 0 && looksLikeUrl(selected)) {
-    return {
-      anchor: range.from + 2,
-      from: range.from,
-      head: range.from + 2 + IMAGE_ALT_PLACEHOLDER.length,
-      insert: `![${IMAGE_ALT_PLACEHOLDER}](${selected})`,
-      to: range.to,
-    };
-  }
-
-  if (selected.length > 0) {
-    const prefix = `![${selected}](`;
-    return {
-      anchor: range.from + prefix.length,
-      from: range.from,
-      head: range.from + prefix.length + IMAGE_URL_PLACEHOLDER.length,
-      insert: `${prefix}${IMAGE_URL_PLACEHOLDER})`,
-      to: range.to,
-    };
-  }
-
-  return {
-    anchor: range.from + 2,
-    from: range.from,
-    head: range.from + 2 + IMAGE_ALT_PLACEHOLDER.length,
-    insert: `![${IMAGE_ALT_PLACEHOLDER}](${IMAGE_URL_PLACEHOLDER})`,
-    to: range.to,
-  };
-}
-
-function formatVideo(text, range) {
-  const selected = text.slice(range.from, range.to);
-
-  if (selected.length > 0 && looksLikeUrl(selected)) {
-    return {
-      anchor: range.from + 2,
-      from: range.from,
-      head: range.from + 2 + VIDEO_LABEL_PLACEHOLDER.length,
-      insert: `![${VIDEO_LABEL_PLACEHOLDER}](${selected})`,
-      to: range.to,
-    };
-  }
-
-  if (selected.length > 0) {
-    const prefix = `![${selected}](`;
-    return {
-      anchor: range.from + prefix.length,
-      from: range.from,
-      head: range.from + prefix.length + VIDEO_URL_PLACEHOLDER.length,
-      insert: `${prefix}${VIDEO_URL_PLACEHOLDER})`,
-      to: range.to,
-    };
-  }
-
-  return {
-    anchor: range.from + 2,
-    from: range.from,
-    head: range.from + 2 + VIDEO_LABEL_PLACEHOLDER.length,
-    insert: `![${VIDEO_LABEL_PLACEHOLDER}](${VIDEO_URL_PLACEHOLDER})`,
+    head: anchor + (selectUrl ? url.length : label.length),
+    insert: `${prefix}${label}](${url})`,
     to: range.to,
   };
 }
@@ -450,13 +368,13 @@ export function createMarkdownToolbarEdit(documentText, selectionRange, action) 
       edit = wrapInline(text, range, '`', INLINE_PLACEHOLDERS.code);
       break;
     case 'link':
-      edit = formatLink(text, range);
+      edit = formatLink(text, range, '[', LINK_LABEL_PLACEHOLDER);
       break;
     case 'image':
-      edit = formatImage(text, range);
+      edit = formatLink(text, range, '![', IMAGE_ALT_PLACEHOLDER);
       break;
     case 'video':
-      edit = formatVideo(text, range);
+      edit = formatLink(text, range, '![', VIDEO_LABEL_PLACEHOLDER);
       break;
     case 'paragraph':
       edit = formatParagraph(text, range);

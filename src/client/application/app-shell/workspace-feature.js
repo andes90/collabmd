@@ -129,50 +129,21 @@ export const workspaceFeature = {
     );
   },
 
-  schedulePreviewLayoutSync({ delayMs = 120 } = {}) {
-    this.workspacePreviewController.schedulePreviewLayoutSync({
-      delayMs,
-      hydrationPaused: this._previewHydrationPaused,
-      previewLayoutSyncTimer: this._previewLayoutSyncTimer,
-      setPendingPreviewLayoutSync: (value) => {
-        this._pendingPreviewLayoutSync = value;
-      },
-      setPreviewLayoutSyncTimer: (value) => {
-        this._previewLayoutSyncTimer = value;
-      },
-    });
+  schedulePreviewLayoutSync(options) {
+    this.workspacePreviewController.schedulePreviewLayoutSync(options);
   },
 
   handleEditorScrollActivityChange(isActive) {
-    this.workspacePreviewController.handleEditorScrollActivityChange({
-      isActive,
-      pendingPreviewLayoutSync: this._pendingPreviewLayoutSync,
-      previewLayoutSyncTimer: this._previewLayoutSyncTimer,
-      setHydrationPaused: (value) => {
-        this._previewHydrationPaused = value;
-      },
-      setPendingPreviewLayoutSync: (value) => {
-        this._pendingPreviewLayoutSync = value;
-      },
-      setPreviewLayoutSyncTimer: (value) => {
-        this._previewLayoutSyncTimer = value;
-      },
-    });
+    this.workspacePreviewController.handleEditorScrollActivityChange(isActive);
   },
 
   showEmptyState() {
-    clearTimeout(this._previewLayoutSyncTimer);
-    this._previewLayoutSyncTimer = null;
-    this._pendingPreviewLayoutSync = false;
-    this._previewHydrationPaused = false;
+    this.workspacePreviewController.resetPreviewLayoutSync();
     this.workspaceRouteController.showEmptyState();
   },
 
   showDiffState() {
-    clearTimeout(this._previewLayoutSyncTimer);
-    this._previewLayoutSyncTimer = null;
-    this._pendingPreviewLayoutSync = false;
-    this._previewHydrationPaused = false;
+    this.workspacePreviewController.resetPreviewLayoutSync();
     this.workspaceRouteController.showDiffState();
   },
 

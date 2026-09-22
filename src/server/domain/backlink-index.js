@@ -49,7 +49,6 @@ export class BacklinkIndex {
     /** @type {Set<string>} file path membership set */
     this._fileSet = new Set();
     this._wikiTargetIndex = createWikiTargetIndex(this._fileList);
-    this._built = false;
     this._requestedBuildVersion = 0;
     this._completedBuildVersion = 0;
     this._buildPromise = null;
@@ -141,7 +140,7 @@ export class BacklinkIndex {
     this.rawTargetKeysBySource.clear();
     this.rawTargetSources.clear();
 
-    const snapshot = workspaceState ?? await this._resolveWorkspaceState();
+    const snapshot = workspaceState ?? await this.vaultFileStore.scanWorkspaceState();
     this._fileList = Array.from(snapshot?.filePaths ?? snapshot?.markdownPaths ?? []);
     this._fileSet = new Set(this._fileList);
     this._sourceFileList = Array.from(
@@ -165,21 +164,7 @@ export class BacklinkIndex {
       }
     }
 
-    this._built = true;
     console.log(`[backlinks] Index built: ${this._sourceFileList.length} markdown sources, ${this._fileList.length} targets, ${this.reverse.size} targets with backlinks`);
-  }
-
-  async _resolveWorkspaceState() {
-    if (typeof this.vaultFileStore.scanWorkspaceState === 'function') {
-      return this.vaultFileStore.scanWorkspaceState();
-    }
-
-    const tree = await this.vaultFileStore.tree();
-    const filePaths = flattenTree(tree);
-    return {
-      filePaths,
-      markdownPaths: filePaths.filter((filePath) => isMarkdownFilePath(filePath)),
-    };
   }
 
   /**
@@ -469,13 +454,6 @@ export class BacklinkIndex {
     return results;
   }
 
-  /**
-   * Get the count of backlinks for a file (cheap — no I/O).
-   */
-  getBacklinkCount(filePath) {
-    return this.reverse.get(filePath)?.size ?? 0;
-  }
-
   // --- Private methods ---
 
   _indexFile(filePath, content, { targetPathAliases = new Map() } = {}) {
@@ -620,17 +598,4 @@ export class BacklinkIndex {
       this.updateFile(livePath, content, { refreshIndex: false, targetPathAliases });
     }
   }
-}
-
-/** Flatten a vault tree into an array of file paths. */
-function flattenTree(nodes) {
-  const files = [];
-  for (const node of nodes) {
-    if (node.type && node.type !== 'directory') {
-      files.push(node.path);
-    } else if (node.children) {
-      files.push(...flattenTree(node.children));
-    }
-  }
-  return files;
 }

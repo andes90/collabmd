@@ -7,6 +7,7 @@ import sharp from 'sharp';
 
 import { createImageBuffer, createOrientedJpegBuffer } from './helpers/image-fixtures.js';
 import { VaultFileStore } from '../../src/server/infrastructure/persistence/vault-file-store.js';
+import { createWorkspaceTree } from '../../src/server/domain/workspace-state.js';
 
 async function createVaultStore() {
   const vaultDir = await mkdtemp(join(tmpdir(), 'collabmd-vault-'));
@@ -71,7 +72,8 @@ test('VaultFileStore rejects leaf, parent and dangling symlinks for reads and mu
   assert.equal((await store.renameDirectory('linked', 'moved')).ok, false);
   assert.equal((await store.deleteDirectory('linked', { recursive: true })).ok, false);
   assert.equal((await store.createDirectory('linked/new')).ok, false);
-  assert.equal((await store.tree()).some((entry) => ['leaf.md', 'dangling.md', 'linked'].includes(entry.name)), false);
+  const tree = createWorkspaceTree((await store.scanWorkspaceState()).entries);
+  assert.equal(tree.some((entry) => ['leaf.md', 'dangling.md', 'linked'].includes(entry.name)), false);
   assert.equal(await readFile(join(outside, 'secret.md'), 'utf8'), 'outside');
   assert.equal(await pathExists(join(outside, 'missing.md')), false);
   assert.equal(await pathExists(join(outside, 'new')), false);
@@ -102,7 +104,7 @@ test('VaultFileStore reads file tree with directories and markdown files', async
   const { store, cleanup } = await createVaultStore();
   t.after(cleanup);
 
-  const tree = await store.tree();
+  const tree = createWorkspaceTree((await store.scanWorkspaceState()).entries);
   assert.ok(Array.isArray(tree));
 
   const dir = tree.find((n) => n.name === 'notes');
@@ -412,7 +414,7 @@ test('VaultFileStore persists hidden comment sidecars alongside vault files', as
   assert.equal(writeResult.ok, true);
   assert.deepEqual(await store.readCommentThreads('README.md'), threads);
 
-  const tree = await store.tree();
+  const tree = createWorkspaceTree((await store.scanWorkspaceState()).entries);
   assert.equal(tree.some((node) => node.name === '.collabmd'), false);
 
   const renameResult = await store.renameFile('README.md', 'renamed.md');
@@ -552,7 +554,7 @@ test('VaultFileStore includes empty directories in the file tree', async (t) => 
   const result = await store.createDirectory('drafts');
   assert.equal(result.ok, true);
 
-  const tree = await store.tree();
+  const tree = createWorkspaceTree((await store.scanWorkspaceState()).entries);
   const drafts = tree.find((node) => node.name === 'drafts');
   assert.ok(drafts);
   assert.equal(drafts.type, 'directory');
@@ -684,7 +686,7 @@ test('VaultFileStore converts PNG attachments to WebP next to their source markd
   assert.equal(attachment?.mimeType, 'image/webp');
   assert.equal((await sharp(attachment?.content).metadata()).format, 'webp');
 
-  const tree = await store.tree();
+  const tree = createWorkspaceTree((await store.scanWorkspaceState()).entries);
   const assetsDirectory = tree.find((node) => node.name === 'assets');
   assert.ok(assetsDirectory);
   assert.equal(assetsDirectory.type, 'directory');

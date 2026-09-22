@@ -23,7 +23,6 @@ it('gates untrusted HTML scripts behind per-render consent', async () => {
       ensureRenderHost: () => renderHost,
       normalizePreviewChildren() {},
     },
-    schedulePreviewLayoutSync() {},
     scrollSyncController: {
       invalidatePreviewBlocks() {},
       setLargeDocumentMode() {},
@@ -94,9 +93,15 @@ setTimeout(() => parent.postMessage({ source: 'html-preview-test', hash: locatio
   controller.setHtmlPreviewMaximized(true);
   expect(shell.classList.contains('is-maximized')).toBe(true);
   expect(document.body.classList.contains('html-preview-maximized-open')).toBe(true);
+  controller.renderHtmlFilePreview({ content: '<p>Updated while maximized</p>' });
+  shell = renderHost.firstElementChild;
+  expect(shell.classList.contains('is-maximized')).toBe(true);
+  expect(document.body.classList.contains('html-preview-maximized-open')).toBe(true);
+  expect(shell.querySelector('iframe').srcdoc).toContain('Updated while maximized');
   controller.setHtmlPreviewMaximized(false);
   expect(document.body.classList.contains('html-preview-maximized-open')).toBe(false);
 
+  controller.resetPreviewLayoutSync();
   window.removeEventListener('message', handleMessage);
   renderHost.remove();
 });

@@ -72,13 +72,6 @@
   line-height: 1.35;
 }
 
-.ui-record-copy {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
-}
-
 .ui-record-title {
   min-width: 0;
   overflow: hidden;

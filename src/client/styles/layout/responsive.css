@@ -311,11 +311,6 @@
     flex: 1;
   }
 
-  .diff-toolbar-actions-group-git .ui-action-button {
-    flex: 1;
-    min-width: 0;
-  }
-
   .diff-toolbar-actions-divider {
     display: none;
   }

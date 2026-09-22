@@ -369,6 +369,34 @@ test('WorkspaceRouteController resets into diff mode and keeps navigation helper
   ]);
 });
 
+test('WorkspaceRouteController keeps historical files selected while resetting the editor session', () => {
+  for (const [method, editorVisible] of [['showFileHistoryState', false], ['showPreviewOnlyState', true]]) {
+    const { controller, currentFilePath, events, previewContent, session, sessionLoadToken } = createController();
+
+    controller[method]('docs/history.md');
+
+    assert.equal(session(), null);
+    assert.equal(sessionLoadToken(), 1);
+    assert.equal(currentFilePath(), 'docs/history.md');
+    assert.equal(previewContent.innerHTML, '');
+    assert.equal(previewContent.dataset.renderPhase, 'ready');
+    assert.deepEqual(events.slice(0, 10), [
+      ['diff-hide'],
+      ['session-token', 1],
+      ['clear-bootstrap'],
+      ['cleanup-session'],
+      ['session', null],
+      ['reset-preview'],
+      ['layout-reset'],
+      ['current-file', 'docs/history.md'],
+      ['lobby-file', null],
+      ['explorer-active', 'docs/history.md'],
+    ]);
+    assert.deepEqual(controller.elements.editorPage.classList.events, [[editorVisible ? 'remove' : 'add', 'hidden']]);
+    assert.deepEqual(controller.elements.diffPage.classList.events, [[editorVisible ? 'add' : 'remove', 'hidden']]);
+  }
+});
+
 test('WorkspaceRouteController reveals the file tree once for quick-switcher opens without changing navigation semantics', async () => {
   const { controller, events } = createController();
 

@@ -75,11 +75,16 @@ For completion:
 
 `check` runs lint, guardrails, unit (which builds), integration, and browser tests.
 `npm test` runs guardrails, unit (which builds), integration, browser, and E2E;
-it does **not** include lint. `:prebuilt` commands assume a current build and
-are useful after `check`, not as standalone clean-checkout verification.
+it does **not** include lint. `test:integration:prebuilt` assumes a current build
+and is useful after `check`, not as standalone clean-checkout verification.
+`test:e2e:prebuilt` remains a compatibility alias for `test:e2e`; every Playwright
+run builds its own temporary client bundle before starting workers.
 
 Playwright's app fixture starts isolated servers with temporary copies of
-`test-vault/` and `dist/client/`; it does not edit the committed fixture vault.
+`test-vault/` and that completed client bundle; it does not edit the committed
+fixture vault or read `dist/client/`. In-process test servers use the same private
+build, so concurrent development builds cannot remove assets under running tests.
+Playwright removes the private build after the run.
 Inspect `test-results/` traces, screenshots, and error context before retrying.
 If Chromium fails before launch with an OS/sandbox permission error, resolve the
 execution permission rather than modifying tests or disabling coverage.

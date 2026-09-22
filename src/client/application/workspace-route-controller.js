@@ -171,11 +171,6 @@ export class WorkspaceRouteController {
     this.elements.emptyState?.classList.remove('hidden');
     this.elements.editorPage?.classList.add('hidden');
     this.elements.diffPage?.classList.add('hidden');
-    if (this.elements.previewContent) {
-      this.elements.previewContent.innerHTML = '';
-      this.elements.previewContent.dataset.renderPhase = 'ready';
-    }
-    this.videoEmbed?.reconcileEmbeds(this.elements.previewContent);
     this.resetPreviewSurface();
 
     this.renderAvatars();
@@ -187,8 +182,7 @@ export class WorkspaceRouteController {
     }
   }
 
-  showDiffState() {
-    this.fileHistoryView?.hide?.();
+  prepareGitView(filePath = null) {
     this.setSessionLoadToken(this.getSessionLoadToken() + 1);
     this.clearInitialFileBootstrap();
     this.clearStaticPreviewDocument?.();
@@ -196,18 +190,18 @@ export class WorkspaceRouteController {
     this.setSession(null);
     this.resetPreviewMode();
     this.layoutController.reset();
-    this.setCurrentFilePath(null);
+    this.setCurrentFilePath(filePath);
     this.lobby.setCurrentFile(null);
-    this.fileExplorer.setActiveFile(null);
+    this.fileExplorer.setActiveFile(filePath);
+  }
+
+  showDiffState() {
+    this.fileHistoryView?.hide?.();
+    this.prepareGitView();
 
     this.elements.emptyState?.classList.add('hidden');
     this.elements.editorPage?.classList.add('hidden');
     this.elements.diffPage?.classList.remove('hidden');
-    if (this.elements.previewContent) {
-      this.elements.previewContent.innerHTML = '';
-      this.elements.previewContent.dataset.renderPhase = 'ready';
-    }
-    this.videoEmbed?.reconcileEmbeds(this.elements.previewContent);
     this.resetPreviewSurface();
 
     this.elements.outlineToggle?.classList.add('hidden');
@@ -220,25 +214,11 @@ export class WorkspaceRouteController {
 
   showFileHistoryState(filePath) {
     this.gitDiffView.hide();
-    this.setSessionLoadToken(this.getSessionLoadToken() + 1);
-    this.clearInitialFileBootstrap();
-    this.clearStaticPreviewDocument?.();
-    this.workspaceCoordinator.cleanupSession();
-    this.setSession(null);
-    this.resetPreviewMode();
-    this.layoutController.reset();
-    this.setCurrentFilePath(filePath);
-    this.lobby.setCurrentFile(null);
-    this.fileExplorer.setActiveFile(filePath);
+    this.prepareGitView(filePath);
 
     this.elements.emptyState?.classList.add('hidden');
     this.elements.editorPage?.classList.add('hidden');
     this.elements.diffPage?.classList.remove('hidden');
-    if (this.elements.previewContent) {
-      this.elements.previewContent.innerHTML = '';
-      this.elements.previewContent.dataset.renderPhase = 'ready';
-    }
-    this.videoEmbed?.reconcileEmbeds(this.elements.previewContent);
     this.resetPreviewSurface();
 
     this.elements.outlineToggle?.classList.add('hidden');
@@ -252,25 +232,11 @@ export class WorkspaceRouteController {
   showPreviewOnlyState(filePath) {
     this.gitDiffView.hide();
     this.fileHistoryView?.hide?.();
-    this.setSessionLoadToken(this.getSessionLoadToken() + 1);
-    this.clearInitialFileBootstrap();
-    this.clearStaticPreviewDocument?.();
-    this.workspaceCoordinator.cleanupSession();
-    this.setSession(null);
-    this.resetPreviewMode();
-    this.layoutController.reset();
-    this.setCurrentFilePath(filePath);
-    this.lobby.setCurrentFile(null);
-    this.fileExplorer.setActiveFile(filePath);
+    this.prepareGitView(filePath);
 
     this.elements.emptyState?.classList.add('hidden');
     this.elements.editorPage?.classList.remove('hidden');
     this.elements.diffPage?.classList.add('hidden');
-    if (this.elements.previewContent) {
-      this.elements.previewContent.innerHTML = '';
-      this.elements.previewContent.dataset.renderPhase = 'ready';
-    }
-    this.videoEmbed?.reconcileEmbeds(this.elements.previewContent);
     this.resetPreviewSurface();
 
     this.elements.markdownToolbar?.classList.add('hidden');
@@ -376,6 +342,11 @@ export class WorkspaceRouteController {
   }
 
   resetPreviewSurface() {
+    if (this.elements.previewContent) {
+      this.elements.previewContent.innerHTML = '';
+      this.elements.previewContent.dataset.renderPhase = 'ready';
+    }
+    this.videoEmbed?.reconcileEmbeds(this.elements.previewContent);
     this.imageLightbox?.close?.();
     this.previewRenderer.setHydrationPaused(false);
     this.drawioEmbed.setHydrationPaused(false);

@@ -1,7 +1,6 @@
 /* ===== FOUNDATION / UTILITIES ===== */
 
-.hidden,
-.u-hidden {
+.hidden {
   display: none !important;
 }
 

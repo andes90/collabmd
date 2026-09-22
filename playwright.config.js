@@ -22,6 +22,7 @@ const crossBrowserExcalidrawReliabilityProjects = process.env.PLAYWRIGHT_EXCALID
   : [];
 
 export default defineConfig({
+  globalSetup: './tests/e2e/helpers/global-setup.js',
   testDir: './tests/e2e',
   timeout: 45000,
   expect: {

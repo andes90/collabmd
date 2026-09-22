@@ -11,8 +11,6 @@ import {
   createWorkspaceTree,
   deriveNextWorkspaceStateForApiMutation as deriveNextWorkspaceStateFromApiMutation,
   diffWorkspaceEntries,
-  isIncrementalWorkspaceMutationAction,
-  readWorkspacePathState as readWorkspacePathStateFromAdapter,
 } from '../domain/workspace-state.js';
 
 function createEventId() {
@@ -85,18 +83,6 @@ export class WorkspaceReconciliation {
 
   getWorkspaceTree() {
     return this.workspaceTree;
-  }
-
-  isIncrementalApiAction(action) {
-    return isIncrementalWorkspaceMutationAction(action);
-  }
-
-  async readWorkspacePathState(pathValue, {
-    expectDirectory = null,
-  } = {}) {
-    return readWorkspacePathStateFromAdapter(this.workspaceStateAdapter, pathValue, {
-      expectDirectory,
-    });
   }
 
   async deriveNextWorkspaceStateForApiMutation(action, workspaceChange = {}) {
