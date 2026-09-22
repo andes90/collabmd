@@ -166,6 +166,23 @@ test('GitService reports sections and diffs for staged, unstaged, and untracked 
   assert.equal(metaDiff.files.every((file) => !('hunks' in file)), true);
 });
 
+test('GitService preserves both scopes and ordering for partially staged files', async (t) => {
+  const repoDir = await createFixtureRepository();
+  t.after(() => rm(repoDir, { force: true, recursive: true }));
+  await runGit(repoDir, ['add', 'tracked.md']);
+  await writeFile(join(repoDir, 'tracked.md'), '# Tracked\n\nbase\nupdated\nunstaged\n');
+  const service = new GitService({ vaultDir: repoDir });
+
+  for (const metaOnly of [true, false]) {
+    const diff = await service.getDiff({ metaOnly, scope: 'all' });
+    assert.deepEqual(diff.files.map((file) => file.path), ['staged.md', 'tracked.md', 'untracked.md']);
+    const tracked = diff.files.find((file) => file.path === 'tracked.md');
+    assert.equal(tracked.hasStagedChanges, true);
+    assert.equal(tracked.hasWorkingTreeChanges, true);
+    assert.equal(tracked.hasUntrackedChanges, false);
+  }
+});
+
 test('GitService keeps untracked images binary and serves historical image blobs', async (t) => {
   const repoDir = await mkdtemp(join(tmpdir(), 'collabmd-git-service-images-'));
   t.after(async () => {

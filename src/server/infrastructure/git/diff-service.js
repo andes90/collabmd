@@ -107,7 +107,6 @@ export class GitDiffService {
   }
 
   getScopedFiles(status, scope = 'working-tree', path = null) {
-    const orderedFiles = [];
     const fileMap = new Map();
     const sectionMap = createSectionMap(status.sections);
     const candidateSections = scope === 'staged'
@@ -126,13 +125,10 @@ export class GitDiffService {
         const existing = fileMap.get(file.path) ?? null;
         const merged = mergeScopedFile(existing, file, scope);
         fileMap.set(file.path, merged);
-        if (!existing) {
-          orderedFiles.push(merged);
-        }
       }
     }
 
-    return orderedFiles;
+    return Array.from(fileMap.values());
   }
 
   async getScopeSummary({
