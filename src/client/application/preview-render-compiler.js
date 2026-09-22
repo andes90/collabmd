@@ -58,41 +58,6 @@ function createHeadingId(baseId = '', headingIdCounts = new Map()) {
   return occurrenceIndex === 0 ? normalizedBaseId : `${normalizedBaseId}-${occurrenceIndex}`;
 }
 
-function createContextualHeadingBaseId(headingInfo, groupedHeadingInfos = []) {
-  if (!headingInfo?.slug) {
-    return 'section';
-  }
-
-  if (groupedHeadingInfos.length <= 1) {
-    return headingInfo.slug;
-  }
-
-  for (let depth = 1; depth <= headingInfo.parentSlugs.length; depth += 1) {
-    const candidate = [
-      ...headingInfo.parentSlugs.slice(-depth),
-      headingInfo.slug,
-    ].join('-');
-
-    const isUniqueWithinGroup = groupedHeadingInfos.every((otherInfo) => {
-      if (otherInfo === headingInfo) {
-        return true;
-      }
-
-      const otherCandidate = [
-        ...otherInfo.parentSlugs.slice(-depth),
-        otherInfo.slug,
-      ].join('-');
-      return otherCandidate !== candidate;
-    });
-
-    if (isUniqueWithinGroup) {
-      return candidate;
-    }
-  }
-
-  return headingInfo.slug;
-}
-
 function assignHeadingIds(state) {
   const headingInfos = [];
   const parentSlugs = [];
@@ -125,10 +90,29 @@ function assignHeadingIds(state) {
     headingsBySlug.set(headingInfo.slug, group);
   });
 
+  for (const group of headingsBySlug.values()) {
+    if (group.length <= 1) {
+      continue;
+    }
+
+    const maxDepth = group.reduce((depth, heading) => Math.max(depth, heading.parentSlugs.length), 0);
+    for (let depth = 1; depth <= maxDepth; depth += 1) {
+      const candidateCounts = new Map();
+      const candidates = group.map((heading) => [...heading.parentSlugs.slice(-depth), heading.slug].join('-'));
+      for (const candidate of candidates) {
+        candidateCounts.set(candidate, (candidateCounts.get(candidate) ?? 0) + 1);
+      }
+      group.forEach((heading, index) => {
+        if (!heading.baseId && depth <= heading.parentSlugs.length && candidateCounts.get(candidates[index]) === 1) {
+          heading.baseId = candidates[index];
+        }
+      });
+    }
+  }
+
   const headingIdCounts = new Map();
   headingInfos.forEach((headingInfo) => {
-    const baseId = createContextualHeadingBaseId(headingInfo, headingsBySlug.get(headingInfo.slug) ?? []);
-    headingInfo.token.attrSet('id', createHeadingId(baseId, headingIdCounts));
+    headingInfo.token.attrSet('id', createHeadingId(headingInfo.baseId ?? headingInfo.slug, headingIdCounts));
   });
 }
 
@@ -276,7 +260,7 @@ function renderInlineWikiText(content, {
   baseEmbedCounts,
   drawioEmbedCounts,
   excalidrawEmbedCounts,
-  wikiTargetIndex,
+  getWikiTargetIndex,
   mermaidEmbedCounts,
   plantUmlEmbedCounts,
   sourceFilePath = '',
@@ -349,7 +333,7 @@ function renderInlineWikiText(content, {
     } else {
       const target = match[4].trim();
       const display = (match[5] || match[4]).trim();
-      const resolved = resolveWikiTargetWithIndex(target, wikiTargetIndex);
+      const resolved = resolveWikiTargetWithIndex(target, getWikiTargetIndex());
       const classes = resolved ? 'wiki-link' : 'wiki-link wiki-link-new';
       const title = resolved
         ? normalizePreviewTypography(display)
@@ -421,7 +405,8 @@ function createMarkdownRenderer(fileList = [], {
   const plantUmlCounts = new Map();
   const plantUmlEmbedCounts = new Map();
   const videoEmbedCounts = new Map();
-  const wikiTargetIndex = createWikiTargetIndex(fileList);
+  let wikiTargetIndex;
+  const getWikiTargetIndex = () => (wikiTargetIndex ??= createWikiTargetIndex(fileList));
 
   const fallbackFence = markdown.renderer.rules.fence;
   const fallbackImage = markdown.renderer.rules.image;
@@ -505,7 +490,7 @@ function createMarkdownRenderer(fileList = [], {
         baseEmbedCounts: baseCounts,
         drawioEmbedCounts,
         excalidrawEmbedCounts,
-        wikiTargetIndex,
+        getWikiTargetIndex,
         mermaidEmbedCounts,
         plantUmlEmbedCounts,
         sourceFilePath,
@@ -519,7 +504,7 @@ function createMarkdownRenderer(fileList = [], {
         baseEmbedCounts: baseCounts,
         drawioEmbedCounts,
         excalidrawEmbedCounts,
-        wikiTargetIndex,
+        getWikiTargetIndex,
         mermaidEmbedCounts,
         plantUmlEmbedCounts,
         sourceFilePath,
@@ -532,7 +517,7 @@ function createMarkdownRenderer(fileList = [], {
       baseEmbedCounts: baseCounts,
       drawioEmbedCounts,
       excalidrawEmbedCounts,
-      wikiTargetIndex,
+      getWikiTargetIndex,
       mermaidEmbedCounts,
       plantUmlEmbedCounts,
       sourceFilePath,

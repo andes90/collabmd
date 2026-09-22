@@ -47,6 +47,36 @@ test('compilePreviewDocument emits stable excalidraw placeholder keys and wiki-l
   assert.equal(stats.plantumlBlocks, 1);
 });
 
+test('compilePreviewDocument only indexes vault paths on the first wiki lookup in each render', () => {
+  let indexBuilds = 0;
+  const paths = ['docs/Guide.md', 'archive/Guide.md', 'Guide.md'];
+  const fileList = new Proxy(paths, {
+    get(target, key, receiver) {
+      if (key === Symbol.iterator) {
+        indexBuilds += 1;
+      }
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  compilePreviewDocument({
+    fileList,
+    markdownText: '# Plain text\n\n`[[Guide]]`\n\n![[diagram.puml]]\n\n![[image.png]]',
+  });
+  assert.equal(indexBuilds, 0);
+
+  const markdownText = '[[Guide]]\n\n[[docs/Guide.md]]\n\n- [ ] [[New]]';
+  const first = compilePreviewDocument({ fileList, markdownText }).html;
+  assert.equal(indexBuilds, 1);
+  assert.equal((first.match(/class="wiki-link"/gu) ?? []).length, 2);
+  assert.match(first, /class="wiki-link wiki-link-new"[^>]*data-wiki-target="New"/u);
+
+  paths.splice(0, paths.length, 'New.md');
+  const second = compilePreviewDocument({ fileList, markdownText }).html;
+  assert.equal(indexBuilds, 2);
+  assert.match(second, /class="wiki-link wiki-link-new"[^>]*data-wiki-target="Guide"/u);
+  assert.match(second, /class="wiki-link"[^>]*data-wiki-target="New"/u);
+});
+
 test('compilePreviewDocument uses editor-supported aliases for fenced code highlighting', () => {
   for (const language of ['ecmascript', 'node']) {
     const { html } = compilePreviewDocument({
@@ -107,6 +137,30 @@ test('compilePreviewDocument uses parent context to disambiguate repeated nested
 
   assert.match(html, /<h4 [^>]*id="approach-a-pros"[^>]*>Pros<\/h4>/);
   assert.match(html, /<h4 [^>]*id="approach-b-pros"[^>]*>Pros<\/h4>/);
+});
+
+test('compilePreviewDocument preserves contextual heading IDs across depth and slug collisions', () => {
+  const markdownText = [
+    '# A', '## B', '### Example',
+    '# X', '## B', '### Example',
+    '# A-B', '## Example',
+    '# X-B-Example', '## Example', '## Example', '#### Skipped',
+    '# End', '### Skipped',
+  ].join('\n\n');
+  const { html } = compilePreviewDocument({ markdownText });
+
+  assert.deepEqual([...html.matchAll(/<h[1-6] [^>]*id="([^"]+)"/gu)].map((match) => match[1]), [
+    'a', 'a-b', 'example', 'x', 'x-b', 'x-b-example', 'a-b-1', 'a-b-example',
+    'x-b-example-1', 'example-1', 'example-2', 'example-skipped', 'end', 'end-skipped',
+  ]);
+});
+
+test('compilePreviewDocument disambiguates a large repeated heading group', () => {
+  const markdownText = Array.from({ length: 1000 }, (_, index) => `# Section ${index}\n\n## Example`).join('\n\n');
+  const { html } = compilePreviewDocument({ markdownText });
+  const ids = [...html.matchAll(/<h2 [^>]*id="([^"]+)"/gu)].map((match) => match[1]);
+
+  assert.deepEqual(ids, Array.from({ length: 1000 }, (_, index) => `section-${index}-example`));
 });
 
 test('compilePreviewDocument emits base placeholders for fenced bases and base embeds', () => {
