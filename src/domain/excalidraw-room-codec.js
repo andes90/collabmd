@@ -17,13 +17,6 @@ function cloneJsonValue(value) {
   return structuredClone(value);
 }
 
-function getRevisionKey(element) {
-  const version = Number.isFinite(Number(element?.version)) ? Number(element.version) : 0;
-  const versionNonce = Number.isFinite(Number(element?.versionNonce)) ? Number(element.versionNonce) : 0;
-  const updated = Number.isFinite(Number(element?.updated)) ? Number(element.updated) : 0;
-  return `${version}:${versionNonce}:${updated}`;
-}
-
 function compareElementVersions(left, right) {
   const leftVersion = Number(left?.version) || 0;
   const rightVersion = Number(right?.version) || 0;
@@ -95,14 +88,18 @@ function selectWinningElementFromSlot(slot) {
   }
 
   let winningElement = null;
-  slot.forEach((value) => {
+  let winningKey = '';
+  slot.forEach((value, key) => {
     const candidate = readRevisionEntry(value);
     if (!candidate || !candidate.id) {
       return;
     }
 
-    if (!winningElement || compareElementVersions(candidate, winningElement) > 0) {
+    // Y.Map iteration order can differ across replicas; equal revisions need a stable tie-break.
+    const comparison = winningElement ? compareElementVersions(candidate, winningElement) : 1;
+    if (comparison > 0 || (comparison === 0 && key > winningKey)) {
       winningElement = candidate;
+      winningKey = key;
     }
   });
 
@@ -112,12 +109,16 @@ function selectWinningElementFromSlot(slot) {
 function writeElementSlot(slot, element, {
   maxRevisions = 2,
 } = {}) {
-  const revisionKey = getRevisionKey(element);
+  // Each writer keeps its own candidate so concurrent version/nonce winners survive.
+  // ponytail: metadata grows with writers, not edits; authoritative replace compacts
+  // legacy keys. Never replace a live slot while reconnecting peers can edit it.
+  const revisionKey = `writer:${slot.doc.clientID}`;
+  const previous = readRevisionEntry(slot.get(revisionKey));
+  if (previous && compareElementVersions(element, previous) < 0) {
+    return false;
+  }
   const serialized = cloneJsonValue(element);
-  const previous = slot.get(revisionKey);
-  const previousSerialized = previous && typeof previous === 'object'
-    ? JSON.stringify(previous)
-    : '';
+  const previousSerialized = previous ? JSON.stringify(previous) : '';
   const nextSerialized = JSON.stringify(serialized);
   if (previousSerialized === nextSerialized) {
     return false;
@@ -151,7 +152,8 @@ function pruneElementSlot(slot, maxRevisions = 2) {
     if (!right.element) {
       return 1;
     }
-    return compareElementVersions(left.element, right.element);
+    return compareElementVersions(left.element, right.element)
+      || (left.key < right.key ? -1 : left.key > right.key ? 1 : 0);
   });
 
   while (revisions.length > maxRevisions) {

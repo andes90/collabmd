@@ -10,8 +10,10 @@ import { CollaborationRoom } from '../../src/server/domain/collaboration/collabo
 import { RoomRegistry } from '../../src/server/domain/collaboration/room-registry.js';
 import { createCommentThreadSharedType } from '../../src/domain/comment-threads.js';
 import {
+  EXCALIDRAW_ELEMENTS_KEY,
   EXCALIDRAW_META_KEY,
   EXCALIDRAW_SCHEMA_VERSION_KEY,
+  applySceneDiffToExcalidrawRoom,
   buildExcalidrawRoomScene,
   replaceExcalidrawRoomScene,
 } from '../../src/domain/excalidraw-room-codec.js';
@@ -492,6 +494,47 @@ test('CollaborationRoom rejects an incompatible Excalidraw snapshot schema and r
   assert.equal(snapshotWrites[0].path, 'incompatible-snapshot.excalidraw');
   staleDoc.destroy();
   await room.destroy();
+});
+
+test('CollaborationRoom keeps legacy Excalidraw snapshots intact until an intentional edit', async (t) => {
+  const legacy = new Y.Doc();
+  const element = { id: 'shape', type: 'rectangle', version: 1, versionNonce: 1, updated: 1, x: 10 };
+  const slot = new Y.Map();
+  legacy.getMap(EXCALIDRAW_ELEMENTS_KEY).set(element.id, slot);
+  slot.set('1:1:1', element);
+  legacy.getMap(EXCALIDRAW_META_KEY).set(EXCALIDRAW_SCHEMA_VERSION_KEY, 1);
+  const legacySnapshot = Y.encodeStateAsUpdate(legacy);
+  const writes = [];
+  const room = new CollaborationRoom({
+    maxBufferedAmountBytes: 1024,
+    name: 'legacy.excalidraw',
+    vaultFileStore: {
+      async readCollaborationSnapshot() { return legacySnapshot; },
+      async readEditableVaultContent() { throw new Error('snapshot should hydrate without falling back to disk content'); },
+      async persistCollaborationState(_path, state) { writes.push(state); },
+    },
+  });
+  t.after(async () => { await room.destroy(); legacy.destroy(); });
+  await room.hydrate();
+  assert.deepEqual(Y.encodeStateAsUpdate(room.doc), legacySnapshot);
+  await room.persist();
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].includeContent, false);
+  const restoredSlot = room.doc.getMap(EXCALIDRAW_ELEMENTS_KEY).get(element.id);
+
+  room.doc.transact(() => {
+    applySceneDiffToExcalidrawRoom(room.doc, {
+      elements: [{ ...element, version: 2, updated: 2, x: 20 }],
+    });
+  }, 'collaborator-edit');
+  await room.persist();
+  assert.equal(writes[1].includeContent, true);
+  assert.equal(JSON.parse(writes[1].content).elements[0].x, 20);
+  assert.equal(room.doc.getMap(EXCALIDRAW_ELEMENTS_KEY).get(element.id), restoredSlot);
+  const restored = new Y.Doc();
+  Y.applyUpdate(restored, writes[1].snapshot);
+  assert.deepEqual(buildExcalidrawRoomScene(restored), JSON.parse(writes[1].content));
+  restored.destroy();
 });
 
 test('CollaborationRoom reloads live room content from disk without scheduling a persist', async (t) => {
