@@ -1,5 +1,6 @@
 import {
   BASE_FILE_EXTENSION,
+  CANVAS_FILE_EXTENSION,
   DRAWIO_FILE_EXTENSION,
   EXCALIDRAW_FILE_EXTENSION,
   HTML_FILE_EXTENSIONS,
@@ -64,6 +65,14 @@ const EXCALIDRAW_CREATION_EXAMPLES = [
 ].map((example) => JSON.stringify(example));
 
 const CAPABILITIES = Object.freeze({
+  canvas: {
+    agentCreatable: false,
+    agentEditable: false,
+    editable: true,
+    extensions: [CANVAS_FILE_EXTENSION],
+    guide: 'Standard JSON Canvas 1.0 document edited collaboratively in CollabMD. Collaboration metadata is stored separately. Agent writes are disabled.',
+    examples: ['{"nodes": [], "edges": []}'],
+  },
   base: {
     agentCreatable: true,
     agentEditable: true,
@@ -167,7 +176,7 @@ export function getCollabMdContentCapability(kindOrPath) {
     commentsSupported: commentPath ? supportsCommentsForFilePath(commentPath) : false,
     kind,
     readable: capability.editable,
-    searchable: kind !== 'image' && kind !== 'pdf',
+    searchable: kind !== 'image' && kind !== 'pdf' && kind !== 'canvas',
   };
 }
 

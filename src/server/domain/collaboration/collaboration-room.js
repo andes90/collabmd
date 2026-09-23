@@ -14,7 +14,21 @@ import {
 import { CollaborationDocumentStore } from './collaboration-document-store.js';
 import { logPerfEvent } from '../../config/perf-logging.js';
 import { populateCommentThreads, serializeCommentThreads } from '../../../domain/comment-threads.js';
-import { getVaultFileKind } from '../../../domain/file-kind.js';
+import { getVaultFileKind, isCanvasFilePath } from '../../../domain/file-kind.js';
+import {
+  buildCanvasRoomDocument,
+  CANVAS_EDGES_KEY,
+  CANVAS_EDGE_ORDER_KEY,
+  CANVAS_META_KEY,
+  CANVAS_NODES_KEY,
+  CANVAS_NODE_ORDER_KEY,
+  isCanvasRoomDocStructured,
+  mergeCanvasDocuments,
+  parseCanvasJson,
+  replaceCanvasRoomDocument,
+  serializeCanvasDocument,
+  serializeCanvasRoomDocument,
+} from '../../../domain/canvas-room-codec.js';
 import {
   applySceneDiffToExcalidrawRoom,
   EXCALIDRAW_APP_STATE_KEY,
@@ -292,7 +306,28 @@ export class CollaborationRoom {
             if (snapshot) {
               snapshotExists = true;
               try {
-                if (isExcalidrawRoom(this.name)) {
+                if (isCanvasFilePath(this.name)) {
+                  const validationDoc = new Y.Doc({ gc: true });
+                  try {
+                    Y.applyUpdate(validationDoc, snapshot, 'hydrate');
+                    const stored = serializeCanvasRoomDocument(validationDoc);
+                    const content = await this.documentStore.readContent();
+                    const meta = validationDoc.getMap(CANVAS_META_KEY);
+                    if (meta.has('externalConflict')) {
+                      let invalid = false;
+                      try { parseCanvasJson(content); } catch { invalid = true; }
+                      meta.set('externalConflict', { content, invalid });
+                    } else {
+                      const external = parseCanvasJson(content);
+                      if (stored !== serializeCanvasDocument(external)) {
+                        replaceCanvasRoomDocument(validationDoc, external);
+                      }
+                    }
+                    Y.applyUpdate(this.doc, Y.encodeStateAsUpdate(validationDoc), 'hydrate');
+                  } finally {
+                    validationDoc.destroy();
+                  }
+                } else if (isExcalidrawRoom(this.name)) {
                   const validationDoc = new Y.Doc({ gc: true });
                   try {
                     Y.applyUpdate(validationDoc, snapshot, 'hydrate');
@@ -332,7 +367,13 @@ export class CollaborationRoom {
               const ytext = this.doc.getText('codemirror');
               const comments = this.doc.getArray('comments');
               this.doc.transact(() => {
-                if (isExcalidrawRoom(this.name)) {
+                if (isCanvasFilePath(this.name)) {
+                  try {
+                    replaceCanvasRoomDocument(this.doc, parseCanvasJson(content));
+                  } catch {
+                    this.doc.getMap(CANVAS_META_KEY).set('invalidContent', true);
+                  }
+                } else if (isExcalidrawRoom(this.name)) {
                   const parsedScene = tryParseExcalidrawSceneJson(content);
                   if (parsedScene) {
                     migrateLegacyExcalidrawRoomData(this.doc, parsedScene);
@@ -346,7 +387,7 @@ export class CollaborationRoom {
               }, 'hydrate');
 
               const replacementSnapshot = Y.encodeStateAsUpdate(this.doc);
-              if (snapshotNeedsReplacement) {
+              if (snapshotNeedsReplacement || isCanvasFilePath(this.name)) {
                 await this.documentStore.writeSnapshot(replacementSnapshot);
               } else {
                 void this.documentStore.writeSnapshot(replacementSnapshot).catch((error) => {
@@ -462,6 +503,13 @@ export class CollaborationRoom {
       this.contentDirty = true;
     };
 
+    if (isCanvasFilePath(this.name)) {
+      for (const key of [CANVAS_NODES_KEY, CANVAS_EDGES_KEY, CANVAS_NODE_ORDER_KEY, CANVAS_EDGE_ORDER_KEY, CANVAS_META_KEY]) {
+        this.doc.getMap(key).observeDeep((_events, transaction) => markFromTransaction(transaction));
+      }
+      return;
+    }
+
     if (isExcalidrawRoom(this.name)) {
       this.doc.getMap(EXCALIDRAW_ELEMENTS_KEY).observeDeep((_events, transaction) => {
         markFromTransaction(transaction);
@@ -482,6 +530,12 @@ export class CollaborationRoom {
 
   resetContentBaseline() {
     this.persistedContentBaseline = this.getPersistedContent();
+    if (isCanvasFilePath(this.name)) {
+      const conflict = this.doc.getMap(CANVAS_META_KEY).get('externalConflict');
+      if (conflict) {
+        this.persistedContentBaseline = conflict.invalid ? null : serializeCanvasDocument(parseCanvasJson(conflict.content));
+      }
+    }
     this.contentDirty = false;
   }
 
@@ -555,15 +609,38 @@ export class CollaborationRoom {
         return;
       }
 
-      const content = this.getPersistedContent();
+      let content = this.getPersistedContent();
       if (content === null) {
-        console.warn(`[room:${this.name}] Skipping persist because the Excalidraw scene is invalid`);
+        console.warn(`[room:${this.name}] Skipping persist because the document is invalid`);
         return;
+      }
+      if (isCanvasFilePath(this.name) && content !== this.persistedContentBaseline && !this.doc.getMap(CANVAS_META_KEY).has('externalConflict')) {
+        const externalContent = await this.documentStore.readContent();
+        if (this.deleted || this.destroyed) return;
+        if (externalContent === null) {
+          this.markDeleted();
+          return;
+        }
+        let externalBaseline = null;
+        let invalid = false;
+        try { externalBaseline = serializeCanvasDocument(parseCanvasJson(externalContent)); } catch { invalid = true; }
+        content = this.getPersistedContent();
+        if (content === null) return;
+        // A filesystem observation may still be queued when the save timer fires.
+        if (externalBaseline !== this.persistedContentBaseline) {
+          this.persistedContentBaseline = externalBaseline;
+          if (externalBaseline !== content) {
+            this.doc.transact(() => {
+              this.doc.getMap(CANVAS_META_KEY).set('externalConflict', { content: externalContent, invalid });
+            }, 'workspace-reconcile');
+          }
+        }
       }
       // Compare inline: refreshContentDirty() would serialize the document
       // a second time for the same check.
-      const includeContent = content !== this.persistedContentBaseline;
-      this.contentDirty = includeContent;
+      const conflict = isCanvasFilePath(this.name) && this.doc.getMap(CANVAS_META_KEY).has('externalConflict');
+      this.contentDirty = content !== this.persistedContentBaseline;
+      const includeContent = this.contentDirty && !conflict;
       const commentThreads = serializeCommentThreads(this.doc.getArray('comments'));
       await this.documentStore.persistState({
         commentThreads,
@@ -616,6 +693,46 @@ export class CollaborationRoom {
     }
 
     const comments = this.doc.getArray('comments');
+    if (isCanvasFilePath(this.name)) {
+      let external;
+      try {
+        external = parseCanvasJson(content);
+      } catch {
+        this.doc.transact(() => {
+          this.doc.getMap(CANVAS_META_KEY).set('externalConflict', { content, invalid: true });
+        }, 'workspace-reconcile');
+        this.persistedContentBaseline = null;
+        // Preserve the pending document in a sidecar while the invalid file remains untouched.
+        await this.persist();
+        return { ok: false, reason: 'invalid-canvas' };
+      }
+
+      const meta = this.doc.getMap(CANVAS_META_KEY);
+      const current = this.getPersistedContent();
+      const hasPendingChanges = current !== null && current !== this.persistedContentBaseline;
+      const reconciliation = hasPendingChanges && this.persistedContentBaseline !== null
+        ? mergeCanvasDocuments(parseCanvasJson(this.persistedContentBaseline), buildCanvasRoomDocument(this.doc), external)
+        : { conflict: hasPendingChanges, document: external };
+      const hadConflict = meta.has('externalConflict');
+      this.doc.transact(() => {
+        if (reconciliation.conflict || hadConflict) {
+          meta.set('externalConflict', { content, invalid: false });
+        } else {
+          replaceCanvasRoomDocument(this.doc, reconciliation.document);
+          meta.delete('invalidContent');
+        }
+        if (replaceCommentThreads) {
+          if (comments.length > 0) comments.delete(0, comments.length);
+          populateCommentThreads(comments, commentThreads);
+        }
+      }, 'workspace-reconcile');
+      this.persistedContentBaseline = serializeCanvasDocument(external);
+      this.refreshContentDirty();
+      if (this.contentDirty && !meta.has('externalConflict')) this.schedulePersist();
+      else await this.persist();
+      return { ok: true, highlightRange: null, conflict: meta.has('externalConflict') };
+    }
+
     if (isExcalidrawRoom(this.name)) {
       const parsedExcalidrawScene = tryParseExcalidrawSceneJson(content);
       if (!parsedExcalidrawScene) {
@@ -913,14 +1030,14 @@ export class CollaborationRoom {
   }
 
   readEditableContent() {
-    if (!this.hydrated || this.deleted || this.destroyed || isExcalidrawRoom(this.name)) {
+    if (!this.hydrated || this.deleted || this.destroyed || isExcalidrawRoom(this.name) || isCanvasFilePath(this.name)) {
       return null;
     }
     return this.doc.getText('codemirror').toString();
   }
 
   applyExactTextChanges(changes, { origin = 'agent' } = {}) {
-    if (!this.hydrated || this.deleted || this.destroyed || isExcalidrawRoom(this.name)) {
+    if (!this.hydrated || this.deleted || this.destroyed || isExcalidrawRoom(this.name) || isCanvasFilePath(this.name)) {
       throw new Error('The collaborative document is unavailable');
     }
     const ytext = this.doc.getText('codemirror');
@@ -956,6 +1073,14 @@ export class CollaborationRoom {
 
     if (isDrawioLeaseRoom(this.name)) {
       return null;
+    }
+
+    if (isCanvasFilePath(this.name)) {
+      try {
+        return isCanvasRoomDocStructured(this.doc) ? serializeCanvasRoomDocument(this.doc) : null;
+      } catch {
+        return null;
+      }
     }
 
     if (!isExcalidrawRoom(this.name)) {
@@ -1023,7 +1148,20 @@ export class CollaborationRoom {
           const encoder = encoding.createEncoder();
           encoding.writeVarUint(encoder, MSG_AGENT_FLUSH_ACK);
           encoding.writeVarString(encoder, requestId);
-          sendMessage.call(this, ws, encoding.toUint8Array(encoder), this);
+          const acknowledge = () => sendMessage.call(this, ws, encoding.toUint8Array(encoder), this);
+          if (isCanvasFilePath(this.name)) {
+            const available = () => this.hydrated && !this.deleted && !this.destroyed
+              && this.documentStore?.hasPersistence() && this.getPersistedContent() !== null;
+            if (available()) {
+              void this.persist().then(() => {
+                if (available()) acknowledge();
+              }).catch((error) => {
+                console.error(`[room:${this.name}] Failed to persist canvas before flush acknowledgement:`, error.message);
+              });
+            }
+          } else {
+            acknowledge();
+          }
           break;
         }
 

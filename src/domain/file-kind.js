@@ -1,6 +1,7 @@
 const MARKDOWN_FILE_EXTENSIONS = Object.freeze(['.md', '.markdown', '.mdx']);
 const HTML_FILE_EXTENSIONS = Object.freeze(['.html', '.htm']);
 const BASE_FILE_EXTENSION = '.base';
+const CANVAS_FILE_EXTENSION = '.canvas';
 const EXCALIDRAW_FILE_EXTENSION = '.excalidraw';
 const DRAWIO_FILE_EXTENSION = '.drawio';
 const MERMAID_FILE_EXTENSIONS = Object.freeze(['.mmd', '.mermaid']);
@@ -10,6 +11,7 @@ const STRUCTURIZR_FILE_EXTENSIONS = Object.freeze([STRUCTURIZR_FILE_EXTENSION]);
 const PDF_FILE_EXTENSION = '.pdf';
 const IMAGE_ATTACHMENT_EXTENSIONS = Object.freeze(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg']);
 const DIAGRAM_FILE_EXTENSIONS = Object.freeze([
+  CANVAS_FILE_EXTENSION,
   EXCALIDRAW_FILE_EXTENSION,
   DRAWIO_FILE_EXTENSION,
   ...MERMAID_FILE_EXTENSIONS,
@@ -24,7 +26,7 @@ const VAULT_FILE_EXTENSIONS = Object.freeze([
   PDF_FILE_EXTENSION,
   ...IMAGE_ATTACHMENT_EXTENSIONS,
 ]);
-const STRIP_VAULT_EXTENSION_PATTERN = /\.(?:md|markdown|mdx|html?|base|excalidraw|drawio|mmd|mermaid|puml|plantuml|dsl|pdf|png|jpe?g|webp|gif|svg)$/i;
+const STRIP_VAULT_EXTENSION_PATTERN = /\.(?:md|markdown|mdx|html?|base|canvas|excalidraw|drawio|mmd|mermaid|puml|plantuml|dsl|pdf|png|jpe?g|webp|gif|svg)$/i;
 
 function normalizeFilePath(filePath) {
   return String(filePath ?? '').trim().toLowerCase();
@@ -37,6 +39,7 @@ function hasFileExtension(filePath, extensions) {
 
 export {
   BASE_FILE_EXTENSION,
+  CANVAS_FILE_EXTENSION,
   DIAGRAM_FILE_EXTENSIONS,
   DRAWIO_FILE_EXTENSION,
   EXCALIDRAW_FILE_EXTENSION,
@@ -62,6 +65,10 @@ export function getVaultFileKind(filePath) {
 
   if (hasFileExtension(filePath, [BASE_FILE_EXTENSION])) {
     return 'base';
+  }
+
+  if (hasFileExtension(filePath, [CANVAS_FILE_EXTENSION])) {
+    return 'canvas';
   }
 
   if (hasFileExtension(filePath, [EXCALIDRAW_FILE_EXTENSION])) {
@@ -129,6 +136,10 @@ export function isExcalidrawFilePath(filePath) {
   return getVaultFileKind(filePath) === 'excalidraw';
 }
 
+export function isCanvasFilePath(filePath) {
+  return getVaultFileKind(filePath) === 'canvas';
+}
+
 export function isBaseFilePath(filePath) {
   return getVaultFileKind(filePath) === 'base';
 }
@@ -160,6 +171,7 @@ export function isImageAttachmentFilePath(filePath) {
 export function isDiagramFilePath(filePath) {
   const kind = getVaultFileKind(filePath);
   return kind === 'excalidraw'
+    || kind === 'canvas'
     || kind === 'drawio'
     || kind === 'mermaid'
     || kind === 'plantuml'

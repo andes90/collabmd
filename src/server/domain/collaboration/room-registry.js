@@ -1,3 +1,5 @@
+import { getVaultFileKind } from '../../../domain/file-kind.js';
+
 export class RoomRegistry {
   constructor({ createRoom }) {
     this.createRoom = createRoom;
@@ -30,6 +32,10 @@ export class RoomRegistry {
     if (!oldName || !newName || oldName === newName) {
       return false;
     }
+
+    const oldKind = getVaultFileKind(oldName);
+    const newKind = getVaultFileKind(newName);
+    if (oldKind !== newKind && [oldKind, newKind].includes('canvas')) return false;
 
     const room = this.rooms.get(oldName);
     if (!room) {
@@ -122,7 +128,7 @@ export class RoomRegistry {
           }
 
           const result = await room.reloadFromDisk?.();
-          if (result && result.ok === false && result.reason === 'invalid-excalidraw') {
+          if (result && result.ok === false && ['invalid-excalidraw', 'invalid-canvas'].includes(result.reason)) {
             reloadRequiredPaths.push(pathValue);
           } else if (result?.highlightRange) {
             highlightRanges.push({

@@ -53,6 +53,7 @@ test('editable text normalization and revision are stable', async () => {
 test('CollabMD capability registry distinguishes supported and agent-writable content', () => {
   const kinds = listCollabMdContentCapabilities().map(({ kind }) => kind);
   assert.deepEqual(kinds, [
+    'canvas',
     'base',
     'drawio',
     'excalidraw',
@@ -68,6 +69,8 @@ test('CollabMD capability registry distinguishes supported and agent-writable co
   assert.equal(isAgentCreatablePath('views/tasks.base'), true);
   assert.equal(getCollabMdContentCapability('views/tasks.base').agentEditable, true);
   assert.equal(isAgentCreatablePath('drawing.excalidraw'), false);
+  assert.equal(getCollabMdContentCapability('planning.canvas').editable, true);
+  assert.equal(getCollabMdContentCapability('planning.canvas').agentEditable, false);
   assert.equal(getCollabMdContentCapability('drawing.excalidraw').agentCreatable, true);
   assert.equal(getCollabMdContentCapability('diagram.mmd').kind, 'mermaid');
   assert.match(getCollabMdSyntaxGuide('markdown').guide, /wiki-links/);

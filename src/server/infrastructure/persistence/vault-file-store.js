@@ -11,6 +11,7 @@ import {
   isVaultFilePath,
   supportsCommentsForFilePath,
 } from '../../../domain/file-kind.js';
+import { parseCanvasJson } from '../../../domain/canvas-room-codec.js';
 import { createCommentOverview } from '../../domain/comment-overview.js';
 import { scanWorkspaceState as scanWorkspaceStateFromAdapter } from '../../domain/workspace-state.js';
 import {
@@ -26,6 +27,7 @@ import {
 
 const EDITABLE_VAULT_CONTENT_PATH_ERRORS = {
   base: 'Invalid file path — must end in .base',
+  canvas: 'Invalid file path — must end in .canvas',
   drawio: 'Invalid file path — must end in .drawio',
   excalidraw: 'Invalid file path — must end in .excalidraw',
   html: 'Invalid file path — must end in .html or .htm',
@@ -34,6 +36,19 @@ const EDITABLE_VAULT_CONTENT_PATH_ERRORS = {
   plantuml: 'Invalid file path — must end in .puml or .plantuml',
   structurizr: 'Invalid file path — must end in .dsl',
 };
+
+function getContentValidationError(filePath, content) {
+  if (getVaultFileKind(filePath) !== 'canvas') return null;
+  try {
+    const text = content instanceof Uint8Array
+      ? new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(content)
+      : content;
+    parseCanvasJson(text);
+    return null;
+  } catch {
+    return 'Invalid JSON Canvas 1.0 document';
+  }
+}
 
 function getEditableVaultContentKind(filePath) {
   const kind = getVaultFileKind(filePath);
@@ -65,6 +80,7 @@ const RASTER_IMAGE_MIME_TYPES_TO_CONVERT = new Set(['image/jpeg', 'image/png']);
 const RASTER_IMAGE_EXTENSIONS_TO_CONVERT = new Set(['.jpeg', '.jpg', '.png']);
 const TEXT_FILE_MIME_TYPES = Object.freeze({
   base: 'text/yaml; charset=utf-8',
+  canvas: 'application/json; charset=utf-8',
   drawio: 'application/xml; charset=utf-8',
   excalidraw: 'application/json; charset=utf-8',
   html: 'text/html; charset=utf-8',
@@ -376,6 +392,9 @@ export class VaultFileStore {
       };
     }
 
+    const validationError = getContentValidationError(filePath, content);
+    if (validationError) return { ok: false, error: validationError };
+
     try {
       await this.runManagedWrite([filePath], async () => {
         await mkdir(dirname(resolved.absolute), { recursive: true });
@@ -568,6 +587,9 @@ export class VaultFileStore {
       };
     }
 
+    const validationError = includeContent && getContentValidationError(filePath, content);
+    if (validationError) return { ok: false, error: validationError };
+
     const commentPath = this.sidecarStore.getCommentThreadPath(filePath);
     const snapshotPath = this.sidecarStore.getSnapshotPath(filePath);
     if (!commentPath || !snapshotPath) {
@@ -705,6 +727,9 @@ export class VaultFileStore {
     if (!absolute) {
       return { ok: false, error };
     }
+
+    const validationError = getContentValidationError(filePath, content);
+    if (validationError) return { ok: false, error: validationError };
 
     try {
       await stat(absolute);

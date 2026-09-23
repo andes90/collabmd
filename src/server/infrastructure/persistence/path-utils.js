@@ -1,10 +1,10 @@
 import { lstatSync } from 'node:fs';
 import { isAbsolute, join, normalize, relative, resolve } from 'path';
 
-import { isVaultFilePath } from '../../../domain/file-kind.js';
+import { getVaultFileKind, isVaultFilePath } from '../../../domain/file-kind.js';
 
 export const IGNORED_DIRECTORIES = new Set(['.git', '.obsidian', '.trash', 'node_modules', '.DS_Store']);
-export const VAULT_FILE_PATH_REQUIREMENT = '.md, .markdown, .mdx, .html, .htm, .base, .excalidraw, .drawio, .mmd, .mermaid, .puml, .plantuml, .dsl, .pdf, .png, .jpg, .jpeg, .webp, .gif, or .svg';
+export const VAULT_FILE_PATH_REQUIREMENT = '.md, .markdown, .mdx, .html, .htm, .base, .canvas, .excalidraw, .drawio, .mmd, .mermaid, .puml, .plantuml, .dsl, .pdf, .png, .jpg, .jpeg, .webp, .gif, or .svg';
 export const INVALID_VAULT_FILE_PATH_ERROR = `Invalid file path — must end in ${VAULT_FILE_PATH_REQUIREMENT}`;
 export const INVALID_DIRECTORY_PATH_ERROR = 'Invalid directory path';
 
@@ -117,6 +117,12 @@ export function resolveVaultRenamePaths(vaultDir, oldPath, newPath) {
       absoluteOld: null,
       error: `New path must be a vault file (${VAULT_FILE_PATH_REQUIREMENT})`,
     };
+  }
+
+  const oldKind = getVaultFileKind(absoluteOld);
+  const newKind = getVaultFileKind(absoluteNew);
+  if (oldKind !== newKind && [oldKind, newKind].includes('canvas')) {
+    return { absoluteNew: null, absoluteOld: null, error: 'Canvas files must keep the .canvas extension' };
   }
 
   return { absoluteNew, absoluteOld, error: null };
