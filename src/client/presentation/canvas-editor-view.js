@@ -66,6 +66,7 @@ export class CanvasEditorView {
     this.selection = new Set();
     this.document = { nodes: [], edges: [] };
     this.viewport = { x: 80, y: 80, zoom: 1 };
+    this.lastWheelPan = -Infinity;
     this.canEdit = false;
     this.selectedEdge = null;
     this.activeEditor = null;
@@ -169,12 +170,27 @@ export class CanvasEditorView {
     }, { signal });
     this.stage.addEventListener('drop', (event) => { void this.dropFile(event); }, { signal });
     this.stage.addEventListener('wheel', (event) => {
-      if (event.target.closest('.canvas-selection-toolbar, .canvas-navigation, .canvas-toolbar')) return;
-      if (!event.ctrlKey && !event.metaKey && !this.spaceHeld && event.target.closest('.canvas-card-content, .canvas-text-editor')) return;
+      if (event.defaultPrevented || event.target.closest('.canvas-selection-toolbar, .canvas-navigation, .canvas-toolbar')) return;
+      const zooming = event.ctrlKey || event.metaKey || this.spaceHeld;
+      const content = event.target.closest('.canvas-card-content');
+      // Keep panning across cards until a pause allows a new content-scroll gesture.
+      if (!zooming && content && event.timeStamp - this.lastWheelPan > 200) {
+        const horizontal = event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY);
+        const delta = horizontal && !event.shiftKey ? event.deltaX : event.deltaY;
+        for (let target = event.target; content.contains(target); target = target.parentElement) {
+          const style = getComputedStyle(target);
+          if (!/(auto|scroll)/.test(style[horizontal ? 'overflowX' : 'overflowY'])) continue;
+          const position = horizontal ? target.scrollLeft : target.scrollTop;
+          const maximum = horizontal ? target.scrollWidth - target.clientWidth : target.scrollHeight - target.clientHeight;
+          if (delta < 0 ? position > 0 : delta > 0 && position < maximum - 1) return;
+          if (style[horizontal ? 'overscrollBehaviorX' : 'overscrollBehaviorY'] !== 'auto') break;
+        }
+      }
       event.preventDefault();
-      if (event.ctrlKey || event.metaKey || this.spaceHeld) {
+      if (zooming) {
         this.zoomBy(Math.exp(-event.deltaY * 0.005), event.clientX, event.clientY);
       } else {
+        this.lastWheelPan = event.timeStamp;
         this.viewport.x -= event.shiftKey ? event.deltaY : event.deltaX;
         this.viewport.y -= event.shiftKey ? 0 : event.deltaY;
         this.applyViewport();
@@ -182,6 +198,7 @@ export class CanvasEditorView {
     }, { signal, passive: false });
     this.root.addEventListener('keydown', (event) => this.onKeyDown(event), { signal });
     this.root.addEventListener('pointerdown', (event) => {
+      this.lastWheelPan = -Infinity;
       [this.colorMenu, this.helpMenu].forEach((menu) => { if (!menu.contains(event.target)) menu.open = false; });
     }, { signal, capture: true });
     window.addEventListener('keyup', (event) => { if (event.code === 'Space') this.spaceHeld = false; }, { signal });

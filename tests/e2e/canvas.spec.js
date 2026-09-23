@@ -199,6 +199,59 @@ test('canvas supports keyboard selection and closes a text editor replaced by an
   expect(errors).toEqual([]);
 });
 
+test('canvas wheel panning crosses cards while long previews and text editors remain scrollable', async ({ page, e2eServer }) => {
+  const content = await createFixture(page, JSON.stringify({
+    nodes: [card('short', 'Short card'), card('long', 'A long paragraph.\n\n'.repeat(60), 350)], edges: [],
+  }));
+  const frame = await openCanvas(page);
+  const world = frame.locator('.canvas-world');
+  const short = frame.locator('[data-node-id="short"] .canvas-card-content');
+  const long = frame.locator('[data-node-id="long"] .canvas-card-content');
+  await expect(long).toContainText('A long paragraph.');
+  const fit = frame.getByRole('button', { name: 'Fit canvas', exact: true });
+
+  await short.hover();
+  const initial = await world.getAttribute('style');
+  await page.mouse.wheel(0, 40);
+  await expect.poll(() => world.getAttribute('style')).not.toBe(initial);
+  expect(await short.evaluate((element) => element.scrollTop)).toBe(0);
+
+  await fit.click();
+  const bounds = await long.boundingBox();
+  const startY = await world.evaluate((element) => new DOMMatrix(element.style.transform).m42);
+  // The first wheel moves the card beneath the pointer; the next must keep panning.
+  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y - 20);
+  await page.mouse.wheel(0, 40);
+  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y - 19);
+  await page.mouse.wheel(0, 40);
+  await expect.poll(() => world.evaluate((element) => new DOMMatrix(element.style.transform).m42)).toBeCloseTo(startY - 80, 0);
+  expect(await long.evaluate((element) => element.scrollTop)).toBe(0);
+
+  await fit.click();
+  await long.click();
+  const reading = await world.getAttribute('style');
+  await page.mouse.wheel(0, 80);
+  await expect.poll(() => long.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  expect(await world.getAttribute('style')).toBe(reading);
+  await long.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+  await page.mouse.wheel(0, 40);
+  await expect.poll(() => world.getAttribute('style')).not.toBe(reading);
+
+  await fit.click();
+  await long.evaluate((element) => { element.scrollTop = 0; });
+  const editor = await editText(frame, 'long');
+  const scroller = frame.locator('.canvas-text-editor .cm-scroller');
+  const editing = await world.getAttribute('style');
+  await scroller.hover();
+  await page.mouse.wheel(0, 80);
+  await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  expect(await world.getAttribute('style')).toBe(editing);
+  await editor.press('Escape');
+  await page.locator('.file-tree-file[data-path="README.md"]').click();
+  await expect(page.locator('.canvas-file-preview-frame')).toHaveCount(0);
+  expect(await readFile(join(e2eServer.vaultDir, path), 'utf8')).toBe(content);
+});
+
 test('canvas pans by touch on mobile and restores Markdown controls for notes', async ({ page, e2eServer }) => {
   const content = await createFixture(page);
   const frame = await openCanvas(page);
