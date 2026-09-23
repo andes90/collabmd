@@ -17,7 +17,7 @@ The durable user-facing files inside a **Vault**, including markdown files, Base
 _Avoid_: Hosted metadata, sidecar data, repository metadata
 
 **Editable Vault Content**:
-The subset of **Vault Content** that CollabMD reads and writes as editor text, including markdown files, Base files, Excalidraw JSON, draw.io XML, Mermaid diagrams, and PlantUML diagrams. Attachments are **Vault Content** but not editable vault content.
+The subset of **Vault Content** that CollabMD reads and writes as editor text, including markdown files, Base files, JSON Canvas, Excalidraw JSON, draw.io XML, Mermaid diagrams, and PlantUML diagrams. Attachments are **Vault Content** but not editable vault content.
 _Avoid_: Attachment, binary content, sidecar data
 
 **Open-only File Session**:

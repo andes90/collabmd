@@ -7,6 +7,7 @@ instead.
 - [development.md](development.md) — setup, commands, and tests
 - [architecture.md](architecture.md) — layer boundaries and import rules
 - [comment-overview.md](comment-overview.md) — comment feature notes
+- [obsidian-canvas-ux-reference.md](obsidian-canvas-ux-reference.md) — Canvas interaction comparison and UI priorities
 - [mcp-webmcp-exploration.md](mcp-webmcp-exploration.md) — agent retrieval and authoring changes, measurements, and remaining evaluation
 - [hosted-workspace-local-testing.md](hosted-workspace-local-testing.md) — hosted workspace local checklist
 - [adr/](adr/) — architecture decision records
