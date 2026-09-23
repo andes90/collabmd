@@ -12,6 +12,21 @@ function createWindowStub() {
   };
 }
 
+test('VaultApiClient keeps explicit file reads pinned to their Vault after the active Vault changes', async (t) => {
+  const requests = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    requests.push(url);
+    return Response.json({ ok: true, tree: [], content: '# Guide' });
+  });
+  const originalWindow = globalThis.window;
+  globalThis.window = { localStorage: { getItem: () => 'other' } };
+  t.after(() => { globalThis.window = originalWindow; });
+  const config = { basePath: '/app', activeVault: 'canvas', vaults: [{ id: 'canvas' }] };
+  await vaultApiClient.readTree(config);
+  await vaultApiClient.readFile('notes/guide.md', config);
+  assert.deepEqual(requests, ['/app/api/v/canvas/files', '/app/api/v/canvas/file?path=notes%2Fguide.md']);
+});
+
 test('VaultApiClient prefixes vault endpoints with the configured base path', async (t) => {
   const originalFetch = globalThis.fetch;
   const originalWindow = globalThis.window;

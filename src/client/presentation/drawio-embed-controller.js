@@ -59,7 +59,6 @@ export class DrawioEmbedController {
     this.hydrationIdleId = null;
     this.hydrationQueue = [];
     this._exitMaximizedEntry();
-    document.body.classList.remove('drawio-maximized-open');
     this.embedEntries.forEach((entry) => entry.wrapper?.remove());
     this.embedEntries.clear();
     this.overlayRoot?.remove();
@@ -637,7 +636,6 @@ export class DrawioEmbedController {
     const entry = this.maximizedEntry;
     if (!entry?.wrapper) {
       this.maximizedEntry = null;
-      document.body.classList.remove('drawio-maximized-open');
       return;
     }
 
@@ -656,7 +654,7 @@ export class DrawioEmbedController {
     entry.restoreParent = null;
     entry.restoreNextSibling = null;
     this.maximizedEntry = null;
-    document.body.classList.remove('drawio-maximized-open');
+    document.body.classList.toggle('drawio-maximized-open', Boolean(document.body.querySelector('.drawio-embed.is-maximized')));
     this.overlayRoot?.classList.remove('has-maximized-entry');
     this.syncEntryLayout(entry);
   }

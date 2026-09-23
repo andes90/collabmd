@@ -80,6 +80,7 @@ export class PreviewRenderExecutor {
   async compile(markdownText, renderVersion, {
     frontmatterCollapsed = false,
     frontmatterInteractive = false,
+    subpath = '',
   } = {}) {
     const worker = this.ensureWorker();
 
@@ -102,6 +103,7 @@ export class PreviewRenderExecutor {
           markdownText,
           renderVersion,
           sourceFilePath: this.getSourceFilePath?.() ?? '',
+          subpath,
           wikiLinkAutoCreate: this.getWikiLinkAutoCreate?.() ?? true,
         });
       });
@@ -115,6 +117,7 @@ export class PreviewRenderExecutor {
       frontmatterInteractive,
       markdownText,
       sourceFilePath: this.getSourceFilePath?.() ?? '',
+      subpath,
       wikiLinkAutoCreate: this.getWikiLinkAutoCreate?.() ?? true,
     });
   }

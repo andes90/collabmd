@@ -202,8 +202,9 @@ function createMermaidHarness(hooks) {
     },
   };
   const mermaid = {
-    async run({ nodes }) {
-      hooks.runCalls.push(nodes.length);
+    async render(id, source) {
+      hooks.runCalls.push({ id, source });
+      return { svg: MERMAID_TEST_MARKUP };
     },
   };
   const hydrator = new MermaidPreviewHydrator(renderer, {});

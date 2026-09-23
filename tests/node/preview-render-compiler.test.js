@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { compilePreviewDocument } from '../../src/client/application/preview-render-compiler.js';
+import { getMarkdownHeadings } from '../../src/client/domain/markdown-headings.js';
 import {
   LARGE_DOCUMENT_CHAR_THRESHOLD,
   analyzeMarkdownComplexity,
@@ -161,6 +162,17 @@ test('compilePreviewDocument disambiguates a large repeated heading group', () =
   const ids = [...html.matchAll(/<h2 [^>]*id="([^"]+)"/gu)].map((match) => match[1]);
 
   assert.deepEqual(ids, Array.from({ length: 1000 }, (_, index) => `section-${index}-example`));
+});
+
+test('compilePreviewDocument selects repeated headings using the shared Canvas heading IDs', () => {
+  const markdownText = '# A\n\n## Example\n\nFirst section\n\n# B\n\n## Example\n\nSecond section\n\n# End';
+  const headings = getMarkdownHeadings(markdownText).filter(({ text }) => text === 'Example');
+  assert.deepEqual(headings.map(({ id }) => id), ['a-example', 'b-example']);
+
+  const { html } = compilePreviewDocument({ markdownText, subpath: `#${headings[1].id}` });
+  assert.match(html, /<h2 [^>]*id="b-example"[^>]*>Example<\/h2>/u);
+  assert.match(html, /Second section/u);
+  assert.doesNotMatch(html, /First section|>End<|id="a-example"/u);
 });
 
 test('compilePreviewDocument emits base placeholders for fenced bases and base embeds', () => {

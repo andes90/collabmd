@@ -93,12 +93,12 @@ export class DiagramPreviewHydrator {
       return [];
     }
 
-    const documentShells = previewElement.ownerDocument?.querySelectorAll?.(this.shellSelector);
-    if (documentShells) {
-      return Array.from(documentShells);
+    const shells = Array.from(previewElement.querySelectorAll(this.shellSelector));
+    const maximizedShell = this.renderer.diagramChrome?.syncActiveShell?.();
+    if (maximizedShell?.classList.contains(this.shellClassName) && !shells.includes(maximizedShell)) {
+      shells.push(maximizedShell);
     }
-
-    return Array.from(previewElement.querySelectorAll(this.shellSelector));
+    return shells;
   }
 
   getPreservationIdentity(shell) {

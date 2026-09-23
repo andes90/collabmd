@@ -69,6 +69,7 @@ test('PreviewRenderExecutor compiles through the worker when available', async (
     markdownText: '# Today',
     renderVersion: 7,
     sourceFilePath: '',
+    subpath: '',
     wikiLinkAutoCreate: true,
   });
 
@@ -87,7 +88,7 @@ test('PreviewRenderExecutor compiles through the worker when available', async (
   });
 });
 
-test('PreviewRenderExecutor forwards disabled wiki-link auto-create to the worker', async () => {
+test('PreviewRenderExecutor forwards section selection and disabled wiki-link auto-create to the worker', async () => {
   const worker = createFakeWorker();
   const executor = new PreviewRenderExecutor({
     createWorkerFn: () => worker,
@@ -95,9 +96,10 @@ test('PreviewRenderExecutor forwards disabled wiki-link auto-create to the worke
     getWikiLinkAutoCreate: () => false,
   });
 
-  const resultPromise = executor.compile('# Today', 8);
+  const resultPromise = executor.compile('# Today', 8, { subpath: '#today' });
 
   assert.equal(worker.lastMessage.wikiLinkAutoCreate, false);
+  assert.equal(worker.lastMessage.subpath, '#today');
 
   worker.dispatch('message', {
     data: {
@@ -138,4 +140,3 @@ test('PreviewRenderExecutor reuses the worker across superseded compiles', async
   await assert.rejects(firstPromise, /Superseded preview render/);
   assert.deepEqual(await secondPromise, { html: '<h1>Two</h1>', stats: {} });
 });
-

@@ -8,6 +8,7 @@ import {
   resolveWikiTargetWithIndex,
 } from '../../domain/wiki-link-resolver.js';
 import { classifyPublicVideoEmbed } from '../../domain/video-embed.js';
+import { assignHeadingIds, findMarkdownSection } from '../domain/markdown-headings.js';
 import { highlightFence } from '../domain/highlight-runtime.js';
 import { escapeHtml } from '../domain/vault-utils.js';
 import { extractYamlFrontmatter } from '../../domain/yaml-frontmatter.js';
@@ -40,80 +41,6 @@ function normalizePreviewTypography(content = '') {
 
 function escapePreviewText(content = '') {
   return escapeHtml(normalizePreviewTypography(content));
-}
-
-function createHeadingSlug(content = '') {
-  return String(content ?? '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    || 'section';
-}
-
-function createHeadingId(baseId = '', headingIdCounts = new Map()) {
-  const normalizedBaseId = String(baseId ?? '').trim() || 'section';
-  const occurrenceIndex = headingIdCounts.get(normalizedBaseId) ?? 0;
-  headingIdCounts.set(normalizedBaseId, occurrenceIndex + 1);
-  return occurrenceIndex === 0 ? normalizedBaseId : `${normalizedBaseId}-${occurrenceIndex}`;
-}
-
-function assignHeadingIds(state) {
-  const headingInfos = [];
-  const parentSlugs = [];
-
-  state.tokens.forEach((token, index) => {
-    if (token.type !== 'heading_open' || token.attrGet('id')) {
-      return;
-    }
-
-    const level = Number.parseInt(token.tag.slice(1), 10);
-    if (!Number.isFinite(level) || level < 1) {
-      return;
-    }
-
-    parentSlugs.length = Math.max(level - 1, 0);
-    const inlineToken = state.tokens[index + 1];
-    const slug = createHeadingSlug(inlineToken?.type === 'inline' ? inlineToken.content : '');
-    headingInfos.push({
-      parentSlugs: parentSlugs.filter(Boolean),
-      slug,
-      token,
-    });
-    parentSlugs[level - 1] = slug;
-  });
-
-  const headingsBySlug = new Map();
-  headingInfos.forEach((headingInfo) => {
-    const group = headingsBySlug.get(headingInfo.slug) ?? [];
-    group.push(headingInfo);
-    headingsBySlug.set(headingInfo.slug, group);
-  });
-
-  for (const group of headingsBySlug.values()) {
-    if (group.length <= 1) {
-      continue;
-    }
-
-    const maxDepth = group.reduce((depth, heading) => Math.max(depth, heading.parentSlugs.length), 0);
-    for (let depth = 1; depth <= maxDepth; depth += 1) {
-      const candidateCounts = new Map();
-      const candidates = group.map((heading) => [...heading.parentSlugs.slice(-depth), heading.slug].join('-'));
-      for (const candidate of candidates) {
-        candidateCounts.set(candidate, (candidateCounts.get(candidate) ?? 0) + 1);
-      }
-      group.forEach((heading, index) => {
-        if (!heading.baseId && depth <= heading.parentSlugs.length && candidateCounts.get(candidates[index]) === 1) {
-          heading.baseId = candidates[index];
-        }
-      });
-    }
-  }
-
-  const headingIdCounts = new Map();
-  headingInfos.forEach((headingInfo) => {
-    headingInfo.token.attrSet('id', createHeadingId(headingInfo.baseId ?? headingInfo.slug, headingIdCounts));
-  });
 }
 
 function renderSafeInlineBreaks(content = '') {
@@ -576,6 +503,7 @@ export function compilePreviewDocument({
   frontmatterInteractive = false,
   markdownText = '',
   sourceFilePath = '',
+  subpath = '',
   wikiLinkAutoCreate = true,
 } = {}) {
   const normalizedMarkdown = String(markdownText);
@@ -586,13 +514,36 @@ export function compilePreviewDocument({
     wikiLinkAutoCreate,
   });
   const renderedMarkdown = frontmatter ? frontmatter.bodyMarkdown : normalizedMarkdown;
-  const frontmatterHtml = renderFrontmatterBlock(frontmatter, {
+  const env = {};
+  let tokens = renderer.parse(renderedMarkdown, env);
+  if (subpath) {
+    const section = subpath.startsWith('#') && findMarkdownSection(tokens, subpath.slice(1));
+    if (!section) {
+      return {
+        html: `<p>${subpath.startsWith('#^')
+          ? 'Block previews are not supported. Open the file to view it.'
+          : 'Heading not found in this file. Choose another heading or clear the field to show the whole file.'}</p>`,
+        stats: analyzeMarkdownComplexity(''),
+      };
+    }
+    // Keep enclosing blocks balanced, original heading IDs and full-document reference definitions.
+    const includedBlocks = [];
+    tokens = tokens.filter((token) => {
+      if (token.nesting === -1) return includedBlocks.pop();
+      const included = token.map
+        ? token.map[1] > section.startLine && (section.endLine === undefined || token.map[0] < section.endLine)
+        : includedBlocks.at(-1);
+      if (token.nesting === 1) includedBlocks.push(included);
+      return included;
+    });
+  }
+  const frontmatterHtml = subpath ? '' : renderFrontmatterBlock(frontmatter, {
     collapsed: frontmatterCollapsed,
     interactive: frontmatterInteractive,
   });
 
   return {
-    html: `${frontmatterHtml}${renderer.render(renderedMarkdown)}`,
+    html: `${frontmatterHtml}${renderer.renderer.render(tokens, renderer.options, env)}`,
     stats: analyzeMarkdownComplexity(normalizedMarkdown),
   };
 }

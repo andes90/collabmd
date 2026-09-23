@@ -27,8 +27,8 @@ async function triggerDownload(url, {
 }
 
 export const vaultApiClient = {
-  async readTree() {
-    const response = await fetch(resolveApiUrl('/files'));
+  async readTree(config) {
+    const response = await fetch(resolveApiUrl('/files', config));
     return parseApiResponse(response, 'Failed to load file tree');
   },
   async callAgentTool(name, input, { signal } = {}) {
@@ -46,8 +46,8 @@ export const vaultApiClient = {
     return parseApiResponse(response, 'Failed to load comment overview');
   },
 
-  async readFile(path) {
-    const response = await fetch(resolveApiUrl(`/file?path=${encodeURIComponent(path)}`));
+  async readFile(path, config) {
+    const response = await fetch(resolveApiUrl(`/file?path=${encodeURIComponent(path)}`, config));
     return parseApiResponse(response, 'Failed to read file');
   },
 

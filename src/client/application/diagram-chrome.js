@@ -90,13 +90,14 @@ export class DiagramChrome {
     this.maximizedRoots.forEach((root) => root.remove());
     this.maximizedRoots.clear();
     this.activeMaximizedShell = null;
+    this.syncBodyMaximizedClasses();
   }
 
   destroyAllShells() {
     this.resizeObservers.forEach((observer) => observer.disconnect());
     this.resizeObservers.clear();
     this.activeMaximizedShell = null;
-    this.document.body.classList.remove('mermaid-maximized-open', 'plantuml-maximized-open');
+    this.syncBodyMaximizedClasses();
   }
 
   destroyShell(shell) {
@@ -147,7 +148,7 @@ export class DiagramChrome {
         root.hidden = true;
       }
     });
-    this.document.body.classList.remove('mermaid-maximized-open', 'plantuml-maximized-open');
+    this.syncBodyMaximizedClasses();
   }
 
   syncActiveShell() {
@@ -189,13 +190,10 @@ export class DiagramChrome {
       return existing;
     }
 
-    let root = this.document.body.querySelector(`[data-${kind}-maximized-root="true"]`);
-    if (!root) {
-      root = this.document.createElement('div');
-      root.dataset[config.maximizedRootDatasetKey] = 'true';
-      root.className = config.maximizedRootClassName;
-      this.document.body.appendChild(root);
-    }
+    const root = this.document.createElement('div');
+    root.dataset[config.maximizedRootDatasetKey] = 'true';
+    root.className = config.maximizedRootClassName;
+    this.document.body.appendChild(root);
 
     this.maximizedRoots.set(kind, root);
     return root;
@@ -235,11 +233,10 @@ export class DiagramChrome {
   }
 
   syncBodyMaximizedClasses() {
-    const activeShell = this.syncActiveShell();
     for (const [kind, config] of Object.entries(DIAGRAM_CHROME_KIND_CONFIG)) {
       this.document.body.classList.toggle(
         config.bodyClassName,
-        Boolean(activeShell?.classList?.contains(`${kind}-shell`)),
+        Boolean(this.document.querySelector?.(`.${kind}-shell.is-maximized`)),
       );
     }
   }

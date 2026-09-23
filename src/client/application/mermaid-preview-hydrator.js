@@ -217,7 +217,6 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
 
       const diagram = document.createElement('div');
       diagram.className = 'mermaid mermaid-render-node';
-      diagram.id = shell.dataset.mermaidKey || `mermaid-${Date.now()}`;
       const sourceLine = shell.getAttribute('data-source-line');
       const sourceLineEnd = shell.getAttribute('data-source-line-end');
       if (sourceLine) {
@@ -231,7 +230,7 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
       const renderHost = this.createRenderHost();
       try {
         renderHost.appendChild(diagram);
-        await mermaid.run({ nodes: [diagram] });
+        const { svg, bindFunctions } = await mermaid.render(`mermaid-${crypto.randomUUID()}`, source, diagram);
         if (
           !this.isHydrationCurrent(renderVersion, shell, hydrationToken)
           || !diagram.isConnected
@@ -240,6 +239,8 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
           return;
         }
 
+        diagram.innerHTML = svg;
+        bindFunctions?.(diagram);
         this.enhanceDiagram(shell, diagram, renderedSource, renderCacheKey);
         this.markShellHydrated(shell);
       } finally {

@@ -406,6 +406,56 @@ test('prepareFileDisconnect requires explicit discard after reconnect timeout', 
   }
 });
 
+test('replays a pending disconnect when a starting iframe becomes ready', async () => {
+  const originalWindow = globalThis.window;
+  const messages = [];
+  const entry = {
+    filePath: 'starting.excalidraw',
+    iframe: { contentWindow: {} },
+    isReady: false,
+  };
+  globalThis.window = {
+    clearTimeout() {},
+    location: { origin: 'http://localhost:4173' },
+    setTimeout: () => 1,
+  };
+
+  try {
+    const controller = Object.assign(Object.create(ExcalidrawEmbedController.prototype), {
+      disconnectRequestCounter: 0,
+      embedEntries: new Map([[entry.filePath, entry]]),
+      pendingDisconnectRequests: new Map(),
+      _clearEntryBootTimeout() {},
+      _entryNeedsHardReload: () => false,
+      _postMessageToEntry: (_entry, payload) => messages.push(payload),
+      _setEntryLoadingState() {},
+      _syncEntryFollowState() {},
+      _syncEntryUser() {},
+    });
+    const result = controller.prepareFileDisconnect(entry.filePath);
+    const requestId = messages[0].requestId;
+    // The first message can arrive before the iframe installs its listener.
+    controller._onMessage({
+      data: { source: 'excalidraw-editor', type: 'ready' },
+      origin: window.location.origin,
+      source: entry.iframe.contentWindow,
+    });
+    assert.deepEqual(messages.filter((message) => message.type === 'prepare-disconnect'), [
+      { source: 'collabmd-host', type: 'prepare-disconnect', requestId },
+      { source: 'collabmd-host', type: 'prepare-disconnect', requestId },
+    ]);
+    controller._onMessage({
+      data: { source: 'excalidraw-editor', type: 'disconnect-ready', requestId },
+      origin: window.location.origin,
+      source: entry.iframe.contentWindow,
+    });
+    assert.equal(await result, true);
+    assert.equal(controller.pendingDisconnectRequests.size, 0);
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
 test('iframe URLs forward the selected vault and opt-in Excalidraw diagnostic flag', () => {
   const originalWindow = globalThis.window;
   globalThis.window = {

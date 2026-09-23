@@ -11,6 +11,7 @@ export class PreviewRenderer {
     getFileList,
     getPreviewVisible = null,
     getSourceFilePath,
+    getSubpath = null,
     getTheme = null,
     getWikiLinkAutoCreate = null,
     loadFileSource = null,
@@ -28,6 +29,7 @@ export class PreviewRenderer {
     this.getFileList = getFileList;
     this.getPreviewVisible = getPreviewVisible;
     this.getSourceFilePath = getSourceFilePath;
+    this.getSubpath = getSubpath;
     this.getTheme = getTheme;
     this.getWikiLinkAutoCreate = getWikiLinkAutoCreate;
     this.loadFileSource = loadFileSource;
@@ -234,7 +236,9 @@ export class PreviewRenderer {
     this.renderScheduler.queue({
       markdownText,
       onRenderRequested: (queuedText, renderVersion) => {
-        void this._deferredPreviewStylesPromise.then(() => this.render(queuedText, renderVersion));
+        void this._deferredPreviewStylesPromise.then(() => {
+          if (renderVersion === this.pendingRenderVersion) return this.render(queuedText, renderVersion);
+        });
       },
       renderVersion: scheduledVersion,
     });
@@ -250,6 +254,7 @@ export class PreviewRenderer {
       const result = await this.renderExecutor.compile(markdownText, renderVersion, {
         frontmatterCollapsed: this.frontmatterCollapsed,
         frontmatterInteractive: true,
+        subpath: this.getSubpath?.() ?? '',
       });
       if (renderVersion !== this.pendingRenderVersion) {
         return;
@@ -266,6 +271,7 @@ export class PreviewRenderer {
   }
 
   destroy() {
+    this.pendingRenderVersion += 1;
     this.renderScheduler.destroy();
     this.diagramChrome.destroy();
     this.mermaidHydrator.destroy();
@@ -321,8 +327,6 @@ export class PreviewRenderer {
 
     this.mermaidHydrator.cancelHydration({ preserveActiveShell: true });
     this.plantUmlHydrator.cancelHydration({ preserveActiveShell: true });
-    document.body.classList.remove('mermaid-maximized-open');
-    document.body.classList.remove('plantuml-maximized-open');
     this.mermaidHydrator.preserveHydratedShellsForCommit();
     this.plantUmlHydrator.preserveHydratedShellsForCommit();
 
@@ -339,7 +343,7 @@ export class PreviewRenderer {
     if (this.previewContainer) this.previewContainer.scrollTop = scrollTop;
     this.setPhase('base');
 
-    this.outlineController.refresh();
+    this.outlineController?.refresh();
     this.onAfterRenderCommit?.(this.previewElement, {
       ...stats,
       isLargeDocument: this.isLargeDocument,
@@ -379,7 +383,7 @@ export class PreviewRenderer {
   }
 
   handleFrontmatterLayoutChange() {
-    this.outlineController.refresh();
+    this.outlineController?.refresh();
     this.onPreviewLayoutChange?.({
       isLargeDocument: this.isLargeDocument,
       renderVersion: this.activeRenderVersion,

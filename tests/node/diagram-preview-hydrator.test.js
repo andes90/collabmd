@@ -232,6 +232,20 @@ test('DiagramPreviewHydrator preserves matching hydrated shells across render co
   assert.deepEqual(hydrator.reconcileEvents, [{ restoredMaximizedShell: true }]);
 });
 
+test('DiagramPreviewHydrator only preserves its own preview and maximized diagram', () => {
+  const own = new FakeShell({ dataset: { diagramKey: 'own', diagramHydrated: 'true' }, source: 'own' });
+  const maximized = new FakeShell({ dataset: { diagramKey: 'max', diagramHydrated: 'true' }, source: 'max', maximized: true });
+  const other = new FakeShell({ dataset: { diagramKey: 'other', diagramHydrated: 'true' }, source: 'other' });
+  const preview = new FakePreviewElement([own]);
+  preview.ownerDocument = { querySelectorAll: () => [own, maximized, other] };
+  const renderer = createRenderer(preview);
+  renderer.diagramChrome = { syncActiveShell: () => maximized };
+  const hydrator = new TestDiagramPreviewHydrator(renderer);
+  hydrator.preserveHydratedShellsForCommit();
+  assert.deepEqual(hydrator.preservedShells.map(({ key }) => key), ['own', 'max']);
+  assert.equal(other.isConnected, true);
+});
+
 test('DiagramPreviewHydrator keeps rendered output while a fenced source changes', () => {
   const preservedShell = new FakeShell({
     dataset: {

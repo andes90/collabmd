@@ -80,7 +80,6 @@ export class ExcalidrawEmbedController {
     this.hydrationIdleId = null;
     this.hydrationQueue = [];
     this._exitMaximizedEmbed();
-    document.body.classList.remove('excalidraw-maximized-open');
 
     this.embedEntries.forEach((entry) => {
       this._clearEntryBootTimeout(entry);
@@ -880,7 +879,7 @@ export class ExcalidrawEmbedController {
       isMaximized = false;
       wrapper.classList.remove('is-maximized');
       syncMaximizeButtonState();
-      document.body.classList.remove('excalidraw-maximized-open');
+      document.body.classList.toggle('excalidraw-maximized-open', Boolean(document.body.querySelector('.excalidraw-embed.is-maximized')));
       this._restoreMaximizedEntryLayout(entry);
       iframe.style.height = restoreHeight;
       if (this.maximizedEmbed?.wrapper === wrapper) {
@@ -1346,6 +1345,15 @@ export class ExcalidrawEmbedController {
       this._syncEntryFollowState(entry);
       this._postPendingCommentThread?.(entry);
       this._postPendingElement?.(entry);
+      this.pendingDisconnectRequests?.forEach((request, requestId) => {
+        if (request.entry === entry) {
+          this._postMessageToEntry(entry, {
+            source: 'collabmd-host',
+            type: 'prepare-disconnect',
+            requestId,
+          });
+        }
+      });
       if (this._entryNeedsHardReload(entry)) {
         void this._hydrateEntry(entry);
       }
@@ -1436,7 +1444,6 @@ export class ExcalidrawEmbedController {
       this.maximizedEmbed.exit();
     }
     this.maximizedEmbed = null;
-    document.body.classList.remove('excalidraw-maximized-open');
   }
 
   _postMessageToEntry(entry, payload) {
