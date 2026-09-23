@@ -2,6 +2,12 @@
 
 :root {
   color-scheme: light dark;
+  --canvas-color-1: light-dark(#dc2626, #f87171);
+  --canvas-color-2: light-dark(#ea580c, #fb923c);
+  --canvas-color-3: light-dark(#ca8a04, #facc15);
+  --canvas-color-4: light-dark(#16a34a, #4ade80);
+  --canvas-color-5: light-dark(#0891b2, #22d3ee);
+  --canvas-color-6: light-dark(#9333ea, #c084fc);
   --pdf-highlight-bg: rgb(180 0 170 / 25%);
   --pdf-highlight-selected-bg: rgb(0 100 0 / 25%);
   --pdf-selection-bg: rgb(0 90 255 / 25%);

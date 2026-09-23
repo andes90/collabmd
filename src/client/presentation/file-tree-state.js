@@ -1,7 +1,7 @@
 import { isImageAttachmentFilePath } from '../../domain/file-kind.js';
 import { normalizeVaultPathInput } from '../domain/vault-paths.js';
 
-function flattenTree(nodes, files = [], searchEntries = [], fileEntries = []) {
+export function flattenTree(nodes, files = [], searchEntries = [], fileEntries = []) {
   for (const node of nodes) {
     if (!node?.path || !node?.type) {
       continue;

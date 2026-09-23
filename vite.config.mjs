@@ -34,6 +34,7 @@ export default defineConfig(({ command }) => ({
     outDir: clientDistRoot,
     rollupOptions: {
       input: {
+        canvasEditor: resolve(clientAppRoot, 'canvas-editor.html'),
         drawioEditor: resolve(clientAppRoot, 'drawio-editor.html'),
         excalidrawEditor: resolve(clientAppRoot, 'excalidraw-editor.html'),
         exportDocument: resolve(clientAppRoot, 'export-document.html'),
