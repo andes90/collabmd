@@ -1,6 +1,7 @@
 export class WorkspaceRouteController {
   constructor({
     backlinksPanel,
+    canvasEmbed = null,
     clearInitialFileBootstrap,
     clearStaticPreviewDocument = null,
     closeSidebarOnMobile,
@@ -38,6 +39,7 @@ export class WorkspaceRouteController {
     layoutController,
   }) {
     this.backlinksPanel = backlinksPanel;
+    this.canvasEmbed = canvasEmbed;
     this.clearInitialFileBootstrap = clearInitialFileBootstrap;
     this.clearStaticPreviewDocument = clearStaticPreviewDocument;
     this.closeSidebarOnMobile = closeSidebarOnMobile;
@@ -83,8 +85,7 @@ export class WorkspaceRouteController {
     }
 
     const route = this.navigation.getHashRoute();
-    const nextFilePath = route.type === 'file' ? route.filePath : null;
-    const canLeave = await this.prepareActiveExcalidrawDisconnect(nextFilePath);
+    const canLeave = route.type === 'file' || await this.prepareActiveEmbedDisconnect();
     if (!canLeave) {
       return;
     }
@@ -247,6 +248,7 @@ export class WorkspaceRouteController {
   }
 
   async openFile(filePath, options = {}) {
+    if (!await this.prepareActiveEmbedDisconnect(filePath)) return false;
     const shouldRevealInTree = this.pendingTreeRevealPath === filePath;
     if (shouldRevealInTree) {
       this.pendingTreeRevealPath = null;
@@ -271,14 +273,16 @@ export class WorkspaceRouteController {
     return true;
   }
 
-  async prepareActiveExcalidrawDisconnect(nextFilePath = null) {
-    const activeFilePath = this.workspaceCoordinator.stateStore?.get?.('currentFilePath') || null;
-    if (
-      activeFilePath
-      && activeFilePath !== nextFilePath
-      && this.workspaceCoordinator.isExcalidrawFile?.(activeFilePath)
-    ) {
-      const canLeave = await this.excalidrawEmbed.prepareFileDisconnect(activeFilePath, {
+  async prepareActiveEmbedDisconnect(nextFilePath = null) {
+    const activeFilePath = this.workspaceCoordinator.stateStore?.currentFilePath
+      ?? this.workspaceCoordinator.stateStore?.get?.('currentFilePath')
+      ?? null;
+    if (!activeFilePath || activeFilePath === nextFilePath) return true;
+    const embed = this.workspaceCoordinator.isCanvasFile?.(activeFilePath)
+      ? this.canvasEmbed
+      : (this.workspaceCoordinator.isExcalidrawFile?.(activeFilePath) ? this.excalidrawEmbed : null);
+    if (embed) {
+      const canLeave = await embed.prepareFileDisconnect(activeFilePath, {
         timeoutMs: 10000,
       });
       if (!canLeave) {

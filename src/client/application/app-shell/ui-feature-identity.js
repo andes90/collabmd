@@ -124,6 +124,7 @@ function handleDisplayNameSubmit() {
   const localUser = this.lobby.getLocalUser();
   this.drawioEmbed?.updateLocalUser(localUser);
   this.excalidrawEmbed?.updateLocalUser(localUser);
+  this.canvasEmbed?.updateLocalUser(localUser);
   this.syncCurrentUserName();
   this.renderChat();
   dialog.close();

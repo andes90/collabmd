@@ -56,7 +56,7 @@
     display: none;
   }
 
-  .mobile-view-toggle {
+  .mobile-view-toggle:not(.hidden) {
     display: flex !important;
   }
 
@@ -416,7 +416,7 @@
     display: none !important;
   }
 
-  #outlineToggle {
+  #outlineToggle:not(.hidden) {
     display: inline-flex !important;
   }
 

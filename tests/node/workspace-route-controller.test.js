@@ -352,6 +352,44 @@ test('WorkspaceRouteController resets editor state when showing the empty worksp
   assert.ok(events.some(([type]) => type === 'lightbox-close'));
 });
 
+test('WorkspaceRouteController waits for canvas edits before changing files or opening git history', async () => {
+  const events = [];
+  let canLeave = false;
+  let route = { filePath: 'next.md', type: 'file' };
+  const { controller } = createController({
+    canvasEmbed: {
+      prepareFileDisconnect: async (filePath) => {
+        events.push(['flush-canvas', filePath]);
+        return canLeave;
+      },
+    },
+    navigation: {
+      getHashRoute: () => route,
+      navigateToFile: (filePath) => events.push(['navigate', filePath]),
+    },
+    workspaceCoordinator: {
+      getSession: () => null,
+      isCanvasFile: (filePath) => filePath.endsWith('.canvas'),
+      openFile: async (filePath) => { events.push(['open-file', filePath]); return true; },
+      stateStore: { currentFilePath: 'ideas.canvas' },
+    },
+    showGitHistory: async () => events.push(['git-history']),
+  });
+  await controller.handleHashChange();
+  assert.deepEqual(events, [['flush-canvas', 'ideas.canvas'], ['navigate', 'ideas.canvas']]);
+  events.length = 0;
+  assert.equal(await controller.openFile('next.md'), false);
+  assert.deepEqual(events, [['flush-canvas', 'ideas.canvas'], ['navigate', 'ideas.canvas']]);
+  events.length = 0;
+  route = { type: 'git-history' };
+  await controller.handleHashChange();
+  assert.deepEqual(events, [['flush-canvas', 'ideas.canvas'], ['navigate', 'ideas.canvas']]);
+  events.length = 0;
+  canLeave = true;
+  await controller.handleHashChange();
+  assert.deepEqual(events, [['flush-canvas', 'ideas.canvas'], ['git-history']]);
+});
+
 test('WorkspaceRouteController resets into diff mode and keeps navigation helpers simple', () => {
   const { controller, events, previewContent, session, sessionLoadToken } = createController();
 

@@ -71,6 +71,7 @@ function createCoordinator(overrides = {}) {
       'report.html',
       'test.dsl',
       'vault/architecture.drawio',
+      'vault/ideas.canvas',
       'vault/new-diagram.excalidraw',
       'views/board.base',
     ]),
@@ -109,6 +110,9 @@ function createCoordinator(overrides = {}) {
     },
     onRenderBasePreview: () => {
       events.push('render-base');
+    },
+    onRenderCanvasPreview: () => {
+      events.push('render-canvas');
     },
     onRenderDrawioPreview: () => {
       events.push('render-drawio');
@@ -300,6 +304,19 @@ test('WorkspaceCoordinator skips creating an editor session for Excalidraw files
   assert.equal(coordinator.getSession(), null);
   assert.ok(events.includes('open-ready'));
   assert.ok(events.includes('render-excalidraw'));
+});
+
+test('WorkspaceCoordinator opens canvas in its collaborative frame and preserves it when selected again', async () => {
+  const { coordinator, events } = createCoordinator({
+    createEditorSession: () => assert.fail('Canvas must not open a raw JSON text session'),
+    isCanvasFile: (filePath) => filePath?.endsWith('.canvas'),
+  });
+  assert.equal(await coordinator.openFile('vault/ideas.canvas'), true);
+  assert.equal(coordinator.getSession(), null);
+  assert.ok(events.includes('render-canvas'));
+  events.length = 0;
+  assert.equal(await coordinator.openFile('vault/ideas.canvas'), true);
+  assert.deepEqual(events, []);
 });
 
 test('WorkspaceCoordinator skips creating an editor session for draw.io files', async () => {

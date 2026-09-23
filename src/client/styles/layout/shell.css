@@ -334,7 +334,8 @@ html[data-workspace-loading] .skip-link {
   overscroll-behavior: contain;
 }
 
-.preview-content.is-excalidraw-file-preview {
+.preview-content.is-excalidraw-file-preview,
+.preview-content.is-canvas-file-preview {
   position: relative;
   display: flex;
   box-sizing: border-box;
@@ -416,6 +417,7 @@ html[data-workspace-loading] .skip-link {
 .preview-content.is-drawio-file-preview [data-preview-render-host='true'],
 .preview-content.is-structurizr-file-preview [data-preview-render-host='true'],
 .preview-content.is-excalidraw-file-preview [data-preview-render-host='true'],
+.preview-content.is-canvas-file-preview [data-preview-render-host='true'],
 .preview-content.is-image-file-preview [data-preview-render-host='true'],
 .preview-content.is-pdf-file-preview [data-preview-render-host='true'],
 .preview-content.is-html-file-preview [data-preview-render-host='true'],
@@ -430,6 +432,16 @@ html[data-workspace-loading] .skip-link {
 
 .preview-content.is-pdf-file-preview [data-preview-render-host='true'] {
   flex-direction: column;
+}
+
+.canvas-file-preview-frame {
+  display: block;
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  border-radius: var(--radius-lg);
 }
 
 .preview-content.is-html-file-preview [data-preview-render-host='true'] {

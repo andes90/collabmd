@@ -5,6 +5,7 @@ import {
 } from '../../domain/file-kind.js';
 import { escapeHtml } from '../domain/vault-utils.js';
 import { findFuzzyMatch } from '../domain/file-search.js';
+import { getActiveVaultId } from '../domain/runtime-paths.js';
 import { getVaultPathLeaf, getVaultPathParent } from '../domain/vault-paths.js';
 import { buttonClassNames } from './components/ui/button.js';
 
@@ -296,8 +297,13 @@ export class FileExplorerView {
     }
     item.classList.add('is-dragging');
     if (event.dataTransfer) {
-      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.effectAllowed = this.dragSource.type === 'file' ? 'copyMove' : 'move';
       event.dataTransfer.setData('text/plain', item.dataset.path);
+      if (this.dragSource.type === 'file') {
+        event.dataTransfer.setData('application/x-collabmd-vault-file', JSON.stringify({
+          path: item.dataset.path, vaultId: getActiveVaultId() || '',
+        }));
+      }
     }
   }
 

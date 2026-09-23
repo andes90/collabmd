@@ -1,5 +1,6 @@
 import {
   isBaseFilePath,
+  isCanvasFilePath,
   isDiagramFilePath,
   isHtmlFilePath,
   isMarkdownFilePath,
@@ -39,6 +40,7 @@ export class WorkspacePreviewController {
   constructor({
     backlinksPanel,
     basesPreview = null,
+    canvasEmbed = null,
     drawioEmbed,
     elements,
     excalidrawEmbed,
@@ -61,6 +63,7 @@ export class WorkspacePreviewController {
   }) {
     this.backlinksPanel = backlinksPanel;
     this.basesPreview = basesPreview ?? { reconcileEmbeds() {}, renderStandalone() {} };
+    this.canvasEmbed = canvasEmbed;
     this.drawioEmbed = drawioEmbed ?? {
       detachForCommit() {},
       hydrateVisibleEmbeds() {},
@@ -143,11 +146,13 @@ export class WorkspacePreviewController {
   }
 
   resetPreviewMode() {
+    this.canvasEmbed?.unmount();
     this.setHtmlPreviewMaximized(false);
     this.htmlPreviewShell = null;
     this.pdfPreview.cancel();
     this.elements.previewContent?.classList.remove('is-drawio-file-preview');
     this.elements.previewContent?.classList.remove('is-excalidraw-file-preview');
+    this.elements.previewContent?.classList.remove('is-canvas-file-preview');
     this.elements.previewContent?.classList.remove('is-base-file-preview');
     this.elements.previewContent?.classList.remove('is-image-file-preview');
     this.elements.previewContent?.classList.remove('is-pdf-file-preview');
@@ -161,6 +166,7 @@ export class WorkspacePreviewController {
   syncFileChrome(filePath, { drawioMode = null, preferPreviewForBase = false } = {}) {
     const isDrawio = this.isDrawioFile(filePath);
     const isExcalidraw = this.isExcalidrawFile(filePath);
+    const isCanvas = isCanvasFilePath(filePath);
     const isBase = this.isBaseFile(filePath);
     const isImage = this.isImageFile(filePath);
     const isPdf = this.isPdfFile(filePath);
@@ -170,11 +176,14 @@ export class WorkspacePreviewController {
     const isPlantUml = this.isPlantUmlFile(filePath);
     const isStructurizr = isStructurizrFilePath(filePath);
     const isDiagramFile = isDiagramFilePath(filePath);
-    const usesHeaderBacklinks = isExcalidraw || (isDrawio && drawioMode !== 'text');
+    const usesHeaderBacklinks = isExcalidraw || isCanvas || (isDrawio && drawioMode !== 'text');
 
     this.backlinksPanel.setDisplayMode?.(usesHeaderBacklinks ? 'header' : 'dock');
 
     this.elements.editorFindButton?.classList.toggle('hidden', !isMarkdown);
+    this.elements.toolbarViewToggle?.classList.toggle('hidden', isCanvas);
+    this.elements.mobileViewToggle?.classList.toggle('hidden', isCanvas);
+    this.elements.toggleWrapButton?.classList.toggle('hidden', isCanvas);
     syncFormatDocumentButton(this.elements.editorFormatButton, filePath, isPlantUml);
     this.elements.markdownToolbar?.classList.toggle('hidden', !isMarkdown);
     this.elements.exportMenuGroup?.classList.toggle('hidden', !isMarkdown);
@@ -189,7 +198,7 @@ export class WorkspacePreviewController {
       this.backlinksPanel.clear();
     }
 
-    if ((isDrawio && drawioMode !== 'text') || isExcalidraw || isHtml || isImage || isPdf || (isBase && preferPreviewForBase)) {
+    if ((isDrawio && drawioMode !== 'text') || isExcalidraw || isCanvas || isHtml || isImage || isPdf || (isBase && preferPreviewForBase)) {
       this.layoutController.setView('preview', { persist: false });
       this.outlineController.close();
       this.backlinksPanel.clear();
@@ -221,6 +230,22 @@ export class WorkspacePreviewController {
       renderHost.replaceChildren(content);
       renderHost.style.minHeight = '';
     }
+  }
+
+  renderCanvasFilePreview(filePath) {
+    const preview = this.prepareFilePreview('is-canvas-file-preview');
+    if (!preview) return;
+    const { previewElement, renderHost } = preview;
+
+    if (renderHost) renderHost.style.minHeight = '';
+    this.canvasEmbed?.mount(filePath, renderHost);
+    previewElement.dataset.renderPhase = 'ready';
+    this.outlineController.close();
+    this.scrollSyncController.setLargeDocumentMode(false);
+    this.scrollSyncController.invalidatePreviewBlocks();
+    this.videoEmbed?.reconcileEmbeds(previewElement);
+    this.drawioEmbed.reconcileEmbeds(previewElement);
+    this.excalidrawEmbed.reconcileEmbeds(previewElement, { isLargeDocument: false });
   }
 
   renderExcalidrawFilePreview(filePath) {

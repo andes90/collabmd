@@ -159,6 +159,16 @@ export class FileActionController {
         onSelect: () => this.handleNewBase({ parentDir }),
       },
       {
+        contextLabel: 'New canvas',
+        group: 'Diagram',
+        hint: 'JSON Canvas',
+        icon: this.getCreateActionIcon('canvas'),
+        id: 'canvas',
+        label: 'Canvas',
+        meta: '.canvas',
+        onSelect: () => this.handleNewCanvas({ parentDir }),
+      },
+      {
         contextLabel: 'New Excalidraw drawing',
         group: 'Diagram',
         hint: 'Excalidraw',
@@ -306,6 +316,7 @@ export class FileActionController {
         return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M5 20h14"/></svg>';
       case 'base':
         return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M14 4v5h5"/><path d="M8 13h8"/><path d="M8 17h6"/><path d="M8 9h3"/></svg>';
+      case 'canvas':
       case 'drawio':
       case 'plantuml':
       case 'structurizr':
@@ -935,6 +946,32 @@ export class FileActionController {
       submitLabel: 'Create folder',
       emptyMessage: 'Folder path is required',
       onSubmit: (value) => this.createDirectory(composeVaultChildPath(context.normalizedParentDir, value)),
+    });
+  }
+
+  handleNewCanvas({ parentDir = '' } = {}) {
+    const context = this.getCreateContext(parentDir);
+    this.openActionDialog({
+      title: 'Create canvas',
+      copy: 'Create a canvas for connected notes, files, links, and groups.',
+      label: `Canvas ${context.inputLabelSuffix}`,
+      hint: `${context.hintPrefix} ".canvas" is added automatically.`,
+      note: context.note,
+      placeholder: context.normalizedParentDir ? 'ideas' : 'diagrams/ideas',
+      submitLabel: 'Create canvas',
+      emptyMessage: 'Canvas path is required',
+      onSubmit: (value) => {
+        const normalizedPath = normalizeVaultPathInput(value);
+        if (!normalizedPath) {
+          this.showToast('Canvas path is required');
+          return false;
+        }
+        const filePath = ensureVaultExtension(composeVaultChildPath(context.normalizedParentDir, normalizedPath), '.canvas');
+        return this.createVaultFile(filePath, '{"nodes":[],"edges":[]}\n', {
+          errorMessage: 'Failed to create canvas',
+          openAfterCreate: true,
+        });
+      },
     });
   }
 

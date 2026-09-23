@@ -16,7 +16,7 @@ export function getVaultFileIconSvg(filePath, {
     return createIcon(iconClass, '<path d="M7 4h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M14 4v5h5"/><path d="M8 13h8"/><path d="M8 17h6"/><path d="M8 9h3"/>');
   }
 
-  if (kind === 'drawio' || kind === 'plantuml' || kind === 'structurizr') {
+  if (kind === 'canvas' || kind === 'drawio' || kind === 'plantuml' || kind === 'structurizr') {
     return createIcon(iconClass, '<rect x="3" y="4" width="7" height="6" rx="1"/><rect x="14" y="4" width="7" height="6" rx="1"/><rect x="8.5" y="14" width="7" height="6" rx="1"/><path d="M10 7h4"/><path d="M17.5 10v2.5"/><path d="M6.5 10v2.5"/><path d="M6.5 12.5h11"/>');
   }
 

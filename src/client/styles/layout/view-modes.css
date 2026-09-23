@@ -26,6 +26,7 @@
 }
 
 .editor-layout[data-view="preview"] .preview-content.is-excalidraw-file-preview,
+.editor-layout[data-view="preview"] .preview-content.is-canvas-file-preview,
 .editor-layout[data-view="preview"] .preview-content.is-drawio-file-preview,
 .editor-layout[data-view="preview"] .preview-content.is-base-file-preview,
 .editor-layout[data-view="preview"] .preview-content.is-image-file-preview,

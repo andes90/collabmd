@@ -340,6 +340,7 @@ test('FileActionController shares the create registry across menus and includes 
     'upload',
     'markdown',
     'base',
+    'canvas',
     'excalidraw',
     'drawio',
     'mermaid',
@@ -369,6 +370,19 @@ test('FileActionController creates base files with starter content and opens the
     ['create-file', 'views/tasks.base', 'views:\n  - type: table\n    name: Table\n    order:\n      - file.name\n'],
     ['refresh'],
     ['select', 'views/tasks.base'],
+  ]);
+});
+
+test('FileActionController creates a standard empty canvas and opens it', async (t) => {
+  const { calls, controller } = createController(t);
+  let dialog;
+  controller.openActionDialog = (config) => { dialog = config; };
+  controller.handleNewCanvas({ parentDir: 'diagrams' });
+  assert.equal(await dialog.onSubmit('ideas'), true);
+  assert.deepEqual(calls, [
+    ['create-file', 'diagrams/ideas.canvas', '{"nodes":[],"edges":[]}\n'],
+    ['refresh'],
+    ['select', 'diagrams/ideas.canvas'],
   ]);
 });
 

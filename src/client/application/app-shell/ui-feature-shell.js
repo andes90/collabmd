@@ -952,6 +952,7 @@ function handleThemeChange(theme) {
   if (
     this.currentFilePath
     && !this.isExcalidrawFile(this.currentFilePath)
+    && !this.isCanvasFile?.(this.currentFilePath)
     && !this.isImageFile?.(this.currentFilePath)
     && !this.isPdfFile?.(this.currentFilePath)
     && !this.isStructurizrWorkspaceFile?.(this.currentFilePath)
@@ -960,6 +961,7 @@ function handleThemeChange(theme) {
   }
   this.session?.applyTheme(theme);
   this.excalidrawEmbed.updateTheme(theme);
+  this.canvasEmbed?.updateTheme(theme);
   this.drawioEmbed.updateTheme(theme);
   this.pdfPreview?.setTheme(theme);
 }

@@ -1,6 +1,7 @@
 import {
   getVaultFileKind,
   isBaseFilePath,
+  isCanvasFilePath,
   isDrawioFilePath,
   isExcalidrawFilePath,
   isImageAttachmentFilePath,
@@ -13,6 +14,7 @@ import {
 
 export const workspaceFeature = {
   isBaseFile: isBaseFilePath,
+  isCanvasFile: isCanvasFilePath,
   isDrawioFile: isDrawioFilePath,
   isExcalidrawFile: isExcalidrawFilePath,
   isImageFile: isImageAttachmentFilePath,
@@ -75,6 +77,7 @@ export const workspaceFeature = {
   },
 
   handleLayoutViewRequest(view) {
+    if (this.isCanvasFile?.(this.currentFilePath)) return view === 'preview';
     if (!this.currentFilePath || !this.isDrawioFile(this.currentFilePath)) {
       return true;
     }

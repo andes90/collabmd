@@ -53,6 +53,7 @@ import { FileExplorerController } from '../presentation/file-explorer-controller
 import { FileHistoryViewController } from '../presentation/file-history-view-controller.js';
 import { BasesPreviewController } from '../presentation/bases-preview-controller.js';
 import { DrawioEmbedController } from '../presentation/drawio-embed-controller.js';
+import { CanvasEmbedController } from '../presentation/canvas-embed-controller.js';
 import { ExcalidrawEmbedController } from '../presentation/excalidraw-embed-controller.js';
 import { GitDiffViewController } from '../presentation/git-diff-view-controller.js';
 import { GitPanelController } from '../presentation/git-panel-controller.js';
@@ -274,10 +275,11 @@ export class CollabMdAppShell {
       vaultSwitcher: {
         activeVaultId: getActiveVaultId(this.runtimeConfig),
         vaults: this.runtimeConfig.vaults ?? [],
-        onVaultSelect: (vaultId) => {
+        onVaultSelect: async (vaultId) => {
           if (!vaultId || vaultId === getActiveVaultId(this.runtimeConfig)) {
             return;
           }
+          if (!await this.workspaceRouteController.prepareActiveEmbedDisconnect()) return;
           setActiveVaultId(vaultId);
           const url = new URL(window.location.href);
           url.searchParams.set('vault', vaultId);
@@ -427,6 +429,16 @@ export class CollabMdAppShell {
       }),
       panelElement: this.elements.backlinksPanel,
     });
+    this.canvasEmbed = new CanvasEmbedController({
+      getLocalUser: () => this.lobby.getLocalUser(),
+      getTheme: () => this.themeController.getTheme(),
+      onAwarenessChange: (users) => this.updateFileAwareness(users),
+      onConnectionChange: (state) => this.handleConnectionChange(state),
+      onOpenFile: (filePath, options) => {
+        if (this.fileExplorer.flatFiles.includes(filePath)) this.navigation.navigateToFile(filePath, options);
+      },
+      toastController: this.toastController,
+    });
     this.excalidrawEmbed = new ExcalidrawEmbedController({
       getLocalUser: () => this.lobby.getLocalUser(),
       getTheme: () => this.themeController.getTheme(),
@@ -497,6 +509,7 @@ export class CollabMdAppShell {
     this.workspacePreviewController = new WorkspacePreviewController({
       backlinksPanel: this.backlinksPanel,
       basesPreview: this.basesPreview,
+      canvasEmbed: this.canvasEmbed,
       drawioEmbed: this.drawioEmbed,
       elements: this.elements,
       excalidrawEmbed: this.excalidrawEmbed,
@@ -571,6 +584,7 @@ export class CollabMdAppShell {
       attachEditorScroller: (scroller) => this.scrollSyncController.attachEditorScroller(scroller),
       beginDocumentLoad: () => this.previewRenderer.beginDocumentLoad(),
       cleanupAfterSessionDestroy: () => {
+        this.canvasEmbed.unmount();
         this.scrollSyncController.setLargeDocumentMode(false);
         this.scrollSyncController.invalidatePreviewBlocks();
         this.outlineController.cleanup();
@@ -602,6 +616,7 @@ export class CollabMdAppShell {
       getStoredUserName: () => this.getStoredUserName(),
       getTheme: () => this.themeController.getTheme(),
       isBaseFile: (filePath) => this.isBaseFile(filePath),
+      isCanvasFile: (filePath) => this.isCanvasFile(filePath),
       isDrawioFile: (filePath) => this.isDrawioFile(filePath),
       isExcalidrawFile: (filePath) => this.isExcalidrawFile(filePath),
       isImageFile: (filePath) => this.isImageFile(filePath),
@@ -689,6 +704,7 @@ export class CollabMdAppShell {
       },
       onRenderDrawioPreview: (filePath) => this.workspacePreviewController.renderDrawioFilePreview(filePath),
       onRenderBasePreview: (filePath) => this.renderBaseFilePreview(filePath),
+      onRenderCanvasPreview: (filePath) => this.workspacePreviewController.renderCanvasFilePreview(filePath),
       onRenderExcalidrawPreview: (filePath) => this.workspacePreviewController.renderExcalidrawFilePreview(filePath),
       onRenderHtmlPreview: (options) => this.workspacePreviewController.renderHtmlFilePreview(options),
       onRenderImagePreview: (filePath) => this.workspacePreviewController.renderImageFilePreview(filePath),
@@ -721,6 +737,7 @@ export class CollabMdAppShell {
     });
     this.workspaceRouteController = new WorkspaceRouteController({
       backlinksPanel: this.backlinksPanel,
+      canvasEmbed: this.canvasEmbed,
       clearInitialFileBootstrap: () => this.clearInitialFileBootstrap(),
       clearStaticPreviewDocument: () => this.clearStaticPreviewDocument(),
       closeSidebarOnMobile: () => this.closeSidebarOnMobile(),

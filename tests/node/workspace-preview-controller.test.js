@@ -467,6 +467,7 @@ test('WorkspacePreviewController delegates standalone base preview rendering', a
   assert.deepEqual(events, [
     ['class-remove', 'is-drawio-file-preview'],
     ['class-remove', 'is-excalidraw-file-preview'],
+    ['class-remove', 'is-canvas-file-preview'],
     ['class-remove', 'is-base-file-preview'],
     ['class-remove', 'is-image-file-preview'],
     ['class-remove', 'is-pdf-file-preview'],
@@ -562,4 +563,23 @@ test('WorkspacePreviewController still syncs Excalidraw preview layout without a
   });
 
   assert.deepEqual(events, ['sync-layout']);
+});
+
+test('WorkspacePreviewController hides text layout actions for canvas and restores them for notes', () => {
+  const visibility = {};
+  const views = [];
+  const action = (name) => ({ classList: { toggle: (_token, hidden) => { visibility[name] = hidden; } } });
+  const controller = createController({
+    elements: {
+      toolbarViewToggle: action('views'),
+      mobileViewToggle: action('mobile'),
+      toggleWrapButton: action('wrap'),
+    },
+    layoutController: { setView: (view, options) => views.push({ view, ...options }) },
+  });
+  controller.syncFileChrome('ideas.canvas');
+  assert.deepEqual(views, [{ view: 'preview', persist: false }]);
+  assert.deepEqual(visibility, { views: true, mobile: true, wrap: true });
+  controller.syncFileChrome('README.md');
+  assert.deepEqual(visibility, { views: false, mobile: false, wrap: false });
 });

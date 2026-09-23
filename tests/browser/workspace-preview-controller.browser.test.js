@@ -1,6 +1,9 @@
 import { afterEach, expect, it } from 'vitest';
 
 import { WorkspacePreviewController } from '../../src/client/application/workspace-preview-controller.js';
+import { CanvasEmbedController } from '../../src/client/presentation/canvas-embed-controller.js';
+import '../../src/client/styles/base.css';
+import '../../src/client/styles/style.css';
 
 afterEach(() => {
   document.body.className = '';
@@ -104,4 +107,42 @@ setTimeout(() => parent.postMessage({ source: 'html-preview-test', hash: locatio
   controller.resetPreviewLayoutSync();
   window.removeEventListener('message', handleMessage);
   renderHost.remove();
+});
+
+it('mounts the canvas frame across the available preview and removes it when leaving', () => {
+  const fixture = document.createElement('div');
+  fixture.style.width = '900px';
+  fixture.style.height = '600px';
+  fixture.innerHTML = '<div class="preview-content"><div data-preview-render-host="true"></div></div>';
+  document.body.append(fixture);
+  const previewContent = fixture.firstElementChild;
+  const renderHost = previewContent.firstElementChild;
+  const canvasEmbed = new CanvasEmbedController({ getTheme: () => 'light' });
+  const embed = { detachForCommit() {}, reconcileEmbeds() {} };
+  const controller = new WorkspacePreviewController({
+    backlinksPanel: { clear() {} },
+    canvasEmbed,
+    drawioEmbed: embed,
+    elements: { previewContent },
+    excalidrawEmbed: embed,
+    getSession: () => null,
+    outlineController: { close() {} },
+    previewRenderer: { ensureRenderHost: () => renderHost, normalizePreviewChildren() {} },
+    scrollSyncController: { invalidatePreviewBlocks() {}, setLargeDocumentMode() {} },
+  });
+  try {
+    controller.renderCanvasFilePreview('ideas.canvas');
+    const frame = renderHost.querySelector('iframe');
+    expect(frame.title).toBe('Canvas: ideas.canvas');
+    expect(new URL(frame.src).searchParams.get('file')).toBe('ideas.canvas');
+    frame.src = 'about:blank';
+    expect(frame.getBoundingClientRect().height).toBeGreaterThan(550);
+    expect(frame.getBoundingClientRect().width).toBeGreaterThan(850);
+    controller.resetPreviewMode();
+    expect(renderHost.querySelector('iframe')).toBeNull();
+    expect(previewContent.classList.contains('is-canvas-file-preview')).toBe(false);
+  } finally {
+    canvasEmbed.unmount();
+    fixture.remove();
+  }
 });

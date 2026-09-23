@@ -88,6 +88,10 @@ async function handleTabBlocked({ reason } = {}) {
   if (shouldPrepareExcalidrawDisconnect) {
     await this.excalidrawEmbed.prepareFileDisconnect(blockedFilePath);
   }
+  if (blockedFilePath && this.isCanvasFile?.(blockedFilePath)) {
+    const canLeave = await this.canvasEmbed.prepareFileDisconnect(blockedFilePath);
+    if (!canLeave) return;
+  }
 
   this.showEmptyState();
   this.renderChat();
