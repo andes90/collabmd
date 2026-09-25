@@ -2,6 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { PlantUmlRenderer } from '../../src/server/infrastructure/plantuml/plantuml-renderer.js';
+import { encodePlantUmlText } from '../../src/server/domain/plantuml-encoder.js';
+
+test('PlantUML source keeps the expected server URL encoding', () => {
+  assert.equal(
+    encodePlantUmlText('@startuml\nAlice -> Bob: Hi\n@enduml'),
+    'SoWkIImgAStDuNBCoKnELT2rKt3AJx9IyCZaSaZDIodDpG40',
+  );
+});
 
 test('PlantUmlRenderer accepts SVG payloads prefixed with PlantUML processing instructions', async () => {
   const renderer = new PlantUmlRenderer({
