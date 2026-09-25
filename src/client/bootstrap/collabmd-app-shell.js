@@ -123,14 +123,7 @@ export class CollabMdAppShell {
       navigateToGitFilePreview,
       navigateToGitHistory,
     };
-    this.preferences = new BrowserPreferencesPort({
-      fileTreeShowExtensionsKey: 'collabmd-file-tree-show-extensions',
-      lineWrappingKey: 'collabmd-editor-line-wrap',
-      recentFilesKey: 'collabmd-recent-files',
-      vimModeKey: 'collabmd-editor-vim-mode',
-      sidebarVisibleKey: 'collabmd-sidebar-visible',
-      userNameKey: 'collabmd-user-name',
-    });
+    this.preferences = new BrowserPreferencesPort();
     this.notifications = new BrowserNotificationPort();
     this.gitApiClient = gitApiClient;
     this.vaultApiClient = vaultApiClient;

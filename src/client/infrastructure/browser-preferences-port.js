@@ -16,70 +16,64 @@ function writeStorage(storage, key, value) {
 }
 
 const MAX_RECENT_FILES = 20;
+const STORAGE_KEYS = {
+  fileTreeShowExtensions: 'collabmd-file-tree-show-extensions',
+  lineWrapping: 'collabmd-editor-line-wrap',
+  recentFiles: 'collabmd-recent-files',
+  vimMode: 'collabmd-editor-vim-mode',
+  viewMode: 'collabmd-editor-view-mode',
+  sidebarVisible: 'collabmd-sidebar-visible',
+  userName: 'collabmd-user-name',
+  cursorNames: 'collabmd-editor-cursor-names',
+};
 
 export class BrowserPreferencesPort {
-  constructor({
-    fileTreeShowExtensionsKey,
-    lineWrappingKey,
-    recentFilesKey = 'collabmd-recent-files',
-    vimModeKey = 'collabmd-editor-vim-mode',
-    viewModeKey = 'collabmd-editor-view-mode',
-    sidebarVisibleKey,
-    userNameKey,
-    storage = globalThis.localStorage,
-  }) {
-    this.fileTreeShowExtensionsKey = fileTreeShowExtensionsKey;
-    this.lineWrappingKey = lineWrappingKey;
-    this.recentFilesKey = recentFilesKey;
-    this.sidebarVisibleKey = sidebarVisibleKey;
+  constructor({ storage = globalThis.localStorage } = {}) {
     this.storage = storage;
-    this.userNameKey = userNameKey;
-    this.viewModeKey = viewModeKey;
-    this.vimModeKey = vimModeKey;
   }
 
   getUserName() {
-    return readStorage(this.storage, this.userNameKey, '') || '';
+    return readStorage(this.storage, STORAGE_KEYS.userName, '') || '';
   }
 
   setUserName(name) {
-    writeStorage(this.storage, this.userNameKey, name);
+    writeStorage(this.storage, STORAGE_KEYS.userName, name);
   }
 
   getFileTreeShowExtensions() {
-    return readStorage(this.storage, this.fileTreeShowExtensionsKey, null) === 'true';
+    return readStorage(this.storage, STORAGE_KEYS.fileTreeShowExtensions, null) === 'true';
   }
 
   setFileTreeShowExtensions(showFileExtensions) {
-    writeStorage(this.storage, this.fileTreeShowExtensionsKey, showFileExtensions ? 'true' : 'false');
+    writeStorage(this.storage, STORAGE_KEYS.fileTreeShowExtensions, showFileExtensions ? 'true' : 'false');
   }
 
   getLineWrappingEnabled() {
-    return readStorage(this.storage, this.lineWrappingKey, null) !== 'false';
+    return readStorage(this.storage, STORAGE_KEYS.lineWrapping, null) !== 'false';
   }
 
   setLineWrappingEnabled(enabled) {
-    writeStorage(this.storage, this.lineWrappingKey, String(enabled));
+    writeStorage(this.storage, STORAGE_KEYS.lineWrapping, String(enabled));
   }
 
   getCursorNamesVisible() {
-    return readStorage(this.storage, 'collabmd-editor-cursor-names', null) !== 'false';
+    return readStorage(this.storage, STORAGE_KEYS.cursorNames, null) !== 'false';
   }
 
   setCursorNamesVisible(visible) {
-    writeStorage(this.storage, 'collabmd-editor-cursor-names', String(visible));
+    writeStorage(this.storage, STORAGE_KEYS.cursorNames, String(visible));
   }
 
   getVimModeEnabled() {
-    return readStorage(this.storage, this.vimModeKey, null) === 'true';
+    return readStorage(this.storage, STORAGE_KEYS.vimMode, null) === 'true';
   }
 
   setVimModeEnabled(enabled) {
-    writeStorage(this.storage, this.vimModeKey, String(enabled));
+    writeStorage(this.storage, STORAGE_KEYS.vimMode, String(enabled));
   }
 
   getViewMode() {
-    const value = readStorage(this.storage, this.viewModeKey, null);
+    const value = readStorage(this.storage, STORAGE_KEYS.viewMode, null);
     if (value === 'editor' || value === 'preview' || value === 'split') {
       return value;
     }
@@ -88,12 +82,12 @@ export class BrowserPreferencesPort {
 
   setViewMode(view) {
     if (view === 'editor' || view === 'preview' || view === 'split') {
-      writeStorage(this.storage, this.viewModeKey, view);
+      writeStorage(this.storage, STORAGE_KEYS.viewMode, view);
     }
   }
 
   getRecentFiles() {
-    const stored = readStorage(this.storage, this.recentFilesKey, '[]');
+    const stored = readStorage(this.storage, STORAGE_KEYS.recentFiles, '[]');
     try {
       const recentFiles = JSON.parse(stored);
       return Array.isArray(recentFiles)
@@ -111,15 +105,15 @@ export class BrowserPreferencesPort {
       filePath,
       ...this.getRecentFiles().filter((recentFilePath) => recentFilePath !== filePath),
     ];
-    writeStorage(this.storage, this.recentFilesKey, JSON.stringify(recentFiles.slice(0, MAX_RECENT_FILES)));
+    writeStorage(this.storage, STORAGE_KEYS.recentFiles, JSON.stringify(recentFiles.slice(0, MAX_RECENT_FILES)));
   }
 
   getSidebarVisible() {
-    return readStorage(this.storage, this.sidebarVisibleKey, null);
+    return readStorage(this.storage, STORAGE_KEYS.sidebarVisible, null);
   }
 
   setSidebarVisible(showSidebar) {
-    writeStorage(this.storage, this.sidebarVisibleKey, showSidebar ? 'true' : 'false');
+    writeStorage(this.storage, STORAGE_KEYS.sidebarVisible, showSidebar ? 'true' : 'false');
   }
 
 }

@@ -24,6 +24,7 @@ test('BrowserPreferencesPort defaults Vim mode to disabled and persists the opt-
   preferences.setVimModeEnabled(true);
 
   assert.equal(preferences.getVimModeEnabled(), true);
+  assert.equal(storage.getItem('collabmd-editor-vim-mode'), 'true');
 });
 
 test('BrowserPreferencesPort stores editor view mode only for known values', () => {
