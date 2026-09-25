@@ -3,6 +3,7 @@ import {
   constants as zlibConstants,
   gzip,
 } from 'node:zlib';
+import { pipeline } from 'node:stream/promises';
 
 const COMPRESSIBLE_CONTENT_TYPE_PATTERN = /^(?:text\/|application\/(?:javascript|json|xml)|image\/svg\+xml)/i;
 const MIN_COMPRESSIBLE_BYTES = 1024;
@@ -212,42 +213,7 @@ export function sendStreamResponse(req, res, {
     return Promise.resolve();
   }
 
-  return new Promise((resolve, reject) => {
-    let settled = false;
-
-    const finish = (error = null) => {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-      res.off('finish', handleFinish);
-      res.off('error', handleError);
-      res.off('close', handleClose);
-      stream.off('error', handleError);
-
-      if (error) {
-        reject(error);
-        return;
-      }
-
-      resolve();
-    };
-
-    const handleFinish = () => finish();
-    const handleError = (error) => finish(error);
-    const handleClose = () => {
-      if (!res.writableEnded) {
-        finish(new Error('Response stream closed before completion'));
-      }
-    };
-
-    res.on('finish', handleFinish);
-    res.on('error', handleError);
-    res.on('close', handleClose);
-    stream.on('error', handleError);
-    stream.pipe(res);
-  });
+  return pipeline(stream, res);
 }
 
 export function jsonResponse(req, res, statusCode, data) {
