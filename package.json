@@ -67,7 +67,6 @@
   "license": "MIT",
   "dependencies": {
     "@excalidraw/fractional-indexing": "^0.18.0-c0ad61c",
-    "@modelcontextprotocol/client": "^2.0.0",
     "@modelcontextprotocol/node": "^2.0.0",
     "@modelcontextprotocol/server": "^2.0.0",
     "@turbodocx/html-to-docx": "^1.23.1",
@@ -110,6 +109,7 @@
     "@embedpdf/snippet": "2.15.1",
     "@eslint/js": "^10.0.1",
     "@excalidraw/excalidraw": "0.18.0-c0ad61c",
+    "@modelcontextprotocol/client": "^2.0.0",
     "@playwright/test": "^1.63.0",
     "@replit/codemirror-vim": "^6.4.0",
     "@vitest/browser-playwright": "^5.0.1",
