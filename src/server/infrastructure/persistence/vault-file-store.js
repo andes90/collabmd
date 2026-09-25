@@ -58,15 +58,7 @@ function getEditableVaultContentKind(filePath) {
 }
 import { SidecarStore } from './sidecar-store.js';
 import { createWorkspaceStateFileSystemAdapter } from '../workspace/workspace-state-file-system-adapter.js';
-
-const IMAGE_EXTENSION_TO_MIME_TYPE = Object.freeze({
-  '.gif': 'image/gif',
-  '.jpeg': 'image/jpeg',
-  '.jpg': 'image/jpeg',
-  '.png': 'image/png',
-  '.svg': 'image/svg+xml',
-  '.webp': 'image/webp',
-});
+import { IMAGE_EXTENSION_TO_MIME_TYPE } from '../../shared/image-mime.js';
 
 const MIME_TYPE_TO_IMAGE_EXTENSION = Object.freeze({
   'image/gif': '.gif',

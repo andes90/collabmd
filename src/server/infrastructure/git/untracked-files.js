@@ -7,7 +7,7 @@ import { getVaultFileKind, isImageAttachmentFilePath } from '../../../domain/fil
 import { mapWithConcurrency } from '../../shared/async-utils.js';
 import { createEmptyStats } from './responses.js';
 import { splitContentLines } from './parsers.js';
-import { getImageMimeType } from './image-mime.js';
+import { getImageMimeType } from '../../shared/image-mime.js';
 
 async function countFileLines(filePath) {
   if (isImageAttachmentFilePath(filePath)) {

@@ -1,7 +1,7 @@
 import { createRequestError as createGitRequestError } from '../http/http-errors.js';
 import { getVaultFileKind, isImageAttachmentFilePath } from '../../../domain/file-kind.js';
 import { normalizeRelativeGitPath } from './path-utils.js';
-import { getImageMimeType } from './image-mime.js';
+import { getImageMimeType } from '../../shared/image-mime.js';
 import {
   countPatchLines,
   parseGitLogHeader,

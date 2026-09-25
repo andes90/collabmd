@@ -1,6 +1,6 @@
 import { extname } from 'node:path';
 
-const IMAGE_MIME_TYPES = Object.freeze({
+export const IMAGE_EXTENSION_TO_MIME_TYPE = Object.freeze({
   '.gif': 'image/gif',
   '.jpeg': 'image/jpeg',
   '.jpg': 'image/jpeg',
@@ -11,5 +11,5 @@ const IMAGE_MIME_TYPES = Object.freeze({
 
 export function getImageMimeType(filePath) {
   const extension = extname(String(filePath ?? '').toLowerCase());
-  return IMAGE_MIME_TYPES[extension] ?? 'application/octet-stream';
+  return IMAGE_EXTENSION_TO_MIME_TYPE[extension] ?? 'application/octet-stream';
 }
