@@ -26,8 +26,7 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/src ./src
 COPY --from=build /app/bin ./bin
 COPY --from=build /app/scripts/cloudflare-tunnel.mjs ./scripts/cloudflare-tunnel.mjs
-COPY --from=build /app/scripts/local-plantuml-compose.mjs ./scripts/local-plantuml-compose.mjs
-COPY --from=build /app/scripts/local-structurizr-compose.mjs ./scripts/local-structurizr-compose.mjs
+COPY --from=build /app/scripts/local-compose.mjs ./scripts/local-compose.mjs
 
 # Default vault directory — mount a volume here
 VOLUME ["/data"]

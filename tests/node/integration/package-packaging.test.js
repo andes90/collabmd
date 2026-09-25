@@ -129,7 +129,7 @@ test('npm pack includes built public assets and runtime helper scripts required 
     );
     assert.ok(packagedPaths.has('docker-compose.yml'));
     assert.ok(packagedPaths.has('scripts/cloudflare-tunnel.mjs'));
-    assert.ok(packagedPaths.has('scripts/local-plantuml-compose.mjs'));
+    assert.ok(packagedPaths.has('scripts/local-compose.mjs'));
   } finally {
     await artifact.cleanup();
   }
@@ -142,12 +142,12 @@ test('packed tarball can run the CLI help path and includes valid runtime helper
     const { packageRoot } = artifact;
     const packagedCliPath = resolve(packageRoot, 'bin/collabmd.js');
     const dockerComposePath = resolve(packageRoot, 'docker-compose.yml');
-    const localPlantUmlScriptPath = resolve(packageRoot, 'scripts/local-plantuml-compose.mjs');
+    const localComposeScriptPath = resolve(packageRoot, 'scripts/local-compose.mjs');
     const cloudflareTunnelScriptPath = resolve(packageRoot, 'scripts/cloudflare-tunnel.mjs');
 
     await access(packagedCliPath);
     await access(dockerComposePath);
-    await access(localPlantUmlScriptPath);
+    await access(localComposeScriptPath);
     await access(cloudflareTunnelScriptPath);
 
     const helpResult = await execFile(process.execPath, [packagedCliPath, '--help'], {
@@ -160,7 +160,7 @@ test('packed tarball can run the CLI help path and includes valid runtime helper
     await execFile(process.execPath, ['--check', packagedCliPath], {
       cwd: packageRoot,
     });
-    await execFile(process.execPath, ['--check', localPlantUmlScriptPath], {
+    await execFile(process.execPath, ['--check', localComposeScriptPath], {
       cwd: packageRoot,
     });
     await execFile(process.execPath, ['--check', cloudflareTunnelScriptPath], {

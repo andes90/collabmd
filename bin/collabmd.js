@@ -91,45 +91,26 @@ if (values['auth-password']) {
   process.env.AUTH_PASSWORD = values['auth-password'];
 }
 
-if (useLocalPlantUml) {
-  const {
-    getLocalPlantUmlServerUrl,
-    startLocalPlantUmlComposeService,
-  } = await import('../scripts/local-plantuml-compose.mjs');
-
-  try {
-    const localPlantUmlUrl = getLocalPlantUmlServerUrl();
-    console.log(`  PlantUML: starting local docker-compose service at ${localPlantUmlUrl}...`);
-    await startLocalPlantUmlComposeService();
-    process.env.PLANTUML_SERVER_URL = localPlantUmlUrl;
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      console.error('Error: Docker is not available. Install Docker Desktop or Docker Engine first.');
-    } else {
-      console.error(`Error: Failed to start local PlantUML service: ${error.message}`);
+if (useLocalPlantUml || useLocalStructurizr) {
+  const { getLocalComposeServerUrl, startLocalComposeService } = await import('../scripts/local-compose.mjs');
+  for (const [enabled, service, label, envName] of [
+    [useLocalPlantUml, 'plantuml', 'PlantUML', 'PLANTUML_SERVER_URL'],
+    [useLocalStructurizr, 'structurizr', 'Structurizr', 'STRUCTURIZR_SERVER_URL'],
+  ]) {
+    if (!enabled) continue;
+    try {
+      const url = getLocalComposeServerUrl(service);
+      console.log(`  ${label}: starting local docker-compose service at ${url}...`);
+      await startLocalComposeService(service, { vaultDir: primaryVaultDir });
+      process.env[envName] = url;
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        console.error('Error: Docker is not available. Install Docker Desktop or Docker Engine first.');
+      } else {
+        console.error(`Error: Failed to start local ${label} service: ${error.message}`);
+      }
+      process.exit(1);
     }
-    process.exit(1);
-  }
-}
-
-if (useLocalStructurizr) {
-  const {
-    getLocalStructurizrServerUrl,
-    startLocalStructurizrComposeService,
-  } = await import('../scripts/local-structurizr-compose.mjs');
-
-  try {
-    const localStructurizrUrl = getLocalStructurizrServerUrl();
-    console.log(`  Structurizr: starting local docker-compose service at ${localStructurizrUrl}...`);
-    await startLocalStructurizrComposeService({ vaultDir: primaryVaultDir });
-    process.env.STRUCTURIZR_SERVER_URL = localStructurizrUrl;
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      console.error('Error: Docker is not available. Install Docker Desktop or Docker Engine first.');
-    } else {
-      console.error(`Error: Failed to start local Structurizr service: ${error.message}`);
-    }
-    process.exit(1);
   }
 }
 
