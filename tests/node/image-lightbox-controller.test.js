@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import {
   clampImageLightboxOffset,
   clampImageLightboxScale,
-  isImageLightboxWheelZoomGesture,
 } from '../../src/client/presentation/image-lightbox-controller.js';
 
 test('clampImageLightboxScale enforces supported zoom bounds', () => {
@@ -32,10 +31,4 @@ test('clampImageLightboxOffset keeps panning inside the visible viewport bounds'
     scale: 1,
     viewportSize: 600,
   }), 0);
-});
-
-test('isImageLightboxWheelZoomGesture only treats ctrl-wheel as pinch zoom', () => {
-  assert.equal(isImageLightboxWheelZoomGesture({ ctrlKey: true }), true);
-  assert.equal(isImageLightboxWheelZoomGesture({ ctrlKey: false }), false);
-  assert.equal(isImageLightboxWheelZoomGesture(null), false);
 });

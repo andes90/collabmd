@@ -40,10 +40,6 @@ export function clampImageLightboxOffset(offset, {
   return Math.min(Math.max(numericOffset, -overflow), overflow);
 }
 
-export function isImageLightboxWheelZoomGesture(event) {
-  return Boolean(event?.ctrlKey);
-}
-
 export class ImageLightboxController {
   constructor({
     previewElement,
@@ -508,7 +504,7 @@ export class ImageLightboxController {
         return;
       }
 
-      if (isImageLightboxWheelZoomGesture(event)) {
+      if (event.ctrlKey) {
         event.preventDefault();
         this.zoomBy(event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP);
         return;
