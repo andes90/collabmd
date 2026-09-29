@@ -44,10 +44,6 @@ const HIGHLIGHT_CACHE_LIMIT = 200;
 const HIGHLIGHT_CACHE_MAX_SOURCE_CHARS = 20000;
 const highlightCache = new Map();
 
-export function getHighlightCacheSize() {
-  return highlightCache.size;
-}
-
 export function highlightFence(source, language, { ignoreIllegals = false } = {}) {
   const text = String(source);
   const cacheable = text.length <= HIGHLIGHT_CACHE_MAX_SOURCE_CHARS;

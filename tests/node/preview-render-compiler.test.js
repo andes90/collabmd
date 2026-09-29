@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import hljs from 'highlight.js/lib/core';
 
 import { compilePreviewDocument } from '../../src/client/application/preview-render-compiler.js';
 import { getMarkdownHeadings } from '../../src/client/domain/markdown-headings.js';
@@ -85,6 +86,19 @@ test('compilePreviewDocument uses editor-supported aliases for fenced code highl
     });
 
     assert.match(html, /<span class="hljs-keyword">const<\/span>/);
+  }
+});
+
+test('compilePreviewDocument reuses fence highlighting across prose edits', (t) => {
+  const highlight = t.mock.method(hljs, 'highlightAuto');
+  const fence = '```unknown-language\nprint("cached preview fence")\n```';
+
+  for (const prose of ['Before edit', 'After edit']) {
+    const { html } = compilePreviewDocument({ markdownText: `${prose}\n\n${fence}` });
+
+    assert.ok(html.includes(prose));
+    assert.match(html, /<span class="hljs-/);
+    assert.equal(highlight.mock.callCount(), 1);
   }
 });
 
