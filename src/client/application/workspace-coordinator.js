@@ -299,6 +299,9 @@ export class WorkspaceCoordinator {
       : Promise.resolve(null);
 
     const EditorSession = await this.loadEditorSessionClass();
+    if (loadToken !== this.stateStore.sessionLoadToken) {
+      return false;
+    }
     const session = this.createEditorSession(EditorSession, {
       filePath,
       getFileList: this.getFileList,
@@ -435,15 +438,13 @@ export class WorkspaceCoordinator {
       await initializePromise;
 
       if (loadToken !== this.stateStore.sessionLoadToken) {
-        session.destroy();
-        return;
+        return false;
       }
 
       await Promise.all([liveSyncPromise, bootstrapVisibilityPromise]);
 
       if (loadToken !== this.stateStore.sessionLoadToken) {
-        session.destroy();
-        return;
+        return false;
       }
 
       if (!fileOpenReady) {
@@ -452,15 +453,14 @@ export class WorkspaceCoordinator {
       }
       return true;
     } catch (error) {
+      if (loadToken !== this.stateStore.sessionLoadToken) {
+        return false;
+      }
       console.error('[app] Failed to initialize editor:', error);
       session.destroy();
       this.attachEditorScroller(null);
       if (this.session === session) {
         this.session = null;
-      }
-
-      if (loadToken !== this.stateStore.sessionLoadToken) {
-        return;
       }
 
       this.onFileOpenError({ code: 'load-failed', filePath });

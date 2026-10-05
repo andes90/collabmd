@@ -188,6 +188,62 @@ test('WorkspaceCoordinator rejects missing files before creating an editor sessi
   assert.equal(coordinator.getSession(), null);
 });
 
+test('WorkspaceCoordinator does not create an editor after its route changes during module loading', async () => {
+  const moduleLoad = Promise.withResolvers();
+  let createdSessions = 0;
+  const { coordinator, session } = createCoordinator({
+    loadEditorSessionClass: () => moduleLoad.promise,
+    createEditorSession: () => {
+      createdSessions += 1;
+      return session;
+    },
+  });
+
+  const pendingOpen = coordinator.openFile('README.md');
+  await coordinator.openFile('__missing__.md');
+  moduleLoad.resolve(EditorSession);
+  const result = await pendingOpen;
+
+  assert.equal(createdSessions, 0);
+  assert.equal(coordinator.getSession(), null);
+  assert.equal(result, false);
+});
+
+for (const outcome of ['resolve', 'reject']) {
+  test(`WorkspaceCoordinator preserves missing-file feedback when cancelled sync ${outcome}s`, async () => {
+    const sync = Promise.withResolvers();
+    const syncStarted = Promise.withResolvers();
+    let feedback = '';
+    let destroyCalls = 0;
+    const { coordinator, session } = createCoordinator({
+      onFileOpenError: () => {
+        feedback = 'File not found';
+      },
+    });
+    session.destroy = () => {
+      destroyCalls += 1;
+      feedback = '';
+    };
+    session.waitForInitialSync = () => {
+      syncStarted.resolve();
+      return sync.promise;
+    };
+
+    const pendingOpen = coordinator.openFile('README.md');
+    await syncStarted.promise;
+    await coordinator.openFile('__missing__.md');
+    assert.equal(feedback, 'File not found');
+
+    sync[outcome](new Error('Cancelled sync'));
+    const result = await pendingOpen;
+
+    assert.equal(feedback, 'File not found');
+    assert.equal(destroyCalls, 1);
+    assert.equal(coordinator.getSession(), null);
+    assert.equal(result, false);
+  });
+}
+
 test('WorkspaceCoordinator renders an arbitrary .dsl workspace root', async () => {
   let renderedPath = null;
   const { coordinator } = createCoordinator({

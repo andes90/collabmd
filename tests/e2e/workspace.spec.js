@@ -151,6 +151,24 @@ test('missing and invalid file routes do not mount phantom editors', async ({ pa
   }
 });
 
+test('keeps missing-file feedback after cancelling a pending editor sync', async ({ page }) => {
+  await setHydrateDelay(page, 2000);
+
+  try {
+    await openFile(page, 'README.md');
+    await expect(page.locator('#editorContainer')).toHaveAttribute('data-editor-mode', 'provisional');
+
+    await page.evaluate(() => { window.location.hash = 'file=__qa_missing_file__.md'; });
+    await expect(page.locator('#editorLoading')).toContainText('File not found');
+    await expect(page.locator('.cm-editor')).toHaveCount(0);
+
+    await page.locator('#fileTree .file-tree-file[data-path="README.md"]').click();
+    await waitForCollaborativeEditor(page);
+  } finally {
+    await setHydrateDelay(page, 0);
+  }
+});
+
 test('skip to editor preserves the file route and focuses CodeMirror', async ({ page }) => {
   await openFile(page, 'README.md');
   const expectedUrl = page.url();
