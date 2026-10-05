@@ -677,6 +677,7 @@ export class CollabMdAppShell {
       onCommentsChange: (threads) => this.handleCommentThreadsChange(threads),
       onFileAwarenessChange: (users) => this.updateFileAwareness(users),
       onFileOpenError: ({ code } = {}) => {
+        this.currentFilePath = null;
         const notFound = code === 'not-found';
         this.showEditorLoadError(notFound ? 'File not found' : 'Failed to load file');
         this.syncWrapToggle();
@@ -780,6 +781,14 @@ export class CollabMdAppShell {
       workspaceCoordinator: this.workspaceCoordinator,
     });
 
+  }
+
+  get currentFilePath() { return this._currentFilePath; }
+  set currentFilePath(value) {
+    this._currentFilePath = value;
+    document.title = value
+      ? `${this.getDisplayName(value)} — CollabMD`
+      : 'CollabMD — Collaborative Markdown Vault';
   }
 
   get session() { return this._session; }

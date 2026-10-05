@@ -477,6 +477,8 @@ test('allows explicit session takeover between tabs in the same browser context'
 
   await expect(pageB.locator('#tabLockOverlay')).toBeVisible();
   await expect(pageB.locator('#tabLockTitle')).toHaveText('This vault is active in another tab');
+  await expect(pageA).toHaveTitle('README — CollabMD');
+  await expect(pageB).toHaveTitle('CollabMD — Collaborative Markdown Vault');
 
   await pageB.locator('#tabLockTakeoverBtn').click();
 
@@ -484,6 +486,8 @@ test('allows explicit session takeover between tabs in the same browser context'
   await expect(pageB.locator('.cm-editor')).toBeVisible();
   await expect(pageA.locator('#tabLockOverlay')).toBeVisible();
   await expect(pageA.locator('#tabLockTitle')).toHaveText('This tab is no longer active');
+  await expect(pageA).toHaveTitle('CollabMD — Collaborative Markdown Vault');
+  await expect(pageB).toHaveTitle('README — CollabMD');
 
   await replaceEditorContent(pageB, '# Takeover Owner\n\nOnly once.\n');
 

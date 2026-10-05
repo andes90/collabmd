@@ -139,15 +139,52 @@ test('shows empty state when no file is selected', async ({ page }) => {
   await expect(page.locator('.empty-state-title')).toContainText('Welcome to CollabMD');
   await expect(page.locator('#sidebarCreateBtn')).toBeVisible();
   await expect(page.locator('#refreshFilesBtn')).toHaveCount(0);
+  await expect(page).toHaveTitle('CollabMD — Collaborative Markdown Vault');
+});
+
+test('browser title follows note navigation, history, and reload', async ({ page }) => {
+  const filePath = 'notes/Résumé & planning.v2.markdown';
+  const response = await page.request.post('/api/file', {
+    data: { content: '# A different heading\n', path: filePath },
+  });
+  expect(response.ok()).toBeTruthy();
+
+  await openFile(page, filePath);
+  await expect(page).toHaveTitle('Résumé & planning.v2 — CollabMD');
+
+  await page.locator('#fileTree .file-tree-file[data-path="README.md"]').click();
+  await waitForEditor(page);
+  await expect(page).toHaveTitle('README — CollabMD');
+
+  await page.goBack();
+  await expect(page).toHaveTitle('Résumé & planning.v2 — CollabMD');
+  await page.goForward();
+  await expect(page).toHaveTitle('README — CollabMD');
+  await page.reload();
+  await waitForEditor(page);
+  await expect(page).toHaveTitle('README — CollabMD');
+
+  await page.evaluate(() => { window.location.hash = ''; });
+  await expect(page.locator('#emptyState')).toBeVisible();
+  await expect(page).toHaveTitle('CollabMD — Collaborative Markdown Vault');
+  await page.goBack();
+  await expect(page).toHaveTitle('README — CollabMD');
 });
 
 test('missing and invalid file routes do not mount phantom editors', async ({ page }) => {
   await openFile(page, 'README.md');
 
   for (const route of ['__qa_missing_file__.md', '../README.md', '']) {
-    await page.goto(`/#file=${encodeURIComponent(route)}`);
+    await page.evaluate((filePath) => {
+      window.location.hash = `file=${encodeURIComponent(filePath)}`;
+    }, route);
     await expect(page.locator('#editorLoading')).toContainText('File not found');
     await expect(page.locator('.cm-editor')).toHaveCount(0);
+    await expect(page).toHaveTitle('CollabMD — Collaborative Markdown Vault');
+
+    await page.locator('#fileTree .file-tree-file[data-path="README.md"]').click();
+    await waitForEditor(page);
+    await expect(page).toHaveTitle('README — CollabMD');
   }
 });
 
@@ -161,9 +198,11 @@ test('keeps missing-file feedback after cancelling a pending editor sync', async
     await page.evaluate(() => { window.location.hash = 'file=__qa_missing_file__.md'; });
     await expect(page.locator('#editorLoading')).toContainText('File not found');
     await expect(page.locator('.cm-editor')).toHaveCount(0);
+    await expect(page).toHaveTitle('CollabMD — Collaborative Markdown Vault');
 
     await page.locator('#fileTree .file-tree-file[data-path="README.md"]').click();
     await waitForCollaborativeEditor(page);
+    await expect(page).toHaveTitle('README — CollabMD');
   } finally {
     await setHydrateDelay(page, 0);
   }
@@ -1043,6 +1082,7 @@ test('moves and deletes files from the sidebar with the custom dialog', async ({
   await page.locator('#fileActionSubmit').click();
 
   await waitForEditor(page);
+  await expect(page).toHaveTitle('scratchpad — CollabMD');
   const scratchpadItem = page.locator('#fileTree .file-tree-item', { hasText: 'scratchpad' }).first();
   await scratchpadItem.click({ button: 'right' });
   await expect(page.locator('.file-context-menu')).toBeVisible();
@@ -1054,6 +1094,7 @@ test('moves and deletes files from the sidebar with the custom dialog', async ({
   await page.locator('#fileActionSubmit').click();
 
   await expect(page.locator('#activeFileName')).toContainText('release-notes');
+  await expect(page).toHaveTitle('release-notes — CollabMD');
   await expect(page.locator('#fileTree')).toContainText('release-notes');
   await expect(page.locator('#fileTree')).not.toContainText('scratchpad');
   await expect(page.locator('#fileTree')).toContainText('notes');
@@ -1069,6 +1110,7 @@ test('moves and deletes files from the sidebar with the custom dialog', async ({
   await page.locator('#fileActionSubmit').click();
 
   await expect(page.locator('#emptyState')).toBeVisible();
+  await expect(page).toHaveTitle('CollabMD — Collaborative Markdown Vault');
   await expect(page.locator('#fileTree')).not.toContainText('release-notes');
 });
 
