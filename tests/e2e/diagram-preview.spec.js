@@ -203,8 +203,7 @@ test('preserves PlantUML zoom and pan location across source edits', async ({ pa
   ].join('\n'));
 
   const updatedFrames = page.locator('#previewContent .plantuml-frame');
-  await expect(updatedFrames).toHaveCount(1);
-  await expect(updatedFrames).toContainText('plantuml-updated');
+  await expect(updatedFrames).toHaveText(['plantuml-updated']);
   const panMismatch = await page.evaluate(() => {
     window.__stopDiagramPanProbe = true;
     return window.__diagramPanMismatch;
