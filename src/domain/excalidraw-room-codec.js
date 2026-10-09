@@ -168,6 +168,14 @@ function sortSceneElements(elements) {
   return [...elements].sort(compareElementIndex);
 }
 
+export function normalizeExcalidrawRoomScene(rawScene, { includeDeleted = true } = {}) {
+  const scene = normalizeScene(rawScene);
+  scene.elements = sortSceneElements(scene.elements.filter((element) => (
+    element?.id && (includeDeleted || !element.isDeleted)
+  )));
+  return scene;
+}
+
 export function isExcalidrawRoomDocStructured(ydoc) {
   if (!ydoc) {
     return false;
@@ -213,10 +221,6 @@ export function buildExcalidrawRoomScene(ydoc, {
       return;
     }
 
-    if (!includeDeleted && winningElement.isDeleted) {
-      return;
-    }
-
     elements.push(winningElement);
   });
 
@@ -229,14 +233,14 @@ export function buildExcalidrawRoomScene(ydoc, {
     files[key] = cloneJsonValue(value);
   });
 
-  const scene = normalizeScene({
+  const scene = normalizeExcalidrawRoomScene({
     appState: {
       gridSize: appStateMap.get('gridSize'),
       viewBackgroundColor: appStateMap.get('viewBackgroundColor'),
     },
-    elements: sortSceneElements(elements),
+    elements,
     files,
-  });
+  }, { includeDeleted });
 
   return scene;
 }
@@ -245,9 +249,6 @@ export function serializeExcalidrawRoomScene(ydoc, {
   includeDeleted = false,
 } = {}) {
   const scene = buildExcalidrawRoomScene(ydoc, { includeDeleted });
-  if (!includeDeleted) {
-    scene.elements = scene.elements.filter((element) => !element.isDeleted);
-  }
   return JSON.stringify(scene);
 }
 

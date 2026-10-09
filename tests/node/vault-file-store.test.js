@@ -175,6 +175,32 @@ test('VaultFileStore can preserve the current collaboration snapshot during room
   assert.equal(await store.readCollaborationSnapshot('README.md'), null);
 });
 
+test('VaultFileStore keeps collaboration snapshots complete during replacement', async (t) => {
+  const { store, cleanup } = await createVaultStore();
+  t.after(cleanup);
+  const size = 262_144;
+  assert.equal((await store.writeCollaborationSnapshot('README.md', new Uint8Array(size).fill(1))).ok, true);
+  let finished = false;
+  let incompleteSnapshot = false;
+  const writer = (async () => {
+    try {
+      for (let value = 2; value < 14; value += 1) {
+        assert.equal((await store.writeCollaborationSnapshot('README.md', new Uint8Array(size).fill(value))).ok, true);
+      }
+    } finally {
+      finished = true;
+    }
+  })();
+  const reader = (async () => {
+    while (!finished) {
+      const snapshot = await store.readCollaborationSnapshot('README.md');
+      incompleteSnapshot ||= snapshot?.length !== size || !snapshot.every((value) => value === snapshot[0]);
+    }
+  })();
+  await Promise.all([writer, reader]);
+  assert.equal(incompleteSnapshot, false, 'Readers must see a complete old or new snapshot');
+});
+
 test('VaultFileStore persists content, comments, and snapshot as one staged collaboration update', async (t) => {
   const { store, cleanup } = await createVaultStore();
   t.after(cleanup);

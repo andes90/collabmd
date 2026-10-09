@@ -510,7 +510,7 @@ test('CollaborationRoom keeps legacy Excalidraw snapshots intact until an intent
     name: 'legacy.excalidraw',
     vaultFileStore: {
       async readCollaborationSnapshot() { return legacySnapshot; },
-      async readEditableVaultContent() { throw new Error('snapshot should hydrate without falling back to disk content'); },
+      async readEditableVaultContent() { return JSON.stringify(buildExcalidrawRoomScene(legacy)); },
       async persistCollaborationState(_path, state) { writes.push(state); },
     },
   });

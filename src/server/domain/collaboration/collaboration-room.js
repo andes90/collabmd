@@ -4,6 +4,7 @@ import * as syncProtocol from 'y-protocols/sync';
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
 import { setTimeout as delay } from 'node:timers/promises';
+import { isDeepStrictEqual } from 'node:util';
 
 import {
   MSG_AGENT_FLUSH,
@@ -36,6 +37,7 @@ import {
   EXCALIDRAW_FILES_KEY,
   isExcalidrawRoomDocStructured,
   migrateLegacyExcalidrawRoomData,
+  normalizeExcalidrawRoomScene,
   readLegacyExcalidrawRoomScene,
   replaceExcalidrawRoomScene,
   serializeExcalidrawRoomScene,
@@ -287,7 +289,6 @@ export class CollaborationRoom {
         const startedAt = Date.now();
         let hydrateSource = 'empty';
         let snapshotExists = false;
-        let snapshotNeedsReplacement = false;
         let snapshotValid = false;
         let commentThreadCount = 0;
         let snapshotReadDurationMs = 0;
@@ -305,53 +306,74 @@ export class CollaborationRoom {
             snapshotReadDurationMs = Date.now() - snapshotReadStartedAt;
             if (snapshot) {
               snapshotExists = true;
+              // Disk is authoritative. Keep read failures outside snapshot validation
+              // so a retry cannot reuse stale state or a partially hydrated document.
+              const content = await this.documentStore.readContent();
+              if (content === null) {
+                throw new Error('Vault file is unavailable');
+              }
+              const externalScene = isExcalidrawRoom(this.name)
+                ? tryParseExcalidrawSceneJson(content)
+                : null;
+              if (isExcalidrawRoom(this.name) && !externalScene) {
+                throw new Error('Invalid Excalidraw file content');
+              }
+              const validationDoc = new Y.Doc({ gc: true });
+              let validatedSnapshot = null;
               try {
+                Y.applyUpdate(validationDoc, snapshot, 'hydrate');
                 if (isCanvasFilePath(this.name)) {
-                  const validationDoc = new Y.Doc({ gc: true });
-                  try {
-                    Y.applyUpdate(validationDoc, snapshot, 'hydrate');
-                    const stored = serializeCanvasRoomDocument(validationDoc);
-                    const content = await this.documentStore.readContent();
-                    const meta = validationDoc.getMap(CANVAS_META_KEY);
-                    if (meta.has('externalConflict')) {
-                      let invalid = false;
-                      try { parseCanvasJson(content); } catch { invalid = true; }
-                      meta.set('externalConflict', { content, invalid });
-                    } else {
-                      const external = parseCanvasJson(content);
-                      if (stored !== serializeCanvasDocument(external)) {
-                        replaceCanvasRoomDocument(validationDoc, external);
-                      }
+                  const stored = serializeCanvasRoomDocument(validationDoc);
+                  const meta = validationDoc.getMap(CANVAS_META_KEY);
+                  if (meta.has('externalConflict')) {
+                    let invalid = false;
+                    try { parseCanvasJson(content); } catch { invalid = true; }
+                    meta.set('externalConflict', { content, invalid });
+                  } else {
+                    const external = parseCanvasJson(content);
+                    if (stored !== serializeCanvasDocument(external)) {
+                      replaceCanvasRoomDocument(validationDoc, external);
                     }
-                    Y.applyUpdate(this.doc, Y.encodeStateAsUpdate(validationDoc), 'hydrate');
-                  } finally {
-                    validationDoc.destroy();
                   }
                 } else if (isExcalidrawRoom(this.name)) {
-                  const validationDoc = new Y.Doc({ gc: true });
-                  try {
-                    Y.applyUpdate(validationDoc, snapshot, 'hydrate');
-                    if (!this.ensureStructuredExcalidrawState(validationDoc)) {
-                      throw new Error('snapshot did not contain a valid structured Excalidraw scene');
-                    }
-
-                    Y.applyUpdate(this.doc, Y.encodeStateAsUpdate(validationDoc), 'hydrate');
-                  } finally {
-                    validationDoc.destroy();
+                  if (!this.ensureStructuredExcalidrawState(validationDoc)) {
+                    throw new Error('snapshot did not contain a valid structured Excalidraw scene');
+                  }
+                  const storedScene = tryParseExcalidrawSceneJson(serializeExcalidrawRoomScene(validationDoc));
+                  if (!isDeepStrictEqual(storedScene, normalizeExcalidrawRoomScene(externalScene, { includeDeleted: false }))) {
+                    replaceExcalidrawRoomScene(validationDoc, externalScene);
                   }
                 } else {
-                  Y.applyUpdate(this.doc, snapshot, 'hydrate');
+                  const ytext = validationDoc.getText('codemirror');
+                  const replacement = computeTextReplacement(ytext.toString(), normalizeEditableText(content));
+                  validationDoc.transact(() => {
+                    if (replacement?.deleteCount) {
+                      ytext.delete(replacement.start, replacement.deleteCount);
+                    }
+                    if (replacement?.insertText) {
+                      ytext.insert(replacement.start, replacement.insertText);
+                    }
+                  }, 'hydrate');
                 }
 
-                snapshotValid = true;
-                hydrateSource = 'snapshot';
-                this.hydrated = true;
-                return;
+                validatedSnapshot = Y.encodeStateAsUpdate(validationDoc);
               } catch (error) {
                 console.warn(
                   `[room:${this.name}] Ignoring invalid collaboration snapshot until durable content is rehydrated: ${error.message}`,
                 );
-                snapshotNeedsReplacement = true;
+              } finally {
+                validationDoc.destroy();
+              }
+              if (validatedSnapshot) {
+                // Persist new Yjs operation IDs before clients can retain them across restarts.
+                if (!isDeepStrictEqual(snapshot, validatedSnapshot)) {
+                  await this.documentStore.writeSnapshot(validatedSnapshot);
+                }
+                Y.applyUpdate(this.doc, validatedSnapshot, 'hydrate');
+                snapshotValid = true;
+                hydrateSource = 'snapshot';
+                this.hydrated = true;
+                return;
               }
             }
 
@@ -364,35 +386,44 @@ export class CollaborationRoom {
             commentThreadCount = commentThreads.length;
             if (content !== null || commentThreads.length > 0) {
               hydrateSource = 'content';
-              const ytext = this.doc.getText('codemirror');
-              const comments = this.doc.getArray('comments');
-              this.doc.transact(() => {
-                if (isCanvasFilePath(this.name)) {
-                  try {
-                    replaceCanvasRoomDocument(this.doc, parseCanvasJson(content));
-                  } catch {
-                    this.doc.getMap(CANVAS_META_KEY).set('invalidContent', true);
-                  }
-                } else if (isExcalidrawRoom(this.name)) {
-                  const parsedScene = tryParseExcalidrawSceneJson(content);
-                  if (parsedScene) {
-                    migrateLegacyExcalidrawRoomData(this.doc, parsedScene);
+              const contentDoc = new Y.Doc({ gc: true });
+              try {
+                const ytext = contentDoc.getText('codemirror');
+                const comments = contentDoc.getArray('comments');
+                contentDoc.transact(() => {
+                  if (isCanvasFilePath(this.name)) {
+                    try {
+                      replaceCanvasRoomDocument(contentDoc, parseCanvasJson(content));
+                    } catch {
+                      contentDoc.getMap(CANVAS_META_KEY).set('invalidContent', true);
+                    }
+                  } else if (isExcalidrawRoom(this.name)) {
+                    const parsedScene = tryParseExcalidrawSceneJson(content);
+                    if (parsedScene) {
+                      migrateLegacyExcalidrawRoomData(contentDoc, parsedScene);
+                    } else if (content !== null) {
+                      ytext.insert(0, content);
+                    }
                   } else if (content !== null) {
-                    ytext.insert(0, content);
+                    ytext.insert(0, normalizeEditableText(content));
                   }
-                } else if (content !== null) {
-                  ytext.insert(0, normalizeEditableText(content));
-                }
-                populateCommentThreads(comments, commentThreads);
-              }, 'hydrate');
+                  populateCommentThreads(comments, commentThreads);
+                }, 'hydrate');
 
-              const replacementSnapshot = Y.encodeStateAsUpdate(this.doc);
-              if (snapshotNeedsReplacement || isCanvasFilePath(this.name)) {
-                await this.documentStore.writeSnapshot(replacementSnapshot);
-              } else {
-                void this.documentStore.writeSnapshot(replacementSnapshot).catch((error) => {
-                  console.error(`[room:${this.name}] Failed to prime collaboration snapshot: ${error.message}`);
-                });
+                const replacementSnapshot = Y.encodeStateAsUpdate(contentDoc);
+                // Clients must only see operation IDs that survive a server restart.
+                for (let attempt = 0; attempt < 3; attempt += 1) {
+                  try {
+                    await this.documentStore.writeSnapshot(replacementSnapshot);
+                    break;
+                  } catch (error) {
+                    if (attempt === 2) throw error;
+                    await delay(100 * (attempt + 1));
+                  }
+                }
+                Y.applyUpdate(this.doc, replacementSnapshot, 'hydrate');
+              } finally {
+                contentDoc.destroy();
               }
             }
           }

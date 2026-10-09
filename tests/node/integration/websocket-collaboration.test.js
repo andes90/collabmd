@@ -10,7 +10,12 @@ import * as decoding from 'lib0/decoding';
 import * as encoding from 'lib0/encoding';
 import { WebsocketProvider } from 'y-websocket';
 
-import { replaceExcalidrawRoomScene } from '../../../src/domain/excalidraw-room-codec.js';
+import {
+  applySceneDiffToExcalidrawRoom,
+  buildExcalidrawRoomScene,
+  replaceExcalidrawRoomScene,
+} from '../../../src/domain/excalidraw-room-codec.js';
+import { createAppServer } from '../../../src/server/create-app-server.js';
 import {
   MSG_AGENT_FLUSH,
   MSG_AGENT_FLUSH_ACK,
@@ -98,6 +103,118 @@ test('WebSocket collaboration does not rewrite CRLF markdown on open-only sessio
   const afterStat = await stat(absolutePath);
   assert.equal(await readFile(absolutePath, 'utf-8'), '# Test\r\n\r\nHello from CRLF.\r\n');
   assert.equal(afterStat.mtimeMs, beforeStat.mtimeMs);
+});
+
+for (const filePath of ['test.md', 'drawing.excalidraw']) {
+  test(`WebSocket restart reconciles offline changes to ${filePath} before a returning client edits`, async (t) => {
+    const app = await startTestServer();
+    const doc = new Y.Doc();
+    let server = app.server;
+    let provider;
+    t.after(async () => {
+      provider?.destroy();
+      doc.destroy();
+      await server.close();
+      await app.close();
+    });
+    const isExcalidraw = filePath.endsWith('.excalidraw');
+    const absolutePath = join(app.vaultDir, filePath);
+    if (isExcalidraw) {
+      await writeFile(absolutePath, JSON.stringify({
+        elements: [{ id: 'shape', type: 'rectangle', x: 10, version: 10, versionNonce: 10 }],
+      }));
+    }
+    const connect = (port) => new WebsocketProvider(
+      `ws://127.0.0.1:${port}${server.config.wsBasePath}`,
+      filePath,
+      doc,
+      { WebSocketPolyfill: WebSocket, disableBc: true },
+    );
+    provider = connect(app.port);
+    await waitForProviderSync(provider);
+    provider.destroy();
+    await waitForRoomRelease(app, filePath);
+    assert.ok(await server.vaultFileStore.readCollaborationSnapshot(filePath));
+    await server.close();
+
+    const externalContent = isExcalidraw
+      ? JSON.stringify({ elements: [{ id: 'shape', type: 'rectangle', x: 20, version: 1, versionNonce: 1 }] }, null, 2)
+      : '# Offline change\r\n\r\nPreserve this edit.\r\n';
+    await writeFile(absolutePath, externalContent);
+    const beforeStat = await stat(absolutePath);
+    for (let restart = 0; restart < 2; restart += 1) {
+      server = createAppServer({ ...app.server.config, port: 0, fileWatcherEnabled: true });
+      const { port } = await server.listen();
+      provider = connect(port);
+      await waitForProviderSync(provider);
+      if (isExcalidraw) assert.equal(buildExcalidrawRoomScene(doc).elements[0].x, 20);
+      else assert.equal(doc.getText('codemirror').toString(), externalContent.replaceAll('\r\n', '\n'));
+      assert.equal(await readFile(absolutePath, 'utf8'), externalContent);
+      assert.equal((await stat(absolutePath)).mtimeMs, beforeStat.mtimeMs);
+      if (restart === 0) {
+        // Discard live rooms without a final save, as after a process interruption.
+        await server.roomRegistry.reset();
+        provider.destroy();
+        await server.close();
+      }
+    }
+
+    if (isExcalidraw) {
+      const scene = buildExcalidrawRoomScene(doc);
+      doc.transact(() => {
+        applySceneDiffToExcalidrawRoom(doc, {
+          ...scene,
+          elements: [{ ...scene.elements[0], x: 30, version: 2 }],
+        });
+      });
+    } else {
+      doc.getText('codemirror').insert(doc.getText('codemirror').length, 'Client edit\n');
+    }
+    await waitForCondition(async () => {
+      const content = await readFile(absolutePath, 'utf8');
+      return isExcalidraw
+        ? JSON.parse(content).elements[0].x === 30
+        : content === '# Offline change\n\nPreserve this edit.\nClient edit\n';
+    });
+  });
+}
+
+test('WebSocket collaboration retries initial snapshot failures before syncing durable state', async (t) => {
+  const app = await startTestServer();
+  t.after(() => app.close());
+  const filePath = 'test.md';
+  const absolutePath = join(app.vaultDir, filePath);
+  const content = '# Initial snapshot\r\n';
+  await writeFile(absolutePath, content, 'utf8');
+  const beforeStat = await stat(absolutePath);
+  const store = app.server.vaultFileStore;
+  const writeSnapshot = store.writeCollaborationSnapshot.bind(store);
+  let attempts = 0;
+  store.writeCollaborationSnapshot = async (...args) => {
+    attempts += 1;
+    if (attempts < 3) return { ok: false, error: 'Temporary snapshot failure' };
+    return writeSnapshot(...args);
+  };
+
+  const doc = new Y.Doc();
+  const restored = new Y.Doc();
+  const provider = new WebsocketProvider(
+    `ws://127.0.0.1:${app.port}${app.server.config.wsBasePath}`,
+    filePath,
+    doc,
+    { WebSocketPolyfill: WebSocket, disableBc: true },
+  );
+  t.after(() => { provider.destroy(); doc.destroy(); restored.destroy(); });
+  await waitForProviderSync(provider);
+  assert.equal(attempts, 3);
+  const snapshot = await store.readCollaborationSnapshot(filePath);
+  assert.ok(snapshot);
+  Y.applyUpdate(restored, snapshot);
+  assert.equal(doc.getText('codemirror').toString(), '# Initial snapshot\n');
+  assert.equal(restored.getText('codemirror').toString(), doc.getText('codemirror').toString());
+  assert.deepEqual(Y.encodeStateVector(restored), Y.encodeStateVector(doc));
+  assert.equal(await readFile(absolutePath, 'utf8'), content);
+  assert.equal((await stat(absolutePath)).mtimeMs, beforeStat.mtimeMs);
 });
 
 test('WebSocket collaboration broadcasts awareness and persists vault file', async (t) => {

@@ -1,5 +1,6 @@
 import { dirname, join } from 'path';
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'fs/promises';
+import { randomUUID } from 'node:crypto';
 
 import { resolveVaultFilePath, sanitizeVaultPath, toVaultRelativePath } from './path-utils.js';
 import { mapWithConcurrency } from '../../shared/async-utils.js';
@@ -176,11 +177,14 @@ export class SidecarStore {
       return { ok: false, error: 'Invalid file path' };
     }
 
+    const tempPath = `${absolute}.collabmd-tmp-${randomUUID()}`;
     try {
       await mkdir(dirname(absolute), { recursive: true });
-      await writeFile(absolute, Buffer.from(snapshot));
+      await writeFile(tempPath, Buffer.from(snapshot), { flag: 'wx' });
+      await rename(tempPath, absolute);
       return { ok: true };
     } catch (error) {
+      await rm(tempPath, { force: true }).catch(() => {});
       return { ok: false, error: error.message };
     }
   }
