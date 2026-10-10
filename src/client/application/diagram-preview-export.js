@@ -4,6 +4,7 @@ import {
   stripVaultFileExtension,
 } from '../../domain/file-kind.js';
 import { getVaultPathLeaf } from '../domain/vault-paths.js';
+import { prepareMermaidRenderSource } from '../domain/mermaid-source.js';
 import {
   encodeSvgDataUrl,
   loadImage,
@@ -166,7 +167,7 @@ export function exportTrimmedSvgMarkupFromElement(svgElement, options = {}) {
 }
 
 function prepareMermaidExportSource(source) {
-  let text = String(source ?? '').replace(MERMAID_INIT_DIRECTIVE_PATTERN, '');
+  let text = prepareMermaidRenderSource(String(source ?? '').replace(MERMAID_INIT_DIRECTIVE_PATTERN, ''));
 
   text = `%%{init: ${JSON.stringify(LIGHT_EXPORT_MERMAID_CONFIG)}}%%\n${text}`;
 

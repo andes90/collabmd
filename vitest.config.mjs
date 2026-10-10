@@ -7,7 +7,7 @@ export default defineConfig({
       enabled: true,
       headless: true,
       instances: [
-        { browser: 'chromium' },
+        { browser: process.env.COLLABMD_TEST_BROWSER || 'chromium' },
       ],
       provider: playwright({
         // Exercise scrollbar-driven layout changes, including diagram auto-fit.

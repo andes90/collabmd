@@ -3,6 +3,7 @@ import {
   renderMermaidExportSvgMarkup,
 } from './diagram-preview-export.js';
 import { DiagramPreviewHydrator } from './diagram-preview-hydrator.js';
+import { prepareMermaidRenderSource } from '../domain/mermaid-source.js';
 import {
   createMermaidPlaceholderCardWithMessage,
   createDiagramErrorPlaceholderCard,
@@ -274,7 +275,7 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
   }
 
   prepareSource(source) {
-    let text = String(source ?? '');
+    let text = prepareMermaidRenderSource(source);
 
     if (!/%%\{[\s\S]*?\binit\s*:/m.test(text)) {
       const initConfig = this.getPreviewInitConfig(text);

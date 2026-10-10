@@ -89,6 +89,15 @@ Inspect `test-results/` traces, screenshots, and error context before retrying.
 If Chromium fails before launch with an OS/sandbox permission error, resolve the
 execution permission rather than modifying tests or disabling coverage.
 
+For Safari rendering regressions, install Playwright WebKit with
+`npx playwright install webkit`, then run the focused browser test:
+
+```bash
+COLLABMD_TEST_BROWSER=webkit npm run test:browser -- tests/browser/mermaid-sequence.browser.test.js
+```
+
+`COLLABMD_TEST_BROWSER` selects the browser instance; the default is Chromium.
+
 The existing [Docker workflow](../../.github/workflows/docker-publish.yml)
 validates PRs with `npm run check` and the Comment Overview E2E pilot below.
 The NPM release workflow runs `check`; neither runs the entire E2E suite.

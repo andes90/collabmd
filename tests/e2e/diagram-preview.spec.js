@@ -1648,6 +1648,39 @@ test('refits standalone PlantUML diagrams on maximize, resize, and restore', asy
   expect(restoredLabel).not.toBe(zoomedMaximizedLabel);
 });
 
+test('renders Mermaid sequence blank lines without changing the saved source', async ({ page }) => {
+  const source = [
+    'sequenceDiagram',
+    'actor Mobile',
+    'participant LoanApp',
+    'Mobile->>LoanApp: Prepare<br/>',
+    'Note right of LoanApp: TBA<br/><br/>Callback from Loan application',
+  ].join('\n');
+  await writeVaultFileAndResetCollab(page, { path: 'sample-mermaid.mmd', content: source });
+  await openFile(page, 'sample-mermaid.mmd');
+  await expect(page.locator('#previewContent .mermaid-frame svg')).toBeVisible();
+  await expect(page.locator('#previewContent .mermaid-frame')).toContainText('Callback from Loan application');
+  await expect(page.locator('#previewContent .diagram-preview-error-card')).toHaveCount(0);
+
+  const downloadPromise = page.waitForEvent('download');
+  await page.locator('#previewContent .mermaid-zoom-btn[aria-label="Download SVG"]').click();
+  const download = await downloadPromise;
+  const chunks = [];
+  for await (const chunk of await download.createReadStream()) {
+    chunks.push(chunk);
+  }
+  expect(Buffer.concat(chunks).toString('utf8')).toContain('Callback from Loan application');
+
+  await openFile(page, 'README.md');
+  await replaceEditorContent(page, `# Sequence\n\n\`\`\`mermaid\n${source}\n\`\`\``);
+  await expect(page.locator('#previewContent .mermaid-frame svg')).toBeVisible();
+  await expect(page.locator('#previewContent .mermaid-frame')).toContainText('Callback from Loan application');
+
+  const response = await page.request.get('/api/file?path=sample-mermaid.mmd');
+  expect(response.ok()).toBe(true);
+  expect((await response.json()).content).toBe(source);
+});
+
 test('opens .mmd files with side-by-side Mermaid preview', async ({ page }) => {
   await openFile(page, 'sample-mermaid.mmd');
 

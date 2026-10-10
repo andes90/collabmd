@@ -41,7 +41,7 @@
     "start:local-structurizr": "npm run build && node bin/collabmd.js --local-structurizr",
     "start:prod": "node bin/collabmd.js",
     "test": "npm run test:guardrails && npm run test:unit && npm run test:integration:prebuilt && npm run test:browser && npm run test:e2e:prebuilt",
-    "test:browser": "vitest run --config vitest.config.mjs --browser=chromium",
+    "test:browser": "vitest run --config vitest.config.mjs",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:prebuilt": "playwright test",

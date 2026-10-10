@@ -38,6 +38,7 @@ import { resolveWikiTargetPath } from '../../domain/wiki-link-resolver.js';
 import { createExcalidrawExportOptions, parseSceneJson } from '../domain/excalidraw-scene.js';
 import { escapeHtml } from '../domain/vault-utils.js';
 import { hasRenderedMath } from '../domain/markdown-math.js';
+import { prepareMermaidRenderSource } from '../domain/mermaid-source.js';
 import { downloadBlob } from '../browser-utils.js';
 import { resolveApiUrl, resolveAppUrl } from '../infrastructure/runtime-config.js';
 import { parseApiResponse } from '../infrastructure/api-client-utils.js';
@@ -881,7 +882,7 @@ async function ensureExcalidrawRuntime() {
 }
 
 function prepareMermaidSource(source) {
-  let text = String(source ?? '');
+  let text = prepareMermaidRenderSource(source);
 
   if (!/%%\{[\s\S]*?\binit\s*:/m.test(text)) {
     if (/^\s*stateDiagram(?:-v2)?\b/m.test(text) || /^\s*classDiagram\b/m.test(text) || /^\s*gantt\b/m.test(text)) {
