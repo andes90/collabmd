@@ -58,17 +58,19 @@ test('Excalidraw scene helpers preserve supported fields', () => {
     files: scene.files,
   });
   assert.deepEqual(createExcalidrawExportOptions(scene, { padding: 12, scale: 2 }), {
-    appState: {
-      exportBackground: true,
-      exportScale: 2,
-      exportWithDarkMode: false,
-      gridSize: 16,
+    config: {
+      padding: 12,
+      scale: 2,
       theme: 'light',
-      viewBackgroundColor: '#123456',
     },
-    elements: [scene.elements[0]],
-    exportPadding: 12,
-    files: scene.files,
+    data: {
+      appState: {
+        gridSize: 16,
+        viewBackgroundColor: '#123456',
+      },
+      elements: [scene.elements[0]],
+      files: scene.files,
+    },
   });
 
   assert.deepEqual(buildLiveCollaborationScene(scene.elements, scene.appState, scene.files), scene);

@@ -23,19 +23,21 @@ export function createExcalidrawExportOptions(scene, {
   scale = 1,
 } = {}) {
   return {
-    appState: {
-      exportBackground: true,
-      exportScale: scale,
-      exportWithDarkMode: false,
-      gridSize: scene.appState?.gridSize ?? null,
+    config: {
+      padding,
+      scale,
       theme: 'light',
-      viewBackgroundColor: scene.appState?.viewBackgroundColor ?? '#ffffff',
     },
-    elements: Array.isArray(scene.elements)
-      ? scene.elements.filter((element) => element && !element.isDeleted)
-      : [],
-    exportPadding: padding,
-    files: scene.files || null,
+    data: {
+      appState: {
+        gridSize: scene.appState?.gridSize ?? null,
+        viewBackgroundColor: scene.appState?.viewBackgroundColor ?? '#ffffff',
+      },
+      elements: Array.isArray(scene.elements)
+        ? scene.elements.filter((element) => element && !element.isDeleted)
+        : [],
+      files: scene.files || null,
+    },
   };
 }
 

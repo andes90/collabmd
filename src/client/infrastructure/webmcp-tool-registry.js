@@ -14,27 +14,24 @@ async function renderExactExcalidrawScene(scene, {
   padding = 32,
   scale = 1,
 } = {}) {
-  const {
-    exportToBlob,
-    exportToSvg,
-  } = await import('@excalidraw/excalidraw');
+  const { exportScene } = await import('@excalidraw/excalidraw');
   const options = createExcalidrawExportOptions(scene, { padding, scale });
   let data;
   let height;
   let mimeType;
   let width;
   if (format === 'svg') {
-    const svg = await exportToSvg(options);
+    const svg = await exportScene({ ...options, type: 'svg' });
     const markup = svg.outerHTML;
     data = new TextEncoder().encode(markup).toBase64();
     height = Math.max(1, Math.ceil(Number.parseFloat(svg.getAttribute('height')) || 1));
     mimeType = 'image/svg+xml';
     width = Math.max(1, Math.ceil(Number.parseFloat(svg.getAttribute('width')) || 1));
   } else {
-    const blob = await exportToBlob({
+    const blob = await exportScene({
       ...options,
-      maxWidthOrHeight: MAX_RENDER_DIMENSION,
-      mimeType: 'image/png',
+      config: { ...options.config, maxWidthOrHeight: MAX_RENDER_DIMENSION },
+      type: 'png',
     });
     const bitmap = await createImageBitmap(blob);
     data = new Uint8Array(await blob.arrayBuffer()).toBase64();

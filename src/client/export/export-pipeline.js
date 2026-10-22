@@ -870,12 +870,12 @@ async function ensureExcalidrawRuntime() {
   }
 
   excalidrawLoaderPromise = import('@excalidraw/excalidraw').then((module) => {
-    const exportToSvg = module?.exportToSvg;
-    if (typeof exportToSvg !== 'function') {
+    const exportScene = module?.exportScene;
+    if (typeof exportScene !== 'function') {
       throw new Error('Excalidraw runtime failed to initialize');
     }
 
-    return exportToSvg;
+    return exportScene;
   });
 
   return excalidrawLoaderPromise;
@@ -952,8 +952,8 @@ async function renderPlantUmlToSvgMarkup(source) {
 async function renderExcalidrawToSvgMarkup(filePath) {
   const rawScene = await fetchTextFile(filePath);
   const scene = parseSceneJson(rawScene);
-  const exportToSvg = await ensureExcalidrawRuntime();
-  const svgElement = await exportToSvg(createExcalidrawExportOptions(scene));
+  const exportScene = await ensureExcalidrawRuntime();
+  const svgElement = await exportScene({ ...createExcalidrawExportOptions(scene), type: 'svg' });
   return normalizeExportSvgMarkup(svgElement.outerHTML, { padding: 24 });
 }
 

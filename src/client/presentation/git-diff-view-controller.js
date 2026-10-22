@@ -1177,9 +1177,9 @@ export class GitDiffViewController {
       return;
     }
 
-    let exportToSvg;
+    let exportScene;
     try {
-      ({ exportToSvg } = await import('@excalidraw/excalidraw'));
+      ({ exportScene } = await import('@excalidraw/excalidraw'));
     } catch (error) {
       console.warn('[git-diff] Excalidraw preview renderer unavailable:', error);
       return;
@@ -1192,7 +1192,7 @@ export class GitDiffViewController {
       }
 
       try {
-        const svg = await exportToSvg(createExcalidrawExportOptions(scene));
+        const svg = await exportScene({ ...createExcalidrawExportOptions(scene), type: 'svg' });
         preview.replaceChildren(svg);
         preview.classList.add('is-ready');
       } catch (error) {
