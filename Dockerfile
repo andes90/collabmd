@@ -1,4 +1,4 @@
-FROM node:26-alpine AS build
+FROM node:26.12.1-alpine AS build
 
 WORKDIR /app
 
@@ -8,7 +8,7 @@ RUN npm ci
 COPY . .
 RUN npm run build && npm prune --omit=dev
 
-FROM node:26-alpine AS runtime
+FROM node:26.12.1-alpine AS runtime
 
 WORKDIR /app
 

@@ -2,7 +2,7 @@
 
 > Operator docs. Start with the [README](../README.md) for the product overview.
 
-- `npx collabmd@latest` fails immediately: confirm you are running Node.js 26, which is the supported runtime for source and npm usage
+- `npx collabmd@latest` fails immediately: confirm you are running Node.js 26.12.1 or newer, which is the minimum runtime for source and npm usage
 - The app is reachable only from localhost: pass `--host 0.0.0.0` or set `HOST=0.0.0.0` when you intend to expose it on your network
 - Port `1234` is already in use: pass `--port 3000` or set `PORT` to another free port
 - Tunnel did not start: install `cloudflared`, or pass `--no-tunnel` to stay local-only

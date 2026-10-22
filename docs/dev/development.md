@@ -7,7 +7,7 @@ in [configuration](../configuration.md), not this guide.
 
 ## Setup
 
-Use Node.js 26 (the exact local version is in `.tool-versions`), npm, and ripgrep
+Use Node.js 26.12.1 or newer (the exact local version is in `.tool-versions`), npm, and ripgrep
 (`rg`, required by search tests). From a clean checkout:
 
 ```bash

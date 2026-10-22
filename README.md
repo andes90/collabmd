@@ -26,7 +26,7 @@ Throughout this guide, **vault** simply means a regular folder on your computer 
 
 Requirements for the fastest first run:
 
-- Node.js 26 for `npx` and source installs
+- Node.js 26.12.1 or newer for `npx` and source installs
 - ripgrep for global text search (`rg`; included in the Docker image)
 - Homebrew only if you want the `brew install` path
 

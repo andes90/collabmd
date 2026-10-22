@@ -5,7 +5,7 @@
 ### Requirements
 
 - macOS, Linux, or Windows (via WSL2)
-- Node.js 26 for `npx` and source installs
+- Node.js 26.12.1 or newer for `npx` and source installs
 - ripgrep for global text search. Install with `brew install ripgrep` on macOS, `apk add ripgrep` on Alpine, or `apt install ripgrep` on Debian/Ubuntu. Docker images already include it.
 
 ### Run via npx (Node.js)

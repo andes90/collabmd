@@ -4,7 +4,7 @@ Use this guide to test the claim gate, temporary source-less setup, Team Setting
 
 ## Prerequisites
 
-- Node.js 26 and `npm install` completed
+- Node.js 26.12.1 or newer and `npm install` completed
 - A Google OAuth Web application
 - One Google account for the first Team Admin
 - A second Google account if you want to test invitation acceptance
