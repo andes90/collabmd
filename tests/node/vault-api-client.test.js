@@ -121,6 +121,26 @@ test('VaultApiClient prefixes vault endpoints with the configured base path', as
   );
 });
 
+test('VaultApiClient identifies PDF uploads when browser MIME metadata is missing or generic', async (t) => {
+  const requests = [];
+  const originalWindow = globalThis.window;
+  globalThis.window = createWindowStub();
+  t.after(() => { globalThis.window = originalWindow; });
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    requests.push({ options, url });
+    return Response.json({ ok: true });
+  });
+
+  for (const type of ['', 'application/octet-stream', 'application/pdf']) {
+    const file = new File(['%PDF-1.7\n%%EOF\n'], 'Guide.PDF', { type });
+    await vaultApiClient.uploadFile({ file, path: 'docs/Guide.PDF' });
+
+    const { options } = requests.at(-1);
+    assert.equal(options.headers['Content-Type'], 'application/pdf');
+    assert.equal(options.body, file);
+  }
+});
+
 test('VaultApiClient surfaces API-provided errors', async (t) => {
   const originalFetch = globalThis.fetch;
   const originalWindow = globalThis.window;

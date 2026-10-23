@@ -727,6 +727,23 @@ test('file explorer uploads multiple supported vault files', async ({ page }) =>
   expect(await response.text()).toBe('# Uploaded note\n');
 });
 
+test('file explorer uploads a PDF with generic browser MIME metadata', async ({ page }) => {
+  await openHome(page);
+  const content = createPdfFixture();
+  const fileChooserPromise = page.waitForEvent('filechooser');
+  await chooseCreateAction(page, 'Upload files');
+  const fileChooser = await fileChooserPromise;
+  const uploadPromise = page.waitForResponse((response) => response.url().endsWith('/file/upload'));
+  await fileChooser.setFiles({ buffer: content, mimeType: 'application/octet-stream', name: 'guide.PDF' });
+
+  const upload = await uploadPromise;
+  expect(upload.status()).toBe(201);
+  await expect(page.locator('#fileTree')).toContainText('guide');
+  const response = await page.request.get('/api/download/file?path=guide.PDF');
+  expect(response.ok()).toBe(true);
+  expect(await response.body()).toEqual(content);
+});
+
 test('image toolbar uploads a vault attachment and inserts inline markdown', async ({ page }) => {
   await openFile(page, 'README.md');
   await waitForCollaborativeEditor(page);

@@ -1,4 +1,5 @@
 import { resolveApiUrl } from '../domain/runtime-paths.js';
+import { isPdfFilePath } from '../../domain/file-kind.js';
 import { getVaultPathLeaf } from '../domain/vault-paths.js';
 import { createRequestHeaders, parseApiResponse } from './api-client-utils.js';
 import { downloadBlob, parseDownloadFileName } from '../browser-utils.js';
@@ -288,7 +289,7 @@ export const vaultApiClient = {
     const response = await fetch(resolveApiUrl('/file/upload'), {
       body: file,
       headers: createRequestHeaders(requestId, {
-        'Content-Type': file?.type || 'application/octet-stream',
+        'Content-Type': isPdfFilePath(path) ? 'application/pdf' : (file?.type || 'application/octet-stream'),
         'X-CollabMD-File-Path': encodeHeaderMetadata(path),
       }),
       method: 'POST',
