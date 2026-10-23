@@ -67,9 +67,12 @@ export class FileSystemSyncService {
     this.pendingEventTypesByPath = new Map();
     this.forceFullScan = false;
     this.suspendWatchEventsUntil = 0;
+    this.retryCount = 0;
+    this.closed = false;
   }
 
   async start({ snapshot = null } = {}) {
+    this.closed = false;
     this.lastState = snapshot ?? this.mutationCoordinator.workspaceState ?? await this.vaultFileStore.scanWorkspaceState();
     this.watcher = watch(this.vaultFileStore.vaultDir, { recursive: true }, (eventType, filename) => {
       this.handleWatchEvent(eventType, filename);
@@ -96,6 +99,8 @@ export class FileSystemSyncService {
       return;
     }
 
+    this.retryCount = 0;
+
     const bucket = this.pendingEventTypesByPath.get(normalizedPath) ?? new Set();
     bucket.add(String(eventType || 'change'));
     this.pendingEventTypesByPath.set(normalizedPath, bucket);
@@ -107,14 +112,19 @@ export class FileSystemSyncService {
     this.scheduleFlush();
   }
 
-  scheduleFlush() {
+  scheduleFlush(delayMs = this.debounceMs) {
+    if (this.closed) return;
     clearTimeout(this.debounceTimer);
     this.debounceTimer = setTimeout(() => {
       this.debounceTimer = null;
-      this.runningFlush = this.flush().finally(() => {
-        this.runningFlush = null;
+      this.flushPendingChanges().then(() => {
+        this.retryCount = 0;
+      }).catch((error) => {
+        console.error('[filesystem-sync] Failed to reconcile changes:', error.message);
+        this.retryCount += 1;
+        if (this.retryCount <= 3) this.scheduleFlush(Math.max(this.debounceMs, 250) * 2 ** (this.retryCount - 1));
       });
-    }, this.debounceMs);
+    }, delayMs);
     this.debounceTimer.unref?.();
   }
 
@@ -140,9 +150,8 @@ export class FileSystemSyncService {
     clearTimeout(this.debounceTimer);
     this.debounceTimer = null;
 
-    if (this.runningFlush) {
+    while (this.runningFlush) {
       await this.runningFlush;
-      return;
     }
 
     if (this.pendingEventTypesByPath.size === 0 && !this.forceFullScan) {
@@ -177,6 +186,18 @@ export class FileSystemSyncService {
   }
 
   async flush() {
+    await this.mutationCoordinator.waitForManagedWrites?.();
+    const previousState = this.lastState;
+    try {
+      return await this.reconcilePendingChanges();
+    } catch (error) {
+      this.lastState = previousState;
+      this.forceFullScan = true;
+      throw error;
+    }
+  }
+
+  async reconcilePendingChanges() {
     const startedAt = Date.now();
     const pendingPathCount = this.pendingEventTypesByPath.size;
     const { fallbackReason, incrementalResult } = await this.buildIncrementalResult();
@@ -190,7 +211,7 @@ export class FileSystemSyncService {
     let workspaceChange = incrementalResult?.workspaceChange ?? detectWorkspaceStateChange(this.lastState, nextState);
     this.lastState = nextState;
 
-    let filteredChange = this.mutationCoordinator.filterManagedWorkspaceChange(workspaceChange);
+    let filteredChange = this.mutationCoordinator.filterManagedWorkspaceChange(workspaceChange, nextState);
     if (!filteredChange) {
       const authoritativeChange = detectWorkspaceStateChange(authoritativePreviousState, nextState);
       // A full scan already reflects current disk state (no awaits since),
@@ -199,7 +220,7 @@ export class FileSystemSyncService {
         nextState = await this.vaultFileStore.scanWorkspaceState();
         workspaceChange = detectWorkspaceStateChange(authoritativePreviousState, nextState);
         this.lastState = nextState;
-        filteredChange = this.mutationCoordinator.filterManagedWorkspaceChange(workspaceChange);
+        filteredChange = this.mutationCoordinator.filterManagedWorkspaceChange(workspaceChange, nextState);
         effectiveMode = 'full-scan';
         effectiveFallbackReason = effectiveFallbackReason || 'authoritative-rebase';
       }
@@ -243,6 +264,7 @@ export class FileSystemSyncService {
   }
 
   async close() {
+    this.closed = true;
     clearTimeout(this.debounceTimer);
     this.debounceTimer = null;
     this.pendingEventTypesByPath.clear();

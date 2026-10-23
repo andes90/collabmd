@@ -2,6 +2,38 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { RoomRegistry } from '../../src/server/domain/collaboration/room-registry.js';
+import { createDrawioLeaseRoomName } from '../../src/domain/drawio-room.js';
+import { WORKSPACE_ROOM_NAME } from '../../src/domain/workspace-room.js';
+
+for (const name of [WORKSPACE_ROOM_NAME, '__lobby__', createDrawioLeaseRoomName('diagram.drawio')]) {
+  test(`RoomRegistry keeps control room ${name} outside vault path mutations`, async () => {
+    const calls = [];
+    const registry = new RoomRegistry({
+      createRoom: ({ name }) => ({
+        name,
+        pausePersistence() { calls.push('pause'); },
+        resumePersistence() { calls.push('resume'); },
+        markDeleted() { calls.push('delete'); },
+        destroy() { calls.push('destroy'); },
+        reloadFromDisk() { calls.push('reload'); },
+      }),
+    });
+    const room = registry.getOrCreate(name);
+    for (const change of [
+      { changedPaths: [name] },
+      { renamedPaths: [{ oldPath: name, newPath: 'archive' }] },
+      { renamedPaths: [{ oldPath: 'archive', newPath: name }] },
+      { deletedPaths: [name] },
+    ]) {
+      await registry.runWithPersistencePaused([name], async () => {
+        assert.equal(registry.getOrCreate(name), room);
+        await registry.reconcileWorkspaceChange(change);
+      });
+      assert.equal(registry.get(name), room);
+    }
+    assert.deepEqual(calls, []);
+  });
+}
 
 test('RoomRegistry reset destroys active rooms and clears the registry', async () => {
   const destroyed = [];

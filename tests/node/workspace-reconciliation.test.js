@@ -8,6 +8,9 @@ import { createWorkspaceChange } from '../../src/domain/workspace-change.js';
 import { WorkspaceReconciliation } from '../../src/server/application/workspace-reconciliation.js';
 import { VaultFileStore } from '../../src/server/infrastructure/persistence/vault-file-store.js';
 import { createWorkspaceStateFileSystemAdapter } from '../../src/server/infrastructure/workspace/workspace-state-file-system-adapter.js';
+import { CollaborationRoom } from '../../src/server/domain/collaboration/collaboration-room.js';
+import { RoomRegistry } from '../../src/server/domain/collaboration/room-registry.js';
+import { WORKSPACE_ROOM_NAME } from '../../src/domain/workspace-room.js';
 
 function createWorkspaceReconciliation(options) {
   return new WorkspaceReconciliation({
@@ -67,6 +70,72 @@ async function createCoordinatorWithVault(t, initialFiles = {}) {
     vaultFileStore,
   };
 }
+
+for (const mutation of ['delete-file', 'delete-directory', 'rename-file', 'rename-directory']) {
+  test(`${mutation} drains an active save before moving content and sidecars`, async (t) => {
+    const { coordinator, vaultDir, vaultFileStore } = await createCoordinatorWithVault(t, { 'docs/note.md': 'original' });
+    const registry = new RoomRegistry({
+      createRoom: ({ name, onEmpty }) => new CollaborationRoom({
+        name, onEmpty, idleGraceMs: 0,
+        vaultFileStore: name === WORKSPACE_ROOM_NAME ? null : vaultFileStore,
+      }),
+    });
+    coordinator.roomRegistry = registry;
+    t.after(() => registry.reset());
+    const room = registry.getOrCreate('docs/note.md');
+    await room.hydrate();
+    room.doc.getText('codemirror').insert(0, 'edited ');
+    const entered = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    const persistState = room.documentStore.persistState.bind(room.documentStore);
+    room.documentStore.persistState = async (state) => {
+      entered.resolve();
+      await release.promise;
+      return persistState(state);
+    };
+    const saving = room.persist();
+    await entered.promise;
+    const operations = {
+      'delete-file': () => coordinator.deleteFile({ path: ' docs//note.md ' }),
+      'delete-directory': () => coordinator.deleteDirectory({ path: ' docs/ ', recursive: true }),
+      'rename-file': () => coordinator.renameFile({ oldPath: 'docs\\note.md', newPath: 'moved.md' }),
+      'rename-directory': () => coordinator.renameDirectory({ oldPath: 'docs/', newPath: ' moved/ ' }),
+    };
+    const changing = operations[mutation]();
+    try {
+      assert.equal(room.persistencePauseCount, 1);
+      assert.equal(await readFile(join(vaultDir, 'docs/note.md'), 'utf8'), 'original');
+      assert.throws(() => registry.getOrCreate('docs/note.md'), /being renamed or deleted/u);
+    } finally {
+      release.resolve();
+    }
+    assert.equal((await changing).ok, true);
+    await saving;
+    await assert.rejects(readFile(join(vaultDir, 'docs/note.md')), { code: 'ENOENT' });
+    assert.equal(await vaultFileStore.readCollaborationSnapshot('docs/note.md'), null);
+    if (mutation.startsWith('rename')) {
+      const destination = mutation === 'rename-file' ? 'moved.md' : 'moved/note.md';
+      assert.equal(await vaultFileStore.readEditableVaultContent(destination), 'edited original');
+      assert.ok(await vaultFileStore.readCollaborationSnapshot(destination));
+    }
+    assert.equal(room.persistencePauseCount, 0);
+  });
+}
+
+test('failed deletion resumes live room saves', async (t) => {
+  const { coordinator, vaultFileStore } = await createCoordinatorWithVault(t, { 'docs/note.md': 'original' });
+  const registry = new RoomRegistry({ createRoom: ({ name, onEmpty }) => new CollaborationRoom({ name, onEmpty, vaultFileStore }) });
+  coordinator.roomRegistry = registry;
+  t.after(() => registry.reset());
+  const room = registry.getOrCreate('docs/note.md');
+  await room.hydrate();
+  assert.equal((await coordinator.deleteDirectory({ path: 'docs' })).ok, false);
+  assert.equal(room.persistencePauseCount, 0);
+  assert.equal(room.isDeleted(), false);
+  room.doc.getText('codemirror').insert(0, 'after failure ');
+  await room.persist();
+  assert.equal(await vaultFileStore.readEditableVaultContent('docs/note.md'), 'after failure original');
+});
 
 test('WorkspaceReconciliation applies small backlink renames incrementally', async () => {
   const calls = [];

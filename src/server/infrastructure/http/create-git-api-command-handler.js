@@ -95,14 +95,14 @@ export function createGitApiCommandHandler({
         return true;
       }
 
-      jsonResponse(req, res, 200, await applyWorkspaceMutationEffects({
-        action: route.action,
-        req,
-        responsePayload: await workspaceMutationCoordinator.runManagedWorkspaceMutation(
-          () => route.run(body, req),
-        ),
-        workspaceMutationCoordinator,
-      }));
+      jsonResponse(req, res, 200, await workspaceMutationCoordinator.runManagedWorkspaceMutation(async () => (
+        applyWorkspaceMutationEffects({
+          action: route.action,
+          req,
+          responsePayload: await route.run(body, req),
+          workspaceMutationCoordinator,
+        })
+      )));
     } catch (error) {
       handleApiError(req, res, error, `[api] ${route.errorMessage}:`, route.errorMessage);
     }

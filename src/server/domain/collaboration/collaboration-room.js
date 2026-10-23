@@ -259,6 +259,7 @@ export class CollaborationRoom {
     this.destroyed = false;
     this.cachedInitialSyncMessage = null;
     this.activePersistPromise = null;
+    this.persistencePauseCount = 0;
     this.persistedContentBaseline = null;
     this.contentDirty = false;
     this.debugMetrics = {
@@ -616,7 +617,7 @@ export class CollaborationRoom {
   }
 
   schedulePersist() {
-    if (!this.documentStore?.hasPersistence()) {
+    if (!this.documentStore?.hasPersistence() || this.persistencePauseCount > 0) {
       return;
     }
 
@@ -629,14 +630,14 @@ export class CollaborationRoom {
   }
 
   async persist() {
-    if (!this.documentStore?.hasPersistence() || this.deleted) {
+    if (!this.documentStore?.hasPersistence() || this.deleted || this.persistencePauseCount > 0) {
       return;
     }
 
     const previousPersistPromise = this.activePersistPromise;
     const persistPromise = (async () => {
       await previousPersistPromise?.catch(() => {});
-      if (!this.documentStore?.hasPersistence() || this.deleted) {
+      if (!this.documentStore?.hasPersistence() || this.deleted || this.persistencePauseCount > 0) {
         return;
       }
 
@@ -692,6 +693,24 @@ export class CollaborationRoom {
     });
     this.activePersistPromise = trackedPromise;
     await trackedPromise;
+  }
+
+  async pausePersistence() {
+    this.persistencePauseCount += 1;
+    this.shutdownGeneration += 1;
+    clearTimeout(this.persistTimer);
+    clearTimeout(this.destroyTimer);
+    this.persistTimer = null;
+    this.destroyTimer = null;
+    await Promise.all([this.hydratePromise, this.activePersistPromise, this.finalizePromise]);
+  }
+
+  resumePersistence() {
+    this.persistencePauseCount -= 1;
+    if (this.persistencePauseCount === 0 && !this.deleted && !this.destroyed) {
+      if (this.clients.size === 0) this.finalizeIfIdle();
+      else this.schedulePersist();
+    }
   }
 
   async reloadFromDisk() {
@@ -975,7 +994,7 @@ export class CollaborationRoom {
   }
 
   finalizeIfIdle() {
-    if (this.clients.size > 0 || this.finalizePromise) {
+    if (this.clients.size > 0 || this.finalizePromise || this.persistencePauseCount > 0) {
       return;
     }
 

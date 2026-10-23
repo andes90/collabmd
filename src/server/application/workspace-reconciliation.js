@@ -11,6 +11,8 @@ import {
   createWorkspaceTree,
   deriveNextWorkspaceStateForApiMutation as deriveNextWorkspaceStateFromApiMutation,
   diffWorkspaceEntries,
+  normalizeWorkspacePath,
+  readWorkspacePathState,
 } from '../domain/workspace-state.js';
 
 function createEventId() {
@@ -54,6 +56,10 @@ function normalizePaths(paths = []) {
   return Array.from(new Set((paths ?? []).filter(Boolean)));
 }
 
+function normalizeMutationPath(path) {
+  return normalizeWorkspacePath(path).replace(/\/{2,}/gu, '/').replace(/\/$/u, '');
+}
+
 export class WorkspaceReconciliation {
   constructor({
     backlinkIndex,
@@ -70,6 +76,8 @@ export class WorkspaceReconciliation {
     this.workspaceStateAdapter = workspaceStateAdapter;
     this.managedWriteWindowMs = managedWriteWindowMs;
     this.managedPathExpiry = new Map();
+    this.managedPathMetadata = new Map();
+    this.activeManagedWrites = new Set();
     this.globalSuppressionUntil = 0;
     this.workspaceState = null;
     this.workspaceTree = [];
@@ -131,20 +139,43 @@ export class WorkspaceReconciliation {
     });
   }
 
-  runManagedWrite(paths = [], operation) {
-    this.markManagedPaths(paths);
-    return Promise.resolve(operation()).finally(() => {
+  runManagedWrite(paths = [], operation, expectedContent) {
+    return this.trackManagedWrite(async () => {
+      const result = await operation();
+      await Promise.all(normalizePaths(paths).map(async (path) => {
+        const state = await readWorkspacePathState(this.workspaceStateAdapter, path);
+        if (expectedContent !== undefined && await this.vaultFileStore.readEditableVaultContent(path) !== expectedContent) {
+          this.managedPathMetadata.delete(path);
+          return;
+        }
+        this.managedPathMetadata.set(path, state?.metadata ?? null);
+      }));
       this.markManagedPaths(paths);
+      return result;
     });
   }
 
-  async runManagedWorkspaceMutation(operation) {
-    this.globalSuppressionUntil = Math.max(this.globalSuppressionUntil, Date.now() + this.managedWriteWindowMs);
-    try {
-      return await operation();
-    } finally {
-      this.globalSuppressionUntil = Math.max(this.globalSuppressionUntil, Date.now() + this.managedWriteWindowMs);
+  trackManagedWrite(operation) {
+    const pending = Promise.resolve().then(operation);
+    this.activeManagedWrites.add(pending);
+    return pending.finally(() => this.activeManagedWrites.delete(pending));
+  }
+
+  async waitForManagedWrites() {
+    while (this.activeManagedWrites.size > 0) {
+      await Promise.allSettled(this.activeManagedWrites);
     }
+  }
+
+  runManagedWorkspaceMutation(operation) {
+    return this.trackManagedWrite(async () => {
+      this.globalSuppressionUntil = Math.max(this.globalSuppressionUntil, Date.now() + this.managedWriteWindowMs);
+      try {
+        return await operation();
+      } finally {
+        this.globalSuppressionUntil = Math.max(this.globalSuppressionUntil, Date.now() + this.managedWriteWindowMs);
+      }
+    });
   }
 
   isGloballySuppressed() {
@@ -156,6 +187,7 @@ export class WorkspaceReconciliation {
     Array.from(this.managedPathExpiry.entries()).forEach(([pathValue, expiresAt]) => {
       if (expiresAt <= now) {
         this.managedPathExpiry.delete(pathValue);
+        this.managedPathMetadata.delete(pathValue);
       }
     });
   }
@@ -166,19 +198,25 @@ export class WorkspaceReconciliation {
     return Number.isFinite(expiresAt) && expiresAt > Date.now();
   }
 
-  filterManagedWorkspaceChange(workspaceChange = {}) {
-    if (this.isGloballySuppressed()) {
-      return null;
-    }
+  filterManagedWorkspaceChange(workspaceChange = {}, nextState) {
+    const matchesManagedPath = (path) => {
+      const global = this.isGloballySuppressed();
+      const managed = this.isManagedPath(path) && this.managedPathMetadata.has(path);
+      if (!managed && !global) return false;
+      const expected = managed ? this.managedPathMetadata.get(path) : this.workspaceState?.metadata.get(path);
+      const actual = nextState?.metadata.get(path);
+      if (!expected || !actual) return !expected && !actual;
+      return expected.type === actual.type && expected.inode === actual.inode
+        && expected.size === actual.size && expected.mtimeMs === actual.mtimeMs;
+    };
 
     const filtered = createWorkspaceChange({
-      changedPaths: (workspaceChange.changedPaths ?? []).filter((pathValue) => !this.isManagedPath(pathValue)),
-      deletedPaths: (workspaceChange.deletedPaths ?? []).filter((pathValue) => !this.isManagedPath(pathValue)),
+      changedPaths: (workspaceChange.changedPaths ?? []).filter((pathValue) => !matchesManagedPath(pathValue)),
+      deletedPaths: (workspaceChange.deletedPaths ?? []).filter((pathValue) => !matchesManagedPath(pathValue)),
       renamedPaths: (workspaceChange.renamedPaths ?? []).filter((entry) => (
         entry?.oldPath
         && entry?.newPath
-        && !this.isManagedPath(entry.oldPath)
-        && !this.isManagedPath(entry.newPath)
+        && !(matchesManagedPath(entry.oldPath) && matchesManagedPath(entry.newPath))
       )),
       refreshExplorer: workspaceChange.refreshExplorer !== false,
     });
@@ -346,37 +384,44 @@ export class WorkspaceReconciliation {
   }
 
   async deleteFile({ origin = 'api', path, requestId = null } = {}) {
-    const result = await this.vaultFileStore.deleteFile(path);
-    if (!result.ok) {
-      return result;
-    }
+    path = normalizeMutationPath(path);
+    return this.runWithPersistencePaused([path], async () => {
+      const result = await this.vaultFileStore.deleteFile(path);
+      if (!result.ok) {
+        return result;
+      }
 
-    await this.reconcileVaultChangeObservation({
-      action: 'delete-file',
-      origin,
-      requestId,
-      workspaceChange: createWorkspaceChange({
-        deletedPaths: [path],
-      }),
+      await this.reconcileVaultChangeObservation({
+        action: 'delete-file',
+        origin,
+        requestId,
+        workspaceChange: createWorkspaceChange({
+          deletedPaths: [path],
+        }),
+      });
+      return result;
     });
-    return result;
   }
 
   async renameFile({ newPath, oldPath, origin = 'api', requestId = null } = {}) {
-    const result = await this.vaultFileStore.renameFile(oldPath, newPath);
-    if (!result.ok) {
-      return result;
-    }
+    oldPath = normalizeMutationPath(oldPath);
+    newPath = normalizeMutationPath(newPath);
+    return this.runWithPersistencePaused([oldPath, newPath], async () => {
+      const result = await this.vaultFileStore.renameFile(oldPath, newPath);
+      if (!result.ok) {
+        return result;
+      }
 
-    await this.reconcileVaultChangeObservation({
-      action: 'rename-file',
-      origin,
-      requestId,
-      workspaceChange: createWorkspaceChange({
-        renamedPaths: [{ oldPath, newPath }],
-      }),
+      await this.reconcileVaultChangeObservation({
+        action: 'rename-file',
+        origin,
+        requestId,
+        workspaceChange: createWorkspaceChange({
+          renamedPaths: [{ oldPath, newPath }],
+        }),
+      });
+      return result;
     });
-    return result;
   }
 
   async createDirectory({ origin = 'api', path, requestId = null } = {}) {
@@ -397,34 +442,47 @@ export class WorkspaceReconciliation {
   }
 
   async renameDirectory({ newPath, oldPath, origin = 'api', requestId = null } = {}) {
-    const workspaceChange = await this.createDirectoryRenameWorkspaceChange(oldPath, newPath);
-    const result = await this.vaultFileStore.renameDirectory(oldPath, newPath);
-    if (!result.ok) {
-      return result;
-    }
+    oldPath = normalizeMutationPath(oldPath);
+    newPath = normalizeMutationPath(newPath);
+    return this.runWithPersistencePaused([oldPath, newPath], async () => {
+      const workspaceChange = await this.createDirectoryRenameWorkspaceChange(oldPath, newPath);
+      const result = await this.vaultFileStore.renameDirectory(oldPath, newPath);
+      if (!result.ok) {
+        return result;
+      }
 
-    await this.reconcileVaultChangeObservation({
-      action: 'rename-directory',
-      origin,
-      requestId,
-      workspaceChange,
+      await this.reconcileVaultChangeObservation({
+        action: 'rename-directory',
+        origin,
+        requestId,
+        workspaceChange,
+      });
+      return result;
     });
-    return result;
   }
 
   async deleteDirectory({ origin = 'api', path, recursive = false, requestId = null } = {}) {
-    const workspaceChange = await this.createDirectoryDeleteWorkspaceChange(path);
-    const result = await this.vaultFileStore.deleteDirectory(path, { recursive });
-    if (!result.ok) {
-      return result;
-    }
+    path = normalizeMutationPath(path);
+    return this.runWithPersistencePaused([path], async () => {
+      const workspaceChange = await this.createDirectoryDeleteWorkspaceChange(path);
+      const result = await this.vaultFileStore.deleteDirectory(path, { recursive });
+      if (!result.ok) {
+        return result;
+      }
 
-    await this.reconcileVaultChangeObservation({
-      action: 'delete-directory',
-      origin,
-      requestId,
-      workspaceChange,
+      await this.reconcileVaultChangeObservation({
+        action: 'delete-directory',
+        origin,
+        requestId,
+        workspaceChange,
+      });
+      return result;
     });
-    return result;
+  }
+
+  runWithPersistencePaused(paths, operation) {
+    return this.roomRegistry?.runWithPersistencePaused
+      ? this.roomRegistry.runWithPersistencePaused(paths, operation)
+      : operation();
   }
 }

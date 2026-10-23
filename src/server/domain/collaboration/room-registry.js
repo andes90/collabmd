@@ -1,9 +1,23 @@
 import { getVaultFileKind } from '../../../domain/file-kind.js';
+import { isDrawioLeaseRoom } from '../../../domain/drawio-room.js';
+import { WORKSPACE_ROOM_NAME } from '../../../domain/workspace-room.js';
+import { normalizeWorkspacePath } from '../workspace-state.js';
+
+function isControlRoom(name) {
+  return name === WORKSPACE_ROOM_NAME || name === '__lobby__' || isDrawioLeaseRoom(name);
+}
+
+function isWithinPaths(name, paths) {
+  if (isControlRoom(name)) return false;
+  const normalized = normalizeWorkspacePath(name).split('/').filter(Boolean).join('/');
+  return paths.some((path) => normalized === path || normalized.startsWith(`${path}/`));
+}
 
 export class RoomRegistry {
   constructor({ createRoom }) {
     this.createRoom = createRoom;
     this.rooms = new Map();
+    this.changingPaths = new Set();
   }
 
   get(name) {
@@ -11,6 +25,9 @@ export class RoomRegistry {
   }
 
   getOrCreate(name) {
+    if (Array.from(this.changingPaths).some((paths) => isWithinPaths(name, paths))) {
+      throw new Error('Document is being renamed or deleted');
+    }
     const existingRoom = this.rooms.get(name);
     if (!existingRoom || existingRoom.isDeleted?.()) {
       const room = this.createRoom({
@@ -67,6 +84,21 @@ export class RoomRegistry {
     return Array.from(this.rooms.entries());
   }
 
+  async runWithPersistencePaused(paths, operation) {
+    const normalizedPaths = paths.map((path) => normalizeWorkspacePath(path).split('/').filter(Boolean).join('/'));
+    this.changingPaths.add(normalizedPaths);
+    const rooms = this.getRooms()
+      .filter(([name]) => isWithinPaths(name, normalizedPaths))
+      .map(([, room]) => room);
+    try {
+      await Promise.all(rooms.map((room) => room.pausePersistence()));
+      return await operation();
+    } finally {
+      this.changingPaths.delete(normalizedPaths);
+      rooms.forEach((room) => room.resumePersistence());
+    }
+  }
+
   async reconcileWorkspaceChange(workspaceChange = {}) {
     const deletedPaths = new Set(workspaceChange.deletedPaths ?? []);
     const renamedPaths = Array.isArray(workspaceChange.renamedPaths) ? workspaceChange.renamedPaths : [];
@@ -75,7 +107,7 @@ export class RoomRegistry {
     const reloadRequiredPaths = [];
 
     renamedPaths.forEach((entry) => {
-      if (!entry?.oldPath || !entry?.newPath) {
+      if (!entry?.oldPath || !entry?.newPath || isControlRoom(entry.oldPath) || isControlRoom(entry.newPath)) {
         return;
       }
 
@@ -90,7 +122,7 @@ export class RoomRegistry {
     });
 
     deletedPaths.forEach((pathValue) => {
-      if (!pathValue) {
+      if (!pathValue || isControlRoom(pathValue)) {
         return;
       }
 
@@ -120,7 +152,7 @@ export class RoomRegistry {
     ]);
     await Promise.allSettled(
       Array.from(new Set(workspaceChange.changedPaths ?? []))
-        .filter((pathValue) => pathValue && !blockedPaths.has(pathValue))
+        .filter((pathValue) => pathValue && !isControlRoom(pathValue) && !blockedPaths.has(pathValue))
         .map(async (pathValue) => {
           const room = this.rooms.get(pathValue);
           if (!room || room.isDeleted?.()) {

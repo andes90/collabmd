@@ -51,6 +51,54 @@ async function createVault() {
   };
 }
 
+test('a background reconciliation failure is caught and retried without losing the change', async (t) => {
+  const { cleanup, store, vaultDir } = await createVault();
+  t.after(cleanup);
+  const baseline = await store.scanWorkspaceState();
+  const errors = [];
+  t.mock.method(console, 'error', (...args) => errors.push(args));
+  let attempts = 0;
+  const applied = Promise.withResolvers();
+  const coordinator = {
+    workspaceState: baseline,
+    filterManagedWorkspaceChange: (change) => change,
+    async apply(payload) {
+      attempts += 1;
+      if (attempts === 1) throw new Error('Temporary read failure');
+      applied.resolve(payload);
+    },
+  };
+  const service = new FileSystemSyncService({ debounceMs: 1, mutationCoordinator: coordinator, vaultFileStore: store });
+  service.lastState = baseline;
+  t.after(() => service.close());
+  await writeFile(join(vaultDir, 'README.md'), 'external content');
+  service.handleWatchEvent('change', 'README.md');
+  const payload = await applied.promise;
+  assert.equal(attempts, 2);
+  assert.deepEqual(payload.workspaceChange.changedPaths, ['README.md']);
+  assert.equal(errors.length, 1);
+});
+
+test('persistent watcher failures stop retrying and close cancels pending retries', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  t.mock.method(console, 'error', () => {});
+  const service = new FileSystemSyncService({ mutationCoordinator: {}, vaultFileStore: {} });
+  let attempts = 0;
+  service.flush = async () => { attempts += 1; service.forceFullScan = true; throw new Error('Unreadable file'); };
+  service.forceFullScan = true;
+  service.scheduleFlush();
+  for (const delay of [180, 250, 500, 1000, 2000]) {
+    t.mock.timers.tick(delay);
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(attempts, 4);
+  service.handleWatchEvent('change', 'note.md');
+  await service.close();
+  t.mock.timers.tick(5000);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(attempts, 4);
+});
+
 test('FileSystemSyncService applies single-file content changes without a full workspace rescan', async (t) => {
   const { cleanup, store, vaultDir } = await createVault();
   t.after(cleanup);
