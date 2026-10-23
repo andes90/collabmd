@@ -1,5 +1,5 @@
 import { lstatSync } from 'node:fs';
-import { isAbsolute, join, normalize, relative, resolve } from 'path';
+import { isAbsolute, join, normalize, relative, resolve, sep } from 'path';
 
 import { getVaultFileKind, isVaultFilePath } from '../../../domain/file-kind.js';
 
@@ -12,8 +12,8 @@ export function isIgnoredVaultEntry(name) {
   return IGNORED_DIRECTORIES.has(name.toLowerCase()) || name.startsWith('.');
 }
 
-function normalizeRequestedPath(requestedPath) {
-  const value = String(requestedPath ?? '').trim().replace(/\\/g, '/');
+function normalizeRequestedPath(requestedPath, preservePath) {
+  const value = preservePath ? String(requestedPath ?? '') : String(requestedPath ?? '').trim().replace(/\\/g, '/');
   const segments = value.split('/');
   if (
     !value
@@ -28,18 +28,18 @@ function normalizeRequestedPath(requestedPath) {
   return normalized === '.' ? '' : normalized;
 }
 
-export function sanitizeVaultPath(vaultDir, requestedPath, { allowIgnored = false } = {}) {
-  const normalized = normalizeRequestedPath(requestedPath);
+export function sanitizeVaultPath(vaultDir, requestedPath, { allowIgnored = false, preservePath = false } = {}) {
+  const normalized = normalizeRequestedPath(requestedPath, preservePath);
   if (!normalized) {
     return null;
   }
 
   const absolute = resolve(vaultDir, normalized);
   const relativePath = relative(vaultDir, absolute);
-  const segments = relativePath.split(/[\\/]/u);
+  const segments = relativePath.split(sep);
 
   if (
-    relativePath.startsWith('..')
+    relativePath.startsWith(`..${sep}`)
     || relativePath === '..'
     || isAbsolute(relativePath)
     || (!allowIgnored && segments.some(isIgnoredVaultEntry))

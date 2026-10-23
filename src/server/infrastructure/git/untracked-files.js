@@ -1,6 +1,6 @@
-import { createReadStream } from 'node:fs';
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { constants } from 'node:fs';
+import { open, realpath } from 'node:fs/promises';
+import { join, relative, sep } from 'node:path';
 import { createInterface } from 'node:readline';
 
 import { getVaultFileKind, isImageAttachmentFilePath } from '../../../domain/file-kind.js';
@@ -8,15 +8,15 @@ import { mapWithConcurrency } from '../../shared/async-utils.js';
 import { createEmptyStats } from './responses.js';
 import { splitContentLines } from './parsers.js';
 import { getImageMimeType } from '../../shared/image-mime.js';
+import { sanitizeVaultPath } from '../persistence/path-utils.js';
 
-async function countFileLines(filePath) {
-  if (isImageAttachmentFilePath(filePath)) {
-    return 0;
-  }
+// Node does not expose Darwin's flag for rejecting symlinks in every path component.
+const DARWIN_O_NOFOLLOW_ANY = 0x20000000;
 
+async function countFileLines(file) {
   const lines = createInterface({
     crlfDelay: Infinity,
-    input: createReadStream(filePath, { encoding: 'utf8' }),
+    input: file.createReadStream({ autoClose: false, encoding: 'utf8' }),
   });
   let lineCount = 0;
 
@@ -74,26 +74,84 @@ export class GitUntrackedFileService {
 
   async countAdditions(files = []) {
     const counts = await mapWithConcurrency(files, 4, async (file) => {
+      let handle;
       try {
-        return await countFileLines(join(this.vaultDir, file.path));
+        if (isImageAttachmentFilePath(file.path)) return 0;
+        handle = await this.openFile(file.path);
+        return handle ? await countFileLines(handle) : 0;
       } catch {
         return 0;
+      } finally {
+        await handle?.close();
       }
     });
 
     return counts.reduce((total, count) => total + count, 0);
   }
 
+  resolvePath(path) {
+    return sanitizeVaultPath(this.vaultDir, path, { allowIgnored: true, preservePath: true });
+  }
+
+  async openFile(path) {
+    const absolutePath = this.resolvePath(path);
+    if (!absolutePath) return null;
+    const root = await realpath(this.vaultDir);
+    const relativePath = relative(this.vaultDir, absolutePath);
+    const flags = constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW;
+    let handle;
+    if (process.platform === 'darwin') {
+      handle = await open(join(root, relativePath), constants.O_RDONLY | constants.O_NONBLOCK | DARWIN_O_NOFOLLOW_ANY);
+    } else if (process.platform === 'linux') {
+      // Pin each directory so replacing a parent cannot redirect the next open.
+      let directory = await open(root, flags | constants.O_DIRECTORY);
+      try {
+        const segments = relativePath.split(sep);
+        for (const segment of segments.slice(0, -1)) {
+          const child = await open(`/proc/self/fd/${directory.fd}/${segment}`, flags | constants.O_DIRECTORY);
+          await directory.close();
+          directory = child;
+        }
+        handle = await open(`/proc/self/fd/${directory.fd}/${segments.at(-1)}`, flags);
+      } finally {
+        await directory.close();
+      }
+    } else {
+      throw new Error('Secure untracked file reads require Linux or macOS');
+    }
+    try {
+      if ((await handle.stat()).isFile()) return handle;
+      await handle.close();
+      return null;
+    } catch (error) {
+      await handle.close();
+      throw error;
+    }
+  }
+
+  async getByteLength(path) {
+    let handle;
+    try {
+      handle = await this.openFile(path);
+      return handle ? (await handle.stat()).size : 0;
+    } catch {
+      return 0;
+    } finally {
+      await handle?.close();
+    }
+  }
+
   async buildSyntheticDiffs(files = []) {
     const results = await mapWithConcurrency(files, 2, async (file) => {
+      let handle;
       try {
-        const absolutePath = join(this.vaultDir, file.path);
+        handle = await this.openFile(file.path);
+        if (!handle) return null;
         if (isImageAttachmentFilePath(file.path)) {
-          const content = await readFile(absolutePath);
           return {
             ...file,
             binaryMessage: 'Binary image file',
-            byteLength: content.byteLength,
+            byteLength: (await handle.stat()).size,
             code: file.code || 'U',
             fileKind: 'image',
             hunks: [],
@@ -107,10 +165,12 @@ export class GitUntrackedFileService {
           };
         }
 
-        const content = await readFile(absolutePath, 'utf8');
+        const content = await handle.readFile('utf8');
         return buildSyntheticAddedFileDiff(file.path, content);
       } catch {
         return null;
+      } finally {
+        await handle?.close();
       }
     });
 

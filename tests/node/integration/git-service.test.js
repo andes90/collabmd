@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile as execFileCallback } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -10,6 +10,37 @@ import { GitService } from '../../../src/server/infrastructure/git/git-service.j
 import { ensureCollabMetadataGitExclude } from '../../../src/server/infrastructure/git/local-exclude.js';
 
 const execFile = promisify(execFileCallback);
+
+test('GitService does not expose outside content through an untracked symlink diff', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'collabmd-git-link-'));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const vaultDir = join(root, 'vault');
+  await mkdir(vaultDir);
+  await runGit(vaultDir, ['init']);
+  await writeFile(join(root, 'secret'), 'OUTSIDE_SENTINEL\n');
+  await symlink(join(root, 'secret'), join(vaultDir, 'link.md'));
+  const service = new GitService({ vaultDir });
+  const diff = await service.getDiff({ path: 'link.md' });
+  assert.equal(diff.files[0].stats.additions, 0);
+  assert.deepEqual(diff.files[0].hunks, []);
+  assert.equal(JSON.stringify(diff).includes('OUTSIDE_SENTINEL'), false);
+});
+
+test('GitService guards the bytes of single-line untracked files and still permits explicit full diffs', async (t) => {
+  const vaultDir = await mkdtemp(join(tmpdir(), 'collabmd-git-untracked-large-'));
+  t.after(() => rm(vaultDir, { force: true, recursive: true }));
+  await runGit(vaultDir, ['init']);
+  await writeFile(join(vaultDir, 'large.html'), `<p>${'text'.repeat(1000)}</p>`);
+  const service = new GitService({ vaultDir, maxInitialPatchBytes: 1000 });
+  const guarded = (await service.getDiff({ path: 'large.html' })).files[0];
+  assert.equal(guarded.tooLarge, true);
+  assert.equal(guarded.canLoadFullPatch, true);
+  assert.deepEqual(guarded.hunks, []);
+  assert.equal(guarded.byteLength, 4007);
+  const full = (await service.getDiff({ path: 'large.html', allowLargePatch: true })).files[0];
+  assert.equal(full.tooLarge, false);
+  assert.equal(full.hunks[0].lines[0].content.length, 4007);
+});
 
 async function runGit(cwd, args) {
   await execFile('git', args, {

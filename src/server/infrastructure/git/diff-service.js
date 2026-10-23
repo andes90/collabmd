@@ -237,6 +237,7 @@ export class GitDiffService {
     const isSinglePathRequest = Boolean(path);
     const currentFile = isSinglePathRequest ? scopedFiles[0] ?? null : null;
     if (currentFile?.status === 'untracked') {
+      const byteLength = await this.untrackedFileService.getByteLength(currentFile.path);
       const fileLineCount = await this.untrackedFileService.countAdditions([currentFile]);
       const summary = {
         additions: fileLineCount,
@@ -244,10 +245,12 @@ export class GitDiffService {
         filesChanged: scopedFiles.length,
       };
 
-      if (!allowLargePatch && fileLineCount > this.maxInitialPatchLines) {
+      if (!allowLargePatch && (fileLineCount > this.maxInitialPatchLines
+        || (getVaultFileKind(currentFile.path) !== 'image' && byteLength > this.maxInitialPatchBytes))) {
         return {
           files: [{
             ...currentFile,
+            byteLength,
             canLoadFullPatch: true,
             hunks: [],
             patchLineCount: fileLineCount,
