@@ -157,7 +157,13 @@ export function attachCollaborationGateway({
       return;
     }
 
-    const originalRequestUrl = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+    let originalRequestUrl;
+    try {
+      originalRequestUrl = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+    } catch {
+      rejectUpgrade(socket, 400, 'Bad Request');
+      return;
+    }
     const requestUrl = createRequestUrlWithPathname(
       originalRequestUrl,
       stripBasePath(originalRequestUrl.pathname, basePath),

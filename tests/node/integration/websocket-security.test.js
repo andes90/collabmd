@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { connect } from 'node:net';
 import WebSocket from 'ws';
 
 import { createSessionCookieManager } from '../../../src/server/auth/session-cookie.js';
@@ -27,6 +28,28 @@ function authConfig(strategy) {
     } : {}),
   };
 }
+
+test('malformed WebSocket URLs are rejected before authentication without stopping the server', async (t) => {
+  const app = await startTestServer({ auth: authConfig('password') });
+  t.after(() => app.close());
+  for (const [host, target] of [['[', '/ws/test.md'], ['localhost:invalid', '/ws/test.md'], ['localhost', 'http://[']]) {
+    const response = await new Promise((resolve, reject) => {
+      let body = '';
+      const socket = connect(app.port, '127.0.0.1', () => {
+        socket.write(`GET ${target} HTTP/1.1\r\nHost: ${host}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n`);
+      });
+      socket.setEncoding('utf8');
+      socket.on('data', (chunk) => { body += chunk; });
+      socket.on('end', () => resolve(body));
+      socket.on('error', reject);
+    });
+    assert.match(response, /^HTTP\/1\.1 400/u);
+  }
+  const ws = new WebSocket(app.wsUrl('test.md'), { headers: { Cookie: createCookie(app) } });
+  await waitForOpen(ws);
+  ws.close();
+  await waitForClose(ws);
+});
 
 for (const strategy of ['none', 'password', 'oidc']) {
   test(`WebSocket ${strategy} accepts its origin and nonbrowser clients, rejects other origins`, async (t) => {
