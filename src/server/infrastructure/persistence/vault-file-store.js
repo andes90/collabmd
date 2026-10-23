@@ -324,12 +324,12 @@ export class VaultFileStore {
     this.managedWriteTracker = tracker ?? null;
   }
 
-  async runManagedWrite(paths, operation) {
+  async runManagedWrite(paths, operation, expectedContent) {
     if (!this.managedWriteTracker?.runManagedWrite) {
       return operation();
     }
 
-    return this.managedWriteTracker.runManagedWrite(paths, operation);
+    return this.managedWriteTracker.runManagedWrite(paths, operation, expectedContent);
   }
 
   resolveContentPath(filePath, { requireVaultFile = true } = {}) {
@@ -394,7 +394,7 @@ export class VaultFileStore {
         if (invalidateCollaborationSnapshot) {
           await this.deleteCollaborationSnapshot(filePath);
         }
-      });
+      }, String(content));
       return { ok: true };
     } catch (error) {
       return { ok: false, error: error.message };
@@ -612,7 +612,7 @@ export class VaultFileStore {
     const committedOperations = [];
 
     try {
-      await this.runManagedWrite([filePath], async () => {
+      const persist = async () => {
         for (const operation of operations) {
           if (operation.kind !== 'write') {
             continue;
@@ -663,7 +663,8 @@ export class VaultFileStore {
             targetPath: operation.targetPath,
           });
         }
-      });
+      };
+      await (includeContent ? this.runManagedWrite([filePath], persist, content) : persist());
 
       await cleanupPaths(committedOperations.map((operation) => operation.backupPath));
       return { ok: true };
@@ -724,19 +725,15 @@ export class VaultFileStore {
     if (validationError) return { ok: false, error: validationError };
 
     try {
-      await stat(absolute);
-      return { ok: false, error: 'File already exists' };
+      await this.runManagedWrite([filePath], async () => {
+        await mkdir(dirname(absolute), { recursive: true });
+        await writeFile(absolute, content, { encoding: 'utf-8', flag: 'wx' });
+        await this.deleteCollaborationSnapshot(filePath);
+      }, getEditableVaultContentKind(filePath) ? content.toString() : undefined);
     } catch (error) {
-      if (error.code !== 'ENOENT') {
-        throw error;
-      }
+      if (error.code === 'EEXIST') return { ok: false, error: 'File already exists' };
+      throw error;
     }
-
-    await this.runManagedWrite([filePath], async () => {
-      await mkdir(dirname(absolute), { recursive: true });
-      await writeFile(absolute, content, 'utf-8');
-      await this.deleteCollaborationSnapshot(filePath);
-    });
     return { ok: true };
   }
 

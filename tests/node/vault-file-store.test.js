@@ -33,6 +33,16 @@ async function pathExists(pathValue) {
   }
 }
 
+test('concurrent creates preserve the winning content and reject every duplicate', async (t) => {
+  const { store, cleanup } = await createVaultStore();
+  t.after(cleanup);
+  const contents = Array.from({ length: 10 }, (_, index) => `upload ${index}`);
+  const results = await Promise.all(contents.map((content) => store.createFile('same.md', content)));
+  assert.equal(results.filter((result) => result.ok).length, 1);
+  assert.equal(await store.readMarkdownFile('same.md'), contents[results.findIndex((result) => result.ok)]);
+  assert.ok(results.filter((result) => !result.ok).every((result) => result.error === 'File already exists'));
+});
+
 test('VaultFileStore protects reserved paths across public file and directory operations', async (t) => {
   const { store, vaultDir, cleanup } = await createVaultStore();
   t.after(cleanup);
