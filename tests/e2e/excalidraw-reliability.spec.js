@@ -120,6 +120,124 @@ async function attachDiagnostics(testInfo, seed, pages) {
   });
 }
 
+for (const remoteChange of ['delete', 'move']) {
+  test(`@excalidraw-smoke replays a remote ${remoteChange} after a stationary resize ends`, async ({ browser }) => {
+    const contextA = await browser.newContext();
+    const contextB = await browser.newContext();
+    const pageA = await contextA.newPage();
+    const pageB = await contextB.newPage();
+    const filePath = `resize-remote-${remoteChange}.e2e.excalidraw`;
+
+    try {
+      await prepareFile(pageA, filePath, createScene([
+        createElement('resize-target', { x: 240, y: 240 }),
+      ]));
+      await openDirectEditor(pageA, filePath);
+      await openDirectEditor(pageB, filePath);
+      await waitForAuthority(pageA);
+      await waitForAuthority(pageB);
+      await waitForIds(pageB, ['resize-target']);
+      await pageB.evaluate(() => {
+        window.__COLLABMD_EXCALIDRAW_TEST__.setViewport({ scrollX: 0, scrollY: 0, zoom: 1 });
+        window.__COLLABMD_EXCALIDRAW_TEST__.selectElement('resize-target');
+      });
+      const handle = await pageB.evaluate(() => {
+        const harness = window.__COLLABMD_EXCALIDRAW_TEST__;
+        const bounds = harness.getElementBounds('resize-target');
+        const viewport = harness.getViewport();
+        return {
+          x: (bounds.x + bounds.width + viewport.scrollX) * viewport.zoom + viewport.offsetLeft + 4,
+          y: (bounds.y + bounds.height + viewport.scrollY) * viewport.zoom + viewport.offsetTop + 4,
+        };
+      });
+      await pageB.mouse.move(handle.x, handle.y);
+      await pageB.mouse.down();
+      await expect.poll(() => pageB.evaluate(() => (
+        window.__COLLABMD_EXCALIDRAW_TEST__.getInteractionState().resizing
+      ))).toBe(true);
+
+      const scene = await getScene(pageA);
+      const target = scene.elements.find((element) => element.id === 'resize-target');
+      target.version += 1;
+      target.versionNonce += 1;
+      if (remoteChange === 'delete') {
+        target.isDeleted = true;
+      } else {
+        target.x += 160;
+      }
+      await setScene(pageA, scene);
+      // Wait for the room snapshot, not the rendered canvas: the local resize
+      // legitimately retains its element until release.
+      await expect.poll(async () => {
+        const received = (await getScene(pageB)).elements.find((element) => element.id === target.id);
+        return remoteChange === 'delete' ? received?.isDeleted : received?.x;
+      }).toBe(remoteChange === 'delete' ? true : target.x);
+      if (remoteChange === 'move') {
+        // A second snapshot while resizing must supersede the first queued one.
+        target.x += 40;
+        target.version += 1;
+        target.versionNonce += 1;
+        await setScene(pageA, scene);
+        await expect.poll(async () => (
+          (await getScene(pageB)).elements.find((element) => element.id === target.id)?.x
+        )).toBe(target.x);
+      }
+      await pageB.mouse.up();
+      await expect.poll(() => pageB.evaluate(() => (
+        window.__COLLABMD_EXCALIDRAW_TEST__.getInteractionState().resizing
+      ))).toBe(false);
+
+      if (remoteChange === 'delete') {
+        await waitForIds(pageB, []);
+      } else {
+        await expect.poll(() => pageB.evaluate(() => (
+          window.__COLLABMD_EXCALIDRAW_TEST__.getElementBounds('resize-target')?.x
+        ))).toBe(target.x);
+      }
+      // No further remote edits or reloads should be needed to repair the view.
+      await expect.poll(async () => {
+        const durable = await readDurableScene(pageA, filePath);
+        return durable.elements.filter((element) => !element.isDeleted).map((element) => element.x);
+      }).toEqual(remoteChange === 'delete' ? [] : [target.x]);
+    } finally {
+      await contextA.close();
+      await contextB.close();
+    }
+  });
+}
+
+test('@excalidraw-smoke preserves an empty peer viewport when the first remote shape arrives', async ({ browser }) => {
+  const contextA = await browser.newContext();
+  const contextB = await browser.newContext();
+  const pageA = await contextA.newPage();
+  const pageB = await contextB.newPage();
+  const filePath = 'empty-remote-viewport.e2e.excalidraw';
+
+  try {
+    await prepareFile(pageA, filePath);
+    await openDirectEditor(pageA, filePath);
+    await openDirectEditor(pageB, filePath);
+    await waitForAuthority(pageA);
+    await waitForAuthority(pageB);
+    await pageB.evaluate(() => window.__COLLABMD_EXCALIDRAW_TEST__.setViewport({
+      scrollX: 42, scrollY: 30, zoom: 0.8,
+    }));
+    const before = await pageB.evaluate(() => window.__COLLABMD_EXCALIDRAW_TEST__.getViewport());
+    const shape = { ...createElement('first-shape'), width: 1, height: 1 };
+    await setScene(pageA, createScene([shape]));
+    await waitForIds(pageB, ['first-shape']);
+    expect(await pageB.evaluate(() => window.__COLLABMD_EXCALIDRAW_TEST__.getViewport())).toEqual(before);
+    await setScene(pageA, createScene([{ ...shape, width: 120, height: 80, version: 2 }]));
+    await expect.poll(() => pageB.evaluate(() => (
+      window.__COLLABMD_EXCALIDRAW_TEST__.getElementBounds('first-shape')?.width
+    ))).toBe(120);
+    expect(await pageB.evaluate(() => window.__COLLABMD_EXCALIDRAW_TEST__.getViewport())).toEqual(before);
+  } finally {
+    await contextA.close();
+    await contextB.close();
+  }
+});
+
 test('@excalidraw-smoke pastes Mermaid text as Excalidraw elements', async ({ browser }) => {
   const context = await browser.newContext();
   const page = await context.newPage();
