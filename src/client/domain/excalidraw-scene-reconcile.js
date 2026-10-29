@@ -1,3 +1,13 @@
+// These are the local interaction states protected by Excalidraw's
+// reconcileElements. Remote snapshots must be replayed once all are idle.
+export function hasActiveExcalidrawInteraction(appState) {
+  return Boolean(
+    appState?.editingTextElement
+    || appState?.resizingElement
+    || appState?.newElement,
+  );
+}
+
 export function buildReconciledExcalidrawSceneUpdate({
   appStateOverrides = {},
   authoritative = false,

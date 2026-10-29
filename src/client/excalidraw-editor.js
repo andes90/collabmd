@@ -40,6 +40,7 @@ import {
 } from './presentation/comment-ui/comment-ui-shared.js';
 import {
   buildReconciledExcalidrawSceneUpdate,
+  hasActiveExcalidrawInteraction,
 } from './domain/excalidraw-scene-reconcile.js';
 import {
   createExcalidrawDiagnosticRing,
@@ -1278,6 +1279,14 @@ if (isTestMode) {
     getCommentThreads: () => roomClient?.getCommentThreads?.() || [],
     getDiagnosticTrace: () => diagnostics.exportTrace(),
     getHistoryState: () => getNativeHistoryState(),
+    getInteractionState: () => {
+      const appState = getMountedExcalidrawAPI()?.getAppState?.();
+      return {
+        editingText: Boolean(appState?.editingTextElement),
+        resizing: Boolean(appState?.resizingElement),
+        creating: Boolean(appState?.newElement),
+      };
+    },
     getLocalUserName: () => localAwarenessUser?.name || '',
     getLocalPeerId: () => localAwarenessUser?.peerId || '',
     getViewport: () => {
@@ -1384,12 +1393,12 @@ function queueCollaboratorsRender(collaborators) {
   });
 }
 
-function isEditingTextElement() {
-  return Boolean(getMountedExcalidrawAPI()?.getAppState?.()?.editingTextElement);
+function hasActiveSceneInteraction() {
+  return hasActiveExcalidrawInteraction(getMountedExcalidrawAPI()?.getAppState?.());
 }
 
 function flushPendingRemoteScene() {
-  if (!pendingRemoteSceneJson || !getMountedExcalidrawAPI() || !collabReady || isEditingTextElement()) {
+  if (!pendingRemoteSceneJson || !getMountedExcalidrawAPI() || !collabReady || hasActiveSceneInteraction()) {
     return false;
   }
 
@@ -1423,12 +1432,16 @@ function applySceneFromJson(rawJson, {
     return;
   }
 
-  if (!force && isEditingTextElement()) {
+  // Reconciliation intentionally preserves locally manipulated elements. Keep the
+  // latest room scene until the interaction ends instead of marking those remote
+  // changes applied and silently losing them (notably remote deletes on resize).
+  if (hasActiveSceneInteraction()) {
     pendingRemoteSceneJson = normalizedJson;
     pendingRemoteSceneAuthoritative ||= authoritative;
     return;
   }
 
+  pendingRemoteSceneJson = '';
   pendingRemoteSceneAuthoritative = false;
   updateApiScene(scene, { authoritative });
 }
@@ -1650,19 +1663,21 @@ function scheduleViewportFit({
     return;
   }
 
+  // Empty initial documents must consume this one-shot fit too. Otherwise the
+  // first tiny shape received from a peer is mistaken for initial hydration.
+  if (consumeInitialFit) {
+    initialViewportFitPending = false;
+  }
   const elements = getSceneElementsForPreviewFit();
   if (elements.length === 0) {
     return;
-  }
-  if (consumeInitialFit) {
-    initialViewportFitPending = false;
   }
 
   if (!forcePreview && delayMs === 0) {
     api.setViewport({
       target: elements,
       animation: false,
-      fit: 'contain',
+      fit: normalizedMode === 'preview' ? 'contain' : 'scale-down',
     });
     return;
   }
@@ -1709,7 +1724,7 @@ function scheduleViewportFit({
         api.setViewport({
           target: latestElements,
           animation: false,
-          fit: 'contain',
+          fit: forcePreview || normalizedMode === 'preview' ? 'contain' : 'scale-down',
         });
 
         if (forcePreview) {
@@ -2179,8 +2194,8 @@ function initializeEditor(api) {
   apiStateCleanupCallbacks.push(api.onStateChange('selectedElementIds', () => {
     renderExcalidrawApp();
   }));
-  apiStateCleanupCallbacks.push(api.onStateChange('editingTextElement', (editingTextElement) => {
-    if (!editingTextElement) {
+  apiStateCleanupCallbacks.push(api.onStateChange(['editingTextElement', 'resizingElement', 'newElement'], () => {
+    if (!hasActiveSceneInteraction()) {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           flushPendingRemoteScene();

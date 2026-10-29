@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   buildReconciledExcalidrawSceneUpdate,
+  hasActiveExcalidrawInteraction,
 } from '../../src/client/domain/excalidraw-scene-reconcile.js';
 
 function shouldKeepLocal(local, remote, appState = {}) {
@@ -234,4 +235,43 @@ test('authoritative remote scene replaces higher-version local elements', () => 
     ['shared-shape', 45],
     ['label', 10],
   ]);
+});
+
+test('remote scenes wait for each Excalidraw-protected interaction to finish', () => {
+  assert.equal(hasActiveExcalidrawInteraction(undefined), false);
+  assert.equal(hasActiveExcalidrawInteraction({}), false);
+  for (const key of ['editingTextElement', 'resizingElement', 'newElement']) {
+    assert.equal(hasActiveExcalidrawInteraction({ [key]: { id: 'active' } }), true);
+    assert.equal(hasActiveExcalidrawInteraction({ [key]: null }), false);
+  }
+  assert.equal(hasActiveExcalidrawInteraction({
+    editingTextElement: null,
+    resizingElement: { id: 'still-resizing' },
+  }), true);
+});
+
+
+test('replaying a deferred deletion after resize uses normal version reconciliation', () => {
+  const local = createElement('shape', { version: 2 });
+  const remote = createElement('shape', { isDeleted: true, version: 3 });
+  const reconcile = (currentElements, currentAppState) => buildReconciledExcalidrawSceneUpdate({
+    currentAppState,
+    currentElements,
+    reconcileElementsFn,
+    restoreAppStateFn,
+    restoreElementsFn,
+    scene: { elements: [remote] },
+  });
+  const duringResize = { resizingElement: local };
+  assert.equal(hasActiveExcalidrawInteraction(duringResize), true);
+  assert.equal(reconcile([local], duringResize).elements[0].isDeleted, false);
+  const idle = { resizingElement: null };
+  assert.equal(hasActiveExcalidrawInteraction(idle), false);
+  assert.equal(reconcile([local], idle).elements[0].isDeleted, true);
+
+  // A deferred snapshot must not become an authoritative replacement: a newer
+  // intentional local edit still participates in the version/nonce conflict rule.
+  const newerLocal = createElement('shape', { version: 4, x: 200 });
+  assert.equal(reconcile([newerLocal], idle).elements[0].isDeleted, false);
+  assert.equal(reconcile([newerLocal], idle).elements[0].x, 200);
 });

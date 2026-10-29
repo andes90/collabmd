@@ -41,6 +41,11 @@ jobs:
         run: npm run test:e2e:prebuilt -- tests/e2e/collaboration.spec.js
           --grep overview
 
+      - name: Verify Excalidraw interaction sync regressions
+        run: >-
+          npm run test:e2e:prebuilt -- tests/e2e/excalidraw-reliability.spec.js
+          --grep 'replays a remote (delete|move) after a stationary resize ends|preserves an empty peer viewport when the first remote shape arrives'
+
       - name: Upload browser failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
