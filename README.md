@@ -70,6 +70,7 @@ Prefer video? [Open the WebM demo](https://raw.githubusercontent.com/andes90/col
 - **Remote AI agent access** — connect any Streamable HTTP MCP client to search, cite, edit, and create supported Vault Content; protected workspaces use scoped, revocable Agent Connections
 - **File upload** — import multiple supported Markdown, HTML, Base, diagram, image, and PDF files into the vault from the file explorer
 - **Markdown with context** — live preview, wiki-links, backlinks, outline, quick switcher, and scroll sync
+- **Inline table of contents** — place `[TOC]` on its own line to render a nested list of heading links using the same IDs as the preview outline; `[toc]` also works, and markers in code stay literal
 - **Global text search** — search text across supported vault files with ripgrep-backed results grouped by file
 - **Source-anchored comments** — comment on lines or selected text with inline markers and preview bubbles, or pin threads to Excalidraw elements
 - **Collaboration built in** — collaborator presence, follow mode, and team chat
