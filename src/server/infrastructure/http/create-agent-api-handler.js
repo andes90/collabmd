@@ -135,6 +135,7 @@ export function createAgentApiHandler({
         return true;
       }
       const user = authService.getAuthenticatedUser?.(req) ?? null;
+      rateLimiter(user?.sub || req.socket?.remoteAddress || 'anonymous');
       if (requestUrl.pathname === '/api/agent/connections' && req.method === 'GET') {
         jsonResponse(req, res, 200, {
           connections: await agentConnectionService.listConnections(user),
