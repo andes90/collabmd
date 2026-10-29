@@ -1,4 +1,5 @@
 import markdownIt from 'markdown-it';
+import { enableMarkdownEmoji } from '../domain/markdown-emoji.js';
 import { enableMarkdownMath } from '../domain/markdown-math.js';
 
 import { isImageAttachmentFilePath } from '../../domain/file-kind.js';
@@ -302,6 +303,7 @@ function createMarkdownRenderer(fileList = [], {
     typographer: true,
   });
   enableMarkdownMath(markdown);
+  enableMarkdownEmoji(markdown);
 
   markdown.core.ruler.push('collabmd-source-lines', (state) => {
     state.tokens.forEach((token) => {
