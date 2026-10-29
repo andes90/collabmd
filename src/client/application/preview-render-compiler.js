@@ -1,6 +1,7 @@
 import markdownIt from 'markdown-it';
 import { enableMarkdownEmoji } from '../domain/markdown-emoji.js';
 import { enableMarkdownMath } from '../domain/markdown-math.js';
+import { enableMarkdownDetails } from '../domain/markdown-details.js';
 
 import { isImageAttachmentFilePath } from '../../domain/file-kind.js';
 import { resolveVaultRelativePath } from '../../domain/vault-paths.js';
@@ -301,6 +302,7 @@ function createMarkdownRenderer(fileList = [], {
     linkify: true,
     typographer: true,
   });
+  enableMarkdownDetails(markdown);
   enableMarkdownMath(markdown);
   enableMarkdownEmoji(markdown, WIKI_TEXT_PATTERN);
 
