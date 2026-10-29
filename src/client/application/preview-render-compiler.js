@@ -1,5 +1,6 @@
 import markdownIt from 'markdown-it';
 import { enableMarkdownMath } from '../domain/markdown-math.js';
+import { enableMarkdownDetails } from '../domain/markdown-details.js';
 
 import { isImageAttachmentFilePath } from '../../domain/file-kind.js';
 import { resolveVaultRelativePath } from '../../domain/vault-paths.js';
@@ -301,6 +302,7 @@ function createMarkdownRenderer(fileList = [], {
     linkify: true,
     typographer: true,
   });
+  enableMarkdownDetails(markdown);
   enableMarkdownMath(markdown);
 
   markdown.core.ruler.push('collabmd-source-lines', (state) => {
