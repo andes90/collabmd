@@ -31,6 +31,15 @@ function getElementScrollTop(container, element) {
   return elementRect.top - containerRect.top + container.scrollTop;
 }
 
+function isVisibleDisclosureBlock(element) {
+  for (let details = element.closest('details'); details; details = details.parentElement?.closest('details')) {
+    if (!details.open && !details.querySelector(':scope > summary')?.contains(element)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function isLeafSourceBlock(element) {
   return !element.querySelector(SOURCE_BLOCK_SELECTOR);
 }
@@ -118,6 +127,11 @@ export class ScrollSyncController {
     this.listenerController = new AbortController();
     const { signal } = this.listenerController;
     this.previewContainer?.addEventListener('scroll', this.handlePreviewScroll, { passive: true, signal });
+    this.previewElement?.addEventListener('toggle', (event) => {
+      if (event.target instanceof HTMLDetailsElement) {
+        this.invalidatePreviewBlocks();
+      }
+    }, { capture: true, signal });
     SCROLL_INPUT_EVENTS.forEach((type) => this.previewContainer?.addEventListener(type, this.handleScrollInput, { passive: true, signal }));
   }
 
@@ -420,6 +434,7 @@ export class ScrollSyncController {
 
   buildPreviewBlocks() {
     const allBlocks = Array.from(this.previewElement.querySelectorAll(SOURCE_BLOCK_SELECTOR))
+      .filter(isVisibleDisclosureBlock)
       .map((element) => {
         const start = Number.parseInt(element.getAttribute('data-source-line') || '', 10);
         const end = Number.parseInt(element.getAttribute('data-source-line-end') || '', 10);
