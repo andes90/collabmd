@@ -49,6 +49,12 @@ describe('StructurizrPreviewController', () => {
     currentViewport.scrollTop = 30;
     controller.iframe = currentIframe;
     controller.lastVersion = 'v1';
+    const createIframe = controller.createIframe.bind(controller);
+    vi.spyOn(controller, 'createIframe').mockImplementation(() => {
+      const iframe = createIframe();
+      Object.defineProperty(iframe, 'src', { set() {} });
+      return iframe;
+    });
 
     await controller.syncNow({ filePath: 'workspace.dsl', source: 'updated' });
 
@@ -70,11 +76,10 @@ describe('StructurizrPreviewController', () => {
     expect(controller.fitFrameToCanvas(replacementIframe)).toBe(false);
     expect(controller.iframe).toBe(currentIframe);
 
+    controller.prepareFrame(replacementIframe);
     canvas.append(Object.assign(document.createElement('div'), { className: 'joint-layers' }));
-    expect(controller.fitFrameToCanvas(replacementIframe)).toBe(true);
-    controller.commitPendingIframe(replacementIframe);
+    await vi.waitFor(() => expect(controller.iframe).toBe(replacementIframe));
 
-    expect(controller.iframe).toBe(replacementIframe);
     expect(currentIframe.isConnected).toBe(false);
     expect(zoomTo).toHaveBeenCalledWith(0.8);
     expect(replacementViewport.scrollLeft).toBe(150);

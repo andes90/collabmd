@@ -277,6 +277,33 @@ describe('DiagramChrome', () => {
     expect(nextFrame.style.visibility).toBe('');
   });
 
+  it('cancels deferred scroll restoration when a hidden diagram is destroyed', () => {
+    const queue = new Map();
+    let nextId = 0;
+    const windowRef = {
+      addEventListener() {},
+      cancelAnimationFrame: (id) => queue.delete(id),
+      removeEventListener() {},
+      requestAnimationFrame(callback) {
+        queue.set(++nextId, callback);
+        return nextId;
+      },
+    };
+    const chrome = new DiagramChrome({ windowRef });
+    const shell = mountDiagram(chrome, 'mermaid');
+    shell.style.display = 'none';
+    chrome.shellViewStates.set(shell, { scrollLeft: 20, scrollTop: 20, zoom: 1 });
+    chrome.mount(shell, {
+      baseHeight: 600,
+      baseWidth: 1200,
+      diagramElement: createSvg({ height: 600, width: 1200 }),
+      kind: 'mermaid',
+    });
+    expect(queue.size).toBeGreaterThan(0);
+    chrome.destroy();
+    expect(queue.size).toBe(0);
+  });
+
   it('maximizes one diagram at a time across Mermaid and PlantUML', () => {
     const chrome = new DiagramChrome();
     const mermaidShell = mountDiagram(chrome, 'mermaid');

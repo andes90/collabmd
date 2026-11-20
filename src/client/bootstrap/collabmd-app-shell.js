@@ -1,3 +1,4 @@
+import { setDiagramActionButtonIcon } from '../presentation/diagram-action-button.js';
 import { PdfPreviewController } from '../application/pdf-preview-controller.js';
 import { analyzeMarkdownComplexity, isLargeDocumentStats } from '../application/preview-render-profile.js';
 import { PreviewRenderer } from '../application/preview-renderer.js';
@@ -42,6 +43,7 @@ import {
 import { TabActivityLock } from '../infrastructure/tab-activity-lock.js';
 import { vaultApiClient } from '../infrastructure/vault-api-client.js';
 import { WebMcpToolRegistry } from '../infrastructure/webmcp-tool-registry.js';
+import { bindAppShellElements } from './app-shell-elements.js';
 import { createLazyLobbyPresence, createLazyWorkspaceSyncClient } from './lazy-collab-clients.js';
 import { AgentConnectionController } from '../presentation/agent-connection-controller.js';
 import { BacklinksPanel } from '../presentation/backlinks-panel.js';
@@ -65,14 +67,6 @@ import { ToastController } from '../presentation/toast-controller.js';
 import { VideoEmbedController } from '../presentation/video-embed-controller.js';
 import { ImageLightboxController } from '../presentation/image-lightbox-controller.js';
 
-const ELEMENT_ID_OVERRIDES = {
-  commentsToggleButton: 'commentsToggle',
-  diffPage: 'diff-page',
-  editorPage: 'editor-page',
-  fileHistoryButtonLabel: 'fileHistoryBtnLabel',
-  htmlPreviewMaximizeButton: 'htmlPreviewMaximize',
-};
-
 const APP_SHELL_FEATURES = [
   chatFeature,
   commentsFeature,
@@ -89,18 +83,32 @@ const APP_SHELL_FEATURES = [
 ];
 
 export class CollabMdAppShell {
+  get connectionHelpShown() { return this.workspaceState.connectionHelpShown; }
+  set connectionHelpShown(value) { this.workspaceState.connectionHelpShown = value; }
+
+  get connectionState() { return this.workspaceState.connectionState; }
+  set connectionState(value) { this.workspaceState.connectionState = value; }
+
+  get currentDrawioMode() { return this.workspaceState.currentDrawioMode; }
+  set currentDrawioMode(value) { this.workspaceState.currentDrawioMode = value; }
+
+  get sessionLoadToken() { return this.workspaceState.sessionLoadToken; }
+  set sessionLoadToken(value) { this.workspaceState.sessionLoadToken = value; }
+
   constructor() {
     for (const feature of APP_SHELL_FEATURES) {
       for (const [name, method] of Object.entries(feature)) {
         if (!(name in this)) this[name] = method;
       }
     }
-    this.elements = new Proxy({}, {
-      get(_target, property) {
-        if (typeof property !== 'string') return undefined;
-        return document.getElementById(ELEMENT_ID_OVERRIDES[property] ?? property.replace(/Button$/, 'Btn'));
-      },
-    });
+    this.elements = bindAppShellElements();
+    this.workspaceState = {
+      connectionHelpShown: false,
+      connectionState: { status: 'disconnected', unreachable: false },
+      currentDrawioMode: null,
+      currentFilePath: null,
+      sessionLoadToken: 0,
+    };
     this.runtimeConfig = getRuntimeConfig();
     this.activeSidebarTab = 'files';
     this.chatInitialSyncComplete = false;
@@ -108,10 +116,6 @@ export class CollabMdAppShell {
     this.chatMessageIds = new Set();
     this.chatMessages = [];
     this.chatUnreadCount = 0;
-    this.connectionHelpShown = false;
-    this.connectionState = { status: 'disconnected', unreachable: false };
-    this.currentDrawioMode = null;
-    this.currentFilePath = null;
     this.fileExplorerReady = false;
     this.followedCursorSignature = '';
     this.followedUserClientId = null;
@@ -119,7 +123,6 @@ export class CollabMdAppShell {
     this.globalUsers = [];
     this.isTabActive = false;
     this.presencePanelOpen = false;
-    this.sessionLoadToken = 0;
     this.navigation = {
       getHashRoute,
       navigateToFile: (filePath, options = {}) => {
@@ -127,7 +130,7 @@ export class CollabMdAppShell {
         if (!preserveFollow && filePath !== this.currentFilePath) {
           this.stopFollowingUser();
         }
-        navigateToFile(filePath, routeOptions);
+        return navigateToFile(filePath, routeOptions);
       },
       navigateToGitCommit,
       navigateToGitDiff,
@@ -357,6 +360,7 @@ export class CollabMdAppShell {
       previewElement: this.elements.previewContent,
     });
     this.previewRenderer = new PreviewRenderer({
+      setActionIcon: setDiagramActionButtonIcon,
       getContent: () => this.getPreviewSource(),
       getFileList: () => this.fileExplorer.flatDocumentFiles,
       getPreviewVisible: () => (
@@ -380,8 +384,7 @@ export class CollabMdAppShell {
         this.drawioEmbed.reconcileEmbeds(this.elements.previewContent);
         this.excalidrawEmbed.reconcileEmbeds(this.elements.previewContent, { isLargeDocument: stats.isLargeDocument });
         this.scrollSyncController.setLargeDocumentMode(stats.isLargeDocument);
-        this.syncPreviewHeadingFoldButtons();
-        this.syncPreviewHeadingLinkButtons();
+        this.syncPreviewControls();
         this.applyPendingPreviewRouteAnchor({ behavior: 'auto', clearMissing: true });
 
         this.schedulePreviewLayoutSync({ delayMs: 0 });
@@ -512,10 +515,12 @@ export class CollabMdAppShell {
       onResolveThread: (threadId) => this.resolveCommentThread(threadId),
     });
     this.structurizrPreview = new StructurizrPreviewController({
+      setActionIcon: setDiagramActionButtonIcon,
       enabled: this.runtimeConfig.structurizrEnabled === true,
       syncWorkspace: (payload) => this.vaultApiClient.syncStructurizrWorkspace(payload),
     });
     this.workspacePreviewController = new WorkspacePreviewController({
+      setActionIcon: setDiagramActionButtonIcon,
       backlinksPanel: this.backlinksPanel,
       basesPreview: this.basesPreview,
       canvasEmbed: this.canvasEmbed,
@@ -727,7 +732,7 @@ export class CollabMdAppShell {
       scrollContainerForSession: (session) => session.getScrollContainer(),
       shouldUseDrawioPreview: () => Boolean(this.runtimeConfig.drawioBaseUrl),
       showEditorLoading: () => this.showEditorLoading(),
-      stateStore: this,
+      stateStore: this.workspaceState,
     });
     this.workspaceRouteController = new WorkspaceRouteController({
       backlinksPanel: this.backlinksPanel,
@@ -740,6 +745,7 @@ export class CollabMdAppShell {
       excalidrawEmbed: this.excalidrawEmbed,
       fileHistoryView: this.fileHistoryView,
       fileExplorer: this.fileExplorer,
+      getCurrentFilePath: () => this.currentFilePath,
       getIsTabActive: () => this.isTabActive,
       getSessionLoadToken: () => this.sessionLoadToken,
       gitDiffView: this.gitDiffView,
@@ -748,6 +754,8 @@ export class CollabMdAppShell {
       layoutController: this.layoutController,
       lobby: this.lobby,
       navigation: this.navigation,
+      onRouteChange: (filePath) => this.handleCommentOverviewRouteChange(filePath),
+      onFileRouteOpened: () => this.focusPendingCommentOverviewThread(),
       previewRenderer: this.previewRenderer,
       requestPreviewRouteAnchor: (anchorId, filePath) => this.requestPreviewRouteAnchor(anchorId, filePath),
       renderAvatars: () => this.renderAvatars(),
@@ -783,9 +791,9 @@ export class CollabMdAppShell {
 
   }
 
-  get currentFilePath() { return this._currentFilePath; }
+  get currentFilePath() { return this.workspaceState.currentFilePath; }
   set currentFilePath(value) {
-    this._currentFilePath = value;
+    this.workspaceState.currentFilePath = value;
     document.title = value
       ? `${this.getDisplayName(value)} — CollabMD`
       : 'CollabMD — Collaborative Markdown Vault';

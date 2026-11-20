@@ -63,6 +63,7 @@ export const workspaceFeature = {
 
   clearStaticPreviewDocument() {
     this._staticPreviewDocument = null;
+    this.workspacePreviewController?.cancelHtmlPreviewRender();
   },
 
   supportsFileHistory(filePath) {

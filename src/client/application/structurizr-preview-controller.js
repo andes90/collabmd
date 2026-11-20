@@ -1,9 +1,7 @@
 import { resolveAppPath } from '../domain/runtime-paths.js';
-import { setDiagramActionButtonIcon } from '../domain/diagram-action-icons.js';
 
 const SYNC_DEBOUNCE_MS = 300;
-const FRAME_FIT_ATTEMPTS = 20;
-const FRAME_FIT_INTERVAL_MS = 50;
+const FRAME_READY_TIMEOUT_MS = 1_000;
 
 function decodeViewKey(hash = '') {
   const normalized = String(hash ?? '').replace(/^#/, '');
@@ -37,8 +35,10 @@ function readFrameState(iframe) {
 export class StructurizrPreviewController {
   constructor({
     enabled = false,
+    setActionIcon = null,
     syncWorkspace,
   }) {
+    this.setActionIcon = setActionIcon;
     this.enabled = Boolean(enabled);
     this.syncWorkspace = syncWorkspace;
     this.iframe = null;
@@ -50,7 +50,7 @@ export class StructurizrPreviewController {
     this.lastVersion = null;
     this.syncTimer = null;
     this.syncToken = 0;
-    this.frameFitTimer = null;
+    this.frameFitCleanup = new Map();
     this.frameHost = null;
     this.pendingIframe = null;
     this.pendingVersion = null;
@@ -136,6 +136,7 @@ export class StructurizrPreviewController {
       return;
     }
 
+    this.frameFitCleanup.get(iframe)?.();
     try {
       iframe.contentWindow?.removeEventListener?.('hashchange', this.handleFrameHashChange);
     } catch {
@@ -150,8 +151,6 @@ export class StructurizrPreviewController {
       return;
     }
 
-    clearTimeout(this.frameFitTimer);
-    this.frameFitTimer = null;
     this.disposeFrame(this.pendingIframe);
     this.pendingIframe = null;
     this.pendingVersion = null;
@@ -215,7 +214,7 @@ export class StructurizrPreviewController {
     }
 
     const isMaximized = this.shell.classList.contains('is-maximized');
-    setDiagramActionButtonIcon(this.maximizeButton, isMaximized ? 'restore' : 'maximize');
+    this.setActionIcon?.(this.maximizeButton, isMaximized ? 'restore' : 'maximize');
     const label = isMaximized ? 'Restore diagram size' : 'Maximize diagram';
     this.maximizeButton.title = label;
     this.maximizeButton.setAttribute('aria-label', label);
@@ -230,22 +229,39 @@ export class StructurizrPreviewController {
   }
 
   scheduleFrameFit(iframe = this.iframe, onReady = null) {
-    if (!iframe) {
+    if (!iframe) return;
+    this.frameFitCleanup.get(iframe)?.();
+    if (this.fitFrameToCanvas(iframe) || !iframe.contentDocument?.documentElement) {
+      onReady?.();
       return;
     }
 
-    clearTimeout(this.frameFitTimer);
-    let attempts = 0;
-    const fit = () => {
-      this.frameFitTimer = null;
-      if (this.fitFrameToCanvas(iframe) || attempts >= FRAME_FIT_ATTEMPTS) {
-        onReady?.();
-        return;
-      }
-
-      attempts += 1;
-      this.frameFitTimer = setTimeout(fit, FRAME_FIT_INTERVAL_MS);
+    const frameDocument = iframe.contentDocument;
+    let observedCanvas = null;
+    const finish = () => {
+      cleanup();
+      onReady?.();
     };
+    const fit = () => {
+      const canvas = frameDocument.querySelector('#diagram-canvas');
+      if (canvas !== observedCanvas) {
+        resizeObserver.disconnect();
+        if (canvas) resizeObserver.observe(canvas);
+        observedCanvas = canvas;
+      }
+      if (this.fitFrameToCanvas(iframe)) finish();
+    };
+    const observer = new MutationObserver(fit);
+    const resizeObserver = new ResizeObserver(fit);
+    const timer = setTimeout(finish, FRAME_READY_TIMEOUT_MS);
+    const cleanup = () => {
+      clearTimeout(timer);
+      observer.disconnect();
+      resizeObserver.disconnect();
+      this.frameFitCleanup.delete(iframe);
+    };
+    this.frameFitCleanup.set(iframe, cleanup);
+    observer.observe(frameDocument.documentElement, { childList: true, subtree: true });
     fit();
   }
 
@@ -266,8 +282,7 @@ export class StructurizrPreviewController {
       return;
     }
 
-    clearTimeout(this.frameFitTimer);
-    this.frameFitTimer = null;
+    for (const cleanup of this.frameFitCleanup.values()) cleanup();
     this.shell = document.createElement('section');
     this.shell.className = 'structurizr-preview-shell diagram-preview-shell';
     this.shell.dataset.structurizrPreview = 'true';
@@ -378,8 +393,7 @@ export class StructurizrPreviewController {
     this.setMaximized(false);
     clearTimeout(this.syncTimer);
     this.syncTimer = null;
-    clearTimeout(this.frameFitTimer);
-    this.frameFitTimer = null;
+    for (const cleanup of this.frameFitCleanup.values()) cleanup();
     this.syncToken += 1;
     this.discardPendingIframe();
     this.disposeFrame(this.iframe);

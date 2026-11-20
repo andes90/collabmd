@@ -1,3 +1,8 @@
+import {
+  isCanvasFilePath,
+  isExcalidrawFilePath,
+} from '../../domain/file-kind.js';
+
 export class WorkspaceRouteController {
   constructor({
     backlinksPanel,
@@ -10,6 +15,7 @@ export class WorkspaceRouteController {
     excalidrawEmbed,
     fileHistoryView = null,
     fileExplorer,
+    getCurrentFilePath = null,
     getIsTabActive,
     getSessionLoadToken,
     gitDiffView,
@@ -17,6 +23,8 @@ export class WorkspaceRouteController {
     imageLightbox = null,
     lobby,
     navigation,
+    onRouteChange = null,
+    onFileRouteOpened = null,
     previewRenderer,
     renderAvatars,
     renderPresence,
@@ -48,6 +56,11 @@ export class WorkspaceRouteController {
     this.excalidrawEmbed = excalidrawEmbed;
     this.fileHistoryView = fileHistoryView;
     this.fileExplorer = fileExplorer;
+    this.getCurrentFilePath = getCurrentFilePath ?? (() => (
+      this.workspaceCoordinator?.stateStore?.currentFilePath
+      ?? this.workspaceCoordinator?.stateStore?.get?.('currentFilePath')
+      ?? null
+    ));
     this.getIsTabActive = getIsTabActive;
     this.getSessionLoadToken = getSessionLoadToken;
     this.gitDiffView = gitDiffView;
@@ -55,6 +68,8 @@ export class WorkspaceRouteController {
     this.imageLightbox = imageLightbox;
     this.lobby = lobby;
     this.navigation = navigation;
+    this.onRouteChange = onRouteChange;
+    this.onFileRouteOpened = onFileRouteOpened;
     this.previewRenderer = previewRenderer;
     this.renderAvatars = renderAvatars;
     this.renderPresence = renderPresence;
@@ -85,6 +100,7 @@ export class WorkspaceRouteController {
     }
 
     const route = this.navigation.getHashRoute();
+    this.onRouteChange?.(route.type === 'file' ? route.filePath : null);
     const canLeave = route.type === 'file' || await this.prepareActiveEmbedDisconnect();
     if (!canLeave) {
       return;
@@ -152,6 +168,7 @@ export class WorkspaceRouteController {
       );
     }
     this.requestPreviewRouteAnchor?.(route.anchor ?? null, route.filePath);
+    if (this.getCurrentFilePath() === route.filePath) this.onFileRouteOpened?.();
   }
 
   showEmptyState() {
@@ -274,13 +291,11 @@ export class WorkspaceRouteController {
   }
 
   async prepareActiveEmbedDisconnect(nextFilePath = null) {
-    const activeFilePath = this.workspaceCoordinator.stateStore?.currentFilePath
-      ?? this.workspaceCoordinator.stateStore?.get?.('currentFilePath')
-      ?? null;
+    const activeFilePath = this.getCurrentFilePath();
     if (!activeFilePath || activeFilePath === nextFilePath) return true;
-    const embed = this.workspaceCoordinator.isCanvasFile?.(activeFilePath)
+    const embed = isCanvasFilePath(activeFilePath)
       ? this.canvasEmbed
-      : (this.workspaceCoordinator.isExcalidrawFile?.(activeFilePath) ? this.excalidrawEmbed : null);
+      : (isExcalidrawFilePath(activeFilePath) ? this.excalidrawEmbed : null);
     if (embed) {
       const canLeave = await embed.prepareFileDisconnect(activeFilePath, {
         timeoutMs: 10000,

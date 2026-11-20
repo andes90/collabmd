@@ -584,8 +584,11 @@ test('shows provisional content before delayed websocket sync and upgrades to co
     )).toBe('provisional');
     await expect(page.locator('#previewContent')).toContainText('My Vault');
     await expect(page.locator('#previewContent')).toContainText('Welcome to the test vault');
+    const editor = page.locator('#editorContainer .cm-editor');
+    await editor.evaluate((element) => { element.dataset.provisionalView = 'true'; });
 
     await waitForCollaborativeEditor(page);
+    await expect(editor).toHaveAttribute('data-provisional-view', 'true');
     await replaceEditorContent(page, '# Live After Bootstrap\n\nCollaborative editing restored.\n');
     await expect(page.locator('#previewContent')).toContainText('Live After Bootstrap');
     await expect(page.locator('#previewContent')).toContainText('Collaborative editing restored.');

@@ -505,6 +505,37 @@ describe('CommentUiController browser behavior', () => {
     expect(controller.previewLayer.querySelector('.comment-preview-badge')).toBeNull();
     expect(editorBadge.classList.contains('is-hovered')).toBe(true);
   });
+
+  it('places the selection chip without hanging when an existing badge sits at the bottom edge', () => {
+    const setup = createController();
+    controller = setup.controller;
+    const editorContainer = document.getElementById('editor');
+    editorContainer.getBoundingClientRect = () => createRect({ left: 0, top: 0, width: 320, height: 120 });
+
+    controller.session.getCommentAnchorClientRect = () => createRect({ left: 12, top: 96, width: 160, height: 24 });
+    controller.session.getSelectionChipClientRect = () => createRect({ left: 10, top: 96, width: 80, height: 24 });
+    controller.setThreads([{
+      anchor: { endLine: 5, quote: 'Bottom line', startLine: 5 },
+      createdAt: 1,
+      createdByName: 'Alice',
+      id: 'thread-bottom',
+      messages: [{ body: 'Bottom comment', createdAt: 2, id: 'message-1', reactions: [], userName: 'Alice' }],
+    }]);
+    controller.committedSelectionAnchor = {
+      anchorKind: 'text',
+      endIndex: 10,
+      endLine: 5,
+      quote: 'Bottom sel',
+      startIndex: 0,
+      startLine: 5,
+    };
+
+    controller.refreshLayout();
+
+    const chip = controller.editorLayer.querySelector('.comment-selection-chip');
+    expect(chip).not.toBeNull();
+    expect(Number.parseFloat(chip.style.top)).toBeLessThan(96);
+  });
 });
 
 describe('CommentUiController preview creation', () => {

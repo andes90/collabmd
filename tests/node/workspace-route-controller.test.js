@@ -285,14 +285,11 @@ test('WorkspaceRouteController keeps the active Excalidraw route when reconnecti
       getHashRoute: () => ({ filePath: 'next.md', type: 'file' }),
       navigateToFile: (filePath) => events.push(['navigate', filePath]),
     },
+    getCurrentFilePath: () => 'active.excalidraw',
     workspaceCoordinator: {
       cleanupSession() {},
       getSession: () => null,
-      isExcalidrawFile: (filePath) => filePath.endsWith('.excalidraw'),
       openFile: async (filePath) => events.push(['open-file', filePath]),
-      stateStore: {
-        get: (key) => (key === 'currentFilePath' ? 'active.excalidraw' : null),
-      },
     },
   });
 
@@ -318,14 +315,11 @@ test('WorkspaceRouteController guards non-file routes before leaving an active E
       getHashRoute: () => ({ type: 'git-history' }),
       navigateToFile: (filePath) => events.push(['navigate', filePath]),
     },
+    getCurrentFilePath: () => 'active.excalidraw',
     workspaceCoordinator: {
       cleanupSession() {},
       getSession: () => null,
-      isExcalidrawFile: (filePath) => filePath.endsWith('.excalidraw'),
       openFile() {},
-      stateStore: {
-        get: (key) => (key === 'currentFilePath' ? 'active.excalidraw' : null),
-      },
     },
   });
 
@@ -367,11 +361,10 @@ test('WorkspaceRouteController waits for canvas edits before changing files or o
       getHashRoute: () => route,
       navigateToFile: (filePath) => events.push(['navigate', filePath]),
     },
+    getCurrentFilePath: () => 'ideas.canvas',
     workspaceCoordinator: {
       getSession: () => null,
-      isCanvasFile: (filePath) => filePath.endsWith('.canvas'),
       openFile: async (filePath) => { events.push(['open-file', filePath]); return true; },
-      stateStore: { currentFilePath: 'ideas.canvas' },
     },
     showGitHistory: async () => events.push(['git-history']),
   });

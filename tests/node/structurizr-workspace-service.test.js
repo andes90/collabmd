@@ -77,13 +77,14 @@ test('Structurizr workspace sync mirrors includes and preserves the last valid s
   await mkdir(join(vaultDir, 'includes'), { recursive: true });
   await writeFile(join(vaultDir, 'workspace.dsl'), createStructurizrStarter('workspace.dsl').content);
   await writeFile(join(vaultDir, 'includes', 'model.dsl'), 'model {\n}\n');
+  await writeFile(join(vaultDir, 'workspace.json'), '{"stale":true}');
 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => {
     const source = await readFile(join(mirrorDir, 'workspace.dsl'), 'utf8').catch(() => '');
-    return source.includes('invalid source')
-      ? jsonResponse({ success: false, message: 'invalid source' }, 400)
-      : jsonResponse({ ok: true });
+    if (source.includes('invalid source')) return jsonResponse({ success: false, message: 'invalid source' }, 400);
+    await writeFile(join(mirrorDir, 'workspace.json'), '{"generated":true}');
+    return jsonResponse({ ok: true });
   };
 
   t.after(async () => {
@@ -101,12 +102,14 @@ test('Structurizr workspace sync mirrors includes and preserves the last valid s
   await service.sync({ content: validSource, rootPath: 'workspace.dsl' });
   assert.equal(await readFile(join(mirrorDir, 'includes/model.dsl'), 'utf8'), 'model {\n}\n');
   assert.equal(await readFile(join(mirrorDir, 'workspace.dsl'), 'utf8'), validSource);
+  assert.equal(await readFile(join(mirrorDir, 'workspace.json'), 'utf8'), '{"generated":true}');
 
   await assert.rejects(
     service.sync({ content: 'invalid source', rootPath: 'workspace.dsl' }),
     (error) => error.requestCode === 'STRUCTURIZR_DSL_INVALID' && error.statusCode === 422,
   );
   assert.equal(await readFile(join(mirrorDir, 'workspace.dsl'), 'utf8'), validSource);
+  assert.equal(await readFile(join(mirrorDir, 'workspace.json'), 'utf8'), '{"generated":true}');
 });
 
 test('Structurizr sync rejects executable DSL in safe mode', async (t) => {
@@ -128,4 +131,17 @@ test('Structurizr sync rejects executable DSL in safe mode', async (t) => {
     service.sync({ content: '!script println("unsafe")', rootPath: 'workspace.dsl' }),
     (error) => error.requestCode === 'STRUCTURIZR_EXECUTABLE_DSL_DISABLED' && error.statusCode === 422,
   );
+  for (const content of [
+    '!include "https://example.test/model.dsl"',
+    'workspace extends "file:///outside/model.dsl" {}',
+    '/* Workspace base */ workspace extends "../model.dsl" {}',
+  ]) {
+    await assert.rejects(service.sync({ content, rootPath: 'workspace.dsl' }), {
+      requestCode: 'STRUCTURIZR_REMOTE_INCLUDE_DISABLED',
+    });
+  }
+  await writeFile(join(vaultDir, 'fragment.md'), '!plugin example.Plugin');
+  await assert.rejects(service.sync({ content: '!include fragment.md', rootPath: 'workspace.dsl' }), {
+    requestCode: 'STRUCTURIZR_EXECUTABLE_DSL_DISABLED',
+  });
 });

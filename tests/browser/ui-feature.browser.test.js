@@ -1020,20 +1020,19 @@ describe('uiFeature browser helpers', () => {
       scrollSyncController: { invalidatePreviewBlocks: vi.fn() },
     };
     Object.assign(context, uiFeatureShellMethods);
-    context.syncPreviewHeadingFoldButtons();
-    expect(previewContent.querySelectorAll('.preview-heading-fold-button')).toHaveLength(0);
+    context.syncPreviewControls();
+    expect(previewContent.querySelectorAll('.preview-heading-fold-button')).toHaveLength(4);
 
     const [sectionA, sectionB, sectionC] = previewContent.querySelectorAll('h2, h3');
 
     const clickFold = (heading) => {
-      context.attachPreviewHeadingControls(heading);
       context.handlePreviewContentClick({
         preventDefault: vi.fn(),
         target: heading.querySelector('.preview-heading-fold-button'),
       });
     };
     clickFold(sectionB);
-    const sectionBButton = context._previewHeadingFoldButton;
+    const sectionBButton = sectionB.querySelector('.preview-heading-fold-button');
 
 
     expect(sectionBButton.getAttribute('aria-expanded')).toBe('false');
@@ -1109,18 +1108,20 @@ describe('uiFeature browser helpers', () => {
     Object.assign(context, uiFeatureShellMethods);
     window.location.hash = 'file=MongoDB%2Fmigration-plan.md';
 
-    context.attachPreviewHeadingControls(document.getElementById('section-a'));
+    context.syncPreviewControls();
     const button = previewContent.querySelector('#section-a .preview-heading-link-button');
     expect(button).not.toBeNull();
     expect(button.getAttribute('aria-label')).toBe('Copy link to Section A');
 
-    context.attachPreviewHeadingControls(document.getElementById('section-b'));
     const complexHeadingButton = previewContent.querySelector('#section-b .preview-heading-link-button');
     expect(complexHeadingButton).not.toBeNull();
     expect(complexHeadingButton.getAttribute('aria-label')).toBe('Copy link to Approach E: Push MongoDB to enable Live Migration Service on Jakarta cluster');
 
-    context.attachPreviewHeadingControls(document.getElementById('section-a'));
+    context.syncPreviewControls();
     const sectionAButton = previewContent.querySelector('#section-a .preview-heading-link-button');
+    expect(sectionAButton).toBe(button);
+    sectionAButton.focus();
+    expect(document.activeElement).toBe(sectionAButton);
     const clickEvent = {
       preventDefault: vi.fn(),
       target: sectionAButton,
@@ -1305,6 +1306,28 @@ describe('uiFeature browser helpers', () => {
       appliedCount: 2,
       anchorId: 'section-a',
     });
+  });
+
+  it.each(['wheel', 'touchmove', 'PageDown'])('abandons route anchor stabilization on %s', (interaction) => {
+    document.body.innerHTML = '<div id="previewContainer" tabindex="0"><div id="preview-content"><h2 id="target">Target</h2></div></div>';
+    const previewContainer = document.getElementById('previewContainer');
+    const context = {
+      ...uiFeatureShellMethods,
+      currentFilePath: 'note.md',
+      elements: { previewContainer, previewContent: document.getElementById('preview-content') },
+      navigatePreviewHeading: vi.fn(() => true),
+    };
+    context.bindEvents();
+    expect(context.requestPreviewRouteAnchor('target')).toBe(true);
+    const fixedDeadline = context._pendingPreviewRouteAnchor.stabilizeUntil;
+    expect(context.applyPendingPreviewRouteAnchor()).toBe(true);
+    expect(context._pendingPreviewRouteAnchor.stabilizeUntil).toBe(fixedDeadline);
+    const event = interaction === 'PageDown' ? new KeyboardEvent('keydown', { key: interaction }) : new Event(interaction);
+    previewContainer.dispatchEvent(event);
+
+    expect(context._pendingPreviewRouteAnchor).toBeNull();
+    expect(context.applyPendingPreviewRouteAnchor()).toBe(false);
+    expect(context.navigatePreviewHeading).toHaveBeenCalledTimes(2);
   });
 
   it('clears missing pending route anchors only after a committed preview render', () => {

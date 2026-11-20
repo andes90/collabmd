@@ -1,3 +1,4 @@
+import { setDiagramActionButtonIcon } from '../presentation/diagram-action-button.js';
 import { resolveVaultRelativePath } from '../../domain/vault-paths.js';
 import { resolveWikiTargetPath } from '../../domain/wiki-link-resolver.js';
 import { PreviewRenderer } from '../application/preview-renderer.js';
@@ -26,6 +27,7 @@ export function createCanvasMarkdownPreview({
   ];
   const syncLayout = () => embeds.forEach((embed) => embed.syncLayout?.());
   const renderer = new PreviewRenderer({
+    setActionIcon: setDiagramActionButtonIcon,
     ...options,
     getContent: () => markdownText,
     getFileList,

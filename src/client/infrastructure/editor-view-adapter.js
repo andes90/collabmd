@@ -86,13 +86,13 @@ const REMOTE_UPDATE_CARET_MAX_LENGTH = 160;
 const RECENT_LOCAL_INPUT_WINDOW_MS = 900;
 const TASK_LIST_MARKER_PATTERN = /^(\s*(?:>\s*)*(?:[-+*]|\d+[.)])\s+\[)( |x|X)(\])(\s.*)?$/;
 
-function openSearchPanelPreservingViewport(view) {
+function openSearchPanelPreservingViewport(view, scheduleFrame) {
   const scrollTop = view.scrollDOM.scrollTop;
   const selection = view.state.selection;
   const applied = openSearchPanel(view);
 
   if (applied) {
-    requestAnimationFrame(() => {
+    scheduleFrame('search-viewport', () => {
       if (view.dom.isConnected && view.state.selection.eq(selection)) {
         view.scrollDOM.scrollTop = scrollTop;
       }
@@ -106,10 +106,9 @@ function getSearchQueryKey(query) {
   return JSON.stringify([query.search, query.caseSensitive, query.regexp, query.wholeWord]);
 }
 
-function createSearchNavigationListener() {
+function createSearchNavigationListener(scheduleFrame) {
   let lastQueryKey = '';
   let panelWasOpen = false;
-  let pendingFrame = 0;
 
   return EditorView.updateListener.of((update) => {
     const panelOpen = searchPanelOpen(update.state);
@@ -126,12 +125,7 @@ function createSearchNavigationListener() {
       return;
     }
 
-    if (pendingFrame) {
-      cancelAnimationFrame(pendingFrame);
-    }
-
-    pendingFrame = requestAnimationFrame(() => {
-      pendingFrame = 0;
+    scheduleFrame('search-reveal', () => {
       if (!update.view.dom.isConnected) {
         return;
       }
@@ -457,18 +451,19 @@ export class EditorViewAdapter {
     this.syntaxThemeCompartment = new Compartment();
     this.lineWrappingCompartment = new Compartment();
     this.vimModeCompartment = new Compartment();
-    this.viewportFrame = 0;
+    this.pendingFrames = new Map();
     this.remoteUpdateFlashTimer = 0;
     this.lastLocalInputAt = 0;
+    this.scheduleFrame = (purpose, callback) => {
+      const pending = this.pendingFrames.get(purpose);
+      if (pending !== undefined) cancelAnimationFrame(pending);
+      this.pendingFrames.set(purpose, requestAnimationFrame(() => {
+        this.pendingFrames.delete(purpose);
+        callback();
+      }));
+    };
     this.handleScroll = () => {
-      if (this.viewportFrame) {
-        return;
-      }
-
-      this.viewportFrame = requestAnimationFrame(() => {
-        this.viewportFrame = 0;
-        this.emitViewportChange();
-      });
+      if (!this.pendingFrames.has('viewport')) this.scheduleFrame('viewport', () => this.emitViewportChange());
     };
     this.handleLocalInputActivity = () => {
       this.lastLocalInputAt = Date.now();
@@ -509,14 +504,14 @@ export class EditorViewAdapter {
       crosshairCursor(),
       highlightActiveLine(),
       highlightSelectionMatches(),
-      createSearchNavigationListener(),
+      createSearchNavigationListener(this.scheduleFrame),
       this.vimModeCompartment.of([]),
       keymap.of([
         ...closeBracketsKeymap,
         ...defaultKeymap,
         ...searchKeymap.map((binding) => (
           binding.run === openSearchPanel
-            ? { ...binding, run: openSearchPanelPreservingViewport }
+            ? { ...binding, run: (view) => openSearchPanelPreservingViewport(view, this.scheduleFrame) }
             : binding
         )),
         ...foldKeymap,
@@ -539,7 +534,7 @@ export class EditorViewAdapter {
       return extensions;
     }
 
-    extensions.splice(13, 0, Prec.highest(EditorView.domEventHandlers({
+    extensions.push(Prec.highest(EditorView.domEventHandlers({
       paste: (event) => handleImagePasteEvent(event, this.onImagePaste),
     })));
     return extensions;
@@ -560,7 +555,15 @@ export class EditorViewAdapter {
     });
   }
 
+  cancelEditorTasks() {
+    this.pendingFrames.forEach((id) => cancelAnimationFrame(id));
+    this.pendingFrames.clear();
+    clearTimeout(this.remoteUpdateFlashTimer);
+    this.remoteUpdateFlashTimer = 0;
+  }
+
   teardownEditorView({ clearContainer = false } = {}) {
+    this.cancelEditorTasks();
     this.editorView?.contentDOM?.removeEventListener('beforeinput', this.handleLocalInputActivity);
     this.editorView?.contentDOM?.removeEventListener('keydown', this.handleLocalInputActivity);
     this.editorView?.contentDOM?.removeEventListener('paste', this.handleLocalInputActivity);
@@ -576,23 +579,24 @@ export class EditorViewAdapter {
   }
 
   mountEditor(state, { editorMode = 'collaborative', preserveScrollTop = 0 } = {}) {
-    this.clearEditorDom({ preserveLoadingIndicator: true });
-    this.teardownEditorView();
-
-    this.editorView = new EditorView({
-      parent: this.editorContainer,
-      state,
-    });
+    if (this.editorView && this.editorContainer.dataset.editorMode === 'provisional' && editorMode === 'collaborative') {
+      this.cancelEditorTasks();
+      this.editorView.setState(state);
+    } else {
+      this.teardownEditorView();
+      this.clearEditorDom({ preserveLoadingIndicator: true });
+      this.editorView = new EditorView({ parent: this.editorContainer, state });
+      this.editorView.scrollDOM.addEventListener('scroll', this.handleScroll, { passive: true });
+      this.editorView.contentDOM.addEventListener('beforeinput', this.handleLocalInputActivity);
+      this.editorView.contentDOM.addEventListener('keydown', this.handleLocalInputActivity);
+      this.editorView.contentDOM.addEventListener('paste', this.handleLocalInputActivity);
+      this.editorView.contentDOM.addEventListener('compositionstart', this.handleLocalInputActivity);
+    }
     // Parse beyond the viewport so diagram syntax does not recolor during scrolling.
     // ponytail: cap startup work at 50ms; larger documents retain background parsing.
     forceParsing(this.editorView, state.doc.length, 50);
 
     this.editorContainer.dataset.editorMode = editorMode;
-    this.editorView.scrollDOM.addEventListener('scroll', this.handleScroll, { passive: true });
-    this.editorView.contentDOM.addEventListener('beforeinput', this.handleLocalInputActivity);
-    this.editorView.contentDOM.addEventListener('keydown', this.handleLocalInputActivity);
-    this.editorView.contentDOM.addEventListener('paste', this.handleLocalInputActivity);
-    this.editorView.contentDOM.addEventListener('compositionstart', this.handleLocalInputActivity);
     this.updateCursorInfo(this.editorView.state);
     this.onSelectionChanged?.(this.editorView.state);
     this.emitViewportChange();
@@ -602,7 +606,7 @@ export class EditorViewAdapter {
     }
 
     if (preserveScrollTop > 0) {
-      requestAnimationFrame(() => {
+      this.scheduleFrame('mount-scroll', () => {
         if (this.editorView?.scrollDOM) {
           this.editorView.scrollDOM.scrollTop = preserveScrollTop;
         }
@@ -643,14 +647,6 @@ export class EditorViewAdapter {
   }
 
   destroy() {
-    if (this.viewportFrame) {
-      cancelAnimationFrame(this.viewportFrame);
-      this.viewportFrame = 0;
-    }
-    if (this.remoteUpdateFlashTimer) {
-      clearTimeout(this.remoteUpdateFlashTimer);
-      this.remoteUpdateFlashTimer = 0;
-    }
     this.undoManager = null;
     this.teardownEditorView({ clearContainer: true });
   }
@@ -802,7 +798,7 @@ export class EditorViewAdapter {
       return false;
     }
 
-    const applied = command(this.editorView);
+    const applied = command(this.editorView, this.scheduleFrame);
     if (applied && normalizedCommandId !== 'openSearch') {
       this.editorView.focus();
     }

@@ -9,6 +9,7 @@ export class LayoutController {
   }) {
     this.mobileBreakpointQuery = mobileBreakpointQuery;
     this.onMeasureEditor = onMeasureEditor;
+    this.editorMeasureTimer = null;
     this.onPreferredViewChange = onPreferredViewChange;
     this.onViewChange = onViewChange;
     this.onViewRequest = onViewRequest;
@@ -82,6 +83,7 @@ export class LayoutController {
   }
 
   applyView(view) {
+    this.cancelEditorMeasure();
     this.currentView = view;
     this.editorLayout?.setAttribute('data-view', view);
     this.syncViewButtons();
@@ -126,7 +128,16 @@ export class LayoutController {
       return;
     }
 
-    setTimeout(() => this.onMeasureEditor(), 50);
+    this.cancelEditorMeasure();
+    this.editorMeasureTimer = setTimeout(() => {
+      this.editorMeasureTimer = null;
+      this.onMeasureEditor();
+    }, 50);
+  }
+
+  cancelEditorMeasure() {
+    clearTimeout(this.editorMeasureTimer);
+    this.editorMeasureTimer = null;
   }
 
   updateMobileToggleButton(label) {

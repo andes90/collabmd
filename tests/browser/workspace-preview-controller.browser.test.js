@@ -46,9 +46,9 @@ it('gates untrusted HTML scripts behind per-render consent', async () => {
   window.addEventListener('message', handleMessage);
 
   controller.renderHtmlFilePreview({
-    content: `<a href="#target">Jump</a><div id="target">Target</div><script>
+    content: `<!doctype html><a href="#target">Jump</a><div id="target">Target</div><script>
 document.querySelector('a').click();
-setTimeout(() => parent.postMessage({ source: 'html-preview-test', hash: location.hash, target: Boolean(document.getElementById('target')) }, '*'));
+setTimeout(() => parent.postMessage({ source: 'html-preview-test', compatMode: document.compatMode, hash: location.hash, target: Boolean(document.getElementById('target')) }, '*'));
 </script>`,
   });
 
@@ -62,6 +62,7 @@ setTimeout(() => parent.postMessage({ source: 'html-preview-test', hash: locatio
   expect(iframe.getAttribute('sandbox')).toBe('');
   expect(iframe.referrerPolicy).toBe('no-referrer');
   expect(iframe.getAttribute('allow')).toContain("camera 'none'");
+  expect(iframe.srcdoc).toMatch(/^<!doctype html><meta/u);
   expect(iframe.srcdoc).toContain("default-src 'none'");
   expect(iframe.srcdoc).toContain("connect-src 'none'");
   expect(iframe.srcdoc).toContain("script-src 'none'");
@@ -74,6 +75,7 @@ setTimeout(() => parent.postMessage({ source: 'html-preview-test', hash: locatio
   runScriptsButton.click();
 
   expect(await scriptMessagePromise).toEqual({
+    compatMode: 'CSS1Compat',
     hash: '#target',
     origin: 'null',
     source: 'html-preview-test',
@@ -84,12 +86,14 @@ setTimeout(() => parent.postMessage({ source: 'html-preview-test', hash: locatio
   expect(shell.querySelector('.html-file-preview-script-gate')).toBeNull();
 
   controller.renderHtmlFilePreview({ content: '<button onclick="alert(1)">Changed</button>' });
+  await expect.poll(() => renderHost.firstElementChild).not.toBe(shell);
   shell = renderHost.firstElementChild;
   expect(shell.querySelector('iframe').getAttribute('sandbox')).toBe('');
   expect(shell.querySelector('iframe').srcdoc).toContain("script-src 'none'");
   expect(shell.querySelector('.html-file-preview-script-gate')).not.toBeNull();
 
   controller.renderHtmlFilePreview({ content: '<p>No scripts</p>' });
+  await expect.poll(() => renderHost.firstElementChild).not.toBe(shell);
   shell = renderHost.firstElementChild;
   expect(shell.querySelector('.html-file-preview-script-gate')).toBeNull();
 
@@ -97,6 +101,7 @@ setTimeout(() => parent.postMessage({ source: 'html-preview-test', hash: locatio
   expect(shell.classList.contains('is-maximized')).toBe(true);
   expect(document.body.classList.contains('html-preview-maximized-open')).toBe(true);
   controller.renderHtmlFilePreview({ content: '<p>Updated while maximized</p>' });
+  await expect.poll(() => renderHost.firstElementChild).not.toBe(shell);
   shell = renderHost.firstElementChild;
   expect(shell.classList.contains('is-maximized')).toBe(true);
   expect(document.body.classList.contains('html-preview-maximized-open')).toBe(true);

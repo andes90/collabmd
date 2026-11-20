@@ -576,3 +576,27 @@ test('WorkspacePreviewController hides text layout actions for canvas and restor
   controller.syncFileChrome('README.md');
   assert.deepEqual(visibility, { views: false, mobile: false, wrap: false });
 });
+
+test('WorkspacePreviewController coalesces HTML input and cancels it on a preview switch', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const controller = createController();
+  const committed = [];
+  controller.commitHtmlFilePreview = (source) => {
+    committed.push(source);
+    controller.htmlPreviewSource = source;
+    controller.htmlPreviewShell = { isConnected: true, classList: { toggle() {} } };
+  };
+
+  controller.renderHtmlFilePreview({ content: 'first' });
+  assert.deepEqual(committed, ['first']);
+  controller.renderHtmlFilePreview({ content: 'skipped' });
+  controller.renderHtmlFilePreview({ content: 'latest' });
+  assert.deepEqual(committed, ['first']);
+  t.mock.timers.tick(120);
+  assert.deepEqual(committed, ['first', 'latest']);
+
+  controller.renderHtmlFilePreview({ content: 'removed' });
+  controller.resetPreviewMode();
+  t.mock.timers.tick(120);
+  assert.deepEqual(committed, ['first', 'latest']);
+});

@@ -227,7 +227,7 @@ test('MermaidPreviewHydrator serves repeated diagrams from the render cache', as
   assert.equal(hooks.runCalls.length, 1);
   assert.equal(hooks.mountCalls.length, 2);
   assert.equal(hooks.bodyAppends, 1);
-  assert.equal(shell._diagramRenderedSource, MERMAID_TEST_SOURCE);
+  assert.equal(hydrator.renderedSources.get(shell), MERMAID_TEST_SOURCE);
   assert.deepEqual(
     [hooks.mountCalls[1].options.baseWidth, hooks.mountCalls[1].options.baseHeight],
     [132, 82],

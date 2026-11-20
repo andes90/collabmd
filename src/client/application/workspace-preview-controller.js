@@ -13,14 +13,18 @@ import {
   isStructurizrFilePath,
 } from '../../domain/file-kind.js';
 import { canFormatDocument } from '../domain/document-formatter.js';
-import { setDiagramActionButtonIcon } from '../domain/diagram-action-icons.js';
 import { resolveApiUrl } from '../domain/runtime-paths.js';
 
 const HTML_PREVIEW_CSP = "default-src 'none'; base-uri about:; form-action 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; connect-src 'none'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:";
 
+const HTML_PREVIEW_UPDATE_DELAY_MS = 120;
+const LEADING_HTML_DOCTYPE = /^\s*<!doctype\s+html(?:\s+(?:public\s+(?:"[^">]*"|'[^'>]*')(?:\s+(?:"[^">]*"|'[^'>]*'))?|system\s+(?:"[^">]*"|'[^'>]*')))?\s*>/iu;
+
 function createHtmlPreviewDocument(content, allowScripts = false) {
   const scriptSource = allowScripts ? "'unsafe-inline'" : "'none'";
-  return `<meta http-equiv="Content-Security-Policy" content="${HTML_PREVIEW_CSP}; script-src ${scriptSource};"><base href="about:srcdoc">${String(content ?? '')}`;
+  const policy = `<meta http-equiv="Content-Security-Policy" content="${HTML_PREVIEW_CSP}; script-src ${scriptSource};"><base href="about:srcdoc">`;
+  const doctypeEnd = content.match(LEADING_HTML_DOCTYPE)?.[0].length ?? 0;
+  return `${content.slice(0, doctypeEnd)}${policy}${content.slice(doctypeEnd)}`;
 }
 
 function hasHtmlScripts(content) {
@@ -56,10 +60,12 @@ export class WorkspacePreviewController {
     outlineController,
     previewRenderer,
     pdfPreview = null,
+    setActionIcon = null,
     scrollSyncController,
     structurizrPreview = null,
     videoEmbed,
   }) {
+    this.setActionIcon = setActionIcon;
     this.backlinksPanel = backlinksPanel;
     this.basesPreview = basesPreview ?? { reconcileEmbeds() {}, renderStandalone() {} };
     this.canvasEmbed = canvasEmbed;
@@ -74,12 +80,14 @@ export class WorkspacePreviewController {
     };
     this.elements = elements;
     this.htmlPreviewShell = null;
+    this.htmlPreviewSource = null;
+    this.htmlPreviewRenderTimer = null;
     if (this.elements.htmlPreviewMaximizeButton) {
       this.elements.htmlPreviewMaximizeButton.addEventListener('click', () => {
         const isMaximized = this.htmlPreviewShell?.classList.contains('is-maximized');
         this.setHtmlPreviewMaximized(!isMaximized);
       });
-      setDiagramActionButtonIcon(this.elements.htmlPreviewMaximizeButton, 'maximize');
+      this.setActionIcon?.(this.elements.htmlPreviewMaximizeButton, 'maximize');
     }
     this.excalidrawEmbed = excalidrawEmbed;
     this.getDisplayName = getDisplayName;
@@ -131,13 +139,20 @@ export class WorkspacePreviewController {
 
     const button = this.elements.htmlPreviewMaximizeButton;
     if (button) {
-      setDiagramActionButtonIcon(button, isMaximized ? 'restore' : 'maximize');
+      this.setActionIcon?.(button, isMaximized ? 'restore' : 'maximize');
       button.title = isMaximized ? 'Restore HTML preview' : 'Maximize HTML preview';
       button.setAttribute('aria-label', button.title);
     }
   }
 
+  cancelHtmlPreviewRender() {
+    clearTimeout(this.htmlPreviewRenderTimer);
+    this.htmlPreviewRenderTimer = null;
+  }
+
   resetPreviewMode() {
+    this.cancelHtmlPreviewRender();
+    this.htmlPreviewSource = null;
     this.canvasEmbed?.unmount();
     this.setHtmlPreviewMaximized(false);
     this.htmlPreviewShell = null;
@@ -343,12 +358,26 @@ export class WorkspacePreviewController {
   }
 
   renderHtmlFilePreview({ content = '' } = {}) {
+    const source = String(content ?? '');
+    this.cancelHtmlPreviewRender();
+    if (!this.htmlPreviewShell?.isConnected) {
+      this.commitHtmlFilePreview(source);
+      return;
+    }
+    if (source === this.htmlPreviewSource) return;
+
+    this.htmlPreviewRenderTimer = setTimeout(() => {
+      this.htmlPreviewRenderTimer = null;
+      this.commitHtmlFilePreview(source);
+    }, HTML_PREVIEW_UPDATE_DELAY_MS);
+  }
+
+  commitHtmlFilePreview(source) {
     const wasMaximized = this.htmlPreviewShell?.classList.contains('is-maximized') ?? false;
     const preview = this.prepareFilePreview('is-html-file-preview');
     if (!preview) return;
     const { previewElement, renderHost } = preview;
 
-    const source = String(content ?? '');
     const iframe = document.createElement('iframe');
     iframe.className = 'html-file-preview-frame';
     iframe.title = 'HTML preview';
@@ -380,6 +409,7 @@ export class WorkspacePreviewController {
     }
     shell.append(iframe);
     this.htmlPreviewShell = shell;
+    this.htmlPreviewSource = source;
     this.setHtmlPreviewMaximized(wasMaximized);
 
     this.commitFilePreview(renderHost, shell);

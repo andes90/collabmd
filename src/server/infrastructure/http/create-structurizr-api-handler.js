@@ -23,7 +23,7 @@ function rewriteBasePath(body, contentType, basePath, { injectEmbedStylesheet = 
   if (basePath) {
     source = source.replace(
       /(["'`(=])\/(static|workspace|api\/workspace)(?=[/"'`?#)])/gu,
-      `$1${basePath}/$2`,
+      (_match, prefix, segment) => `${prefix}${basePath}/${segment}`,
     );
   }
 
@@ -31,8 +31,8 @@ function rewriteBasePath(body, contentType, basePath, { injectEmbedStylesheet = 
     const normalizedBasePath = String(basePath || '').replace(/\/+$/u, '');
     const stylesheetPath = `${normalizedBasePath}/api/structurizr/embed.css`;
     source = source.replace(
-      /<head(?:\s[^>]*)?>/iu,
-      (head) => `${head}\n<link rel="stylesheet" href="${stylesheetPath}">`,
+      /<\/head\s*>/iu,
+      (endHead) => `<link rel="stylesheet" href="${stylesheetPath}">\n${endHead}`,
     );
   }
 
@@ -123,7 +123,7 @@ export function createStructurizrApiHandler({ basePath = '', service = null } = 
         }),
         headers: {
           'Cache-Control': requestUrl.pathname.startsWith('/static/')
-            ? 'public, max-age=31536000, immutable'
+            ? 'public, max-age=300'
             : 'no-store',
           'Content-Type': response.contentType,
         },

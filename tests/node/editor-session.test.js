@@ -304,3 +304,13 @@ test('agent context bounds the exact primary selection and binds it to a local s
   });
   assert.equal(state.doc.toString(), content);
 });
+
+test('EditorSession reads an empty synchronized document ahead of provisional text', () => {
+  const session = new EditorSession({ editorContainer: null });
+  session.viewAdapter.getText = () => 'provisional text';
+  session.collaborationClient.getText = () => '';
+  assert.equal(session.getText(), 'provisional text');
+
+  session.collaborationClient.initialSyncComplete = true;
+  assert.equal(session.getText(), '');
+});

@@ -160,6 +160,8 @@ function createPendingFocusTarget(element, draft = null) {
 
 /** @this {any} */
 function renderCard() {
+  if (this.cardFocusFrame != null) cancelAnimationFrame(this.cardFocusFrame);
+  this.cardFocusFrame = null;
   const root = this.ensureCardRoot();
   this.captureActiveCardDraft();
   root.replaceChildren();
@@ -184,7 +186,7 @@ function renderCard() {
 
     this.reactionPicker = null;
     requestAnimationFrame(() => {
-      if (this.activeCard) {
+      if (card.isConnected && this.activeCard && !this.reactionPicker) {
         this.renderCard();
       }
     });
@@ -695,13 +697,10 @@ function flushPendingCardFocus() {
     return;
   }
 
-  requestAnimationFrame(() => {
-    focusElement();
-    if (document.activeElement !== element) {
-      setTimeout(() => {
-        focusElement();
-      }, 50);
-    }
+  const activeAfterFocus = document.activeElement;
+  this.cardFocusFrame = requestAnimationFrame(() => {
+    this.cardFocusFrame = null;
+    if (document.activeElement === activeAfterFocus) focusElement();
   });
 }
 

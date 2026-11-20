@@ -6,15 +6,6 @@ import { CommentThreadStore } from './comment-thread-store.js';
 import { EditorCollaborationClient } from './editor-collaboration-client.js';
 import { EditorViewAdapter } from './editor-view-adapter.js';
 
-function delegateMethods(proto, targetProp, methods) {
-  for (const entry of methods) {
-    const [methodName, targetMethod] = Array.isArray(entry) ? entry : [entry, entry];
-    proto[methodName] = function (...args) {
-      return this[targetProp][targetMethod](...args);
-    };
-  }
-}
-
 export class EditorSession {
   constructor({
     editorContainer,
@@ -142,7 +133,8 @@ export class EditorSession {
   }
 
   getText() {
-    return this.collaborationClient.getText() || this.viewAdapter.getText();
+    const text = this.collaborationClient.getText();
+    return this.isInitialSyncComplete() ? text : (text || this.viewAdapter.getText());
   }
 
   get awareness() { return this.collaborationClient.awareness; }
@@ -231,43 +223,37 @@ export class EditorSession {
       cursorLine: state.doc.lineAt(head.index).number,
     };
   }
+
+  applyMarkdownToolbarAction(...args) { return this.viewAdapter.applyMarkdownToolbarAction(...args); }
+  applyTheme(...args) { return this.viewAdapter.applyTheme(...args); }
+  flashExternalUpdate(...args) { return this.viewAdapter.flashRemoteRange(...args); }
+  formatDocument(...args) { return this.viewAdapter.formatDocument(...args); }
+  getCommentAnchorClientRect(...args) { return this.viewAdapter.getAnchorClientRect(...args); }
+  getCurrentSelectionCommentAnchor(...args) { return this.viewAdapter.getCurrentSelectionCommentAnchor(...args); }
+  getCurrentSelectionLineRange(...args) { return this.viewAdapter.getCurrentSelectionLineRange(...args); }
+  getScrollContainer(...args) { return this.viewAdapter.getScrollContainer(...args); }
+  getSelectionChipClientRect(...args) { return this.viewAdapter.getSelectionChipClientRect(...args); }
+  getTopVisibleLineNumber(...args) { return this.viewAdapter.getTopVisibleLineNumber(...args); }
+  insertText(...args) { return this.viewAdapter.insertText(...args); }
+  isLineWrappingEnabled(...args) { return this.viewAdapter.isLineWrappingEnabled(...args); }
+  isVimModeEnabled(...args) { return this.viewAdapter.isVimModeEnabled(...args); }
+  replaceText(...args) { return this.viewAdapter.replaceText(...args); }
+  requestMeasure(...args) { return this.viewAdapter.requestMeasure(...args); }
+  revealSearchMatch(...args) { return this.viewAdapter.revealSearchMatch(...args); }
+  runEditorCommand(...args) { return this.viewAdapter.runEditorCommand(...args); }
+  scrollToLine(...args) { return this.viewAdapter.scrollToLine(...args); }
+  scrollToPosition(...args) { return this.viewAdapter.scrollToPosition(...args); }
+  setLineWrapping(...args) { return this.viewAdapter.setLineWrapping(...args); }
+  setVimMode(...args) { return this.viewAdapter.setVimMode(...args); }
+
+  createCommentThread(...args) { return this.commentThreadStore.createCommentThread(...args); }
+  deleteCommentThread(...args) { return this.commentThreadStore.deleteCommentThread(...args); }
+  getCommentThreads(...args) { return this.commentThreadStore.getCommentThreads(...args); }
+  replyToCommentThread(...args) { return this.commentThreadStore.replyToCommentThread(...args); }
+  toggleCommentReaction(...args) { return this.commentThreadStore.toggleCommentReaction(...args); }
+
+  getLocalUser(...args) { return this.collaborationClient.getLocalUser(...args); }
+  getUserViewport(...args) { return this.collaborationClient.getUserViewport(...args); }
+  setUserName(...args) { return this.collaborationClient.setUserName(...args); }
+  waitForInitialSync(...args) { return this.collaborationClient.waitForInitialSync(...args); }
 }
-
-delegateMethods(EditorSession.prototype, 'viewAdapter', [
-  'applyMarkdownToolbarAction',
-  'applyTheme',
-  ['flashExternalUpdate', 'flashRemoteRange'],
-  'formatDocument',
-  ['getCommentAnchorClientRect', 'getAnchorClientRect'],
-  'getCurrentSelectionCommentAnchor',
-  'getCurrentSelectionLineRange',
-  'getScrollContainer',
-  'getSelectionChipClientRect',
-  'getTopVisibleLineNumber',
-  'insertText',
-  'isLineWrappingEnabled',
-  'isVimModeEnabled',
-  'replaceText',
-  'requestMeasure',
-  'revealSearchMatch',
-  'runEditorCommand',
-  'scrollToLine',
-  'scrollToPosition',
-  'setLineWrapping',
-  'setVimMode',
-]);
-
-delegateMethods(EditorSession.prototype, 'commentThreadStore', [
-  'createCommentThread',
-  'deleteCommentThread',
-  'getCommentThreads',
-  'replyToCommentThread',
-  'toggleCommentReaction',
-]);
-
-delegateMethods(EditorSession.prototype, 'collaborationClient', [
-  'getLocalUser',
-  'getUserViewport',
-  'setUserName',
-  'waitForInitialSync',
-]);

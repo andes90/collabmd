@@ -1,4 +1,3 @@
-import { setDiagramActionButtonIcon } from '../domain/diagram-action-icons.js';
 import {
   rasterizeSvgMarkupToPngBlob,
   writeBlobToClipboard,
@@ -69,16 +68,19 @@ function isSvgElement(value) {
 export class DiagramChrome {
   constructor({
     documentRef = document,
+    setActionIcon = null,
     toastController = null,
     windowRef = window,
   } = {}) {
+    this.setActionIcon = setActionIcon;
     this.document = documentRef;
     this.window = windowRef;
     this.toastController = toastController;
     this.activeMaximizedShell = null;
     this.maximizedRoots = new Map();
     this.resizeObservers = new Set();
-    this.shellControllers = new WeakMap();
+    this.shellControllers = new Map();
+    this.shellRestoreMounts = new WeakMap();
     this.shellViewStates = new WeakMap();
     this.shellRefits = new WeakMap();
   }
@@ -94,6 +96,7 @@ export class DiagramChrome {
   }
 
   destroyAllShells() {
+    this.shellControllers.forEach((_controller, shell) => this.destroyShell(shell));
     this.resizeObservers.forEach((observer) => observer.disconnect());
     this.resizeObservers.clear();
     this.activeMaximizedShell = null;
@@ -202,8 +205,7 @@ export class DiagramChrome {
   mountShellInMaximizedRoot(shell, kind) {
     const root = this.ensureMaximizedRoot(kind);
     root.hidden = false;
-    shell._diagramChromeRestoreParent = shell.parentElement || null;
-    shell._diagramChromeRestoreNextSibling = shell.nextSibling || null;
+    this.shellRestoreMounts.set(shell, { parent: shell.parentElement, nextSibling: shell.nextSibling });
     root.appendChild(shell);
   }
 
@@ -212,8 +214,7 @@ export class DiagramChrome {
       return;
     }
 
-    const restoreParent = shell._diagramChromeRestoreParent;
-    const restoreNextSibling = shell._diagramChromeRestoreNextSibling;
+    const { parent: restoreParent, nextSibling: restoreNextSibling } = this.shellRestoreMounts.get(shell) ?? {};
     if (restoreParent?.isConnected) {
       if (restoreNextSibling?.parentElement === restoreParent) {
         restoreParent.insertBefore(shell, restoreNextSibling);
@@ -222,8 +223,7 @@ export class DiagramChrome {
       }
     }
 
-    shell._diagramChromeRestoreParent = null;
-    shell._diagramChromeRestoreNextSibling = null;
+    this.shellRestoreMounts.delete(shell);
 
     this.maximizedRoots.forEach((root) => {
       if (root.childElementCount === 0) {
@@ -248,8 +248,8 @@ export class DiagramChrome {
     button.className = config.buttonClassName;
     button.setAttribute('aria-label', ariaLabel);
     button.title = ariaLabel;
-    if (icon) {
-      setDiagramActionButtonIcon(button, icon);
+    if (icon && this.setActionIcon) {
+      this.setActionIcon(button, icon);
     } else {
       button.textContent = label;
     }
@@ -344,7 +344,7 @@ export class DiagramChrome {
 
   syncMaximizeButtonState(shell, maximizeButton) {
     const isMaximized = shell.classList.contains('is-maximized');
-    setDiagramActionButtonIcon(maximizeButton, isMaximized ? 'restore' : 'maximize');
+    this.setActionIcon?.(maximizeButton, isMaximized ? 'restore' : 'maximize');
     const label = isMaximized ? 'Restore diagram size' : 'Maximize diagram';
     maximizeButton.setAttribute('aria-label', label);
     maximizeButton.title = label;
@@ -772,7 +772,8 @@ export class DiagramChrome {
       });
     } else if (shouldRestoreScrollPosition) {
       if (!restoreScrollPosition()) {
-        this.window.requestAnimationFrame(() => {
+        replacementFrameId = this.window.requestAnimationFrame(() => {
+          replacementFrameId = null;
           if (frame.isConnected) {
             restoreScrollPosition();
             frame.style.visibility = '';
@@ -791,8 +792,11 @@ export class DiagramChrome {
         if (resetZoomFrameId) {
           this.window.cancelAnimationFrame(resetZoomFrameId);
         }
-        if (replacementFrameId) {
+        if (replacementFrameId !== null) {
           this.window.cancelAnimationFrame(replacementFrameId);
+          if (shouldStageReplacement) frame.remove();
+          else frame.style.visibility = '';
+          if (shouldRestoreShellPosition) shell.style.position = '';
         }
         resizeObserver?.disconnect?.();
         this.resizeObservers.delete(resizeObserver);

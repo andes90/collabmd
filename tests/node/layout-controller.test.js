@@ -230,3 +230,21 @@ test('LayoutController restores a stored desktop view and persists later changes
     assert.deepEqual(persisted, ['preview']);
   });
 });
+
+test('LayoutController coalesces editor measurements and cancels them when switching away', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  withDom({}, () => {
+    let measureCount = 0;
+    const controller = new LayoutController({ onMeasureEditor: () => { measureCount += 1; } });
+    controller.initialize();
+    controller.setView('editor');
+    controller.setView('split');
+    t.mock.timers.tick(50);
+    assert.equal(measureCount, 1);
+
+    controller.setView('editor');
+    controller.setView('preview');
+    t.mock.timers.tick(50);
+    assert.equal(measureCount, 1);
+  });
+});

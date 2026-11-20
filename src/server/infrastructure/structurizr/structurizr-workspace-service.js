@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, readdir, realpath, rm, stat, utimes, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -39,26 +39,32 @@ function normalizeWorkspaceRootPath(pathValue) {
   return normalized;
 }
 
-function validateStructurizrDsl(source, { trustedExecutableDsl = false } = {}) {
-  if (trustedExecutableDsl) {
-    return;
-  }
+// Match comments and quoted text before bare tokens so descriptions cannot be
+// mistaken for directives, and the text within comments is never inspected.
+const DSL_TOKEN = /\/\*[\s\S]*?(?:\*\/|$)|\/\/[^\r\n]*|#[^\r\n]*|"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|[{}]|[^\s{}"']+/gu;
 
-  const text = String(source ?? '');
-  if (/^\s*!script\b/im.test(text) || /^\s*!plugin\b/im.test(text)) {
-    throw createServiceError(
-      'Executable Structurizr DSL is disabled for this workspace.',
-      422,
-      'STRUCTURIZR_EXECUTABLE_DSL_DISABLED',
-    );
-  }
-
-  if (/^\s*!include\s+<?(?:https?|file):/im.test(text)) {
-    throw createServiceError(
-      'Remote Structurizr DSL includes are disabled for this workspace.',
-      422,
-      'STRUCTURIZR_REMOTE_INCLUDE_DISABLED',
-    );
+function validateStructurizrDsl(source) {
+  const tokens = Array.from(source.matchAll(DSL_TOKEN), ([token]) => token)
+    .filter((token) => !token.startsWith('/*') && !token.startsWith('//') && !token.startsWith('#'));
+  for (let index = 0; index < tokens.length; index += 1) {
+    const directive = tokens[index].toLowerCase();
+    if (directive === '!script' || directive === '!plugin' || directive === '!components') {
+      throw createServiceError(
+        'Executable Structurizr DSL is disabled for this workspace.',
+        422,
+        'STRUCTURIZR_EXECUTABLE_DSL_DISABLED',
+      );
+    }
+    const extendsWorkspace = directive === 'workspace' && tokens[index + 1]?.toLowerCase() === 'extends';
+    if (directive !== '!include' && !extendsWorkspace) continue;
+    const location = (tokens[index + (extendsWorkspace ? 2 : 1)] ?? '').replace(/^["'<]|["'>]$/gu, '');
+    if (/^(?:[a-z][a-z0-9+.-]*:|\/)|\\|\$\{|(?:^|\/)\.\.(?:\/|$)/iu.test(location)) {
+      throw createServiceError(
+        'Structurizr DSL includes and base workspaces must use local paths inside the workspace.',
+        422,
+        'STRUCTURIZR_REMOTE_INCLUDE_DISABLED',
+      );
+    }
   }
 }
 
@@ -266,12 +272,11 @@ export class StructurizrWorkspaceService {
     }
 
     files.delete(sourceRootFileName);
+    files.delete(WORKSPACE_JSON_FILE_NAME);
     files.set(WORKSPACE_DSL_FILE_NAME, Buffer.from(rootSource, 'utf8'));
-    for (const [pathValue, fileContent] of files) {
-      if (pathValue.toLowerCase().endsWith('.dsl')) {
-        validateStructurizrDsl(fileContent.toString('utf8'), {
-          trustedExecutableDsl: this.trustedExecutableDsl,
-        });
+    if (!this.trustedExecutableDsl) {
+      for (const fileContent of files.values()) {
+        validateStructurizrDsl(fileContent.toString('utf8'));
       }
     }
 
@@ -284,21 +289,10 @@ export class StructurizrWorkspaceService {
     try {
       await removeMirrorPaths(this.mirrorDir, stalePaths);
       await writeMirrorFiles(this.mirrorDir, files);
-      // Local caches workspace.json; an old mtime makes it parse the DSL without a delete race.
+      // Invalidate the generated workspace after the new DSL is ready.
       const workspaceJsonPath = resolveMirrorPath(this.mirrorDir, WORKSPACE_JSON_FILE_NAME);
-      try {
-        await utimes(workspaceJsonPath, new Date(0), new Date(0));
-      } catch (error) {
-        if (error.code !== 'ENOENT') {
-          throw error;
-        }
-      }
+      await rm(workspaceJsonPath, { force: true });
       await this.validateMirror();
-      if (files.has(WORKSPACE_JSON_FILE_NAME)) {
-        await writeMirrorFiles(this.mirrorDir, new Map([
-          [WORKSPACE_JSON_FILE_NAME, files.get(WORKSPACE_JSON_FILE_NAME)],
-        ]));
-      }
       await writeFile(
         resolveMirrorPath(this.mirrorDir, MANIFEST_FILE_NAME),
         `${JSON.stringify({ paths: sourcePaths }, null, 2)}\n`,
@@ -317,7 +311,7 @@ export class StructurizrWorkspaceService {
   }
 
   async validateMirror() {
-    for (let attempt = 0; attempt < 8; attempt += 1) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
       let response;
       try {
         response = await fetch(`${this.serverUrl}/api/workspace/1`, {
@@ -339,9 +333,7 @@ export class StructurizrWorkspaceService {
 
       const message = String(payload.message || payload.error || `Structurizr renderer returned HTTP ${response.status}`)
         .replace(/^com\.structurizr\.dsl\.StructurizrDslParserException:\s*/u, '');
-      const isTransientStartupFailure = response.status >= 500
-        && /(?:No workspace|FileNotFoundException|workspace\.json)/iu.test(message);
-      if (isTransientStartupFailure && attempt < 7) {
+      if (response.status === 503 && attempt < 2) {
         await delay(250);
         continue;
       }

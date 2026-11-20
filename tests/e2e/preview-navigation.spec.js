@@ -343,10 +343,18 @@ test('copies and restores file-plus-anchor deep links from preview headings', as
   await replaceEditorContent(page, FRAGMENT_LINK_DOCUMENT);
 
   const heading = page.locator('#previewContent h2#section-a');
-  await heading.hover();
+  const foldButton = heading.locator('.preview-heading-fold-button');
   const headingLinkButton = heading.locator('.preview-heading-link-button');
-  await expect(headingLinkButton).toBeVisible();
-  await headingLinkButton.click();
+  await page.mouse.move(0, 0);
+  await expect(headingLinkButton).toHaveCSS('opacity', '0');
+  await heading.hover();
+  await expect(headingLinkButton).toHaveCSS('opacity', '1');
+  await page.mouse.move(0, 0);
+  await foldButton.focus();
+  await foldButton.press('Tab');
+  await expect(headingLinkButton).toBeFocused();
+  await expect(headingLinkButton).toHaveCSS('opacity', '1');
+  await headingLinkButton.press('Enter');
 
 
   const expectedUrl = new URL(page.url());

@@ -129,3 +129,24 @@ test('createLanguageExtension highlights Mermaid fenced blocks inside Markdown',
   assert.equal(getInnerSyntaxNodeNameAt(state, 'flowchart'), 'meta');
   assert.equal(getInnerSyntaxNodeNameAt(state, '-->'), 'operator');
 });
+
+test('EditorViewAdapter cancels queued view work before destroying its editor', (t) => {
+  const adapter = new EditorViewAdapter({ editorContainer: null });
+  const previousRequest = globalThis.requestAnimationFrame;
+  const previousCancel = globalThis.cancelAnimationFrame;
+  t.after(() => {
+    globalThis.requestAnimationFrame = previousRequest;
+    globalThis.cancelAnimationFrame = previousCancel;
+  });
+  const cancelled = [];
+  let nextFrame = 0;
+  globalThis.requestAnimationFrame = () => ++nextFrame;
+  globalThis.cancelAnimationFrame = (id) => cancelled.push(id);
+  adapter.scheduleFrame('search-reveal', () => {});
+  adapter.scheduleFrame('mount-scroll', () => {});
+  adapter.editorView = { destroy: () => assert.deepEqual(cancelled, [1, 2]) };
+
+  adapter.teardownEditorView();
+  assert.equal(adapter.pendingFrames.size, 0);
+  assert.equal(adapter.editorView, null);
+});

@@ -90,13 +90,28 @@
   font-weight: 600;
 }
 
-.preview-content .preview-heading-fold-button {
-  margin-inline: 0 var(--space-2);
+.preview-content :is(h1, h2, h3, h4, h5, h6):has(> .preview-heading-fold-button) {
+  position: relative;
+  /* The buttons sit in the gutters, outside the heading's paint box. */
+  content-visibility: visible;
+}
+
+.preview-content :is(.preview-heading-fold-button, .preview-heading-link-button) {
+  --heading-button-size: var(--space-6);
+  position: absolute;
+  inset-block-start: max(0px, calc((1lh - var(--heading-button-size)) / 2));
+  width: var(--heading-button-size);
+  min-width: var(--heading-button-size);
+  height: var(--heading-button-size);
   border: 0;
   border-radius: var(--radius-full);
-  font-size: var(--text-sm);
-  line-height: 1;
-  vertical-align: middle;
+  font-size: inherit;
+  line-height: inherit;
+  opacity: 0;
+}
+
+.preview-content .preview-heading-fold-button {
+  inset-inline-end: 100%;
 }
 
 .preview-content .preview-heading-fold-button::before {
@@ -125,29 +140,13 @@
 }
 
 .preview-content .preview-heading-link-button {
-  display: inline-flex;
-  width: 1.18em;
-  min-width: 1.18em;
-  height: 1.18em;
-  margin-inline-start: 0.28em;
-  border: 0;
-  border-radius: var(--radius-full);
-  background: transparent;
+  inset-inline-start: 100%;
   color: color-mix(in oklab, var(--color-text-muted) 78%, transparent);
-  transform: translateY(-0.04em);
-  transition:
-    transform var(--transition-interactive),
-    background var(--transition-interactive),
-    box-shadow var(--transition-interactive),
-    color var(--transition-interactive),
-    opacity var(--transition-interactive);
-  vertical-align: middle;
-  opacity: 0;
 }
 
 .preview-content .preview-heading-link-button > svg {
-  width: 0.74em;
-  height: 0.74em;
+  width: var(--space-3);
+  height: var(--space-3);
   stroke-width: 2;
 }
 
@@ -155,17 +154,23 @@
   background: color-mix(in oklab, var(--color-primary) 12%, transparent);
   box-shadow: var(--shadow-accent-outline);
   color: var(--color-primary);
-  transform: translateY(-0.04em) scale(1.04);
 }
 
-.preview-content h1:hover .preview-heading-link-button,
-.preview-content h2:hover .preview-heading-link-button,
-.preview-content h3:hover .preview-heading-link-button,
-.preview-content h4:hover .preview-heading-link-button,
-.preview-content h5:hover .preview-heading-link-button,
-.preview-content h6:hover .preview-heading-link-button,
-.preview-content .preview-heading-link-button:focus-visible {
+.preview-content :is(h1, h2, h3, h4, h5, h6):is(:hover, :focus-within) > :is(.preview-heading-fold-button, .preview-heading-link-button),
+.preview-content .preview-heading-fold-button[aria-expanded='false'] {
   opacity: 1;
+}
+
+@media (max-width: 768px) {
+  .preview-content :is(.preview-heading-fold-button, .preview-heading-link-button) {
+    --heading-button-size: var(--space-4);
+  }
+}
+
+@media (hover: none) {
+  .preview-content :is(.preview-heading-fold-button, .preview-heading-link-button) {
+    opacity: 1;
+  }
 }
 
 .preview-content .preview-heading-link-button:focus-visible {

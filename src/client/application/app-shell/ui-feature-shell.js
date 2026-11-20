@@ -6,6 +6,7 @@ import { createFileRouteHash, isCollabMdHashRoute, isGitHashRouteType } from '..
 const VERSION_RELOAD_TOAST_DURATION_MS = 0;
 const PREVIEW_ROUTE_ANCHOR_STABILIZE_MS = 2000;
 const PREVIEW_ROUTE_ANCHOR_MAX_APPLICATIONS = 8;
+const PREVIEW_SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End', ' ']);
 const PREVIEW_CODE_COPY_ICON = `
   <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
     <rect x="8" y="8" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>
@@ -253,7 +254,15 @@ function bindEvents() {
   this.elements.editorContainer?.addEventListener('keydown', stopFollowing);
   this.elements.editorContainer?.addEventListener('wheel', stopFollowing, { passive: true });
   this.elements.previewContainer?.addEventListener('pointerdown', stopFollowing);
-  this.elements.previewContainer?.addEventListener('wheel', stopFollowing, { passive: true });
+  const cancelAnchorScroll = () => { this._pendingPreviewRouteAnchor = null; };
+  this.elements.previewContainer?.addEventListener('wheel', () => {
+    stopFollowing();
+    cancelAnchorScroll();
+  }, { passive: true });
+  this.elements.previewContainer?.addEventListener('touchmove', cancelAnchorScroll, { passive: true });
+  this.elements.previewContainer?.addEventListener('keydown', (event) => {
+    if (!event.defaultPrevented && PREVIEW_SCROLL_KEYS.has(event.key)) cancelAnchorScroll();
+  });
   this.elements.skipToEditor?.addEventListener('click', (event) => this.focusEditor(event));
 
   this.elements.emptyStateNewFileBtn?.addEventListener('click', () => {
@@ -353,12 +362,6 @@ function bindEvents() {
 
   this.elements.previewContent?.addEventListener('click', (event) => {
     this.handlePreviewContentClick?.(event);
-  });
-  this.elements.previewContent?.addEventListener('pointerover', (event) => {
-    this.handlePreviewContentPointerOver?.(event);
-  });
-  this.elements.previewContent?.addEventListener('focusin', (event) => {
-    this.handlePreviewContentPointerOver?.(event);
   });
 
   this.elements.sidebarToggle?.addEventListener('click', () => {
@@ -465,17 +468,7 @@ function scrollPreviewToTarget(previewContainer, target, { behavior = 'smooth' }
 }
 
 function getHeadingLinkLabel(heading) {
-  if (!(heading instanceof HTMLElement)) {
-    return '';
-  }
-
-  const headingClone = heading.cloneNode(true);
-  if (!(headingClone instanceof HTMLElement)) {
-    return heading.textContent.trim();
-  }
-
-  headingClone.querySelectorAll('.preview-heading-fold-button, .preview-heading-link-button').forEach((button) => button.remove());
-  return headingClone.textContent.replace(/\s+/g, ' ').trim();
+  return heading.dataset.previewHeadingLabel ?? heading.textContent.replace(/\s+/gu, ' ').trim();
 }
 
 function nowMs() {
@@ -571,81 +564,53 @@ function attachPreviewHeadingControls(heading) {
     return;
   }
 
-  if (!this._previewHeadingFoldButton) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'ui-icon-button preview-heading-fold-button';
-    this._previewHeadingFoldButton = button;
-  }
-  if (!this._previewHeadingLinkButton) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'ui-icon-button preview-heading-link-button';
-    // pi-lens-ignore: no-inner-html-js
-    button.innerHTML = PREVIEW_HEADING_LINK_ICON;
-    this._previewHeadingLinkButton = button;
-  }
-
-  const foldButton = this._previewHeadingFoldButton;
-  const linkButton = this._previewHeadingLinkButton;
-
-  if (foldButton.parentElement !== heading) {
+  heading.dataset.previewHeadingLabel ??= getHeadingLinkLabel(heading);
+  let foldButton = heading.querySelector(':scope > .preview-heading-fold-button');
+  if (!foldButton) {
+    foldButton = document.createElement('button');
+    foldButton.type = 'button';
+    foldButton.className = 'ui-icon-button preview-heading-fold-button';
     heading.prepend(foldButton);
   }
   syncHeadingFoldButtonState(heading, foldButton);
 
+  let linkButton = heading.querySelector(':scope > .preview-heading-link-button');
   if (!heading.id) {
-    linkButton.remove();
+    linkButton?.remove();
     return;
   }
-
-  const headingLabel = getHeadingLinkLabel(heading);
-  linkButton.dataset.previewHeadingAnchor = heading.id;
-  linkButton.setAttribute('aria-label', `Copy link to ${headingLabel}`);
-  linkButton.setAttribute('title', 'Copy link to this section');
-  if (linkButton.parentElement !== heading) {
+  if (!linkButton) {
+    linkButton = document.createElement('button');
+    linkButton.type = 'button';
+    linkButton.className = 'ui-icon-button preview-heading-link-button';
+    // pi-lens-ignore: no-inner-html-js
+    linkButton.innerHTML = PREVIEW_HEADING_LINK_ICON;
     heading.append(linkButton);
   }
+  linkButton.dataset.previewHeadingAnchor = heading.id;
+  linkButton.setAttribute('aria-label', `Copy link to ${getHeadingLinkLabel(heading)}`);
+  linkButton.title = 'Copy link to this section';
 }
 
 function attachPreviewCodeCopyButton(pre) {
-  if (!(pre instanceof HTMLElement) || pre.tagName !== 'PRE' || !pre.querySelector(':scope > code')) {
-    return;
-  }
+  if (!pre.querySelector(':scope > code') || pre.querySelector(':scope > .preview-code-copy-button')) return;
 
-  if (!this._previewCodeCopyButton) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'ui-button ui-button--secondary ui-button--compact preview-code-copy-button';
-    button.setAttribute('aria-label', 'Copy code');
-    button.title = 'Copy code';
-    // pi-lens-ignore: no-inner-html-js
-    button.innerHTML = `${PREVIEW_CODE_COPY_ICON}<span data-preview-code-copy-label>Copy</span>`;
-    this._previewCodeCopyButton = button;
-  }
-
-  const button = this._previewCodeCopyButton;
-  if (button.parentElement !== pre) {
-    pre.append(button);
-  }
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'ui-button ui-button--secondary ui-button--compact preview-code-copy-button';
+  button.setAttribute('aria-label', 'Copy code');
+  button.title = 'Copy code';
+  // pi-lens-ignore: no-inner-html-js
+  button.innerHTML = `${PREVIEW_CODE_COPY_ICON}<span data-preview-code-copy-label>Copy</span>`;
+  pre.append(button);
 }
 
-function handlePreviewContentPointerOver(event) {
-  if (!(event.target instanceof Element) || !this.elements.previewContent) {
-    return;
-  }
-
-  const heading = event.target.closest('h1, h2, h3, h4, h5, h6');
-  if (heading instanceof HTMLElement && this.elements.previewContent.contains(heading)) {
-    this.attachPreviewHeadingControls(heading);
-  }
-
-  const pre = event.target.closest('pre');
-  if (pre instanceof HTMLElement && this.elements.previewContent.contains(pre)) {
-    this.attachPreviewCodeCopyButton(pre);
-  }
+function syncPreviewControls() {
+  const previewContent = this.elements.previewContent;
+  previewContent?.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(attachPreviewHeadingControls);
+  previewContent?.querySelectorAll('pre').forEach(attachPreviewCodeCopyButton);
+  applyPreviewHeadingFolds(previewContent);
 }
-
 
 function applyPreviewHeadingFolds(previewContent) {
   const parents = new Set(Array.from(previewContent?.querySelectorAll?.('h1, h2, h3, h4, h5, h6') ?? [])
@@ -722,20 +687,6 @@ function syncPreviewHeadingFoldButtons() {
   applyPreviewHeadingFolds(this.elements.previewContent);
 }
 
-function syncPreviewHeadingLinkButtons() {
-  const linkButton = this._previewHeadingLinkButton;
-  const heading = linkButton?.parentElement;
-  if (!(heading instanceof HTMLElement) || !heading.id) {
-    return;
-  }
-
-  const headingLabel = getHeadingLinkLabel(heading);
-  linkButton.dataset.previewHeadingAnchor = heading.id;
-  linkButton.setAttribute('aria-label', `Copy link to ${headingLabel}`);
-  linkButton.setAttribute('title', 'Copy link to this section');
-}
-
-
 function requestPreviewRouteAnchor(anchorId, filePath = this.currentFilePath) {
   const normalizedAnchor = String(anchorId ?? '').trim();
   this._pendingPreviewRouteAnchor = normalizedAnchor
@@ -744,7 +695,7 @@ function requestPreviewRouteAnchor(anchorId, filePath = this.currentFilePath) {
       appliedCount: 0,
       anchorId: normalizedAnchor,
       filePath: filePath ?? this.currentFilePath ?? null,
-      stabilizeUntil: nowMs() + PREVIEW_ROUTE_ANCHOR_STABILIZE_MS,
+      stabilizeUntil: null,
     }
     : null;
 
@@ -782,9 +733,9 @@ function applyPendingPreviewRouteAnchor({ allowExpired = false, behavior = 'auto
     return false;
   }
 
+  if (!pendingAnchor.applied) pendingAnchor.stabilizeUntil = nowMs() + PREVIEW_ROUTE_ANCHOR_STABILIZE_MS;
   pendingAnchor.applied = true;
   pendingAnchor.appliedCount = (pendingAnchor.appliedCount ?? 0) + 1;
-  pendingAnchor.stabilizeUntil = nowMs() + PREVIEW_ROUTE_ANCHOR_STABILIZE_MS;
   if (pendingAnchor.appliedCount >= PREVIEW_ROUTE_ANCHOR_MAX_APPLICATIONS) {
     this._pendingPreviewRouteAnchor = null;
   }
@@ -1072,7 +1023,6 @@ export const uiFeatureShellMethods = {
   handleConnectionChange,
   handleDocumentKeydown,
   handlePreviewContentClick,
-  handlePreviewContentPointerOver,
   handleThemeChange,
   hideEditorLoading,
   initialize,
@@ -1086,7 +1036,7 @@ export const uiFeatureShellMethods = {
   showEditorLoadError,
   showEditorLoading,
   syncPreviewHeadingFoldButtons,
-  syncPreviewHeadingLinkButtons,
+  syncPreviewControls,
   syncVisualViewportBounds,
   syncToolbarOverflowVisibility,
   syncVimModeToggle,

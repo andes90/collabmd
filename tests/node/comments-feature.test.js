@@ -3,96 +3,70 @@ import test from 'node:test';
 
 import { commentsFeature } from '../../src/client/application/app-shell/comments-feature.js';
 
-test('comment overview selection keeps comments tab and opens anchored thread card', async () => {
-  const calls = [];
-  const context = {
-    commentUi: {
-      openThreadFromOverview: (threadId) => {
-        calls.push(['openThreadFromOverview', threadId]);
-        return true;
-      },
-    },
-    closeSidebarOnMobile: () => calls.push(['closeSidebarOnMobile']),
+function createOverviewContext(overrides = {}) {
+  return {
+    ...commentsFeature,
+    closeSidebarOnMobile() {},
+    commentUi: { setThreads() {}, openThreadFromOverview: () => false },
     currentFilePath: 'notes/current.md',
-    navigation: {
-      navigateToFile: (filePath, options) => calls.push(['navigateToFile', filePath, options]),
-    },
-    session: {
-      scrollToLine: (line, viewportRatio) => calls.push(['scrollToLine', line, viewportRatio]),
-    },
-    setSidebarTab: (tab) => calls.push(['setSidebarTab', tab]),
-    setSidebarVisibility: (visible) => calls.push(['setSidebarVisibility', visible]),
-    workspaceRouteController: {
-      openFile: async (filePath) => {
-        calls.push(['openFile', filePath]);
-        context.currentFilePath = filePath;
-      },
-      preserveSidebarTabForNextFileRoute: (filePath) => calls.push(['preserveSidebarTabForNextFileRoute', filePath]),
-    },
+    navigation: { navigateToFile: () => true },
+    setSidebarTab() {},
+    setSidebarVisibility() {},
+    workspaceRouteController: { preserveSidebarTabForNextFileRoute() {} },
+    ...overrides,
   };
-  context.focusPendingCommentOverviewThread = commentsFeature.focusPendingCommentOverviewThread;
+}
 
-  await commentsFeature.openCommentOverviewThread.call(context, {
-    anchor: { startLine: 12 },
-    filePath: 'notes/target.md',
-    threadId: 'thread-1',
+test('comment overview waits for the file route and focuses a thread when it arrives', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const calls = [];
+  let available = false;
+  const context = createOverviewContext({
+    commentUi: {
+      setThreads(threads) { available = threads.some(({ id }) => id === 'thread-1'); },
+      openThreadFromOverview: (threadId) => { calls.push(['focus', threadId]); return available; },
+    },
+    navigation: { navigateToFile: (filePath, options) => { calls.push(['route', filePath, options]); return true; } },
   });
 
-  assert.deepEqual(calls, [
-    ['setSidebarTab', 'comments'],
-    ['setSidebarVisibility', true],
-    ['preserveSidebarTabForNextFileRoute', 'notes/target.md'],
-    ['navigateToFile', 'notes/target.md', { line: 12 }],
-    ['openFile', 'notes/target.md'],
-    ['setSidebarTab', 'comments'],
-    ['setSidebarVisibility', true],
-    ['scrollToLine', 12, 0.2],
-    ['openThreadFromOverview', 'thread-1'],
-    ['setSidebarTab', 'comments'],
-    ['closeSidebarOnMobile'],
-  ]);
+  context.openCommentOverviewThread({ anchor: { startLine: 12 }, filePath: 'notes/target.md', threadId: 'thread-1' });
+  assert.deepEqual(calls, [['route', 'notes/target.md', { line: 12 }]]);
+  context.handleCommentOverviewRouteChange('notes/target.md');
+  context.currentFilePath = 'notes/target.md';
+  context.handleCommentThreadsChange([]);
+  t.mock.timers.tick(2_000);
+  assert.equal(calls.length, 2);
+  context.handleCommentThreadsChange([{ id: 'thread-1' }]);
+  assert.deepEqual(calls.at(-1), ['focus', 'thread-1']);
   assert.equal(context._pendingCommentOverviewFocus, null);
+  assert.equal(context._commentOverviewFocusTimer, null);
 });
 
-test('comment overview selection opens an Excalidraw thread in its diagram drawer', async () => {
+test('comment overview focuses diagram threads after the route mounts the preview', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   const calls = [];
-  const context = {
-    closeSidebarOnMobile: () => calls.push(['closeSidebarOnMobile']),
-    currentFilePath: 'notes/current.md',
-    excalidrawEmbed: {
-      openCommentThread: (filePath, threadId) => calls.push(['openCommentThread', filePath, threadId]),
-    },
-    navigation: {
-      navigateToFile: (filePath, options) => calls.push(['navigateToFile', filePath, options]),
-    },
-    setSidebarTab: (tab) => calls.push(['setSidebarTab', tab]),
-    setSidebarVisibility: (visible) => calls.push(['setSidebarVisibility', visible]),
-    workspaceRouteController: {
-      openFile: async (filePath) => {
-        calls.push(['openFile', filePath]);
-        context.currentFilePath = filePath;
-      },
-      preserveSidebarTabForNextFileRoute: (filePath) => calls.push(['preserveSidebarTabForNextFileRoute', filePath]),
-    },
-  };
-
-  await commentsFeature.openCommentOverviewThread.call(context, {
-    anchor: { kind: 'diagram-element' },
-    filePath: 'diagrams/target.excalidraw',
-    threadId: 'thread-diagram',
+  const filePath = 'diagrams/target.excalidraw';
+  const context = createOverviewContext({
+    excalidrawEmbed: { openCommentThread: (...args) => { calls.push(args); return true; } },
   });
+  context.openCommentOverviewThread({ filePath, threadId: 'thread-diagram' });
+  assert.deepEqual(calls, []);
+  context.handleCommentOverviewRouteChange(filePath);
+  context.currentFilePath = filePath;
+  assert.equal(context.focusPendingCommentOverviewThread(), true);
+  assert.deepEqual(calls, [[filePath, 'thread-diagram']]);
+});
 
-  assert.deepEqual(calls, [
-    ['setSidebarTab', 'comments'],
-    ['setSidebarVisibility', true],
-    ['preserveSidebarTabForNextFileRoute', 'diagrams/target.excalidraw'],
-    ['navigateToFile', 'diagrams/target.excalidraw', undefined],
-    ['openFile', 'diagrams/target.excalidraw'],
-    ['setSidebarTab', 'comments'],
-    ['setSidebarVisibility', true],
-    ['openCommentThread', 'diagrams/target.excalidraw', 'thread-diagram'],
-    ['closeSidebarOnMobile'],
-  ]);
+test('comment overview clears pending focus and refresh timers when leaving the route', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const context = createOverviewContext({ commentsOverview: { refresh: () => assert.fail('Refresh ran after leaving') } });
+  context.openCommentOverviewThread({ filePath: 'notes/target.md', threadId: 'thread-1' });
+  context.scheduleCommentOverviewRefresh();
+  context.handleCommentOverviewRouteChange(null);
+  t.mock.timers.tick(15_000);
+  assert.equal(context._pendingCommentOverviewFocus, null);
+  assert.equal(context._commentOverviewRefreshTimer, null);
+  assert.equal(context._commentOverviewStale, true);
 });
 
 test('comment overview tree changes refresh only while comments tab is active', () => {

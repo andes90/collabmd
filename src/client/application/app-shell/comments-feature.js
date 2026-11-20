@@ -86,70 +86,48 @@ export const commentsFeature = {
     void this.commentsOverview?.refresh?.();
   },
 
-  async openCommentOverviewThread({ anchor = null, filePath, threadId } = {}) {
-    if (!filePath || !threadId) {
-      return;
-    }
+  openCommentOverviewThread({ anchor = null, filePath, threadId } = {}) {
+    if (!filePath || !threadId) return;
 
-    const isDiagram = getVaultFileKind(filePath) === 'excalidraw';
-    const line = Number.isFinite(anchor?.startLine) ? anchor.startLine : null;
-    if (!isDiagram) {
-      this._pendingCommentOverviewFocus = {
-        attempts: 0,
-        filePath,
-        line,
-        threadId,
-      };
-    }
+    this.clearPendingCommentOverviewFocus();
+    this._pendingCommentOverviewFocus = { filePath, threadId };
+    this._commentOverviewFocusTimer = setTimeout(() => this.clearPendingCommentOverviewFocus(), 15_000);
     this.setSidebarTab('comments');
     this.setSidebarVisibility(true);
     this.workspaceRouteController?.preserveSidebarTabForNextFileRoute?.(filePath);
-    this.navigation.navigateToFile(filePath, isDiagram ? undefined : { line });
-
-    if (this.currentFilePath !== filePath || !this.session) {
-      await this.workspaceRouteController.openFile(filePath);
+    const isDiagram = getVaultFileKind(filePath) === 'excalidraw';
+    const line = Number.isFinite(anchor?.startLine) ? anchor.startLine : null;
+    const routeChanged = this.navigation.navigateToFile(filePath, isDiagram ? undefined : { line });
+    if (!routeChanged) {
+      this.workspaceRouteController?.preserveSidebarTabForNextFileRoute?.(null);
+      this.focusPendingCommentOverviewThread();
     }
-
-    this.setSidebarTab('comments');
-    this.setSidebarVisibility(true);
-    if (isDiagram) {
-      this.excalidrawEmbed?.openCommentThread?.(filePath, threadId);
-      this.closeSidebarOnMobile?.();
-      return;
-    }
-
-    this.focusPendingCommentOverviewThread();
     this.closeSidebarOnMobile?.();
+  },
+
+  clearPendingCommentOverviewFocus() {
+    clearTimeout(this._commentOverviewFocusTimer);
+    this._commentOverviewFocusTimer = null;
+    this._pendingCommentOverviewFocus = null;
+  },
+
+  handleCommentOverviewRouteChange(filePath) {
+    if (this._commentOverviewRefreshTimer != null) {
+      clearTimeout(this._commentOverviewRefreshTimer);
+      this._commentOverviewRefreshTimer = null;
+      this._commentOverviewStale = true;
+    }
+    if (this._pendingCommentOverviewFocus?.filePath !== filePath) this.clearPendingCommentOverviewFocus();
   },
 
   focusPendingCommentOverviewThread() {
     const pending = this._pendingCommentOverviewFocus;
-    if (!pending || pending.filePath !== this.currentFilePath) {
-      return false;
-    }
+    if (!pending || pending.filePath !== this.currentFilePath) return false;
 
-    if (Number.isFinite(pending.line)) {
-      this.session?.scrollToLine?.(pending.line, 0.2);
-    }
-
-    const didFocus = this.commentUi.openThreadFromOverview?.(pending.threadId);
-    if (didFocus) {
-      this._pendingCommentOverviewFocus = null;
-      this.setSidebarTab('comments');
-      return true;
-    }
-
-    if (pending.attempts >= 8) {
-      this._pendingCommentOverviewFocus = null;
-      return false;
-    }
-
-    pending.attempts += 1;
-    clearTimeout(this._commentOverviewFocusTimer);
-    this._commentOverviewFocusTimer = setTimeout(() => {
-      this._commentOverviewFocusTimer = null;
-      this.focusPendingCommentOverviewThread();
-    }, 120);
-    return false;
+    const focused = getVaultFileKind(pending.filePath) === 'excalidraw'
+      ? this.excalidrawEmbed?.openCommentThread?.(pending.filePath, pending.threadId)
+      : this.commentUi.openThreadFromOverview?.(pending.threadId);
+    if (focused) this.clearPendingCommentOverviewFocus();
+    return Boolean(focused);
   },
 };

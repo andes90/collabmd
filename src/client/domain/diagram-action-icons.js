@@ -60,3 +60,7 @@ export function setDiagramActionButtonIcon(button, iconName) {
   button.dataset.icon = iconName;
   button.innerHTML = markup.trim();
 }
+
+export function getDiagramActionIconMarkup(iconName) {
+  return Object.hasOwn(DIAGRAM_ACTION_ICONS, iconName) ? DIAGRAM_ACTION_ICONS[iconName] : '';
+}

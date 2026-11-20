@@ -119,6 +119,7 @@ export function navigateToFile(filePath, {
   line = null,
   matchLength = null,
 } = {}) {
+  const previousHash = window.location.hash;
   window.location.hash = createFileRouteHash(filePath, {
     anchor,
     column,
@@ -128,6 +129,7 @@ export function navigateToFile(filePath, {
     line,
     matchLength,
   });
+  return window.location.hash !== previousHash;
 }
 
 export function navigateToGitDiff({ filePath = null, scope = 'all' } = {}) {

@@ -24,6 +24,7 @@ export class PreviewRenderer {
     plantUmlRenderClient = null,
     previewContainer,
     previewElement,
+    setActionIcon = null,
     toastController = null,
   }) {
     this.getContent = getContent;
@@ -103,6 +104,7 @@ export class PreviewRenderer {
     };
 
     this.diagramChrome = new DiagramChrome({
+      setActionIcon,
       toastController,
     });
     this.mermaidHydrator = new MermaidPreviewHydrator(this, {

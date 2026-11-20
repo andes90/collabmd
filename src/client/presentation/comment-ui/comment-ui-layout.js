@@ -168,13 +168,38 @@ function renderEditorLayer(groups = this.getThreadGroups()) {
     return;
   }
 
-  let chipTop = clamp(relativeRect.top, 8, Math.max(containerRect.height - COMMENT_CONTROL_SLOT_HEIGHT, 8));
-  while (occupiedTops.some((top) => Math.abs(top - chipTop) < (COMMENT_CONTROL_SLOT_HEIGHT - 4))) {
-    chipTop = clamp(
-      chipTop + COMMENT_CONTROL_SLOT_HEIGHT,
-      8,
-      Math.max(containerRect.height - COMMENT_CONTROL_SLOT_HEIGHT, 8),
-    );
+  const minTop = 8;
+  const maxTop = Math.max(containerRect.height - COMMENT_CONTROL_SLOT_HEIGHT, minTop);
+  const initialTop = clamp(relativeRect.top, minTop, maxTop);
+  const collides = (candidateTop) => occupiedTops.some(
+    (top) => Math.abs(top - candidateTop) < (COMMENT_CONTROL_SLOT_HEIGHT - 4),
+  );
+  let chipTop = initialTop;
+  if (collides(chipTop)) {
+    let foundTop = null;
+    for (
+      let candidate = initialTop + COMMENT_CONTROL_SLOT_HEIGHT;
+      candidate <= maxTop;
+      candidate += COMMENT_CONTROL_SLOT_HEIGHT
+    ) {
+      if (!collides(candidate)) {
+        foundTop = candidate;
+        break;
+      }
+    }
+    if (foundTop === null) {
+      for (
+        let candidate = initialTop - COMMENT_CONTROL_SLOT_HEIGHT;
+        candidate >= minTop;
+        candidate -= COMMENT_CONTROL_SLOT_HEIGHT
+      ) {
+        if (!collides(candidate)) {
+          foundTop = candidate;
+          break;
+        }
+      }
+    }
+    chipTop = foundTop ?? initialTop;
   }
   if (!button) {
     button = document.createElement('button');

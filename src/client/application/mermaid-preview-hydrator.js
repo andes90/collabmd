@@ -54,6 +54,7 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
     this.loader = null;
     this.runtime = null;
     this.renderCache = new Map();
+    this.renderedSources = new WeakMap();
   }
 
   cancelHydration({ preserveActiveShell = false } = {}) {
@@ -335,7 +336,7 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
   async renderExportSvgMarkup(shell) {
     const mermaid = await this.ensureMermaid();
     try {
-      const source = shell._diagramRenderedSource
+      const source = this.renderedSources.get(shell)
         ?? shell.querySelector('.mermaid-source')?.textContent
         ?? '';
       return await renderMermaidExportSvgMarkup(mermaid, source);
@@ -377,7 +378,7 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
       kind: 'mermaid',
       sourceSelector: '.mermaid-source',
     });
-    shell._diagramRenderedSource = renderedSource;
+    this.renderedSources.set(shell, renderedSource);
   }
 
   tryMountCachedDiagram(shell, {

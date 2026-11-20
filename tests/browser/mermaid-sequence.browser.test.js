@@ -68,7 +68,7 @@ it.each(renderCases)('renders $name in previews and exports while retaining the 
     expect(shell.querySelector('.diagram-preview-error-card')).toBeNull();
     expect(shell.dataset.mermaidHydrated).toBe('true');
     expect(sourceNode.textContent).toBe(source);
-    expect(shell._diagramRenderedSource).toBe(source);
+    expect(hydrator.renderedSources.get(shell)).toBe(source);
     if (sequence) {
       const noteLines = Array.from(svg.querySelectorAll('text')).map((node) => node.textContent);
       expect(noteLines).toContain('\u00a0');
