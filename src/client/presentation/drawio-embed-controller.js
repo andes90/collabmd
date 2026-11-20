@@ -1,6 +1,16 @@
 import { createDrawioLeaseRoomName } from '../../domain/drawio-room.js';
 import { setDiagramActionButtonIcon } from '../domain/diagram-action-icons.js';
 import { getActiveVaultId, resolveAppUrl } from '../domain/runtime-paths.js';
+import {
+  applyEmbedMaximizedBoxStyles,
+  applyEmbedOverlayPositionStyles,
+  clearEmbedInlinePositionStyles,
+  ensureEmbedOverlayRoot,
+  insertMaximizeSpacer,
+  postHostMessageToEntry,
+  removeMaximizeSpacer,
+  resetEmbedPlaceholderLayout,
+} from './diagram-embed-helpers.js';
 import { renderDrawioViewer } from './drawio-viewer.js';
 import {
   cancelIdleRender,
@@ -251,16 +261,7 @@ export class DrawioEmbedController {
     this.hydrateIframeEntry(entry);
   }
 
-  hydrateIframeEntry(entry) {
-    if (!entry.placeholder?.isConnected || entry.wrapper) {
-      return;
-    }
-
-    const wrapper = document.createElement('div');
-    wrapper.className = `drawio-embed diagram-preview-shell${entry.mode === 'edit' ? ' is-direct-file' : ''}`;
-    wrapper.dataset.file = entry.filePath;
-    wrapper.dataset.drawioKey = entry.key;
-
+  _createHeader(entry, wrapper, { showOpenButton = true } = {}) {
     const header = document.createElement('div');
     header.className = 'drawio-embed-header diagram-preview-toolbar';
 
@@ -273,11 +274,22 @@ export class DrawioEmbedController {
     label.textContent = entry.label.replace(/\.drawio$/i, '');
     header.append(icon, label);
 
-    if (entry.mode !== 'edit') {
+    if (showOpenButton) {
       header.appendChild(this.createOpenButton(entry));
     }
-
     header.appendChild(this.createMaximizeButton(entry, wrapper));
+    return header;
+  }
+
+  hydrateIframeEntry(entry) {
+    if (!entry.placeholder?.isConnected || entry.wrapper) {
+      return;
+    }
+
+    const wrapper = document.createElement('div');
+    wrapper.className = `drawio-embed diagram-preview-shell${entry.mode === 'edit' ? ' is-direct-file' : ''}`;
+    wrapper.dataset.file = entry.filePath;
+    wrapper.dataset.drawioKey = entry.key;
 
     const iframe = document.createElement('iframe');
     iframe.className = 'drawio-embed-iframe';
@@ -287,7 +299,7 @@ export class DrawioEmbedController {
     iframe.dataset.instanceId = entry.instanceId;
     iframe.src = this.buildIframeUrl(entry);
 
-    wrapper.append(header, iframe);
+    wrapper.append(this._createHeader(entry, wrapper, { showOpenButton: entry.mode !== 'edit' }), iframe);
     entry.iframe = iframe;
     entry.wrapper = wrapper;
     this.attachWrapper(entry);
@@ -303,20 +315,6 @@ export class DrawioEmbedController {
     wrapper.dataset.file = entry.filePath;
     wrapper.dataset.drawioKey = entry.key;
 
-    const header = document.createElement('div');
-    header.className = 'drawio-embed-header diagram-preview-toolbar';
-
-    const icon = document.createElement('span');
-    icon.className = 'drawio-embed-icon';
-    icon.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="7" height="6" rx="1"/><rect x="14" y="4" width="7" height="6" rx="1"/><rect x="8.5" y="14" width="7" height="6" rx="1"/><path d="M10 7h4"/><path d="M17.5 10v2.5"/><path d="M6.5 10v2.5"/><path d="M6.5 12.5h11"/></svg>';
-
-    const label = document.createElement('span');
-    label.className = 'drawio-embed-label';
-    label.textContent = entry.label.replace(/\.drawio$/i, '');
-    header.append(icon, label);
-
-    header.append(this.createOpenButton(entry), this.createMaximizeButton(entry, wrapper));
-
     const viewerShell = document.createElement('div');
     viewerShell.className = 'drawio-viewer-shell';
     viewerShell.dataset.filePath = entry.filePath;
@@ -326,7 +324,7 @@ export class DrawioEmbedController {
     loadingShell.textContent = 'Rendering draw.io preview…';
     viewerShell.appendChild(loadingShell);
 
-    wrapper.append(header, viewerShell);
+    wrapper.append(this._createHeader(entry, wrapper), viewerShell);
     entry.iframe = null;
     entry.wrapper = wrapper;
     entry.viewerElement = viewerShell;
@@ -386,13 +384,11 @@ export class DrawioEmbedController {
 
   updateTheme(theme) {
     this.embedEntries.forEach((entry) => {
-      if (entry.iframe?.contentWindow) {
-        entry.iframe.contentWindow.postMessage({
-          source: 'collabmd-host',
-          theme,
-          type: 'set-theme',
-        }, window.location.origin);
-      }
+      postHostMessageToEntry(entry, {
+        source: 'collabmd-host',
+        theme,
+        type: 'set-theme',
+      });
 
       if (entry.mode === 'view' && entry.wrapper?.isConnected && entry.viewerElement?.isConnected) {
         void this.renderViewerEntry(entry).catch((error) => {
@@ -425,11 +421,7 @@ export class DrawioEmbedController {
     this.syncMountedEntryMetadata(entry);
 
     if (this.shouldInlineEntry(entry)) {
-      entry.wrapper.style.position = '';
-      entry.wrapper.style.top = '';
-      entry.wrapper.style.left = '';
-      entry.wrapper.style.width = '';
-      entry.wrapper.style.margin = '';
+      clearEmbedInlinePositionStyles(entry.wrapper);
       entry.wrapper.style.pointerEvents = 'auto';
       placeholder.replaceWith(entry.wrapper);
       entry.placeholder = null;
@@ -465,20 +457,11 @@ export class DrawioEmbedController {
   }
 
   ensureOverlayRoot() {
-    if (this.overlayRoot?.isConnected && this.overlayRoot.parentElement === this.previewElement) {
-      return this.overlayRoot;
-    }
-
-    let overlayRoot = this.previewElement?.querySelector?.('[data-drawio-overlay-root="true"]');
-    if (!overlayRoot) {
-      overlayRoot = document.createElement('div');
-      overlayRoot.dataset.drawioOverlayRoot = 'true';
-      overlayRoot.className = 'drawio-embed-overlay-root';
-      this.previewElement?.appendChild(overlayRoot);
-    }
-
-    this.overlayRoot = overlayRoot;
-    return overlayRoot;
+    this.overlayRoot = ensureEmbedOverlayRoot(this.previewElement, this.overlayRoot, {
+      className: 'drawio-embed-overlay-root',
+      datasetKey: 'drawioOverlayRoot',
+    });
+    return this.overlayRoot;
   }
 
   shouldInlineEntry(entry) {
@@ -498,14 +481,11 @@ export class DrawioEmbedController {
   }
 
   resetPlaceholderLayout(entry) {
-    if (!entry?.placeholder?.isConnected || this.shouldInlineEntry(entry)) {
+    if (this.shouldInlineEntry(entry)) {
       return;
     }
 
-    entry.placeholder.classList.remove('is-hydrated');
-    entry.placeholder.removeAttribute('data-drawio-hydrated');
-    entry.placeholder.style.height = '';
-    entry.placeholder.style.pointerEvents = '';
+    resetEmbedPlaceholderLayout(entry?.placeholder, 'drawioHydrated');
   }
 
   syncEntryLayout(entry) {
@@ -540,21 +520,11 @@ export class DrawioEmbedController {
     entry.wrapper.style.pointerEvents = 'auto';
 
     if (isMaximized) {
-      entry.wrapper.style.position = '';
-      entry.wrapper.style.top = '';
-      entry.wrapper.style.left = '';
-      entry.wrapper.style.width = 'auto';
-      entry.wrapper.style.height = 'auto';
-      entry.wrapper.style.minHeight = '0';
-      entry.wrapper.style.margin = '';
+      applyEmbedMaximizedBoxStyles(entry.wrapper);
       return;
     }
 
-    entry.wrapper.style.position = 'absolute';
-    entry.wrapper.style.top = `${placeholder.offsetTop}px`;
-    entry.wrapper.style.left = `${placeholder.offsetLeft}px`;
-    entry.wrapper.style.width = `${placeholder.offsetWidth}px`;
-    entry.wrapper.style.margin = '0';
+    applyEmbedOverlayPositionStyles(entry.wrapper, placeholder);
   }
 
   createOpenButton(entry) {
@@ -612,20 +582,10 @@ export class DrawioEmbedController {
     }
 
     this._exitMaximizedEntry();
-
-    if (entry.wrapper.parentElement) {
-      const spacer = document.createElement('div');
-      spacer.className = 'drawio-maximize-spacer';
-      spacer.style.height = `${Math.ceil(entry.wrapper.getBoundingClientRect().height)}px`;
-      entry.maximizeSpacer = spacer;
-      entry.wrapper.parentElement.insertBefore(spacer, entry.wrapper);
-    }
-
+    insertMaximizeSpacer(entry, 'drawio-maximize-spacer');
     entry.wrapper.classList.add('is-maximized');
     entry.wrapper.dataset.drawioMaximized = 'true';
-    entry.wrapper.style.width = 'auto';
-    entry.wrapper.style.height = 'auto';
-    entry.wrapper.style.minHeight = '0';
+    applyEmbedMaximizedBoxStyles(entry.wrapper);
     document.body.classList.add('drawio-maximized-open');
     this.maximizedEntry = entry;
     this.overlayRoot?.classList.add('has-maximized-entry');
@@ -639,18 +599,13 @@ export class DrawioEmbedController {
       return;
     }
 
-    const { maximizeSpacer } = entry;
     entry.wrapper.classList.remove('is-maximized');
     delete entry.wrapper.dataset.drawioMaximized;
     entry.wrapper.style.width = '';
     entry.wrapper.style.height = '';
     entry.wrapper.style.minHeight = '';
 
-    if (maximizeSpacer?.parentElement) {
-      maximizeSpacer.remove();
-    }
-
-    entry.maximizeSpacer = null;
+    removeMaximizeSpacer(entry);
     entry.restoreParent = null;
     entry.restoreNextSibling = null;
     this.maximizedEntry = null;

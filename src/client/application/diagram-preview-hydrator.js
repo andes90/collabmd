@@ -572,4 +572,18 @@ export class DiagramPreviewHydrator {
     this.fileInflightRequests.set(target, request);
     return request;
   }
+
+  setBoundedCacheEntry(cache, key, value, limit) {
+    if (!key || !value) {
+      return;
+    }
+
+    if (cache.has(key)) {
+      cache.delete(key);
+    }
+    while (cache.size >= limit) {
+      cache.delete(cache.keys().next().value);
+    }
+    cache.set(key, value);
+  }
 }

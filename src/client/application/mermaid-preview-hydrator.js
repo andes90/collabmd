@@ -299,25 +299,9 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
   }
 
   getPreviewInitConfig(source) {
-    if (/^\s*stateDiagram(?:-v2)?\b/m.test(source)) {
-      return {
-        htmlLabels: false,
-      };
-    }
-
-    if (/^\s*classDiagram\b/m.test(source)) {
-      return {
-        htmlLabels: false,
-      };
-    }
-
-    if (/^\s*gantt\b/m.test(source)) {
-      return {
-        htmlLabels: false,
-      };
-    }
-
-    return null;
+    return /^\s*(?:stateDiagram(?:-v2)?|classDiagram|gantt)\b/m.test(source)
+      ? { htmlLabels: false }
+      : null;
   }
 
   resetHydratedShells() {
@@ -428,17 +412,7 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
   }
 
   storeRenderCache(key, markup) {
-    if (!key || !markup) {
-      return;
-    }
-
-    if (this.renderCache.has(key)) {
-      this.renderCache.delete(key);
-    }
-    while (this.renderCache.size >= MERMAID_RENDER_CACHE_LIMIT) {
-      this.renderCache.delete(this.renderCache.keys().next().value);
-    }
-    this.renderCache.set(key, markup);
+    this.setBoundedCacheEntry(this.renderCache, key, markup, MERMAID_RENDER_CACHE_LIMIT);
   }
 
 }
