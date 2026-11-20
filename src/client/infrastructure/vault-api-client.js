@@ -1,17 +1,14 @@
 import { resolveApiUrl } from '../domain/runtime-paths.js';
 import { isPdfFilePath } from '../../domain/file-kind.js';
 import { getVaultPathLeaf } from '../domain/vault-paths.js';
-import { createRequestHeaders, parseApiResponse } from './api-client-utils.js';
+import { apiRequest } from './api-client-utils.js';
 import { downloadBlob, parseDownloadFileName } from '../browser-utils.js';
 
 function encodeHeaderMetadata(value) {
   return encodeURIComponent(String(value ?? ''));
 }
 
-async function triggerDownload(url, {
-  fallbackError,
-  fallbackFileName,
-} = {}) {
+async function triggerDownload(url, { fallbackError, fallbackFileName } = {}) {
   const response = await fetch(url);
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
@@ -28,120 +25,75 @@ async function triggerDownload(url, {
 }
 
 export const vaultApiClient = {
-  async readTree(config) {
-    const response = await fetch(resolveApiUrl('/files', config));
-    return parseApiResponse(response, 'Failed to load file tree');
+  readTree(config) {
+    return apiRequest('/files', { config, fallback: 'Failed to load file tree' });
   },
-  async callAgentTool(name, input, { signal } = {}) {
-    const response = await fetch(resolveApiUrl(`/agent/tools/${encodeURIComponent(name)}`), {
-      body: JSON.stringify(input),
-      headers: { 'Content-Type': 'application/json' },
+
+  callAgentTool(name, input, { signal } = {}) {
+    return apiRequest(`/agent/tools/${encodeURIComponent(name)}`, {
+      body: input,
+      fallback: `Failed to execute ${name}`,
       method: 'POST',
       signal,
     });
-    return parseApiResponse(response, `Failed to execute ${name}`);
   },
 
-  async readCommentOverview() {
-    const response = await fetch(resolveApiUrl('/comments/overview'));
-    return parseApiResponse(response, 'Failed to load comment overview');
+  readCommentOverview() {
+    return apiRequest('/comments/overview', { fallback: 'Failed to load comment overview' });
   },
 
-  async readFile(path, config) {
-    const response = await fetch(resolveApiUrl(`/file?path=${encodeURIComponent(path)}`, config));
-    return parseApiResponse(response, 'Failed to read file');
+  readFile(path, config) {
+    return apiRequest('/file', { config, fallback: 'Failed to read file', query: { path } });
   },
 
   async readBacklinks(filePath, { signal } = {}) {
-    const response = await fetch(
-      resolveApiUrl(`/backlinks?file=${encodeURIComponent(filePath)}`),
-      { signal },
-    );
-    const data = await parseApiResponse(response, 'Failed to load backlinks');
+    const data = await apiRequest('/backlinks', {
+      fallback: 'Failed to load backlinks',
+      query: { file: filePath },
+      signal,
+    });
     return Array.isArray(data.backlinks) ? data.backlinks : [];
   },
 
-  async syncStructurizrWorkspace({ path, source }) {
-    const response = await fetch(resolveApiUrl('/structurizr/sync'), {
-      body: JSON.stringify({
-        path,
-        source,
-      }),
-      headers: {
-        'Content-Type': 'application/json',
-      },
+  syncStructurizrWorkspace({ path, source }) {
+    return apiRequest('/structurizr/sync', {
+      body: { path, source },
+      fallback: 'Failed to sync Structurizr workspace',
       method: 'POST',
     });
-    return parseApiResponse(response, 'Failed to sync Structurizr workspace');
   },
 
   async renderSvg(source) {
-    const response = await fetch(resolveApiUrl('/plantuml/render'), {
-      body: JSON.stringify({ source }),
-      headers: {
-        'Content-Type': 'application/json',
-      },
+    const data = await apiRequest('/plantuml/render', {
+      body: { source },
+      fallback: 'Failed to render PlantUML',
       method: 'POST',
     });
-    const data = await parseApiResponse(response, 'Failed to render PlantUML');
     if (!data.ok || typeof data.svg !== 'string') {
       throw new Error(data.error || 'Failed to render PlantUML');
     }
-
     return data.svg;
   },
 
-  async searchText({ limit = 50, query = '', signal = null } = {}) {
-    const searchParams = new URLSearchParams({
-      limit: String(limit),
-      q: String(query ?? ''),
-    });
-    const response = await fetch(resolveApiUrl(`/search?${searchParams.toString()}`), {
+  searchText({ limit = 50, query = '', signal = null } = {}) {
+    return apiRequest('/search', {
+      fallback: 'Failed to search files',
+      query: { limit, q: String(query ?? '') },
       signal,
     });
-    return parseApiResponse(response, 'Failed to search files');
   },
 
-  async queryBase({
-    activeFilePath = '',
-    path = '',
-    search = '',
-    source = null,
-    sourcePath = '',
-    view = '',
-  } = {}) {
-    const response = await fetch(resolveApiUrl('/base/query'), {
-      body: JSON.stringify({
-        activeFilePath,
-        path,
-        search,
-        source,
-        sourcePath,
-        view,
-      }),
-      headers: { 'Content-Type': 'application/json' },
+  queryBase({ activeFilePath = '', path = '', search = '', source = null, sourcePath = '', view = '' } = {}) {
+    return apiRequest('/base/query', {
+      body: { activeFilePath, path, search, source, sourcePath, view },
+      fallback: 'Failed to query base',
       method: 'POST',
     });
-    return parseApiResponse(response, 'Failed to query base');
   },
 
-  async exportBaseCsv({
-    activeFilePath = '',
-    path = '',
-    search = '',
-    source = null,
-    sourcePath = '',
-    view = '',
-  } = {}) {
+  async exportBaseCsv({ activeFilePath = '', path = '', search = '', source = null, sourcePath = '', view = '' } = {}) {
     const response = await fetch(resolveApiUrl('/base/export'), {
-      body: JSON.stringify({
-        activeFilePath,
-        path,
-        search,
-        source,
-        sourcePath,
-        view,
-      }),
+      body: JSON.stringify({ activeFilePath, path, search, source, sourcePath, view }),
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
     });
@@ -156,7 +108,7 @@ export const vaultApiClient = {
     };
   },
 
-  async queryBasePropertyValues({
+  queryBasePropertyValues({
     activeFilePath = '',
     path = '',
     propertyId = '',
@@ -165,147 +117,90 @@ export const vaultApiClient = {
     sourcePath = '',
     view = '',
   } = {}) {
-    const response = await fetch(resolveApiUrl('/base/property-values'), {
-      body: JSON.stringify({
-        activeFilePath,
-        path,
-        propertyId,
-        query,
-        source,
-        sourcePath,
-        view,
-      }),
-      headers: { 'Content-Type': 'application/json' },
+    return apiRequest('/base/property-values', {
+      body: { activeFilePath, path, propertyId, query, source, sourcePath, view },
+      fallback: 'Failed to load base property values',
       method: 'POST',
     });
-    return parseApiResponse(response, 'Failed to load base property values');
   },
 
-  async transformBase({
-    activeFilePath = '',
-    mutation = null,
-    path = '',
-    source = null,
-    sourcePath = '',
-    view = '',
-  } = {}) {
-    const response = await fetch(resolveApiUrl('/base/transform'), {
-      body: JSON.stringify({
-        activeFilePath,
-        mutation,
-        path,
-        source,
-        sourcePath,
-        view,
-      }),
-      headers: { 'Content-Type': 'application/json' },
+  transformBase({ activeFilePath = '', mutation = null, path = '', source = null, sourcePath = '', view = '' } = {}) {
+    return apiRequest('/base/transform', {
+      body: { activeFilePath, mutation, path, source, sourcePath, view },
+      fallback: 'Failed to transform base',
       method: 'POST',
     });
-    return parseApiResponse(response, 'Failed to transform base');
   },
 
-  async createFile({ content, path, requestId = null }) {
-    const response = await fetch(resolveApiUrl('/file'), {
-      body: JSON.stringify({ content, path }),
-      headers: createRequestHeaders(requestId, { 'Content-Type': 'application/json' }),
-      method: 'POST',
-    });
-    return parseApiResponse(response, 'Failed to create file');
+  createFile({ content, path, requestId = null }) {
+    return apiRequest('/file', { body: { content, path }, fallback: 'Failed to create file', method: 'POST', requestId });
   },
 
-  async writeFile({ content, path, requestId = null }) {
-    const response = await fetch(resolveApiUrl('/file'), {
-      body: JSON.stringify({ content, path }),
-      headers: createRequestHeaders(requestId, { 'Content-Type': 'application/json' }),
-      method: 'PUT',
-    });
-    return parseApiResponse(response, 'Failed to write file');
+  writeFile({ content, path, requestId = null }) {
+    return apiRequest('/file', { body: { content, path }, fallback: 'Failed to write file', method: 'PUT', requestId });
   },
 
-  async renameFile({ oldPath, newPath, requestId = null }) {
-    const response = await fetch(resolveApiUrl('/file'), {
-      body: JSON.stringify({ newPath, oldPath }),
-      headers: createRequestHeaders(requestId, { 'Content-Type': 'application/json' }),
-      method: 'PATCH',
-    });
-    return parseApiResponse(response, 'Failed to rename file');
+  renameFile({ oldPath, newPath, requestId = null }) {
+    return apiRequest('/file', { body: { newPath, oldPath }, fallback: 'Failed to rename file', method: 'PATCH', requestId });
   },
 
-  async deleteFile(path, { requestId = null } = {}) {
-    const response = await fetch(resolveApiUrl(`/file?path=${encodeURIComponent(path)}`), {
-      headers: requestId ? createRequestHeaders(requestId) : undefined,
+  deleteFile(path, { requestId = null } = {}) {
+    return apiRequest('/file', { fallback: 'Failed to delete file', method: 'DELETE', query: { path }, requestId });
+  },
+
+  createDirectory(path, { requestId = null } = {}) {
+    return apiRequest('/directory', { body: { path }, fallback: 'Failed to create folder', method: 'POST', requestId });
+  },
+
+  renameDirectory({ oldPath, newPath, requestId = null }) {
+    return apiRequest('/directory', { body: { newPath, oldPath }, fallback: 'Failed to rename folder', method: 'PATCH', requestId });
+  },
+
+  deleteDirectory(path, { recursive = false, requestId = null } = {}) {
+    return apiRequest('/directory', {
+      fallback: 'Failed to delete folder',
       method: 'DELETE',
+      query: { path: String(path ?? ''), recursive: recursive ? '1' : null },
+      requestId,
     });
-    return parseApiResponse(response, 'Failed to delete file');
   },
 
-  async createDirectory(path, { requestId = null } = {}) {
-    const response = await fetch(resolveApiUrl('/directory'), {
-      body: JSON.stringify({ path }),
-      headers: createRequestHeaders(requestId, { 'Content-Type': 'application/json' }),
-      method: 'POST',
-    });
-    return parseApiResponse(response, 'Failed to create folder');
-  },
-
-  async renameDirectory({ oldPath, newPath, requestId = null }) {
-    const response = await fetch(resolveApiUrl('/directory'), {
-      body: JSON.stringify({ newPath, oldPath }),
-      headers: createRequestHeaders(requestId, { 'Content-Type': 'application/json' }),
-      method: 'PATCH',
-    });
-    return parseApiResponse(response, 'Failed to rename folder');
-  },
-
-  async deleteDirectory(path, { recursive = false, requestId = null } = {}) {
-    const searchParams = new URLSearchParams({
-      path: String(path ?? ''),
-    });
-    if (recursive) {
-      searchParams.set('recursive', '1');
-    }
-
-    const response = await fetch(resolveApiUrl(`/directory?${searchParams.toString()}`), {
-      headers: requestId ? createRequestHeaders(requestId) : undefined,
-      method: 'DELETE',
-    });
-    return parseApiResponse(response, 'Failed to delete folder');
-  },
-
-  async uploadImageAttachment({ file, fileName = '', sourcePath }) {
-    const response = await fetch(resolveApiUrl('/attachments'), {
+  uploadImageAttachment({ file, fileName = '', sourcePath }) {
+    return apiRequest('/attachments', {
       body: file,
+      fallback: 'Failed to upload image',
       headers: {
         'Content-Type': file?.type || 'application/octet-stream',
         'X-CollabMD-File-Name': encodeHeaderMetadata(fileName),
         'X-CollabMD-Source-Path': encodeHeaderMetadata(sourcePath),
       },
       method: 'POST',
+      rawBody: true,
     });
-    return parseApiResponse(response, 'Failed to upload image');
   },
 
-  async uploadFile({ file, path, requestId = null }) {
-    const response = await fetch(resolveApiUrl('/file/upload'), {
+  uploadFile({ file, path, requestId = null }) {
+    return apiRequest('/file/upload', {
       body: file,
-      headers: createRequestHeaders(requestId, {
+      fallback: 'Failed to upload file',
+      headers: {
         'Content-Type': isPdfFilePath(path) ? 'application/pdf' : (file?.type || 'application/octet-stream'),
         'X-CollabMD-File-Path': encodeHeaderMetadata(path),
-      }),
+      },
       method: 'POST',
+      rawBody: true,
+      requestId,
     });
-    return parseApiResponse(response, 'Failed to upload file');
   },
 
-  async downloadFile(path) {
-    const fallbackFileName = getVaultPathLeaf(path) || 'download';
+  downloadFile(path) {
     return triggerDownload(resolveApiUrl(`/download/file?path=${encodeURIComponent(path)}`), {
       fallbackError: 'Failed to download file',
-      fallbackFileName,
+      fallbackFileName: getVaultPathLeaf(path) || 'download',
     });
   },
 
-  async downloadDirectory(path) {
+  downloadDirectory(path) {
     const directoryName = getVaultPathLeaf(path) || 'vault';
     return triggerDownload(resolveApiUrl(`/download/directory?path=${encodeURIComponent(path)}`), {
       fallbackError: 'Failed to download folder',
