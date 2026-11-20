@@ -1,4 +1,5 @@
 import markdownIt from 'markdown-it';
+import { enableMarkdownEmoji } from '../domain/markdown-emoji.js';
 import { enableMarkdownMath } from '../domain/markdown-math.js';
 
 import { isImageAttachmentFilePath } from '../../domain/file-kind.js';
@@ -15,6 +16,7 @@ import { extractYamlFrontmatter } from '../../domain/yaml-frontmatter.js';
 import { renderFrontmatterBlock } from './markdown-frontmatter.js';
 import { analyzeMarkdownComplexity } from './preview-render-profile.js';
 
+const WIKI_TEXT_PATTERN = /!\[\[([^\]|#]+\.(?:base|excalidraw|drawio|mmd|mermaid|puml|plantuml|png|jpe?g|webp|gif|svg))(?:#([^\]|]+))?(?:\|([^\]]+))?\]\]|\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/gi;
 
 function renderToken(renderer, tokens, index, options, env, self) {
   return renderer?.(tokens, index, options, env, self) ?? self.renderToken(tokens, index, options);
@@ -193,12 +195,10 @@ function renderInlineWikiText(content, {
   sourceFilePath = '',
   wikiLinkAutoCreate = true,
 }) {
-  const regex = /!\[\[([^\]|#]+\.(?:base|excalidraw|drawio|mmd|mermaid|puml|plantuml|png|jpe?g|webp|gif|svg))(?:#([^\]|]+))?(?:\|([^\]]+))?\]\]|\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/gi;
   let lastIndex = 0;
   let html = '';
-  let match;
 
-  while ((match = regex.exec(content)) !== null) {
+  for (const match of content.matchAll(WIKI_TEXT_PATTERN)) {
     if (match.index > lastIndex) {
       html += renderSafeInlineBreaks(content.slice(lastIndex, match.index));
     }
@@ -270,7 +270,7 @@ function renderInlineWikiText(content, {
       html += `<a class="${classes}" href="#" data-wiki-target="${escapeHtml(target)}" title="${escapeHtml(title)}">${escapePreviewText(display)}</a>`;
     }
 
-    lastIndex = regex.lastIndex;
+    lastIndex = match.index + match[0].length;
   }
 
   if (lastIndex < content.length) {
@@ -302,6 +302,7 @@ function createMarkdownRenderer(fileList = [], {
     typographer: true,
   });
   enableMarkdownMath(markdown);
+  enableMarkdownEmoji(markdown, WIKI_TEXT_PATTERN);
 
   markdown.core.ruler.push('collabmd-source-lines', (state) => {
     state.tokens.forEach((token) => {
@@ -397,60 +398,38 @@ function createMarkdownRenderer(fileList = [], {
     );
   };
 
-  markdown.renderer.rules.list_item_open = (tokens, index, options, env, self) => {
+  markdown.renderer.rules.list_item_open = (tokens, index, options, _env, self) => {
     const inlineToken = tokens[index + 2];
-    const content = inlineToken?.content ?? '';
-
-    if (content.startsWith('[ ] ') || content.startsWith('[x] ') || content.startsWith('[X] ')) {
+    const firstChild = inlineToken?.children?.[0];
+    const marker = inlineToken?.type === 'inline' && firstChild?.type === 'text' && /^\[([ xX])\] /u.exec(firstChild.content);
+    if (marker) {
       tokens[index].attrJoin('class', 'task-list-item');
+      firstChild.content = firstChild.content.slice(marker[0].length);
+      inlineToken.type = 'collabmd_task';
+      inlineToken.meta = { checked: marker[1] !== ' ' };
     }
 
     return self.renderToken(tokens, index, options);
   };
 
-  markdown.renderer.rules.text = (tokens, index) => {
-    const content = tokens[index].content;
-
-    if (content.startsWith('[x] ') || content.startsWith('[X] ')) {
-      return `<label class="task-list-label"><input type="checkbox" checked data-task-checkbox="true"> ${renderInlineWikiText(content.slice(4), {
-        attachmentApiPath,
-        baseEmbedCounts: baseCounts,
-        drawioEmbedCounts,
-        excalidrawEmbedCounts,
-        getWikiTargetIndex,
-        mermaidEmbedCounts,
-        plantUmlEmbedCounts,
-        sourceFilePath,
-        wikiLinkAutoCreate,
-      })}</label>`;
-    }
-
-    if (content.startsWith('[ ] ')) {
-      return `<label class="task-list-label"><input type="checkbox" data-task-checkbox="true"> ${renderInlineWikiText(content.slice(4), {
-        attachmentApiPath,
-        baseEmbedCounts: baseCounts,
-        drawioEmbedCounts,
-        excalidrawEmbedCounts,
-        getWikiTargetIndex,
-        mermaidEmbedCounts,
-        plantUmlEmbedCounts,
-        sourceFilePath,
-        wikiLinkAutoCreate,
-      })}</label>`;
-    }
-
-    return renderInlineWikiText(content, {
-      attachmentApiPath,
-      baseEmbedCounts: baseCounts,
-      drawioEmbedCounts,
-      excalidrawEmbedCounts,
-      getWikiTargetIndex,
-      mermaidEmbedCounts,
-      plantUmlEmbedCounts,
-      sourceFilePath,
-      wikiLinkAutoCreate,
-    });
+  markdown.renderer.rules.collabmd_task = (tokens, index, options, env, self) => {
+    const { children, meta } = tokens[index];
+    const checked = meta.checked ? ' checked' : '';
+    const labelId = `_task-${Math.random().toString(36).slice(2)}`;
+    return `<input type="checkbox"${checked} data-task-checkbox="true" aria-labelledby="${labelId}"> <span id="${labelId}" class="task-list-label">${self.renderInline(children, options, env)}</span>`;
   };
+
+  markdown.renderer.rules.text = (tokens, index) => renderInlineWikiText(tokens[index].content, {
+    attachmentApiPath,
+    baseEmbedCounts: baseCounts,
+    drawioEmbedCounts,
+    excalidrawEmbedCounts,
+    getWikiTargetIndex,
+    mermaidEmbedCounts,
+    plantUmlEmbedCounts,
+    sourceFilePath,
+    wikiLinkAutoCreate,
+  });
 
   markdown.renderer.rules.link_open = (tokens, index, options, env, self) => {
     const href = tokens[index].attrGet('href') || '';

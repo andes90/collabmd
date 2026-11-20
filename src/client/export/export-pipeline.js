@@ -1608,16 +1608,8 @@ export function buildDocxHtmlDocument(snapshot) {
 
   normalizeDocxWhitespace(template.content);
 
-  // The converter drops label content, which would erase every task list
-  // item. Flatten task labels to ballot-box text first.
-  Array.from(template.content.querySelectorAll('label.task-list-label')).forEach((label) => {
-    const checkbox = label.querySelector('input[data-task-checkbox]');
-    const box = checkbox?.hasAttribute('checked') ? '\u2611' : '\u2610';
-    const kept = Array.from(label.childNodes).filter((node) => node.tagName !== 'INPUT');
-    if (kept[0]?.nodeType === 3) {
-      kept[0].textContent = kept[0].textContent.replace(/^\s+/, '');
-    }
-    label.replaceWith(`${box} `, ...kept);
+  template.content.querySelectorAll('input[data-task-checkbox]').forEach((checkbox) => {
+    checkbox.replaceWith(checkbox.hasAttribute('checked') ? '\u2611' : '\u2610');
   });
 
   // KaTeX lays math out as positioned spans that read out of order as
