@@ -9,7 +9,7 @@ import { logPerfEvent } from './config/perf-logging.js';
 import { renderDocx } from './domain/docx-exporter.js';
 import { GitHubAppClient } from './infrastructure/github/github-app-client.js';
 import { GitHubSetupFlow } from './infrastructure/github/github-setup-flow.js';
-import { HostedWorkspaceService } from './domain/hosted-workspace.js';
+import { HostedWorkspaceService } from './application/hosted-workspace-service.js';
 import { PlantUmlRenderer } from './infrastructure/plantuml/plantuml-renderer.js';
 import { StructurizrWorkspaceService } from './infrastructure/structurizr/structurizr-workspace-service.js';
 import { createRequestHandler } from './infrastructure/http/create-request-handler.js';

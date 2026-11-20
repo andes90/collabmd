@@ -1,7 +1,12 @@
 import { mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
-import { createHostedError, HOSTED_ROLE_ADMIN } from '../../domain/hosted-workspace.js';
+import {
+  createHostedError,
+  HOSTED_ROLE_ADMIN,
+  requireHostedMembership,
+  validateHostedMembershipChange,
+} from '../../domain/hosted-workspace.js';
 
 function parseMetadata(value) {
   try {
@@ -145,7 +150,7 @@ export class HostedMetadataStore {
     }
   }
 
-  async getTeam() {
+  getTeam() {
     return mapRow(this.prepare('getTeam', 'SELECT * FROM team LIMIT 1').get());
   }
 
@@ -255,7 +260,7 @@ export class HostedMetadataStore {
     );
   }
 
-  async getMembershipByEmail(email) {
+  getMembershipByEmail(email) {
     return mapRow(this.prepare(
       'getMembershipByEmail',
       'SELECT * FROM memberships WHERE email = ?',
@@ -298,22 +303,16 @@ export class HostedMetadataStore {
   async changeMembership({ actorId, membershipId, auditEvent, role = null, requireAdmin = true }) {
     return this.transaction(() => {
       const actor = this.getMembershipById(actorId);
-      if (!actor) {
-        throw createHostedError(403, 'Team membership is required.', 'HOSTED_MEMBERSHIP_REQUIRED');
-      }
-      const isSelfLeave = !requireAdmin && actorId === membershipId && role === null;
-      if (!isSelfLeave && actor.role !== HOSTED_ROLE_ADMIN) {
-        throw createHostedError(403, 'Team Admin role is required.', 'HOSTED_ADMIN_REQUIRED');
-      }
-
       const membership = this.getMembershipById(membershipId);
-      if (!membership) {
-        throw createHostedError(404, 'Membership was not found.', 'HOSTED_MEMBERSHIP_NOT_FOUND');
-      }
-      if (membership.role === HOSTED_ROLE_ADMIN && role !== HOSTED_ROLE_ADMIN
-        && this.countAdminsExcept(membership.email) < 1) {
-        throw createHostedError(409, 'A team must always have at least one Team Admin.', 'HOSTED_LAST_ADMIN');
-      }
+      validateHostedMembershipChange({
+        actor,
+        actorId,
+        hasOtherAdmin: membership?.role !== HOSTED_ROLE_ADMIN || this.countAdminsExcept(membership.email) > 0,
+        membership,
+        membershipId,
+        requireAdmin,
+        role,
+      });
 
       const updated = role === null ? membership : { ...membership, role, updatedAt: auditEvent.createdAt };
       if (role === null) {
@@ -332,32 +331,42 @@ export class HostedMetadataStore {
     });
   }
 
-  async upsertPendingInvitation(invitation) {
-    this.prepare(
-      'upsertPendingInvitation',
-      `INSERT INTO invitations (
-        id, email, role, invited_by_email, invited_by_name, created_at, expires_at, revoked_at, accepted_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)
-      ON CONFLICT(email) DO UPDATE SET
-        id = excluded.id,
-        role = excluded.role,
-        invited_by_email = excluded.invited_by_email,
-        invited_by_name = excluded.invited_by_name,
-        created_at = excluded.created_at,
-        expires_at = excluded.expires_at,
-        revoked_at = NULL,
-        accepted_at = NULL,
-        updated_at = excluded.updated_at`,
-    ).run(
-      invitation.id,
-      invitation.email,
-      invitation.role,
-      invitation.invitedByEmail,
-      invitation.invitedByName,
-      invitation.createdAt,
-      invitation.expiresAt,
-      invitation.updatedAt,
-    );
+  async upsertPendingInvitation({ actorId, auditEvent, invitation }) {
+    this.transaction(() => {
+      requireHostedMembership(this.getMembershipById(actorId), { admin: true });
+      if (!this.getTeam()?.setupCompletedAt) {
+        throw createHostedError(409, 'Workspace setup must complete before inviting collaborators.', 'HOSTED_SETUP_INCOMPLETE');
+      }
+      if (this.getMembershipByEmail(invitation.email)) {
+        throw createHostedError(409, 'This email is already a collaborator.', 'HOSTED_ALREADY_MEMBER');
+      }
+      this.prepare(
+        'upsertPendingInvitation',
+        `INSERT INTO invitations (
+          id, email, role, invited_by_email, invited_by_name, created_at, expires_at, revoked_at, accepted_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)
+        ON CONFLICT(email) DO UPDATE SET
+          id = excluded.id,
+          role = excluded.role,
+          invited_by_email = excluded.invited_by_email,
+          invited_by_name = excluded.invited_by_name,
+          created_at = excluded.created_at,
+          expires_at = excluded.expires_at,
+          revoked_at = NULL,
+          accepted_at = NULL,
+          updated_at = excluded.updated_at`,
+      ).run(
+        invitation.id,
+        invitation.email,
+        invitation.role,
+        invitation.invitedByEmail,
+        invitation.invitedByName,
+        invitation.createdAt,
+        invitation.expiresAt,
+        invitation.updatedAt,
+      );
+      this.insertAuditEvent(auditEvent);
+    });
   }
 
   async getInvitationById(id) {
@@ -385,29 +394,39 @@ export class HostedMetadataStore {
     ).all(now).map(mapRow);
   }
 
-  async updateInvitation(invitation) {
-    this.prepare(
-      'updateInvitation',
-      `UPDATE invitations
-       SET role = ?, revoked_at = ?, accepted_at = ?, updated_at = ?
-       WHERE id = ?`,
-    ).run(
-      invitation.role,
-      invitation.revokedAt,
-      invitation.acceptedAt,
-      invitation.updatedAt,
-      invitation.id,
-    );
+  async updateInvitation({ actorId, auditEvent, invitationId, revokedAt = null, role = null }) {
+    return this.transaction(() => {
+      requireHostedMembership(this.getMembershipById(actorId), { admin: true });
+      const invitation = mapRow(this.prepare(
+        'updatePendingInvitation',
+        `UPDATE invitations
+         SET role = COALESCE(?, role), revoked_at = ?, updated_at = ?
+         WHERE id = ? AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > ?
+         RETURNING *`,
+      ).get(role, revokedAt, auditEvent.createdAt, invitationId, auditEvent.createdAt));
+      if (!invitation) {
+        throw createHostedError(404, 'Pending invitation was not found.', 'HOSTED_INVITATION_NOT_FOUND');
+      }
+      this.insertAuditEvent({ ...auditEvent, targetEmail: invitation.email, targetRole: invitation.role });
+      return invitation;
+    });
   }
 
   async acceptInvitation({ auditEvent, invitation, membership }) {
-    this.transaction(() => {
-      this.prepare(
+    return this.transaction(() => {
+      const accepted = this.prepare(
         'acceptInvitationUpdate',
-        'UPDATE invitations SET accepted_at = ?, updated_at = ? WHERE id = ?',
-      ).run(invitation.acceptedAt, invitation.updatedAt, invitation.id);
-      this.insertMembership(membership);
-      this.insertAuditEvent(auditEvent);
+        `UPDATE invitations SET accepted_at = ?, updated_at = ?
+         WHERE id = ? AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > ?
+         RETURNING role`,
+      ).get(invitation.acceptedAt, invitation.updatedAt, invitation.id, invitation.acceptedAt);
+      if (!accepted) {
+        throw createHostedError(409, 'Invitation is no longer pending.', 'HOSTED_INVITATION_CONFLICT');
+      }
+      const acceptedMembership = { ...membership, role: accepted.role };
+      this.insertMembership(acceptedMembership);
+      this.insertAuditEvent({ ...auditEvent, targetRole: accepted.role });
+      return acceptedMembership;
     });
   }
 

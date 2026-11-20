@@ -6,7 +6,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { HostedWorkspaceService } from '../../src/server/domain/hosted-workspace.js';
+import { HostedWorkspaceService } from '../../src/server/application/hosted-workspace-service.js';
 import { createSignedCookieManager } from '../../src/server/auth/session-cookie.js';
 import { createHostedApiHandler } from '../../src/server/infrastructure/http/create-hosted-api-handler.js';
 import { GitHubSetupFlow } from '../../src/server/infrastructure/github/github-setup-flow.js';

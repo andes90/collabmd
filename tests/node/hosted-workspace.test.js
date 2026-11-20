@@ -7,8 +7,8 @@ import { tmpdir } from 'node:os';
 import {
   HOSTED_ROLE_ADMIN,
   HOSTED_ROLE_COLLABORATOR,
-  HostedWorkspaceService,
 } from '../../src/server/domain/hosted-workspace.js';
+import { HostedWorkspaceService } from '../../src/server/application/hosted-workspace-service.js';
 import { HostedMetadataStore } from '../../src/server/infrastructure/persistence/hosted-metadata-store.js';
 
 function googleUser(email, name = null) {
@@ -239,6 +239,50 @@ test('hosted invitations require completed setup and accept with current role', 
 
   const memberships = await service.listMemberships(admin);
   assert.equal(memberships.length, 2);
+});
+
+test('only one concurrent acceptance can consume an invitation', async (t) => {
+  const service = await createHostedService(t);
+  const admin = googleUser('admin@example.com');
+  const invitee = googleUser('invitee@example.com');
+  await service.claimWorkspace({ token: 'claim-secret', user: admin });
+  await service.completeWorkspaceSetup();
+  await service.createInvitation({ email: invitee.email, user: admin });
+
+  const bothRead = Promise.withResolvers();
+  const originalRead = service.store.getPendingInvitationByEmail.bind(service.store);
+  let reads = 0;
+  t.mock.method(service.store, 'getPendingInvitationByEmail', async (...args) => {
+    const invitation = await originalRead(...args);
+    if (++reads === 2) bothRead.resolve();
+    await bothRead.promise;
+    return invitation;
+  });
+  const results = await Promise.allSettled([service.acceptInvitation(invitee), service.acceptInvitation(invitee)]);
+  assert.equal(results.filter(({ status }) => status === 'fulfilled').length, 1);
+  assert.equal(results.find(({ status }) => status === 'rejected').reason.code, 'HOSTED_INVITATION_CONFLICT');
+  const events = await service.store.listAuditEvents();
+  assert.equal(events.filter(({ type }) => type === 'invitation_accepted').length, 1);
+});
+
+test('invitation creation, role changes, and revocation roll back if the audit write fails', async (t) => {
+  const service = await createHostedService(t);
+  const admin = googleUser('admin@example.com');
+  const email = 'invitee@example.com';
+  await service.claimWorkspace({ token: 'claim-secret', user: admin });
+  await service.completeWorkspaceSetup();
+  const invitation = await service.createInvitation({ email, user: admin });
+  service.store.db.exec(`CREATE TRIGGER fail_invitation_audit BEFORE INSERT ON audit_events
+    WHEN NEW.type LIKE 'invitation_%' BEGIN SELECT RAISE(ABORT, 'Injected audit failure'); END`);
+  const operations = [
+    () => service.createInvitation({ email: 'another@example.com', user: admin }),
+    () => service.updateInvitationRole({ invitationId: invitation.id, role: HOSTED_ROLE_ADMIN, user: admin }),
+    () => service.revokeInvitation({ invitationId: invitation.id, user: admin }),
+  ];
+  for (const run of operations) {
+    await assert.rejects(run, /Injected audit failure/u);
+    assert.deepEqual(await service.listInvitations(admin), [invitation]);
+  }
 });
 
 test('hosted membership enforces last-admin rule, removal, leave, and audit events', async (t) => {
