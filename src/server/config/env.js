@@ -1,4 +1,4 @@
-import { basename, isAbsolute, relative, resolve } from 'path';
+import { basename, isAbsolute, relative, resolve, sep } from 'path';
 import { lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'url';
 
@@ -222,12 +222,12 @@ export function parseVaultList(rawValue) {
 
 export function resolveConfiguredVaults(overrides = {}, env = process.env) {
   if (Array.isArray(overrides.vaults)) {
-    return overrides.vaults.map(({ id, dir, name, repoUrl }) => {
-      if (!VAULT_ID_PATTERN.test(String(id ?? ''))) {
-        throw new Error(`Invalid vault id "${id}". ${VAULT_ID_HINT}`);
-      }
-      return { id, dir: resolve(dir), ...(name ? { name: normalizeOptionalString(name) } : {}), repoUrl: normalizeOptionalString(repoUrl) };
-    });
+    return validateConfiguredVaults(overrides.vaults.map(({ id, dir, name, repoUrl }) => ({
+      id: String(id ?? ''),
+      dir: resolve(dir),
+      ...(name ? { name: normalizeOptionalString(name) } : {}),
+      repoUrl: normalizeOptionalString(repoUrl),
+    })));
   }
   // ponytail: explicit directory (CLI positional) wins over the operator list
   if (overrides.vaultDir) {
@@ -258,20 +258,31 @@ export function resolveConfiguredVaults(overrides = {}, env = process.env) {
       throw new Error('No vaults found. Check COLLABMD_VAULT_DIR and COLLABMD_VAULT_DISCOVERY.');
     }
   }
+  return validateConfiguredVaults(vaults);
+}
+
+function isSameOrNestedDir(parent, child) {
+  const between = relative(parent, child);
+  return between === '' || (between !== '..' && !between.startsWith(`..${sep}`) && !isAbsolute(between));
+}
+
+function validateConfiguredVaults(vaults) {
+  if (vaults.length === 0) {
+    throw new Error('No vaults configured.');
+  }
   const seenIds = new Set();
   for (const vault of vaults) {
     if (!VAULT_ID_PATTERN.test(vault.id)) {
       throw new Error(`Invalid vault id "${vault.id}". ${VAULT_ID_HINT}`);
     }
     if (seenIds.has(vault.id)) {
-      throw new Error(`Duplicate vault id "${vault.id}" in COLLABMD_VAULTS.`);
+      throw new Error(`Duplicate vault id "${vault.id}".`);
     }
     seenIds.add(vault.id);
   }
   for (let i = 0; i < vaults.length; i += 1) {
     for (let j = i + 1; j < vaults.length; j += 1) {
-      const between = relative(vaults[i].dir, vaults[j].dir);
-      if (between === '' || (!between.startsWith('..') && !isAbsolute(between))) {
+      if (isSameOrNestedDir(vaults[i].dir, vaults[j].dir) || isSameOrNestedDir(vaults[j].dir, vaults[i].dir)) {
         throw new Error(`Vaults "${vaults[i].id}" and "${vaults[j].id}" overlap. Vault directories must not nest.`);
       }
     }
@@ -624,7 +635,7 @@ export function loadConfig(overrides = {}) {
     build,
     drawioBaseUrl: resolveDrawioBaseUrl(process.env.COLLABMD_DRAWIO_BASE_URL || process.env.DRAWIO_BASE_URL),
     fileWatcherEnabled: overrides.fileWatcherEnabled ?? process.env.COLLABMD_FILE_WATCHER_ENABLED !== 'false',
-    host: process.env.HOST || getDefaultHost(nodeEnv),
+    host: overrides.host || process.env.HOST || getDefaultHost(nodeEnv),
     httpHeadersTimeoutMs: parsePositiveInt(process.env.HTTP_HEADERS_TIMEOUT_MS, 60_000),
     httpKeepAliveTimeoutMs: parsePositiveInt(process.env.HTTP_KEEP_ALIVE_TIMEOUT_MS, 5_000),
     httpRequestTimeoutMs: parsePositiveInt(process.env.HTTP_REQUEST_TIMEOUT_MS, 30_000),
@@ -648,9 +659,9 @@ export function loadConfig(overrides = {}) {
     ),
     structurizr,
     perfLoggingEnabled: overrides.perfLoggingEnabled ?? isPerfLoggingEnabled(process.env.COLLABMD_PERF_LOGGING),
-    port: parsePositiveInt(process.env.PORT, 1234),
+    port: parsePositiveInt(overrides.port ?? process.env.PORT, 1234),
     nodeEnv,
-    plantumlServerUrl: process.env.PLANTUML_SERVER_URL || 'https://www.plantuml.com/plantuml',
+    plantumlServerUrl: overrides.plantumlServerUrl || process.env.PLANTUML_SERVER_URL || 'https://www.plantuml.com/plantuml',
     publicDir,
     vaultDir,
     vaults,

@@ -8,34 +8,13 @@ import {
   buildClientConfig,
   createResponse,
   createUnauthorizedBody,
+  resolveRequestProtocol,
 } from './auth-common.js';
 import {
   createNoneStrategy,
   createOidcStrategy,
   createPasswordStrategy,
 } from './auth-strategies.js';
-
-function resolveRequestProtocol(req) {
-  const forwarded = String(req.headers['x-forwarded-proto'] ?? '').split(',')[0].trim().toLowerCase();
-  if (forwarded === 'https' || forwarded === 'http') {
-    return `${forwarded}:`;
-  }
-
-  try {
-    const cfVisitor = JSON.parse(req.headers['cf-visitor'] ?? '');
-    if (String(cfVisitor?.scheme).toLowerCase() === 'https') {
-      return 'https:';
-    }
-  } catch {
-    // Non-Cloudflare requests carry no cf-visitor payload.
-  }
-
-  if (req.socket?.encrypted) {
-    return 'https:';
-  }
-
-  return 'http:';
-}
 
 export function createAuthService(config) {
   const authConfig = config.auth ?? { strategy: AUTH_STRATEGY_NONE };

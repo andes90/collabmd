@@ -16,7 +16,7 @@ collabmd [directory] [options]
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `-p, --port` | Port to listen on | `1234` |
+| `-p, --port` | Port to listen on | `PORT`, otherwise `1234` |
 | `--host` | Host to bind to | `127.0.0.1` |
 | `--auth` | Auth strategy: `none`, `password`, `oidc` | `none` |
 | `--auth-password` | Password for `--auth password` | generated per run |

@@ -25,6 +25,15 @@ function getTunnelArgs(targetUrl) {
   return ['tunnel', '--url', targetUrl, ...customArgs];
 }
 
+const authPassword = process.connected
+  ? await new Promise((resolve) => {
+    process.once('message', (message) => {
+      resolve(message?.authPassword || '');
+      if (process.connected) process.disconnect();
+    });
+    process.once('disconnect', () => resolve(''));
+  })
+  : (process.env.AUTH_STRATEGY === 'password' ? process.env.AUTH_PASSWORD : '');
 const targetUrl = getTunnelTargetUrl();
 const cloudflaredCommand = getCloudflaredCommand();
 const cloudflaredArgs = getTunnelArgs(targetUrl);
@@ -35,14 +44,14 @@ let shareLinkLogged = false;
 console.log(`[tunnel] Starting Cloudflare Tunnel for ${targetUrl}`);
 
 function buildShareUrl(publicUrl) {
-  if (process.env.AUTH_STRATEGY !== 'password' || !process.env.AUTH_PASSWORD) {
+  if (!authPassword) {
     return null;
   }
 
   try {
     const shareUrl = new URL(publicUrl);
     shareUrl.hash = new URLSearchParams({
-      auth_password: process.env.AUTH_PASSWORD,
+      auth_password: authPassword,
     }).toString();
     return shareUrl.toString();
   } catch {
@@ -70,8 +79,10 @@ function maybeLogShareLink(line) {
   console.log('[tunnel] The password is stored in the URL fragment. It is not sent to the server, but anyone with the full URL can use it.');
 }
 
+const cloudflaredEnv = { ...process.env };
+delete cloudflaredEnv.AUTH_PASSWORD;
 const child = spawn(cloudflaredCommand, cloudflaredArgs, {
-  env: process.env,
+  env: cloudflaredEnv,
   stdio: ['inherit', 'pipe', 'pipe'],
 });
 

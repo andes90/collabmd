@@ -130,3 +130,16 @@ test('resolveVaultRepoUrls rejects ambiguous mangled suffixes', () => {
     /Ambiguous git remote/,
   );
 });
+
+test('validates nested and duplicate programmatic vaults as well as environment entries', () => {
+  for (const list of ['child=/tmp/va/sub, root=/tmp/va', 'root=/tmp/va, child=/tmp/va/..foo']) {
+    assert.throws(() => resolveConfiguredVaults({}, { COLLABMD_VAULTS: list }), /must not nest/);
+  }
+  const root = { id: 'docs', dir: '/tmp/va' };
+  const nested = { id: 'nested', dir: '/tmp/va/sub' };
+  const duplicate = { id: 'docs', dir: '/tmp/unrelated' };
+  assert.throws(() => resolveConfiguredVaults({ vaults: [nested, root] }), /must not nest/);
+  assert.throws(() => resolveConfiguredVaults({ vaults: [root, duplicate] }), /Duplicate vault id/);
+  assert.throws(() => resolveConfiguredVaults({ vaults: [root, { ...root, id: 'other' }] }), /must not nest/);
+  assert.equal(resolveConfiguredVaults({ vaults: [root, { id: 'sibling', dir: '/tmp/va-2' }] }).length, 2);
+});

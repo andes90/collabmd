@@ -3,7 +3,7 @@
 import { parseArgs } from 'node:util';
 import { resolve } from 'node:path';
 import { stat } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
+import { fork } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const packagePath = resolve(fileURLToPath(import.meta.url), '../../package.json');
@@ -17,7 +17,7 @@ const { values, positionals } = parseArgs({
     help: { type: 'boolean', short: 'h', default: false },
     'local-plantuml': { type: 'boolean', default: false },
     'local-structurizr': { type: 'boolean', default: false },
-    port: { type: 'string', short: 'p', default: '1234' },
+    port: { type: 'string', short: 'p' },
     host: { type: 'string' },
     'no-tunnel': { type: 'boolean', default: false },
     version: { type: 'boolean', short: 'v', default: false },
@@ -41,7 +41,7 @@ if (values.help) {
     directory            Path to vault directory (default: current directory)
 
   Options:
-    -p, --port <port>    Port to listen on (default: 1234)
+    -p, --port <port>    Port to listen on (default: PORT env var, otherwise 1234)
     --host <host>        Host to bind to (default: HOST env var, otherwise 127.0.0.1)
     --auth <strategy>    Auth strategy: none, password, oidc (default: none)
     --auth-password <pw> Password for --auth password (default: generated per run)
@@ -63,8 +63,6 @@ if (values.help) {
   process.exit(0);
 }
 
-const port = parseInt(values.port ?? process.env.PORT ?? '1234', 10) || 1234;
-const host = values.host || process.env.HOST || '127.0.0.1';
 const enableTunnel = !values['no-tunnel'];
 const useLocalPlantUml = values['local-plantuml'];
 const useLocalStructurizr = values['local-structurizr'];
@@ -77,32 +75,26 @@ const vaultPath = useVaultList ? '' : resolveCliVaultDir(positionals);
 // ponytail: primary vault known before loadConfig so local services mirror the right dir
 const primaryVaultDir = useVaultList ? resolveConfiguredVaults({}, process.env)[0].dir : vaultPath;
 
-if (!useVaultList) {
-  process.env.COLLABMD_VAULT_DIR = vaultPath;
-}
-process.env.PORT = String(port);
-process.env.HOST = host;
-
-if (values.auth) {
-  process.env.AUTH_STRATEGY = values.auth;
-}
-
-if (values['auth-password']) {
-  process.env.AUTH_PASSWORD = values['auth-password'];
-}
+const overrides = {
+  auth: { password: values['auth-password'], strategy: values.auth || undefined },
+  host: values.host || process.env.HOST || '127.0.0.1',
+  port: values.port,
+  vaultDir: vaultPath || undefined,
+};
 
 if (useLocalPlantUml || useLocalStructurizr) {
   const { getLocalComposeServerUrl, startLocalComposeService } = await import('../scripts/local-compose.mjs');
-  for (const [enabled, service, label, envName] of [
-    [useLocalPlantUml, 'plantuml', 'PlantUML', 'PLANTUML_SERVER_URL'],
-    [useLocalStructurizr, 'structurizr', 'Structurizr', 'STRUCTURIZR_SERVER_URL'],
+  for (const [enabled, service, label] of [
+    [useLocalPlantUml, 'plantuml', 'PlantUML'],
+    [useLocalStructurizr, 'structurizr', 'Structurizr'],
   ]) {
     if (!enabled) continue;
     try {
       const url = getLocalComposeServerUrl(service);
       console.log(`  ${label}: starting local docker-compose service at ${url}...`);
       await startLocalComposeService(service, { vaultDir: primaryVaultDir });
-      process.env[envName] = url;
+      if (service === 'plantuml') overrides.plantumlServerUrl = url;
+      else overrides.structurizr = { serverUrl: url };
     } catch (error) {
       if (error.code === 'ENOENT') {
         console.error('Error: Docker is not available. Install Docker Desktop or Docker Engine first.');
@@ -117,7 +109,7 @@ if (useLocalPlantUml || useLocalStructurizr) {
 const { createAppServer } = await import('../src/server/create-app-server.js');
 const { prepareConfigForStartup } = await import('../src/server/startup/git-remote-bootstrap.js');
 
-const config = useVaultList ? loadConfig({}) : loadConfig({ vaultDir: vaultPath });
+const config = loadConfig(overrides);
 
 for (const vault of config.vaults) {
   try {
@@ -137,11 +129,6 @@ for (const vault of config.vaults) {
       process.exit(1);
     }
   }
-}
-
-if (config.auth.strategy === 'password') {
-  process.env.AUTH_PASSWORD = config.auth.password;
-  process.env.AUTH_STRATEGY = 'password';
 }
 
 try {
@@ -230,14 +217,19 @@ try {
   if (enableTunnel) {
     console.log('  Tunnel: starting...');
 
-    const scriptDir = resolve(fileURLToPath(import.meta.url), '../../scripts/cloudflare-tunnel.mjs');
-    tunnelProcess = spawn(process.execPath, [scriptDir], {
-      env: {
-        ...process.env,
-        TUNNEL_TARGET_HOST: host === '0.0.0.0' ? '127.0.0.1' : host,
-        TUNNEL_TARGET_PORT: String(info.port),
-      },
-      stdio: 'inherit',
+    const tunnelScript = resolve(fileURLToPath(import.meta.url), '../../scripts/cloudflare-tunnel.mjs');
+    const tunnelEnv = {
+      ...process.env,
+      TUNNEL_TARGET_HOST: config.host === '0.0.0.0' ? '127.0.0.1' : config.host,
+      TUNNEL_TARGET_PORT: String(info.port),
+    };
+    delete tunnelEnv.AUTH_PASSWORD;
+    tunnelProcess = fork(tunnelScript, { env: tunnelEnv, execArgv: [] });
+    // Only the Node wrapper needs the password to print the share URL.
+    tunnelProcess.send({ authPassword: config.auth.password }, (error) => {
+      if (error && !shutdownPromise) {
+        console.error(`  Tunnel: failed to send configuration — ${error.message}`);
+      }
     });
 
     tunnelProcess.on('error', (error) => {

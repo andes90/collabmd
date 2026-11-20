@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { resolveRequestProtocol } from './auth-common.js';
 
 function decodeBase64Url(value) {
   return Buffer.from(String(value ?? ''), 'base64url');
@@ -34,11 +35,6 @@ function createSignature(payload, secret) {
   return createHmac('sha256', secret).update(payload).digest();
 }
 
-function hasSecureRequestHeaders(req) {
-  const forwardedProto = String(req.headers['x-forwarded-proto'] ?? '').toLowerCase();
-  return forwardedProto === 'https';
-}
-
 export function createSignedCookieManager({
   cookieName,
   cookiePath = '/',
@@ -49,8 +45,8 @@ export function createSignedCookieManager({
   // the cookie-header check keeps it correct if headers ever change.
   const readCache = new WeakMap();
 
-  function readSignedCookie(req) {
-    const token = parseCookieHeader(req.headers.cookie).get(cookieName);
+  function readSignedCookie(cookieHeader) {
+    const token = parseCookieHeader(cookieHeader).get(cookieName);
     if (!token) {
       return null;
     }
@@ -89,7 +85,7 @@ export function createSignedCookieManager({
       'SameSite=Lax',
     ];
 
-    if (hasSecureRequestHeaders(req)) {
+    if (resolveRequestProtocol(req) === 'https:') {
       attributes.push('Secure');
     }
 
@@ -119,18 +115,17 @@ export function createSignedCookieManager({
     },
 
     read(req) {
-      if (req && typeof req === 'object') {
-        const cached = readCache.get(req);
-        if (cached !== undefined) {
-          return cached;
-        }
+      if (!req || typeof req !== 'object') return null;
 
-        const result = readSignedCookie(req);
-        readCache.set(req, result);
-        return result;
+      const cookieHeader = req.headers?.cookie;
+      const cached = readCache.get(req);
+      if (cached && cached.cookieHeader === cookieHeader) {
+        return cached.value;
       }
 
-      return readSignedCookie(req);
+      const value = readSignedCookie(cookieHeader);
+      readCache.set(req, { cookieHeader, value });
+      return value;
     },
   };
 }

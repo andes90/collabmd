@@ -47,3 +47,30 @@ test('signed cookie manager caches reads per request across strategy payloads', 
   assert.deepEqual(first, { strategy: 'password' });
   assert.ok(first === manager.read(req));
 });
+
+test('sets and clears secure cookies behind HTTPS proxies and on direct TLS', () => {
+  const manager = createSignedCookieManager({ cookieName: 'session', secret: 'test-secret' });
+  for (const req of [
+    { headers: { 'x-forwarded-proto': 'HTTPS, http' } },
+    { headers: { 'cf-visitor': '{"scheme":"https"}' } },
+    { headers: {}, socket: { encrypted: true } },
+  ]) {
+    assert.match(manager.create(req, {}), /; Secure\b/u);
+    assert.match(manager.clear(req), /; Secure\b/u);
+  }
+  assert.doesNotMatch(manager.create({ headers: {} }, {}), /; Secure\b/u);
+});
+
+test('refreshes the cached cookie when the cookie header changes', () => {
+  const manager = createSignedCookieManager({ cookieName: 'session', secret: 'test-secret' });
+  const req = { headers: {} };
+  assert.equal(manager.read(req), null);
+  const first = createCookieHeader(manager, { id: 1 });
+  const second = createCookieHeader(manager, { id: 2 });
+  req.headers.cookie = first;
+  assert.equal(manager.read(req).id, 1);
+  req.headers.cookie = second;
+  assert.equal(manager.read(req).id, 2);
+  delete req.headers.cookie;
+  assert.equal(manager.read(req), null);
+});

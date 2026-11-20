@@ -1,11 +1,37 @@
 import { createHash } from 'node:crypto';
 
+import { normalizeEmailAddress } from '../shared/email-address.js';
+
 import {
   AUTH_STRATEGY_NONE,
   AUTH_STRATEGY_OIDC,
   AUTH_STRATEGY_PASSWORD,
   OIDC_PROVIDER_GOOGLE,
 } from './auth-constants.js';
+
+export { normalizeEmailAddress };
+
+export function resolveRequestProtocol(req) {
+  const forwarded = String(req?.headers?.['x-forwarded-proto'] ?? '').split(',')[0].trim().toLowerCase();
+  if (forwarded === 'https' || forwarded === 'http') {
+    return `${forwarded}:`;
+  }
+
+  try {
+    const cfVisitor = JSON.parse(req?.headers?.['cf-visitor'] ?? '');
+    if (String(cfVisitor?.scheme).toLowerCase() === 'https') {
+      return 'https:';
+    }
+  } catch {
+    // Non-Cloudflare requests carry no cf-visitor payload.
+  }
+
+  if (req?.socket?.encrypted) {
+    return 'https:';
+  }
+
+  return 'http:';
+}
 
 export function hashPassword(value) {
   return createHash('sha256').update(String(value ?? ''), 'utf8').digest();
@@ -81,10 +107,6 @@ export function sanitizeReturnTo(rawValue, { basePath = '', publicBaseUrl = '' }
 
 export function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
-}
-
-export function normalizeEmailAddress(value) {
-  return String(value ?? '').trim().toLowerCase();
 }
 
 export function getEmailDomain(email) {
