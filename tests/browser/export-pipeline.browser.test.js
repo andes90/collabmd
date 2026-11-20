@@ -8,6 +8,7 @@ import {
   buildHtmlDocument,
   prepareDirectoryExportSnapshot,
   prepareExportSnapshot,
+  printPdfAdapter,
   resolveExportAssets,
   waitForRenderedExportContent,
 } from '../../src/client/export/export-pipeline.js';
@@ -610,82 +611,62 @@ describe('export pipeline browser helpers', () => {
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
   });
 
+  function dispatchExportMessage(source, jobId, type) {
+    window.dispatchEvent(Object.assign(new Event('message'), {
+      data: { jobId, source: 'collabmd-export-page', type },
+      origin: window.location.origin,
+      source,
+    }));
+  }
+
   it('opens folder exports with the selected directory in the bootstrap payload', async () => {
-    const exportWindow = {
-      closed: false,
-      focus: vi.fn(),
-      location: { replace: vi.fn() },
-      postMessage: vi.fn(),
-    };
+    const exportWindow = { focus: vi.fn(), postMessage: vi.fn() };
     window.open = vi.fn(() => exportWindow);
     document.documentElement.dataset.theme = 'dark';
     initializeExportBridge();
 
-    const jobId = await exportDirectory({
-      directoryPath: 'docs',
-      fileList: ['docs/one.md'],
-      format: 'pdf',
-    });
-
-    window.dispatchEvent(new MessageEvent('message', {
-      data: { jobId, source: 'collabmd-export-page', type: 'ready' },
-      origin: window.location.origin,
-    }));
-
-    expect(window.open.mock.calls[0]).toEqual(['', jobId]);
-    expect(new URL(exportWindow.location.replace.mock.calls[0][0]).pathname).toMatch(/\/export-document\.html$/u);
+    const jobId = await exportDirectory({ directoryPath: 'docs', fileList: ['docs/one.md'], format: 'pdf' });
+    const [address, target] = window.open.mock.calls[0];
+    const url = new URL(address);
+    expect(target).toBe('_blank');
+    expect(url.pathname).toMatch(/\/export-document\.html$/u);
+    expect(url.searchParams.get('job')).toBe(jobId);
+    dispatchExportMessage({}, jobId, 'ready');
+    expect(exportWindow.postMessage).not.toHaveBeenCalled();
+    dispatchExportMessage(exportWindow, jobId, 'ready');
     expect(exportWindow.postMessage.mock.calls[0][0]).toMatchObject({
       action: 'pdf',
       directoryPath: 'docs',
       fileList: ['docs/one.md'],
       theme: 'light',
     });
-
-    window.dispatchEvent(new MessageEvent('message', {
-      data: { jobId, source: 'collabmd-export-page', type: 'complete' },
-      origin: window.location.origin,
-    }));
+    dispatchExportMessage(exportWindow, jobId, 'complete');
   });
 
-  it('cleans up export jobs when the popup closes before completion', async () => {
-    vi.useFakeTimers();
-
+  it('cleans up when the export page reports that the popup closed', async () => {
     const onError = vi.fn();
-    const exportWindow = {
-      closed: false,
-      focus: vi.fn(),
-      location: { replace: vi.fn() },
-      postMessage: vi.fn(),
-    };
-
+    const exportWindow = { focus: vi.fn(), postMessage: vi.fn() };
     window.open = vi.fn(() => exportWindow);
     initializeExportBridge({ onError });
 
-    const jobId = await exportDocument({
-      filePath: 'README.md',
-      format: 'html',
-      markdownText: '# Export',
-      title: 'README',
-    });
-
-    expect(window.open.mock.calls[0]).toEqual(['', jobId]);
-    expect(new URL(exportWindow.location.replace.mock.calls[0][0]).pathname).toMatch(/\/export-document\.html$/u);
-
-    exportWindow.closed = true;
-    vi.advanceTimersByTime(600);
-
+    const jobId = await exportDocument({ filePath: 'README.md', format: 'html', markdownText: '# Export', title: 'README' });
+    expect(new URL(window.open.mock.calls[0][0]).searchParams.get('job')).toBe(jobId);
+    dispatchExportMessage(exportWindow, jobId, 'closed');
     expect(onError).toHaveBeenCalledWith('Export window was closed before the export completed');
 
-    window.dispatchEvent(new MessageEvent('message', {
-      data: {
-        jobId,
-        source: 'collabmd-export-page',
-        type: 'ready',
-      },
-      origin: window.location.origin,
-    }));
-
+    dispatchExportMessage(exportWindow, jobId, 'ready');
     expect(exportWindow.postMessage).not.toHaveBeenCalled();
+  });
+
+  it('keeps the PDF export pending until afterprint', async () => {
+    const print = vi.spyOn(window, 'print').mockImplementation(() => {});
+    let complete = false;
+    const result = printPdfAdapter().then(() => { complete = true; });
+    await vi.waitFor(() => expect(print).toHaveBeenCalledOnce());
+    expect(complete).toBe(false);
+    window.dispatchEvent(new Event('afterprint'));
+    await result;
+    expect(complete).toBe(true);
   });
 
   it('groups headings with the following block for print pagination', () => {

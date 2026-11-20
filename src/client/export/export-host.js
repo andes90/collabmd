@@ -2,10 +2,10 @@ import { resolveAppUrl } from '../infrastructure/runtime-config.js';
 
 const EXPORT_PAGE_SOURCE = 'collabmd-export-page';
 const EXPORT_HOST_SOURCE = 'collabmd-export-host';
-const EXPORT_JOB_CLOSE_POLL_MS = 500;
 const EXPORT_JOB_TIMEOUT_MS = 300_000;
 const pendingJobs = new Map();
 let exportBridgeErrorHandler = null;
+let exportBridgeInitialized = false;
 
 function createJobId() {
   return `export-${crypto.randomUUID()}`;
@@ -43,20 +43,6 @@ function createBootstrapPayload({
   };
 }
 
-function clearPendingJobTimers(pendingJob) {
-  if (!pendingJob) {
-    return;
-  }
-
-  if (pendingJob.closePollId) {
-    window.clearInterval(pendingJob.closePollId);
-  }
-
-  if (pendingJob.timeoutId) {
-    window.clearTimeout(pendingJob.timeoutId);
-  }
-}
-
 function finishPendingJob(jobId, {
   notifyError = false,
   message = '',
@@ -66,7 +52,7 @@ function finishPendingJob(jobId, {
     return;
   }
 
-  clearPendingJobTimers(pendingJob);
+  window.clearTimeout(pendingJob.timeoutId);
   pendingJobs.delete(jobId);
 
   if (notifyError && message) {
@@ -79,7 +65,7 @@ export function initializeExportBridge({
 } = {}) {
   exportBridgeErrorHandler = typeof onError === 'function' ? onError : null;
 
-  if (window.__collabmdExportBridgeInitialized) {
+  if (exportBridgeInitialized) {
     return;
   }
 
@@ -99,19 +85,19 @@ export function initializeExportBridge({
     }
 
     const pendingJob = pendingJobs.get(jobId);
-    if (!pendingJob) {
+    if (!pendingJob || event.source !== pendingJob.window) {
+      return;
+    }
+
+    if (payload.type === 'closed') {
+      finishPendingJob(jobId, {
+        message: 'Export window was closed before the export completed',
+        notifyError: true,
+      });
       return;
     }
 
     if (payload.type === 'ready') {
-      if (pendingJob.window?.closed) {
-        finishPendingJob(jobId, {
-          message: 'Export window was closed before the export completed',
-          notifyError: true,
-        });
-        return;
-      }
-
       try {
         pendingJob.window?.postMessage(pendingJob.payload, window.location.origin);
       } catch (error) {
@@ -131,27 +117,19 @@ export function initializeExportBridge({
     }
   });
 
-  window.__collabmdExportBridgeInitialized = true;
+  exportBridgeInitialized = true;
 }
 
 async function startExport(payload) {
   const jobId = createJobId();
-  const exportWindow = globalThis.open('', jobId);
+  const url = new URL(resolveAppUrl('/export-document.html'));
+  url.searchParams.set('job', jobId);
+  const exportWindow = globalThis.open(url.href, '_blank');
   if (!exportWindow) {
     throw new Error('Export popup was blocked');
   }
 
   pendingJobs.set(jobId, {
-    closePollId: window.setInterval(() => {
-      if (!exportWindow.closed) {
-        return;
-      }
-
-      finishPendingJob(jobId, {
-        message: 'Export window was closed before the export completed',
-        notifyError: true,
-      });
-    }, EXPORT_JOB_CLOSE_POLL_MS),
     payload: createBootstrapPayload({ ...payload, jobId }),
     timeoutId: window.setTimeout(() => {
       finishPendingJob(jobId, {
@@ -162,7 +140,6 @@ async function startExport(payload) {
     window: exportWindow,
   });
 
-  exportWindow.location.replace(resolveAppUrl('/export-document.html'));
   exportWindow.focus?.();
   return jobId;
 }

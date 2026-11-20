@@ -11,7 +11,7 @@ const DOCX_MATH_KEY_PATTERN = /^COLLABMD-MATH-\d+$/;
 const MATHML_ANNOTATION_PATTERN = /<annotation\b[^>]*>[\s\S]*?<\/annotation>/g;
 // mpadded is purely presentational padding with no OMML equivalent; unwrap it
 // and let the supported children through instead of dropping the subtree.
-const MATHML_PADDED_PATTERN = /<mpadded\b[^>]*>([\s\S]*?)<\/mpadded>/g;
+const MATHML_PADDED_TAG = /<\/?mpadded(?=[\s/>])(?:[^>"']|"[^"]*"|'[^']*')*>/gu;
 const DOCX_EXPORTER_CREATOR = 'CollabMD';
 let converterPromise = null;
 
@@ -161,40 +161,29 @@ function convertMathmlToOmml(mml) {
     return escapeOmmlTextContent(deduplicateOmmlArgPr(mml2omml(
       String(mml ?? '')
         .replace(MATHML_ANNOTATION_PATTERN, '')
-        .replace(MATHML_PADDED_PATTERN, (_match, inner) => inner),
+        .replace(MATHML_PADDED_TAG, ''),
     )));
   } catch {
     return null;
   }
 }
 
-function findDocxParagraphStart(documentXml, index) {
-  // Plain lastIndexOf('<w:p') also matches <w:pPr> and <w:pStyle, so the
-  // character after the prefix must end the tag name.
-  let start = documentXml.lastIndexOf('<w:p', index);
-  while (start !== -1 && !/^[\s>/]/.test(documentXml[start + 4] ?? '')) {
-    start = documentXml.lastIndexOf('<w:p', start - 1);
-  }
-  return start;
-}
-
 function enclosingDocxParagraph(documentXml, index) {
-  const start = findDocxParagraphStart(documentXml, index);
-  if (start === -1) {
-    return null;
+  const paragraphTags = /<(\/?)w:p(?=[\s/>])(?:[^>"']|"[^"]*"|'[^']*')*>/gu;
+  const openParagraphs = [];
+  for (const match of documentXml.matchAll(paragraphTags)) {
+    if (match[1]) {
+      const start = openParagraphs.pop();
+      const end = match.index + match[0].length;
+      if (start !== undefined && start < index && index < match.index) {
+        return { end, start, xml: documentXml.slice(start, end) };
+      }
+    } else if (!match[0].endsWith('/>')) {
+      if (match.index > index && !openParagraphs.length) break;
+      openParagraphs.push(match.index);
+    }
   }
-
-  if (documentXml.lastIndexOf('</w:p>', index) > start) {
-    return null;
-  }
-
-  const end = documentXml.indexOf('</w:p>', index);
-  if (end === -1) {
-    return null;
-  }
-
-  const close = end + '</w:p>'.length;
-  return { end: close, start, xml: documentXml.slice(start, close) };
+  return null;
 }
 
 function isSoleMarkerParagraph(paragraphXml, key) {

@@ -248,7 +248,7 @@ export function serializeSvgElement(svgElement) {
   return new XMLSerializer().serializeToString(sanitizedSvg);
 }
 
-function parseSvgMarkup(svgMarkup) {
+export function parseSvgMarkup(svgMarkup) {
   const normalizedMarkup = String(svgMarkup ?? '')
     .replace(/<!--[\s\S]*?-->/gu, '')
     .replace(/&nbsp;/giu, '&#160;');

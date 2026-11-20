@@ -50,6 +50,9 @@ function renderSnapshot(snapshot) {
   return mount;
 }
 
+const jobId = getExportJobId();
+if (jobId) window.addEventListener('pagehide', () => postExportPageMessage('closed', { jobId }), { once: true });
+
 async function bootstrap() {
   try {
     setStatus('Loading export content…');
@@ -71,12 +74,12 @@ async function bootstrap() {
     setStatus(payload.action === 'pdf'
       ? 'Print dialog opened.'
       : `${payload.action.toUpperCase()} download started.`);
-    postExportPageMessage('complete', { jobId: getExportJobId() });
+    postExportPageMessage('complete', { jobId });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Export failed';
     setStatus(message);
     postExportPageMessage('error', {
-      jobId: getExportJobId(),
+      jobId,
       message,
     });
   }

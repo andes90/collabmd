@@ -8,7 +8,9 @@ import { prepareMermaidRenderSource } from '../domain/mermaid-source.js';
 import {
   encodeSvgDataUrl,
   loadImage,
+  parseSvgMarkup,
   resolveSvgDimensions,
+  sanitizeSvgElement,
   sanitizeSvgMarkup,
   serializeSvgElement,
 } from './preview-diagram-utils.js';
@@ -97,27 +99,26 @@ function trimExportSvgElement(svgElement, { padding = 16 } = {}) {
   return cleanedSvg;
 }
 
-export function trimSvgMarkup(svgMarkup, { padding = 16 } = {}) {
-  const probe = document.createElement('div');
-  Object.assign(probe.style, {
-    left: '-10000px',
-    pointerEvents: 'none',
-    position: 'fixed',
-    top: '0',
-    visibility: 'hidden',
-  });
-  const parsed = new DOMParser().parseFromString(`<body>${String(svgMarkup ?? '')}</body>`, 'text/html');
-  probe.replaceChildren(...parsed.body.childNodes);
-  document.body.appendChild(probe);
+export function trimSvgMarkup(source, { padding = 16 } = {}) {
+  const svg = sanitizeSvgElement(source instanceof SVGSVGElement ? source : parseSvgMarkup(source));
+  const probe = svg.isConnected && svg.ownerDocument === document ? null : document.createElement('div');
+  if (probe) {
+    Object.assign(probe.style, {
+      left: '-10000px',
+      pointerEvents: 'none',
+      position: 'fixed',
+      top: '0',
+      visibility: 'hidden',
+    });
+    probe.append(svg);
+    document.body.append(probe);
+  }
 
   try {
-    const svgElement = probe.querySelector('svg');
-    if (!(svgElement instanceof SVGSVGElement)) {
-      return svgMarkup;
-    }
-    return applyTrimmedSvgBounds(svgElement, svgElement, padding) ? svgElement.outerHTML : svgMarkup;
+    applyTrimmedSvgBounds(svg, svg, padding);
+    return new XMLSerializer().serializeToString(svg);
   } finally {
-    probe.remove();
+    probe?.remove();
   }
 }
 

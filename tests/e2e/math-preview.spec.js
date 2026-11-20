@@ -3,6 +3,7 @@ import {
   openFile,
   replaceEditorContent,
   test,
+  waitForExportPage,
   waitForPreview,
 } from './helpers/app-fixture.js';
 
@@ -109,7 +110,7 @@ test('renders styled math on the PDF export page before printing', async ({ page
   await page.locator('#exportMenuGroup > summary').click();
   await page.locator('#exportPdfBtn').click();
   const popup = await popupPromise;
-  await popup.waitForURL(/\/export-document\.html$/);
+  await waitForExportPage(popup);
 
   const math = popup.locator('#exportContent .katex').first();
   await expect(math).toBeVisible();

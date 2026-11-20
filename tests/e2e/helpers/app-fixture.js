@@ -234,6 +234,12 @@ export async function waitForPreview(page) {
   await expect(page.locator('#previewContent')).toBeVisible({ timeout: 15000 });
 }
 
+export async function waitForExportPage(popup) {
+  await popup.waitForURL((url) => (
+    url.pathname.endsWith('/export-document.html') && Boolean(url.searchParams.get('job'))
+  ));
+}
+
 export async function openFile(page, filePath, { userName = E2E_USER_NAME, waitFor = 'editor' } = {}) {
   await seedStoredUserName(page, userName);
   await page.goto(`/#file=${encodeURIComponent(filePath)}`);

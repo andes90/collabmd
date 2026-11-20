@@ -14,7 +14,6 @@ import {
   encodeSvgDataUrl,
   loadImage,
   resolveSvgDimensions,
-  sanitizeSvgMarkup,
 } from '../application/preview-diagram-utils.js';
 import { isMarkdownFilePath, stripVaultFileExtension } from '../../domain/file-kind.js';
 import { resolveVaultRelativePath } from '../../domain/vault-paths.js';
@@ -91,28 +90,22 @@ const KATEX_EXPORT_FONT_URLS = Object.fromEntries(
 // math offline. Fonts load once per session, only for math exports.
 let katexExportStylesPromise = null;
 
-// Bundler output rewrites the stylesheet's font paths (hashed names, absolute
-// URLs, sometimes pre-inlined), so match each font by basename instead.
 function loadKatexExportStyles() {
   return (katexExportStylesPromise ??= (async () => {
-    let css = katexExportCss;
-    await Promise.all(
-      Object.entries(KATEX_EXPORT_FONT_URLS).map(async ([fontFile, fontUrl]) => {
-        const base = fontFile
-          .replace(/\.woff2$/, '')
-          .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const pattern = new RegExp(`url\\((?!data:)[^)]*${base}[^)]*?\\.woff2\\)`, 'g');
-        if (!pattern.test(css)) {
-          return;
-        }
-
-        const response = await fetch(fontUrl);
-        const bytes = new Uint8Array(await response.arrayBuffer());
-        css = css.replace(pattern, `url(data:font/woff2;base64,${bytes.toBase64()})`);
-      }),
-    );
-    return css.replace(/,url\((?!data:)[^)]+?\)\s*format\("(?:woff|truetype)"\)/gu, '');
-  })());
+    const fontFaces = await Promise.all(Object.entries(KATEX_EXPORT_FONT_URLS).sort().map(async ([file, url]) => {
+      const [family, variant] = file.replace(/\.woff2$/u, '').split('-');
+      const weight = variant.startsWith('Bold') ? 'bold' : 'normal';
+      const style = variant.endsWith('Italic') ? 'italic' : 'normal';
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Failed to load export font ${file}`);
+      const data = new Uint8Array(await response.arrayBuffer()).toBase64();
+      return `@font-face{font-family:"${family}";font-weight:${weight};font-style:${style};src:url(data:font/woff2;base64,${data}) format("woff2")}`;
+    }));
+    return `${fontFaces.join('\n')}\n${katexExportCss.replace(/@font-face\s*\{[^{}]*\}/gu, '')}`;
+  })().catch((error) => {
+    katexExportStylesPromise = null;
+    throw error;
+  }));
 }
 
 let mermaidLoaderPromise = null;
@@ -244,10 +237,6 @@ function blobToDataUrl(blob) {
     reader.addEventListener('error', () => reject(reader.error ?? new Error('Failed to read blob')));
     reader.readAsDataURL(blob);
   });
-}
-
-function normalizeExportSvgMarkup(svgMarkup, options = {}) {
-  return trimSvgMarkup(sanitizeSvgMarkup(svgMarkup), options);
 }
 
 async function imageDataUrlToPngDataUrl(dataUrl) {
@@ -764,7 +753,7 @@ async function renderMermaidToSvgMarkup(source) {
       throw new Error('Mermaid render returned no SVG');
     }
 
-    return normalizeExportSvgMarkup(svg.outerHTML, { padding: 24 });
+    return trimSvgMarkup(svg, { padding: 24 });
   } finally {
     renderHost.remove();
   }
@@ -783,7 +772,7 @@ async function renderPlantUmlToSvgMarkup(source) {
     throw new Error('PlantUML render returned no SVG');
   }
 
-  return normalizeExportSvgMarkup(payload.svg, { padding: 16 });
+  return trimSvgMarkup(payload.svg, { padding: 16 });
 }
 
 async function renderExcalidrawToSvgMarkup(filePath) {
@@ -791,7 +780,7 @@ async function renderExcalidrawToSvgMarkup(filePath) {
   const scene = parseSceneJson(rawScene);
   const exportScene = await ensureExcalidrawRuntime();
   const svgElement = await exportScene({ ...createExcalidrawExportOptions(scene), type: 'svg' });
-  return normalizeExportSvgMarkup(svgElement.outerHTML, { padding: 24 });
+  return trimSvgMarkup(svgElement, { padding: 24 });
 }
 
 async function renderDrawioToPngDataUrl(filePath) {
@@ -1709,15 +1698,14 @@ export async function printPdfAdapter() {
   await waitForKatexPrintFonts();
   await waitForAnimationFrame();
   await waitForAnimationFrame();
-  await new Promise((resolve) => {
-    const timeoutId = window.setTimeout(resolve, 1500);
-    const handleAfterPrint = () => {
-      window.clearTimeout(timeoutId);
-      window.removeEventListener('afterprint', handleAfterPrint);
-      resolve();
-    };
-    window.addEventListener('afterprint', handleAfterPrint, { once: true });
-    window.print();
+  await new Promise((resolve, reject) => {
+    window.addEventListener('afterprint', resolve, { once: true });
+    try {
+      window.print();
+    } catch (error) {
+      window.removeEventListener('afterprint', resolve);
+      reject(error);
+    }
   });
 }
 
@@ -1782,8 +1770,7 @@ export async function waitForBootstrapPayload() {
   const jobId = searchParams.get('job') || window.name || '';
 
   if (jobId && window.opener && !window.opener.closed) {
-    postExportPageMessage('ready', { jobId });
-
+    const opener = window.opener;
     return new Promise((resolve, reject) => {
       const timeoutId = window.setTimeout(() => {
         cleanup();
@@ -1796,7 +1783,7 @@ export async function waitForBootstrapPayload() {
       };
 
       const handleMessage = (event) => {
-        if (event.origin !== window.location.origin) {
+        if (event.origin !== window.location.origin || event.source !== opener) {
           return;
         }
 
@@ -1820,6 +1807,7 @@ export async function waitForBootstrapPayload() {
       };
 
       window.addEventListener('message', handleMessage);
+      postExportPageMessage('ready', { jobId });
     });
   }
 

@@ -6,7 +6,7 @@ import { AgentConnectionService } from './application/agent-connection-service.j
 import { AgentContentService } from './application/agent-content-service.js';
 import { createAuthService } from './auth/create-auth-service.js';
 import { logPerfEvent } from './config/perf-logging.js';
-import { renderDocx } from './domain/docx-exporter.js';
+import { renderDocx } from './infrastructure/export/docx-exporter.js';
 import { GitHubAppClient } from './infrastructure/github/github-app-client.js';
 import { GitHubSetupFlow } from './infrastructure/github/github-setup-flow.js';
 import { HostedWorkspaceService } from './application/hosted-workspace-service.js';

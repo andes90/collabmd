@@ -1,10 +1,12 @@
 import { getVaultFileKind } from './file-kind.js';
+import { extractYamlFrontmatter } from './yaml-frontmatter.js';
 
-const FENCE_OPEN_PATTERN = /^\s*(`{3,})(mermaid|plantuml|puml)\s*$/iu;
+const FENCE_OPEN_PATTERN = /^ {0,3}(`{3,}|~{3,})(.*)$/u;
+const FENCE_CLOSE_PATTERN = /^ {0,3}(`{3,}|~{3,})[ \t]*$/u;
 
 export function listRenderableDiagrams(content = '', path = '', { contentStartLine = 1 } = {}) {
   const kind = getVaultFileKind(path);
-  const lines = String(content).split('\n');
+  const lines = String(content).split(/\r?\n/u);
   if (kind === 'mermaid' || kind === 'plantuml') {
     return [{
       endLine: contentStartLine + Math.max(lines.length - 1, 0),
@@ -16,26 +18,32 @@ export function listRenderableDiagrams(content = '', path = '', { contentStartLi
   if (kind !== 'markdown') return [];
 
   const diagrams = [];
-  for (let index = 0; index < lines.length; index += 1) {
-    const match = lines[index].match(FENCE_OPEN_PATTERN);
-    if (!match) continue;
-
-    const fence = match[1];
-    const diagramKind = match[2].toLowerCase() === 'mermaid' ? 'mermaid' : 'plantuml';
-    const sourceStart = index + 1;
-    let end = sourceStart;
-    while (end < lines.length && lines[end].trim() !== fence) {
-      end += 1;
+  let fence = null;
+  const firstBodyLine = extractYamlFrontmatter(content)?.endLine ?? 0;
+  for (let index = firstBodyLine; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (fence) {
+      const closing = line.match(FENCE_CLOSE_PATTERN)?.[1];
+      if (!closing || closing[0] !== fence.marker[0] || closing.length < fence.marker.length) continue;
+      if (fence.kind) {
+        diagrams.push({
+          endLine: contentStartLine + index,
+          kind: fence.kind,
+          source: lines.slice(fence.index + 1, index).join('\n'),
+          startLine: contentStartLine + fence.index,
+        });
+      }
+      fence = null;
+      continue;
     }
-    if (end >= lines.length) continue;
 
-    diagrams.push({
-      endLine: contentStartLine + end,
-      kind: diagramKind,
-      source: lines.slice(sourceStart, end).join('\n'),
-      startLine: contentStartLine + index,
-    });
-    index = end;
+    const match = line.match(FENCE_OPEN_PATTERN);
+    if (!match) continue;
+    const [, marker, info] = match;
+    if (marker[0] === '`' && info.includes('`')) continue;
+    const language = info.trim().toLowerCase();
+    const diagramKind = language === 'puml' ? 'plantuml' : language;
+    fence = { index, kind: ['mermaid', 'plantuml'].includes(diagramKind) ? diagramKind : null, marker };
   }
   return diagrams;
 }

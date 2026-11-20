@@ -9,6 +9,7 @@ import {
   test,
   waitForCollaborativeEditor,
   waitForEditor,
+  waitForExportPage,
   waitForPreview,
   waitForHeavyPreviewContent,
   appendEditorContent,
@@ -558,7 +559,7 @@ test('export pdf uses the export page and prints the rendered snapshot html', as
   await page.locator('#exportMenuGroup > summary').click();
   await page.locator('#exportPdfBtn').click();
   const popup = await popupPromise;
-  await popup.waitForURL(/\/export-document\.html$/);
+  await waitForExportPage(popup);
 
   await expect.poll(() => popup.evaluate(() => window.__collabmdPrinted)).toBe(true);
   await expect(popup.locator('#exportContent')).toContainText('My Vault');
@@ -1358,7 +1359,7 @@ test('prints all markdown notes in a folder as one PDF document', async ({ page,
   await page.locator('#fileTree .file-tree-dir', { hasText: 'daily' }).first().click({ button: 'right' });
   await page.locator('.file-context-menu').getByRole('menuitem', { name: 'Print / save PDF' }).click();
   const popup = await popupPromise;
-  await popup.waitForURL(/\/export-document\.html$/);
+  await waitForExportPage(popup);
 
   await expect.poll(() => popup.evaluate(() => window.__collabmdPrinted)).toBe(true);
   await expect(popup.locator('#exportContent')).toContainText('daily/2026-03-05.md');

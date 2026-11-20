@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 
 import katex from 'katex';
-import { renderDocx } from '../../src/server/domain/docx-exporter.js';
+import { renderDocx } from '../../src/server/infrastructure/export/docx-exporter.js';
 
 const converterRequire = createRequire(import.meta.resolve('@turbodocx/html-to-docx'));
 const JSZip = converterRequire('jszip');
@@ -80,6 +80,17 @@ test('DOCX renders math markers as native OMML equations', async () => {
   assert.doesNotMatch(documentXml, /export-math/);
   assert.ok(documentXml.includes('<m:f>'), 'expected fraction OMML');
   assert.ok(documentXml.includes('<m:nary>'), 'expected summation OMML');
+});
+
+test('DOCX preserves both children when unwrapping nested MathML padding', async () => {
+  const mathml = '<math><mpadded width="0"><mpadded width="0"><mi>x</mi></mpadded><mi>y</mi></mpadded></math>';
+  const result = await renderDocx({
+    html: `<html><body><p><span class="export-math" data-mml="${encodeURIComponent(mathml)}">COLLABMD-MATH-0</span></p></body></html>`,
+  });
+  const zip = await JSZip.loadAsync(result);
+  const xml = await zip.file('word/document.xml').async('string');
+  assert.match(xml, /<m:oMath\b[^>]*>.*<m:t\b[^>]*>xy<\/m:t>.*<\/m:oMath>/);
+  assert.match(xml, /<w:jc w:val="center"\/>/);
 });
 
 test('DOCX converts KaTeX padding wrappers without converter warnings', async () => {
