@@ -1,37 +1,7 @@
-/**
- * @typedef {object} UiTabActivityContext
- * @property {boolean} isTabActive
- * @property {string | null} currentFilePath
- * @property {Set<string>} chatMessageIds
- * @property {boolean} chatInitialSyncComplete
- * @property {number} chatUnreadCount
- * @property {Array<unknown>} chatMessages
- * @property {Array<unknown>} globalUsers
- * @property {string | null} followedUserClientId
- * @property {string} followedCursorSignature
- * @property {{ status: string, unreachable: boolean }} connectionState
- * @property {{ tabLockOverlay?: HTMLDialogElement | null, tabLockTitle?: HTMLElement | null, tabLockCopy?: HTMLElement | null }} elements
- * @property {{ connect(): void, disconnect(): void, provider?: unknown }} lobby
- * @property {{ connect(): void, disconnect(): void, provider?: unknown }} workspaceSync
- * @property {{ show(message: string): void }} toastController
- * @property {{ tryActivate(options?: { takeover?: boolean }): void }} tabActivityLock
- * @property {{ refresh(): Promise<boolean> }} webMcpTools
- * @property {{ prepareFileDisconnect(filePath: string): Promise<void> }} excalidrawEmbed
- * @property {{ handleHashChange(): Promise<void> }} workspaceRouteController
- * @property {() => boolean} isExcalidrawFile
- * @property {() => void} promptForDisplayNameIfNeeded
- * @property {() => void} renderChat
- * @property {() => void} showEmptyState
- * @property {({ reason }: { reason?: string }) => void} showTabLockOverlay
- * @property {() => void} hideTabLockOverlay
- */
-
-/** @this {UiTabActivityContext} */
 function handleTabTakeover() {
   this.tabActivityLock.tryActivate({ takeover: true });
 }
 
-/** @this {UiTabActivityContext} */
 function handleTabActivated({ takeover = false } = {}) {
   const wasInactive = !this.isTabActive;
   this.isTabActive = true;
@@ -61,7 +31,6 @@ function connectWorkspaceSync() {
   }
 }
 
-/** @this {UiTabActivityContext} */
 async function handleTabBlocked({ reason } = {}) {
   const wasActive = this.isTabActive;
   const blockedFilePath = this.currentFilePath;
@@ -101,7 +70,6 @@ async function handleTabBlocked({ reason } = {}) {
   }
 }
 
-/** @this {UiTabActivityContext} */
 function showTabLockOverlay({ reason } = {}) {
   const overlay = this.elements.tabLockOverlay;
   const title = this.elements.tabLockTitle;
@@ -134,7 +102,6 @@ function showTabLockOverlay({ reason } = {}) {
   this.elements.tabLockTakeoverButton?.focus();
 }
 
-/** @this {UiTabActivityContext} */
 function hideTabLockOverlay() {
   if (this.elements.tabLockOverlay?.open) this.elements.tabLockOverlay.close();
   this.tabLockPreviouslyFocusedElement?.focus?.();

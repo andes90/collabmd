@@ -1,7 +1,5 @@
 import { generatePeerId, normalizeUserName, USER_COLORS } from './room.js';
 
-export const USER_COLOR_PALETTE = USER_COLORS;
-
 export function hashString(value) {
   let hash = 0;
   for (let index = 0; index < value.length; index += 1) {
@@ -13,7 +11,7 @@ export function hashString(value) {
 }
 
 export function pickFallbackColor(seed) {
-  return USER_COLOR_PALETTE[hashString(seed) % USER_COLOR_PALETTE.length];
+  return USER_COLORS[hashString(seed) % USER_COLORS.length];
 }
 
 export function ensureColorLight(color, colorLight) {

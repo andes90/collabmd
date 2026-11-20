@@ -1,22 +1,8 @@
-/**
- * @typedef {object} UiSidebarContext
- * @property {string} activeSidebarTab
- * @property {{ sidebar?: HTMLElement | null, sidebarBackdrop?: HTMLElement | null, sidebarResizer?: HTMLElement | null, filesSidebarTab?: HTMLElement | null, commentsSidebarTab?: HTMLElement | null, gitSidebarTab?: HTMLElement | null, fileSearch?: HTMLElement | null, gitSearch?: HTMLElement | null, commentOverviewPanel?: HTMLElement | null }} elements
- * @property {{ setSidebarVisible(showSidebar: boolean): void, getSidebarVisible(): string | null | undefined }} preferences
- * @property {{ setActive(active: boolean): void }} gitPanel
- * @property {boolean} gitRepoAvailable
- * @property {() => boolean} isMobileViewport
- * @property {() => void} toggleSidebar
- * @property {(showSidebar: boolean) => void} applySidebarVisibility
- * @property {(showSidebar: boolean) => void} setSidebarVisibility
- */
-
 const SIDEBAR_DEFAULT_WIDTH = 260;
 const SIDEBAR_MIN_WIDTH = 220;
 const SIDEBAR_MAX_WIDTH = 420;
 const SIDEBAR_KEYBOARD_STEP = 16;
 
-/** @this {UiSidebarContext} */
 function initializeSidebarResizer() {
   const sidebar = this.elements.sidebar;
   const resizer = this.elements.sidebarResizer;
@@ -83,12 +69,10 @@ function initializeSidebarResizer() {
   });
 }
 
-/** @this {UiSidebarContext} */
 function isMobileViewport() {
   return this.mobileBreakpointQuery.matches;
 }
 
-/** @this {UiSidebarContext} */
 function closeSidebarOnMobile() {
   const sidebar = this.elements.sidebar;
   if (!sidebar || !this.isMobileViewport()) return;
@@ -97,7 +81,6 @@ function closeSidebarOnMobile() {
   this.setSidebarVisibility(false);
 }
 
-/** @this {UiSidebarContext} */
 function toggleSidebar() {
   const sidebar = this.elements.sidebar;
   if (!sidebar) return;
@@ -105,7 +88,6 @@ function toggleSidebar() {
   this.setSidebarVisibility(isHidden);
 }
 
-/** @this {UiSidebarContext} */
 function restoreSidebarState() {
   const sidebar = this.elements.sidebar;
   if (!sidebar) return;
@@ -124,13 +106,11 @@ function restoreSidebarState() {
   this.applySidebarVisibility(showSidebar);
 }
 
-/** @this {UiSidebarContext} */
 function setSidebarVisibility(showSidebar) {
   this.applySidebarVisibility(showSidebar);
   this.preferences.setSidebarVisible(showSidebar);
 }
 
-/** @this {UiSidebarContext} */
 function applySidebarVisibility(showSidebar) {
   const sidebar = this.elements.sidebar;
   if (!sidebar) return;
@@ -153,7 +133,6 @@ function applySidebarVisibility(showSidebar) {
   }
 }
 
-/** @this {UiSidebarContext} */
 function handleSidebarTabsKeydown(event) {
   if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
 
@@ -173,7 +152,6 @@ function handleSidebarTabsKeydown(event) {
   tabs[nextIndex]?.focus();
 }
 
-/** @this {UiSidebarContext} */
 function setSidebarTab(tab) {
   const nextTab = tab === 'git' && this.gitRepoAvailable
     ? 'git'

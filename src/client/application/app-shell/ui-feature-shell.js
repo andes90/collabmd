@@ -20,35 +20,6 @@ const PREVIEW_HEADING_LINK_ICON = `
   </svg>
 `;
 
-/**
- * @typedef {object} UiShellContext
- * @property {boolean} chatIsOpen
- * @property {boolean} gitRepoAvailable
- * @property {boolean} isTabActive
- * @property {boolean} presencePanelOpen
- * @property {string | null} currentFilePath
- * @property {number} lobbyChatMessageMaxLength
- * @property {any} runtimeConfig
- * @property {any} navigation
- * @property {any} session
- * @property {any} commentUi
- * @property {any} elements
- * @property {any} fileExplorer
- * @property {any} gitPanel
- * @property {any} gitDiffView
- * @property {any} fileHistoryView
- * @property {any} outlineController
- * @property {any} layoutController
- * @property {any} scrollSyncController
- * @property {any} themeController
- * @property {any} previewRenderer
- * @property {any} tabActivityLock
- * @property {any} notifications
- * @property {any} toastController
- * @property {any} versionMonitor
- */
-
-/** @this {UiShellContext} */
 async function initialize() {
   await this.hostedGateController?.initialize();
   this.initializeExportBridge?.();
@@ -108,12 +79,10 @@ async function initialize() {
 
 }
 
-/** @this {UiShellContext} */
 function initializeVersionMonitoring() {
   this.versionMonitor?.start();
 }
 
-/** @this {UiShellContext} */
 function syncVisualViewportBounds() {
   const root = document.documentElement;
   const viewport = window.visualViewport;
@@ -132,7 +101,6 @@ function syncVisualViewportBounds() {
   root.style.setProperty('--app-viewport-offset-top', `${Math.round(viewport.offsetTop)}px`);
 }
 
-/** @this {UiShellContext} */
 function initializeVisualViewportBinding() {
   this.syncVisualViewportBounds?.();
 
@@ -147,7 +115,6 @@ function initializeVisualViewportBinding() {
   window.addEventListener('orientationchange', handler);
 }
 
-/** @this {UiShellContext} */
 function promptForVersionReload(payload = null) {
   if (this._reloadPromptShown) {
     return;
@@ -167,7 +134,6 @@ function promptForVersionReload(payload = null) {
   });
 }
 
-/** @this {UiShellContext} */
 function bindToolbarEvents() {
   const openQuickSwitcher = () => {
     void this.toggleQuickSwitcher();
@@ -222,7 +188,6 @@ function bindToolbarEvents() {
   });
 }
 
-/** @this {UiShellContext} */
 function bindDialogEvents() {
   this.elements.displayNameCancel?.addEventListener('click', () => {
     this.handleDisplayNameCancel();
@@ -270,7 +235,6 @@ function bindDialogEvents() {
   });
 }
 
-/** @this {UiShellContext} */
 function focusEditor(event) {
   event?.preventDefault?.();
   const container = this.elements.editorContainer;
@@ -283,7 +247,6 @@ function focusEditor(event) {
   target.focus();
 }
 
-/** @this {UiShellContext} */
 function bindEvents() {
   const stopFollowing = () => this.stopFollowingUser?.();
   this.elements.editorContainer?.addEventListener('pointerdown', stopFollowing);
@@ -437,7 +400,6 @@ function bindEvents() {
 }
 
 
-/** @this {UiShellContext} */
 function handleDocumentKeydown(event) {
   if (event.key === 'Escape') {
     this.stopFollowingUser?.();
@@ -520,7 +482,6 @@ function nowMs() {
   return globalThis.performance?.now?.() ?? Date.now();
 }
 
-/** @this {UiShellContext} */
 function navigatePreviewHeading(target, headingId, { behavior = 'auto' } = {}) {
   if (!(target instanceof HTMLElement) || !headingId) {
     return false;
@@ -548,7 +509,6 @@ function navigatePreviewHeading(target, headingId, { behavior = 'auto' } = {}) {
   return true;
 }
 
-/** @this {UiShellContext} */
 function createPreviewHeadingLinkUrl(anchorId) {
   if (!this.currentFilePath || !anchorId) {
     return '';
@@ -563,7 +523,6 @@ function createPreviewHeadingLinkUrl(anchorId) {
   return url.toString();
 }
 
-/** @this {UiShellContext} */
 async function copyPreviewHeadingLink(anchorId) {
   const url = this.createPreviewHeadingLinkUrl(anchorId);
   if (!url) {
@@ -579,7 +538,6 @@ async function copyPreviewHeadingLink(anchorId) {
   }
 }
 
-/** @this {UiShellContext} */
 async function copyPreviewCodeBlock(button) {
   const code = button?.closest('pre')?.querySelector(':scope > code');
   if (!(code instanceof HTMLElement)) {
@@ -608,7 +566,6 @@ function syncHeadingFoldButtonState(heading, button) {
   button.setAttribute('title', `${collapsed ? 'Expand' : 'Collapse'} section`);
 }
 
-/** @this {UiShellContext} */
 function attachPreviewHeadingControls(heading) {
   if (!(heading instanceof HTMLElement) || !/^H[1-6]$/.test(heading.tagName)) {
     return;
@@ -651,7 +608,6 @@ function attachPreviewHeadingControls(heading) {
   }
 }
 
-/** @this {UiShellContext} */
 function attachPreviewCodeCopyButton(pre) {
   if (!(pre instanceof HTMLElement) || pre.tagName !== 'PRE' || !pre.querySelector(':scope > code')) {
     return;
@@ -674,7 +630,6 @@ function attachPreviewCodeCopyButton(pre) {
   }
 }
 
-/** @this {UiShellContext} */
 function handlePreviewContentPointerOver(event) {
   if (!(event.target instanceof Element) || !this.elements.previewContent) {
     return;
@@ -717,7 +672,6 @@ function applyPreviewHeadingFolds(previewContent) {
   });
 }
 
-/** @this {UiShellContext} */
 function unfoldPreviewHeading(target) {
   if (!(target instanceof HTMLElement) || !/^H[1-6]$/.test(target.tagName)) {
     return false;
@@ -749,7 +703,6 @@ function unfoldPreviewHeading(target) {
   return true;
 }
 
-/** @this {UiShellContext} */
 function syncPreviewHeadingFoldButtons() {
   const headings = this.elements.previewContent?.querySelectorAll?.('h1, h2, h3, h4, h5, h6') ?? [];
 
@@ -769,7 +722,6 @@ function syncPreviewHeadingFoldButtons() {
   applyPreviewHeadingFolds(this.elements.previewContent);
 }
 
-/** @this {UiShellContext} */
 function syncPreviewHeadingLinkButtons() {
   const linkButton = this._previewHeadingLinkButton;
   const heading = linkButton?.parentElement;
@@ -784,7 +736,6 @@ function syncPreviewHeadingLinkButtons() {
 }
 
 
-/** @this {UiShellContext} */
 function requestPreviewRouteAnchor(anchorId, filePath = this.currentFilePath) {
   const normalizedAnchor = String(anchorId ?? '').trim();
   this._pendingPreviewRouteAnchor = normalizedAnchor
@@ -804,7 +755,6 @@ function requestPreviewRouteAnchor(anchorId, filePath = this.currentFilePath) {
   return this.applyPendingPreviewRouteAnchor({ behavior: 'auto', clearMissing: false });
 }
 
-/** @this {UiShellContext} */
 function applyPendingPreviewRouteAnchor({ allowExpired = false, behavior = 'auto', clearMissing = false } = {}) {
   const pendingAnchor = this._pendingPreviewRouteAnchor;
   if (!pendingAnchor) {
@@ -841,7 +791,6 @@ function applyPendingPreviewRouteAnchor({ allowExpired = false, behavior = 'auto
   return true;
 }
 
-/** @this {UiShellContext} */
 function handlePreviewContentClick(event) {
   if (!(event.target instanceof Element)) {
     return;
@@ -925,7 +874,6 @@ function handlePreviewContentClick(event) {
   this.session?.toggleTaskListItem?.(sourceLine);
 }
 
-/** @this {UiShellContext} */
 function syncToolbarOverflowVisibility() {
   const toggle = this.elements.toolbarOverflowToggle;
   if (!toggle) {
@@ -937,14 +885,12 @@ function syncToolbarOverflowVisibility() {
   toggle.setAttribute('aria-hidden', 'false');
 }
 
-/** @this {UiShellContext} */
 function closeToolbarOverflowMenu() {
   if (this.elements.toolbarOverflowMenu?.matches(':popover-open')) {
     this.elements.toolbarOverflowMenu.hidePopover();
   }
 }
 
-/** @this {UiShellContext} */
 function handleThemeChange(theme) {
   this.previewRenderer.applyTheme(theme);
   if (
@@ -964,7 +910,6 @@ function handleThemeChange(theme) {
   this.pdfPreview?.setTheme(theme);
 }
 
-/** @this {UiShellContext} */
 function handleConnectionChange(state) {
   this.connectionState = state;
   if (state?.firstConnection) {
@@ -981,7 +926,6 @@ function handleConnectionChange(state) {
   }
 }
 
-/** @this {UiShellContext} */
 function toggleLineWrapping() {
   const currentState = this.session?.isLineWrappingEnabled() ?? this.getStoredLineWrapping();
   const nextState = !currentState;
@@ -993,12 +937,10 @@ function toggleLineWrapping() {
   this.scrollSyncController.syncPreviewToEditor();
 }
 
-/** @this {UiShellContext} */
 function getStoredLineWrapping() {
   return this.preferences.getLineWrappingEnabled();
 }
 
-/** @this {UiShellContext} */
 async function formatCurrentDocument() {
   const button = this.elements.editorFormatButton;
   button?.setAttribute('disabled', '');
@@ -1021,7 +963,6 @@ async function formatCurrentDocument() {
   }
 }
 
-/** @this {UiShellContext} */
 function toggleVimMode() {
   const currentState = this.session?.isVimModeEnabled?.() ?? this.getStoredVimMode();
   const nextState = !currentState;
@@ -1031,12 +972,10 @@ function toggleVimMode() {
   this.syncVimModeToggle(nextState);
 }
 
-/** @this {UiShellContext} */
 function getStoredVimMode() {
   return this.preferences.getVimModeEnabled();
 }
 
-/** @this {UiShellContext} */
 function syncVimModeToggle(state) {
   const enabled = state ?? this.session?.isVimModeEnabled?.() ?? this.getStoredVimMode();
   const label = this.elements.vimModeToggleLabel;
@@ -1050,7 +989,6 @@ function syncVimModeToggle(state) {
   }
 }
 
-/** @this {UiShellContext} */
 function syncCursorNamesToggle(visible = this.preferences.getCursorNamesVisible()) {
   this.elements.editorContainer?.classList.toggle('hide-cursor-names', !visible);
   const label = this.elements.cursorNamesToggleLabel;
@@ -1061,7 +999,6 @@ function syncCursorNamesToggle(visible = this.preferences.getCursorNamesVisible(
   button?.setAttribute('title', `${visible ? 'Hide' : 'Show'} cursor names`);
 }
 
-/** @this {UiShellContext} */
 function syncWrapToggle(state) {
   const enabled = state ?? this.session?.isLineWrappingEnabled() ?? this.getStoredLineWrapping();
   const label = this.elements.wrapToggleLabel;
@@ -1073,7 +1010,6 @@ function syncWrapToggle(state) {
   }
 }
 
-/** @this {UiShellContext} */
 function scheduleBacklinkRefresh() {
   clearTimeout(this._backlinkRefreshTimer);
   this._backlinkRefreshTimer = setTimeout(() => {
@@ -1083,7 +1019,6 @@ function scheduleBacklinkRefresh() {
   }, 2000);
 }
 
-/** @this {UiShellContext} */
 function showEditorLoading() {
   if (!this.elements.editorContainer) return;
   this.elements.editorContainer.classList.add('is-loading-editor');
@@ -1097,14 +1032,12 @@ function showEditorLoading() {
       </div>`;
 }
 
-/** @this {UiShellContext} */
 function hideEditorLoading() {
   if (!this.elements.editorContainer) return;
   this.elements.editorContainer.classList.remove('is-loading-editor');
   this.elements.editorContainer.querySelector('#editorLoading')?.remove();
 }
 
-/** @this {UiShellContext} */
 function showEditorLoadError(message = 'Failed to load file') {
   if (!this.elements.editorContainer) return;
   const loading = document.createElement('div');
@@ -1118,7 +1051,6 @@ function showEditorLoadError(message = 'Failed to load file') {
   this.elements.editorContainer.replaceChildren(loading);
 }
 
-/** @this {UiShellContext} */
 function clearInitialFileBootstrap() {
   document.documentElement.removeAttribute('data-initial-file-requested');
 }

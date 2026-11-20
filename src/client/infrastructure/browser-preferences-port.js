@@ -24,23 +24,27 @@ export class BrowserPreferencesPort {
     try { this.storage.setItem(key, value); } catch { /* Ignore storage errors. */ }
   }
 
+  _readFlag(key, defaultValue) {
+    const raw = this._read(key);
+    return defaultValue ? raw !== 'false' : raw === 'true';
+  }
+
+  _writeFlag(key, value, coerce = false) {
+    this._write(key, String(coerce ? Boolean(value) : value));
+  }
+
   getUserName() { return this._read(KEYS.userName, '') || ''; }
   setUserName(name) { this._write(KEYS.userName, name); }
-
-  getFileTreeShowExtensions() { return this._read(KEYS.fileTreeShowExtensions) === 'true'; }
-  setFileTreeShowExtensions(show) { this._write(KEYS.fileTreeShowExtensions, String(Boolean(show))); }
-
-  getLineWrappingEnabled() { return this._read(KEYS.lineWrapping) !== 'false'; }
-  setLineWrappingEnabled(enabled) { this._write(KEYS.lineWrapping, String(enabled)); }
-
-  getCursorNamesVisible() { return this._read(KEYS.cursorNames) !== 'false'; }
-  setCursorNamesVisible(visible) { this._write(KEYS.cursorNames, String(visible)); }
-
-  getVimModeEnabled() { return this._read(KEYS.vimMode) === 'true'; }
-  setVimModeEnabled(enabled) { this._write(KEYS.vimMode, String(enabled)); }
-
+  getFileTreeShowExtensions() { return this._readFlag(KEYS.fileTreeShowExtensions, false); }
+  setFileTreeShowExtensions(show) { this._writeFlag(KEYS.fileTreeShowExtensions, show, true); }
+  getLineWrappingEnabled() { return this._readFlag(KEYS.lineWrapping, true); }
+  setLineWrappingEnabled(enabled) { this._writeFlag(KEYS.lineWrapping, enabled); }
+  getCursorNamesVisible() { return this._readFlag(KEYS.cursorNames, true); }
+  setCursorNamesVisible(visible) { this._writeFlag(KEYS.cursorNames, visible); }
+  getVimModeEnabled() { return this._readFlag(KEYS.vimMode, false); }
+  setVimModeEnabled(enabled) { this._writeFlag(KEYS.vimMode, enabled); }
   getSidebarVisible() { return this._read(KEYS.sidebarVisible); }
-  setSidebarVisible(show) { this._write(KEYS.sidebarVisible, String(Boolean(show))); }
+  setSidebarVisible(show) { this._writeFlag(KEYS.sidebarVisible, show, true); }
 
   getViewMode() {
     const value = this._read(KEYS.viewMode);

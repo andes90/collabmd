@@ -87,26 +87,11 @@ function renderMarkdownToolbarMarkup(activeAction) {
   }).join('');
 }
 
-/**
- * @typedef {object} UiToolbarContext
- * @property {string | null} currentFilePath
- * @property {{ markdownToolbar?: HTMLElement | null }} elements
- * @property {Document} document
- * @property {{ refresh(): Promise<void> }} fileExplorer
- * @property {{ show(message: string): void }} toastController
- * @property {{ uploadImageAttachment(payload: { file: File, fileName: string, sourcePath: string }): Promise<{ markdown?: string, path?: string }>} } vaultApiClient
- * @property {{ applyMarkdownToolbarAction(action: string): boolean, insertText(text: string): void, runEditorCommand?(commandId: string): boolean } | null} session
- * @property {(file: File) => Promise<boolean>} handleEditorImageInsert
- * @property {() => Promise<void>} handleToolbarImageInsert
- */
-
-/** @this {UiToolbarContext} */
 function getActiveMarkdownBlockAction() {
   const action = normalizeToolbarAction(this._activeMarkdownBlockAction || DEFAULT_BLOCK_ACTION);
   return isMarkdownBlockAction(action) ? action : DEFAULT_BLOCK_ACTION;
 }
 
-/** @this {UiToolbarContext} */
 function renderMarkdownToolbar() {
   const root = this.elements?.markdownToolbar;
   if (!root) {
@@ -118,12 +103,10 @@ function renderMarkdownToolbar() {
   this.syncMarkdownToolbarBlockUi();
 }
 
-/** @this {UiToolbarContext} */
 function getMarkdownBlockMenuPopover() {
   return document.getElementById('markdownBlockMenuPopover');
 }
 
-/** @this {UiToolbarContext} */
 function syncMarkdownToolbarBlockUi() {
   const root = this.elements?.markdownToolbar;
   if (!root) {
@@ -152,7 +135,6 @@ function syncMarkdownToolbarBlockUi() {
   });
 }
 
-/** @this {UiToolbarContext} */
 function setActiveMarkdownBlockAction(action) {
   const normalized = normalizeToolbarAction(action);
   if (!isMarkdownBlockAction(normalized)) {
@@ -163,12 +145,10 @@ function setActiveMarkdownBlockAction(action) {
   this.syncMarkdownToolbarBlockUi();
 }
 
-/** @this {UiToolbarContext} */
 function isMarkdownBlockMenuOpen() {
   return Boolean(this.getMarkdownBlockMenuPopover()?.matches(':popover-open'));
 }
 
-/** @this {UiToolbarContext} */
 function openMarkdownBlockMenu() {
   const popover = this.getMarkdownBlockMenuPopover();
   if (popover && !popover.matches(':popover-open')) {
@@ -176,7 +156,6 @@ function openMarkdownBlockMenu() {
   }
 }
 
-/** @this {UiToolbarContext} */
 function closeMarkdownBlockMenu() {
   const popover = this.getMarkdownBlockMenuPopover();
   if (popover?.matches(':popover-open')) {
@@ -184,7 +163,6 @@ function closeMarkdownBlockMenu() {
   }
 }
 
-/** @this {UiToolbarContext} */
 function handleMarkdownToolbarClick(event) {
   const target = event.target instanceof Element ? event.target : null;
   if (!target) {
@@ -220,7 +198,6 @@ function handleMarkdownToolbarClick(event) {
   this.applyMarkdownToolbarAction(action);
 }
 
-/** @this {UiToolbarContext} */
 function handleMarkdownToolbarKeydown(event) {
   if (!this.isMarkdownBlockMenuOpen()) {
     const toggle = event.target instanceof Element
@@ -250,7 +227,6 @@ function handleMarkdownToolbarKeydown(event) {
 }
 
 
-/** @this {UiToolbarContext} */
 function applyMarkdownToolbarAction(action) {
   if (!this.session || !isMarkdownFilePath(this.currentFilePath)) {
     return;
@@ -273,7 +249,6 @@ function applyMarkdownToolbarAction(action) {
   }
 }
 
-/** @this {UiToolbarContext} */
 function runEditorCommand(commandId) {
   const ran = this.session?.runEditorCommand?.(commandId);
   if (!ran) {
@@ -284,7 +259,6 @@ function runEditorCommand(commandId) {
   return true;
 }
 
-/** @this {UiToolbarContext} */
 async function handleToolbarImageInsert() {
   const [file] = await pickFiles({ accept: IMAGE_FILE_PICKER_ACCEPT });
   if (!file) {
@@ -294,7 +268,6 @@ async function handleToolbarImageInsert() {
   await this.handleEditorImageInsert(file);
 }
 
-/** @this {UiToolbarContext} */
 async function handleEditorImageInsert(file) {
   if (!this.session || !isMarkdownFilePath(this.currentFilePath)) {
     console.warn('[ui] Ignoring image insert because there is no active markdown session.', {
@@ -343,7 +316,6 @@ async function handleEditorImageInsert(file) {
   }
 }
 
-/** @this {UiToolbarContext} */
 async function copyCurrentLink() {
   try {
     await navigator.clipboard.writeText(window.location.href);

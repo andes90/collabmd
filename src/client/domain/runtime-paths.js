@@ -101,6 +101,17 @@ export function setActiveVaultId(vaultId) {
     // Ignore storage failures; the server default still applies.
   }
 }
+const DEFAULT_AUTH_CONFIG = Object.freeze({
+  enabled: false,
+  implemented: true,
+  loginEndpoint: '/api/auth/oidc/login',
+  provider: '',
+  requiresLogin: false,
+  sessionEndpoint: '/api/auth/session',
+  statusEndpoint: '/api/auth/status',
+  strategy: 'none',
+});
+
 export function getClientRuntimeConfig() {
   const rawConfig = {
     activeVault: '',
@@ -109,16 +120,7 @@ export function getClientRuntimeConfig() {
       endpoint: '',
       managed: false,
     },
-    auth: {
-      enabled: false,
-      implemented: true,
-      loginEndpoint: '/api/auth/oidc/login',
-      provider: '',
-      requiresLogin: false,
-      sessionEndpoint: '/api/auth/session',
-      statusEndpoint: '/api/auth/status',
-      strategy: 'none',
-    },
+    auth: DEFAULT_AUTH_CONFIG,
     basePath: '',
     build: {
       id: '',
@@ -143,14 +145,7 @@ export function getClientRuntimeConfig() {
   };
   const basePath = normalizeBasePath(rawConfig.basePath);
   const authConfig = {
-    enabled: false,
-    implemented: true,
-    loginEndpoint: '/api/auth/oidc/login',
-    provider: '',
-    requiresLogin: false,
-    sessionEndpoint: '/api/auth/session',
-    statusEndpoint: '/api/auth/status',
-    strategy: 'none',
+    ...DEFAULT_AUTH_CONFIG,
     ...(rawConfig.auth ?? {}),
   };
   const buildConfig = {

@@ -8,7 +8,6 @@ import { WikiLinkFileController } from '../application/wiki-link-file-controller
 import { WorkspacePreviewController } from '../application/workspace-preview-controller.js';
 import { StructurizrPreviewController } from '../application/structurizr-preview-controller.js';
 import { WorkspaceCoordinator } from '../application/workspace-coordinator.js';
-import { bindAppShellElements } from '../application/app-shell-elements.js';
 import { isMarkdownFilePath } from '../../domain/file-kind.js';
 import { exportDirectory, exportDocument, initializeExportBridge } from '../export/export-host.js';
 import { chatFeature } from '../application/app-shell/chat-feature.js';
@@ -66,6 +65,14 @@ import { ToastController } from '../presentation/toast-controller.js';
 import { VideoEmbedController } from '../presentation/video-embed-controller.js';
 import { ImageLightboxController } from '../presentation/image-lightbox-controller.js';
 
+const ELEMENT_ID_OVERRIDES = {
+  commentsToggleButton: 'commentsToggle',
+  diffPage: 'diff-page',
+  editorPage: 'editor-page',
+  fileHistoryButtonLabel: 'fileHistoryBtnLabel',
+  htmlPreviewMaximizeButton: 'htmlPreviewMaximize',
+};
+
 const APP_SHELL_FEATURES = [
   chatFeature,
   commentsFeature,
@@ -88,7 +95,12 @@ export class CollabMdAppShell {
         if (!(name in this)) this[name] = method;
       }
     }
-    this.elements = bindAppShellElements(document);
+    this.elements = new Proxy({}, {
+      get(_target, property) {
+        if (typeof property !== 'string') return undefined;
+        return document.getElementById(ELEMENT_ID_OVERRIDES[property] ?? property.replace(/Button$/, 'Btn'));
+      },
+    });
     this.runtimeConfig = getRuntimeConfig();
     this.activeSidebarTab = 'files';
     this.chatInitialSyncComplete = false;

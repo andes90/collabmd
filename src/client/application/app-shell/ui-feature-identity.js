@@ -1,31 +1,10 @@
 import { USER_NAME_MAX_LENGTH, normalizeUserName } from '../../domain/room.js';
 
-/**
- * @typedef {object} UiIdentityContext
- * @property {boolean} isTabActive
- * @property {boolean} _hasPromptedForDisplayName
- * @property {{ currentUserName?: HTMLElement | null, displayNameDialog?: HTMLDialogElement | HTMLElement | null, displayNameInput?: HTMLInputElement | null, displayNameTitle?: HTMLElement | null, displayNameCopy?: HTMLElement | null, displayNameCancel?: HTMLElement | null, displayNameSubmit?: HTMLElement | null, editNameButton?: HTMLElement | null }} elements
- * @property {{ getUserName(): string, setUserName(name: string): void }} preferences
- * @property {{ getLocalUser(): { name?: string } | null, setUserName(name: string): void }} lobby
- * @property {{ getLocalUser(): { name?: string } | null, setUserName(name: string): string } | null} session
- * @property {{ updateLocalUser(user: unknown): void } | null | undefined} drawioEmbed
- * @property {{ updateLocalUser(user: unknown): void } | null | undefined} excalidrawEmbed
- * @property {{ show(message: string): void }} toastController
- * @property {() => boolean} isIdentityManagedByAuth
- * @property {() => { name?: string } | null} getCurrentUser
- * @property {() => string} getCurrentUserName
- * @property {() => string} getStoredUserName
- * @property {() => void} renderChat
- * @property {() => void} syncCurrentUserName
- */
-
-/** @this {UiIdentityContext} */
 function isIdentityManagedByAuth() {
   return this.runtimeConfig?.auth?.strategy === 'oidc'
     && this.runtimeConfig?.auth?.provider === 'google';
 }
 
-/** @this {UiIdentityContext} */
 function openDisplayNameDialog({ mode = 'edit' } = {}) {
   if (this.isIdentityManagedByAuth()) {
     return;
@@ -72,7 +51,6 @@ function openDisplayNameDialog({ mode = 'edit' } = {}) {
   requestAnimationFrame(() => { input.focus(); input.select(); });
 }
 
-/** @this {UiIdentityContext} */
 function promptForDisplayNameIfNeeded() {
   if (
     !this.isTabActive
@@ -89,7 +67,6 @@ function promptForDisplayNameIfNeeded() {
   });
 }
 
-/** @this {UiIdentityContext} */
 function handleDisplayNameCancel() {
   if (this._displayNameDialogMode === 'onboarding' && !this.getStoredUserName()) {
     const guestName = this.getCurrentUserName();
@@ -100,7 +77,6 @@ function handleDisplayNameCancel() {
   this.elements.displayNameDialog?.close();
 }
 
-/** @this {UiIdentityContext} */
 function handleDisplayNameSubmit() {
   if (this.isIdentityManagedByAuth()) {
     return;
@@ -130,7 +106,6 @@ function handleDisplayNameSubmit() {
   dialog.close();
 }
 
-/** @this {UiIdentityContext} */
 function getCurrentUser() {
   return this.globalUsers.find((u) => u.isLocal)
     ?? this.session?.getLocalUser()
@@ -138,17 +113,14 @@ function getCurrentUser() {
     ?? null;
 }
 
-/** @this {UiIdentityContext} */
 function getCurrentUserName() {
   return this.getCurrentUser()?.name ?? this.getStoredUserName() ?? '';
 }
 
-/** @this {UiIdentityContext} */
 function getStoredUserName() {
   return this.preferences.getUserName();
 }
 
-/** @this {UiIdentityContext} */
 function syncCurrentUserName() {
   const el = this.elements.currentUserName;
   if (!el) return;
@@ -163,7 +135,6 @@ function syncCurrentUserName() {
   }
 }
 
-/** @this {UiIdentityContext} */
 function syncIdentityManagementUi() {
   const isManaged = this.isIdentityManagedByAuth();
   this.elements.editNameButton?.classList.toggle('hidden', isManaged);
