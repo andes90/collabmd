@@ -9,9 +9,10 @@ import { WorkspacePreviewController } from '../application/workspace-preview-con
 import { StructurizrPreviewController } from '../application/structurizr-preview-controller.js';
 import { WorkspaceCoordinator } from '../application/workspace-coordinator.js';
 import { bindAppShellElements } from '../application/app-shell-elements.js';
+import { isMarkdownFilePath } from '../../domain/file-kind.js';
+import { exportDirectory, exportDocument, initializeExportBridge } from '../export/export-host.js';
 import { chatFeature } from '../application/app-shell/chat-feature.js';
 import { commentsFeature } from '../application/app-shell/comments-feature.js';
-import { exportFeature } from '../application/app-shell/export-feature.js';
 import { gitFeature } from '../application/app-shell/git-feature.js';
 import { presenceFeature } from '../application/app-shell/presence-feature.js';
 import { uiFeatureIdentityMethods } from '../application/app-shell/ui-feature-identity.js';
@@ -68,7 +69,6 @@ import { ImageLightboxController } from '../presentation/image-lightbox-controll
 const APP_SHELL_FEATURES = [
   chatFeature,
   commentsFeature,
-  exportFeature,
   gitFeature,
   presenceFeature,
   {
@@ -508,13 +508,6 @@ export class CollabMdAppShell {
       excalidrawEmbed: this.excalidrawEmbed,
       getDisplayName: (filePath) => this.getDisplayName(filePath),
       getSession: () => this.session,
-      isBaseFile: (filePath) => this.isBaseFile(filePath),
-      isDrawioFile: (filePath) => this.isDrawioFile(filePath),
-      isExcalidrawFile: (filePath) => this.isExcalidrawFile(filePath),
-      isImageFile: (filePath) => this.isImageFile(filePath),
-      isPdfFile: (filePath) => this.isPdfFile(filePath),
-      isMermaidFile: (filePath) => this.isMermaidFile(filePath),
-      isPlantUmlFile: (filePath) => this.isPlantUmlFile(filePath),
       layoutController: this.layoutController,
       structurizrPreview: this.structurizrPreview,
       outlineController: this.outlineController,
@@ -608,15 +601,6 @@ export class CollabMdAppShell {
       getLocalUser: () => this.lobby.getLocalUser(),
       getStoredUserName: () => this.getStoredUserName(),
       getTheme: () => this.themeController.getTheme(),
-      isBaseFile: (filePath) => this.isBaseFile(filePath),
-      isCanvasFile: (filePath) => this.isCanvasFile(filePath),
-      isDrawioFile: (filePath) => this.isDrawioFile(filePath),
-      isExcalidrawFile: (filePath) => this.isExcalidrawFile(filePath),
-      isImageFile: (filePath) => this.isImageFile(filePath),
-      isPdfFile: (filePath) => this.isPdfFile(filePath),
-      isMermaidFile: (filePath) => this.isMermaidFile(filePath),
-      isPlantUmlFile: (filePath) => this.isPlantUmlFile(filePath),
-      isStructurizrWorkspaceFile: (filePath) => this.isStructurizrWorkspaceFile(filePath),
       isTabActive: () => this.isTabActive,
       loadBootstrapContent: async (filePath) => {
         const response = await this.vaultApiClient.readFile(filePath);
@@ -873,5 +857,48 @@ export class CollabMdAppShell {
 
   async toggleQuickSwitcher() {
     return toggleQuickSwitcherInstance(this);
+  }
+
+  initializeExportBridge() {
+    if (this._exportBridgeInitialized) return;
+    initializeExportBridge({ onError: (message) => this.toastController?.show(message) });
+    this._exportBridgeInitialized = true;
+  }
+
+  async handleDirectoryExportRequest(directoryPath, format) {
+    try {
+      await exportDirectory({
+        currentFilePath: this.currentFilePath,
+        currentMarkdownText: this.session?.getText?.() ?? '',
+        directoryPath,
+        fileList: this.fileExplorer?.flatDocumentFiles ?? [],
+        format,
+      });
+      return true;
+    } catch (error) {
+      this.toastController?.show(error instanceof Error ? error.message : 'Failed to start folder export');
+      return false;
+    }
+  }
+
+  async handleExportRequest(format) {
+    const filePath = String(this.currentFilePath ?? '').trim();
+    if (!isMarkdownFilePath(filePath)) {
+      this.toastController?.show('Export is available for markdown notes only');
+      return false;
+    }
+    try {
+      await exportDocument({
+        fileList: this.fileExplorer?.flatDocumentFiles ?? [],
+        filePath,
+        format,
+        markdownText: this.session?.getText?.() ?? '',
+        title: this.getDisplayName(filePath),
+      });
+      return true;
+    } catch (error) {
+      this.toastController?.show(error instanceof Error ? error.message : 'Failed to start export');
+      return false;
+    }
   }
 }

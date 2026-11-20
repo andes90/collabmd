@@ -37,13 +37,6 @@ function createController(overrides = {}) {
     },
     getDisplayName: (filePath) => filePath,
     getSession,
-    isBaseFile: overrides.isBaseFile ?? ((filePath) => filePath?.endsWith('.base')),
-    isDrawioFile: (filePath) => filePath?.endsWith('.drawio'),
-    isExcalidrawFile: (filePath) => filePath?.endsWith('.excalidraw'),
-    isImageFile: (filePath) => filePath?.endsWith('.png'),
-    isPdfFile: overrides.isPdfFile ?? ((filePath) => filePath?.endsWith('.pdf')),
-    isMermaidFile: (filePath) => filePath?.endsWith('.mmd'),
-    isPlantUmlFile: (filePath) => filePath?.endsWith('.puml'),
     layoutController: { setView() {}, ...(overrides.layoutController || {}) },
     outlineController: { close() {}, scheduleActiveHeadingUpdate() {}, ...(overrides.outlineController || {}) },
     previewRenderer: {

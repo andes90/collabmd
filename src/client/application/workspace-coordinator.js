@@ -1,7 +1,15 @@
 import {
   isBaseFilePath,
+  isCanvasFilePath,
+  isDrawioFilePath,
+  isExcalidrawFilePath,
   isHtmlFilePath,
+  isImageAttachmentFilePath,
   isMarkdownFilePath,
+  isMermaidFilePath,
+  isPdfFilePath,
+  isPlantUmlFilePath,
+  isStructurizrFilePath,
   supportsBacklinksForFilePath,
 } from '../../domain/file-kind.js';
 
@@ -27,15 +35,6 @@ export class WorkspaceCoordinator {
     getLocalUser,
     getStoredUserName,
     getTheme,
-    isBaseFile,
-    isCanvasFile,
-    isDrawioFile,
-    isExcalidrawFile,
-    isImageFile,
-    isPdfFile,
-    isMermaidFile,
-    isPlantUmlFile,
-    isStructurizrWorkspaceFile,
     isTabActive,
     loadBootstrapContent = null,
     loadEditorSessionClass,
@@ -83,15 +82,6 @@ export class WorkspaceCoordinator {
     this.getLocalUser = getLocalUser;
     this.getStoredUserName = getStoredUserName;
     this.getTheme = getTheme;
-    this.isBaseFile = isBaseFile ?? (() => false);
-    this.isCanvasFile = isCanvasFile ?? (() => false);
-    this.isDrawioFile = isDrawioFile ?? (() => false);
-    this.isExcalidrawFile = isExcalidrawFile ?? (() => false);
-    this.isImageFile = isImageFile ?? (() => false);
-    this.isPdfFile = isPdfFile ?? (() => false);
-    this.isMermaidFile = isMermaidFile ?? (() => false);
-    this.isPlantUmlFile = isPlantUmlFile ?? (() => false);
-    this.isStructurizrWorkspaceFile = isStructurizrWorkspaceFile ?? (() => false);
     this.isTabActive = isTabActive;
     this.loadBootstrapContent = loadBootstrapContent;
     this.loadEditorSessionClassPort = loadEditorSessionClass;
@@ -202,7 +192,7 @@ export class WorkspaceCoordinator {
     if (isHtml) this.onRenderHtmlPreview({ content: this.session?.getText?.() ?? '' });
     if (isImage) this.onRenderImagePreview(filePath);
     if (isPdf) this.onRenderPdfPreview(filePath);
-    if (this.isStructurizrWorkspaceFile(filePath)) {
+    if (isStructurizrFilePath(filePath)) {
       this.onRenderStructurizrPreview(filePath, {
         source: this.session?.getText?.() ?? '',
       });
@@ -225,16 +215,16 @@ export class WorkspaceCoordinator {
 
     const normalizedDrawioMode = drawioMode ?? null;
     const currentDrawioMode = this.stateStore.currentDrawioMode ?? null;
-    const isDrawio = this.isDrawioFile(filePath) && drawioMode !== 'text' && this.shouldUseDrawioPreview(filePath);
-    const isExcalidraw = this.isExcalidrawFile(filePath);
-    const isCanvas = this.isCanvasFile(filePath);
-    const isBase = this.isBaseFile(filePath);
-    const isImage = this.isImageFile(filePath);
-    const isPdf = this.isPdfFile(filePath);
+    const isDrawio = isDrawioFilePath(filePath) && drawioMode !== 'text' && this.shouldUseDrawioPreview(filePath);
+    const isExcalidraw = isExcalidrawFilePath(filePath);
+    const isCanvas = isCanvasFilePath(filePath);
+    const isBase = isBaseFilePath(filePath);
+    const isImage = isImageAttachmentFilePath(filePath);
+    const isPdf = isPdfFilePath(filePath);
     const isHtml = isHtmlFilePath(filePath);
-    const isMermaid = this.isMermaidFile(filePath);
-    const isPlantUml = this.isPlantUmlFile(filePath);
-    const isStructurizrWorkspace = this.isStructurizrWorkspaceFile(filePath);
+    const isMermaid = isMermaidFilePath(filePath);
+    const isPlantUml = isPlantUmlFilePath(filePath);
+    const isStructurizrWorkspace = isStructurizrFilePath(filePath);
 
     if (
       filePath === this.stateStore.currentFilePath

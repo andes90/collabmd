@@ -80,11 +80,6 @@ function createCoordinator(overrides = {}) {
     getLocalUser: () => null,
     getStoredUserName: () => 'Tester',
     getTheme: () => 'light',
-    isDrawioFile: () => false,
-    isExcalidrawFile: () => false,
-    isMermaidFile: () => false,
-    isPlantUmlFile: () => false,
-    isStructurizrWorkspaceFile: () => false,
     isTabActive: () => true,
     loadBootstrapContent: async () => null,
     loadEditorSessionClass: async () => EditorSession,
@@ -247,7 +242,6 @@ for (const outcome of ['resolve', 'reject']) {
 test('WorkspaceCoordinator renders an arbitrary .dsl workspace root', async () => {
   let renderedPath = null;
   const { coordinator } = createCoordinator({
-    isStructurizrWorkspaceFile: (filePath) => filePath.endsWith('.dsl'),
     onRenderStructurizrPreview: (filePath) => {
       renderedPath = filePath;
     },
@@ -351,7 +345,6 @@ test('WorkspaceCoordinator skips creating an editor session for Excalidraw files
         destroy() {},
       };
     },
-    isExcalidrawFile: (filePath) => filePath?.endsWith('.excalidraw'),
   });
 
   await coordinator.openFile('vault/new-diagram.excalidraw');
@@ -365,7 +358,6 @@ test('WorkspaceCoordinator skips creating an editor session for Excalidraw files
 test('WorkspaceCoordinator opens canvas in its collaborative frame and preserves it when selected again', async () => {
   const { coordinator, events } = createCoordinator({
     createEditorSession: () => assert.fail('Canvas must not open a raw JSON text session'),
-    isCanvasFile: (filePath) => filePath?.endsWith('.canvas'),
   });
   assert.equal(await coordinator.openFile('vault/ideas.canvas'), true);
   assert.equal(coordinator.getSession(), null);
@@ -384,7 +376,6 @@ test('WorkspaceCoordinator skips creating an editor session for draw.io files', 
         destroy() {},
       };
     },
-    isDrawioFile: (filePath) => filePath?.endsWith('.drawio'),
     shouldUseDrawioPreview: () => true,
   });
 
@@ -408,7 +399,6 @@ test('WorkspaceCoordinator reopens draw.io files when switching from text mode b
         destroy() {},
       };
     },
-    isDrawioFile: (filePath) => filePath?.endsWith('.drawio'),
     session: existingSession,
     shouldUseDrawioPreview: () => true,
   });
@@ -435,7 +425,6 @@ test('WorkspaceCoordinator skips creating an editor session for image attachment
     },
     getFileList: () => ['README.md'],
     getVaultFileList: () => ['README.assets/diagram.png', 'README.md'],
-    isImageFile: (filePath) => filePath?.endsWith('.png'),
   });
 
   await coordinator.openFile('README.assets/diagram.png');
@@ -453,7 +442,6 @@ test('WorkspaceCoordinator skips creating an editor session for PDF files', asyn
       createSessionCalls += 1;
       return { destroy() {} };
     },
-    isPdfFile: (filePath) => filePath?.endsWith('.pdf'),
   });
 
   await coordinator.openFile('docs/brief.pdf');
@@ -471,7 +459,6 @@ test('WorkspaceCoordinator opens base files in the editor and renders the base p
       createSessionCalls += 1;
       return session;
     },
-    isBaseFile: (filePath) => filePath?.endsWith('.base'),
   });
 
   await coordinator.openFile('views/board.base');

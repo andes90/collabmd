@@ -2,8 +2,14 @@ import {
   isBaseFilePath,
   isCanvasFilePath,
   isDiagramFilePath,
+  isDrawioFilePath,
+  isExcalidrawFilePath,
   isHtmlFilePath,
+  isImageAttachmentFilePath,
   isMarkdownFilePath,
+  isMermaidFilePath,
+  isPdfFilePath,
+  isPlantUmlFilePath,
   isStructurizrFilePath,
 } from '../../domain/file-kind.js';
 import { canFormatDocument } from '../domain/document-formatter.js';
@@ -46,13 +52,6 @@ export class WorkspacePreviewController {
     excalidrawEmbed,
     getDisplayName,
     getSession,
-    isDrawioFile,
-    isExcalidrawFile,
-    isBaseFile,
-    isImageFile,
-    isPdfFile,
-    isMermaidFile,
-    isPlantUmlFile,
     layoutController,
     outlineController,
     previewRenderer,
@@ -85,13 +84,6 @@ export class WorkspacePreviewController {
     this.excalidrawEmbed = excalidrawEmbed;
     this.getDisplayName = getDisplayName;
     this.getSession = getSession;
-    this.isDrawioFile = isDrawioFile ?? (() => false);
-    this.isExcalidrawFile = isExcalidrawFile ?? (() => false);
-    this.isBaseFile = isBaseFile ?? isBaseFilePath;
-    this.isImageFile = isImageFile ?? (() => false);
-    this.isPdfFile = isPdfFile ?? (() => false);
-    this.isMermaidFile = isMermaidFile ?? (() => false);
-    this.isPlantUmlFile = isPlantUmlFile ?? (() => false);
     this.layoutController = layoutController;
     this.outlineController = outlineController;
     this.previewRenderer = previewRenderer;
@@ -117,15 +109,15 @@ export class WorkspacePreviewController {
 
   getPreviewSource(filePath, { drawioMode = null } = {}) {
     const source = this.getSession()?.getText() ?? '';
-    if (this.isMermaidFile(filePath)) {
+    if (isMermaidFilePath(filePath)) {
       return this.createDiagramPreviewDocument('mermaid', source);
     }
 
-    if (this.isPlantUmlFile(filePath)) {
+    if (isPlantUmlFilePath(filePath)) {
       return this.createDiagramPreviewDocument('plantuml', source);
     }
 
-    if (this.isDrawioFile(filePath) && drawioMode === 'text') {
+    if (isDrawioFilePath(filePath) && drawioMode === 'text') {
       return this.createDiagramPreviewDocument('xml', source);
     }
 
@@ -164,16 +156,16 @@ export class WorkspacePreviewController {
   }
 
   syncFileChrome(filePath, { drawioMode = null, preferPreviewForBase = false } = {}) {
-    const isDrawio = this.isDrawioFile(filePath);
-    const isExcalidraw = this.isExcalidrawFile(filePath);
+    const isDrawio = isDrawioFilePath(filePath);
+    const isExcalidraw = isExcalidrawFilePath(filePath);
     const isCanvas = isCanvasFilePath(filePath);
-    const isBase = this.isBaseFile(filePath);
-    const isImage = this.isImageFile(filePath);
-    const isPdf = this.isPdfFile(filePath);
+    const isBase = isBaseFilePath(filePath);
+    const isImage = isImageAttachmentFilePath(filePath);
+    const isPdf = isPdfFilePath(filePath);
     const isHtml = isHtmlFilePath(filePath);
     const isMarkdown = isMarkdownFilePath(filePath);
-    const isMermaid = this.isMermaidFile(filePath);
-    const isPlantUml = this.isPlantUmlFile(filePath);
+    const isMermaid = isMermaidFilePath(filePath);
+    const isPlantUml = isPlantUmlFilePath(filePath);
     const isStructurizr = isStructurizrFilePath(filePath);
     const isDiagramFile = isDiagramFilePath(filePath);
     const usesHeaderBacklinks = isExcalidraw || isCanvas || (isDrawio && drawioMode !== 'text');
