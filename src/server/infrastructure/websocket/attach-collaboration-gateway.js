@@ -11,6 +11,8 @@ function rejectUpgrade(socket, statusCode, statusMessage, {
   body = '',
   headers = {},
 } = {}) {
+  if (socket.destroyed) return;
+
   const headerLines = Object.entries(headers)
     .map(([key, value]) => `${key}: ${value}`)
     .join('\r\n');
@@ -26,15 +28,24 @@ function rejectUpgrade(socket, statusCode, statusMessage, {
 
 // ponytail: /ws/v/:knownId/:room scopes to a vault; anything else stays a legacy primary room.
 // A primary-vault file literally at v/<vaultId>/... is shadowed by design.
-function extractVaultAndRoom(pathname, wsBasePath, isKnownVaultId) {
+function extractVaultAndRoom(pathname, wsBasePath, vaultRegistry) {
   const rest = pathname.slice(wsBasePath.length + 1);
-  if (rest === 'v' || rest.startsWith('v/')) {
-    const after = rest === 'v' ? '' : rest.slice('v/'.length);
+  try {
+    return decodeVaultAndRoom(rest, vaultRegistry);
+  } catch (error) {
+    if (error instanceof URIError) return null;
+    throw error;
+  }
+}
+
+function decodeVaultAndRoom(rest, vaultRegistry) {
+  if (rest.startsWith('v/')) {
+    const after = rest.slice('v/'.length);
     const slashIndex = after.indexOf('/');
     if (slashIndex > 0) {
       const candidate = after.slice(0, slashIndex);
       const roomPart = after.slice(slashIndex + 1);
-      if (roomPart && isKnownVaultId?.(candidate)) {
+      if (roomPart && vaultRegistry?.isKnownVaultId(candidate)) {
         return { roomName: decodeURIComponent(roomPart) || 'default', vaultId: candidate };
       }
     }
@@ -114,44 +125,26 @@ export function attachCollaborationGateway({
     });
   }) ?? (() => {});
 
-  websocketServer.on('connection', (ws, req, requestUrl, user = null, expiresAt = null) => {
-    const { roomName, vaultId } = extractVaultAndRoom(requestUrl.pathname, wsBasePath, vaultRegistry?.isKnownVaultId?.bind(vaultRegistry));
-    const registryPromise = vaultId && vaultRegistry
-      ? vaultRegistry.getOrCreateContextAsync(vaultId).then((context) => context.roomRegistry)
-      : Promise.resolve(roomRegistry);
-    registryPromise.then((targetRegistry) => {
-      if (ws.readyState !== ws.OPEN) return;
-      const room = targetRegistry.getOrCreate(roomName);
-      const session = new ClientSocketSession({
-        expiresAt,
-        onDisconnected: (disconnectedRoomName) => {
-          socketSessions.delete(ws);
-          const remaining = targetRegistry.rooms.get(disconnectedRoomName)?.clients.size ?? 0;
-          console.log(`[ws] "${disconnectedRoomName}" disconnected (${remaining} active client(s))`);
-        },
-        onFailed: () => {
-          socketSessions.delete(ws);
-        },
-        room,
-        roomName,
-        ws,
-      });
-      socketSessions.set(ws, {
-        session,
-        userEmail: normalizeEmailAddress(user?.email),
-      });
-      void session.initialize();
-    }).catch((error) => {
-      console.error(`[ws] Failed to open room "${roomName}":`, error.message);
-      try {
-        ws.close(1011, 'Vault unavailable');
-      } catch {
-        try { ws.terminate(); } catch { /* ignore */ }
-      }
+  websocketServer.on('connection', (ws, _req, { expiresAt, room, roomName, targetRegistry, user }) => {
+    const session = new ClientSocketSession({
+      expiresAt,
+      onDisconnected: (disconnectedRoomName) => {
+        socketSessions.delete(ws);
+        const remaining = targetRegistry.getClientCount(disconnectedRoomName);
+        console.log(`[ws] "${disconnectedRoomName}" disconnected (${remaining} active client(s))`);
+      },
+      onFailed: () => {
+        socketSessions.delete(ws);
+      },
+      room,
+      roomName,
+      ws,
     });
+    socketSessions.set(ws, { session, userEmail: normalizeEmailAddress(user?.email) });
+    void session.initialize();
   });
 
-  httpServer.on('upgrade', (req, socket, head) => {
+  httpServer.on('upgrade', async (req, socket, head) => {
     if (isShuttingDown) {
       rejectUpgrade(socket, 503, 'Server Shutting Down');
       return;
@@ -176,16 +169,23 @@ export function attachCollaborationGateway({
       return;
     }
 
+    const roomTarget = extractVaultAndRoom(requestUrl.pathname, wsBasePath, vaultRegistry);
+    if (!roomTarget) {
+      rejectUpgrade(socket, 400, 'Bad Request');
+      return;
+    }
+
     const authResult = authService.authorizeWebSocketRequest(req, requestUrl);
     if (!authResult.ok) {
       rejectUpgrade(socket, authResult.statusCode, authResult.statusMessage, authResult);
       return;
     }
 
-    const authenticatedUser = authService.getAuthenticatedUser?.(req) ?? null;
-    Promise.resolve(hostedWorkspaceService?.authorizeWorkspaceAccess?.({
-      user: authenticatedUser,
-    })).then((hostedAuthResult) => {
+    const user = authService.getAuthenticatedUser?.(req) ?? null;
+    const onSocketError = () => socket.destroy();
+    socket.on('error', onSocketError);
+    try {
+      const hostedAuthResult = await hostedWorkspaceService?.authorizeWorkspaceAccess?.({ user });
       if (hostedAuthResult && !hostedAuthResult.ok) {
         rejectUpgrade(socket, hostedAuthResult.statusCode, 'Forbidden', {
           body: hostedAuthResult.body?.error || 'Workspace access denied',
@@ -196,13 +196,41 @@ export function attachCollaborationGateway({
         return;
       }
 
+      const { roomName, vaultId } = roomTarget;
+      const targetRegistry = vaultId
+        ? (await vaultRegistry.getOrCreateContextAsync(vaultId)).roomRegistry
+        : roomRegistry;
+      if (socket.destroyed) return;
+      if (isShuttingDown) {
+        rejectUpgrade(socket, 503, 'Server Shutting Down');
+        return;
+      }
+
       websocketServer.handleUpgrade(req, socket, head, (ws) => {
-        websocketServer.emit('connection', ws, req, requestUrl, authenticatedUser, authResult.expiresAt);
+        let room;
+        try {
+          room = targetRegistry.getOrCreate(roomName);
+        } catch {
+          ws.close(1011, 'Room unavailable');
+          return;
+        }
+        websocketServer.emit('connection', ws, req, {
+          expiresAt: authResult.expiresAt,
+          room,
+          roomName,
+          targetRegistry,
+          user,
+        });
       });
-    }).catch((error) => {
-      console.error('[ws] Hosted workspace authorization failed:', error.message);
-      rejectUpgrade(socket, 500, 'Internal Server Error');
-    });
+    } catch (error) {
+      if (error.statusCode === 404) {
+        rejectUpgrade(socket, 404, 'Not Found');
+      } else {
+        rejectUpgrade(socket, 503, 'Service Unavailable');
+      }
+    } finally {
+      socket.off('error', onSocketError);
+    }
   });
 
   async function close() {

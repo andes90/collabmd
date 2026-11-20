@@ -133,7 +133,7 @@ export function normalizeCommentReactionEmoji(value) {
 }
 
 export function createCommentReactionKey(messageId, emoji, userId) {
-  return `${REACTION_KEY_PREFIX}${JSON.stringify([messageId, emoji, userId])}`;
+  return JSON.stringify([messageId, emoji, userId]);
 }
 
 function createReactionUserRecord(user) {
@@ -225,14 +225,20 @@ function serializeMessages(messages, thread) {
     return records;
   }
 
+  const reactions = thread.get('reactions');
+  const canonical = reactions instanceof Y.Map;
+  if (canonical) records.forEach((message) => { message.reactions = []; });
   const byId = new Map(records.map((message) => [message.id, message]));
-  const overrides = [...thread.entries()]
-    .filter(([key]) => key.startsWith(REACTION_KEY_PREFIX))
-    .sort(([left], [right]) => left.localeCompare(right));
+  const entries = canonical
+    ? [...reactions.entries()]
+    : [...thread.entries()]
+        .filter(([key]) => key.startsWith(REACTION_KEY_PREFIX))
+        .map(([key, value]) => [key.slice(REACTION_KEY_PREFIX.length), value]);
+  const overrides = entries.sort(([left], [right]) => left.localeCompare(right));
   for (const [key, value] of overrides) {
     let identity;
     try {
-      identity = JSON.parse(key.slice(REACTION_KEY_PREFIX.length));
+      identity = JSON.parse(key);
     } catch {
       continue;
     }
@@ -260,6 +266,41 @@ function serializeMessages(messages, thread) {
     }
   }
   return records;
+}
+
+function createReactionMap(messages) {
+  const reactions = new Y.Map();
+  for (const message of messages) {
+    for (const { emoji, users } of message.reactions) {
+      for (const user of users) {
+        reactions.set(createCommentReactionKey(message.id, emoji, user.userId), user);
+      }
+    }
+  }
+  return reactions;
+}
+
+export function migrateCommentReactions(comments) {
+  for (const thread of comments.toArray()) {
+    if (!(thread instanceof Y.Map) || thread.get('reactions') instanceof Y.Map) continue;
+    const messages = thread.get('messages');
+    thread.set('reactions', createReactionMap(serializeMessages(messages, thread)));
+    if (messages instanceof Y.Array) {
+      messages.toArray().forEach((value, index) => {
+        if (value instanceof Y.Map) {
+          value.delete('reactions');
+        } else if (value && Object.hasOwn(value, 'reactions')) {
+          const message = { ...value };
+          delete message.reactions;
+          messages.delete(index, 1);
+          messages.insert(index, [message]);
+        }
+      });
+    }
+    for (const key of thread.keys()) {
+      if (key.startsWith(REACTION_KEY_PREFIX)) thread.delete(key);
+    }
+  }
 }
 
 export function createCommentId(prefix = 'comment') {
@@ -311,17 +352,14 @@ export function createCommentThreadSharedType(record = {}) {
   }
 
   const anchor = normalizeCommentAnchor(record);
-  const initialMessage = createMessageRecord(record.messages?.[0]);
+  const normalizedMessages = asArray(record.messages).map(createMessageRecord).filter(Boolean);
+  const [initialMessage] = normalizedMessages;
   if (!anchor || !initialMessage) {
     return null;
   }
 
   const messages = new Y.Array();
-  const normalizedMessages = record.messages
-    ?.map((message) => createMessageRecord(message))
-    .filter(Boolean) ?? [];
-
-  messages.push(normalizedMessages.length > 0 ? normalizedMessages : [initialMessage]);
+  messages.push(normalizedMessages.map(({ reactions: _reactions, ...message }) => message));
 
   const thread = new Y.Map();
   thread.set('anchorKind', anchor.anchorKind);
@@ -342,6 +380,7 @@ export function createCommentThreadSharedType(record = {}) {
   thread.set('createdByPeerId', asString(record.createdByPeerId) || initialMessage.peerId);
   thread.set('id', asString(record.id) || createCommentId('thread'));
   thread.set('messages', messages);
+  thread.set('reactions', createReactionMap(normalizedMessages));
   thread.set('resolvedAt', asFiniteNumber(record.resolvedAt));
   thread.set('resolvedByColor', asString(record.resolvedByColor));
   thread.set('resolvedByName', asString(record.resolvedByName));

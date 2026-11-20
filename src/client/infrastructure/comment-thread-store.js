@@ -19,7 +19,6 @@ function createCommentMessage({ body, user }) {
     createdAt: Date.now(),
     id: createCommentId('comment'),
     peerId: user?.peerId ?? '',
-    reactions: [],
     userColor: user?.color ?? '',
     userName: user?.name ?? 'Anonymous',
   };
@@ -234,15 +233,17 @@ export class CommentThreadStore {
 
     const thread = this.findSharedCommentThread(threadId);
     const message = serializeCommentThread(thread)?.messages.find((entry) => entry.id === messageId);
-    if (!message) {
+    const reactions = thread?.get('reactions');
+    if (!message || !(reactions instanceof Y.Map)) {
       return false;
     }
     const hasReaction = message.reactions.some((group) => group.emoji === normalizedEmoji
       && group.users.some((user) => user.userId === localUserId));
 
     this.ydoc.transact(() => {
-      // Keep the message identity intact; different users change independent keys.
-      thread.set(createCommentReactionKey(messageId, normalizedEmoji, localUserId), hasReaction ? null : {
+      const key = createCommentReactionKey(messageId, normalizedEmoji, localUserId);
+      if (hasReaction) reactions.delete(key);
+      else reactions.set(key, {
         reactedAt: Date.now(),
         userColor: localUser?.color ?? '',
         userId: localUserId,

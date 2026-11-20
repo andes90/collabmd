@@ -24,6 +24,10 @@ export class RoomRegistry {
     return this.rooms.get(name);
   }
 
+  getClientCount(name) {
+    return this.get(name)?.clients.size ?? 0;
+  }
+
   getOrCreate(name) {
     if (Array.from(this.changingPaths).some((paths) => isWithinPaths(name, paths))) {
       throw new Error('Document is being renamed or deleted');

@@ -32,7 +32,7 @@ function authConfig(strategy) {
 test('malformed WebSocket URLs are rejected before authentication without stopping the server', async (t) => {
   const app = await startTestServer({ auth: authConfig('password') });
   t.after(() => app.close());
-  for (const [host, target] of [['[', '/ws/test.md'], ['localhost:invalid', '/ws/test.md'], ['localhost', 'http://[']]) {
+  for (const [host, target] of [['[', '/ws/test.md'], ['localhost:invalid', '/ws/test.md'], ['localhost', 'http://['], ['localhost', '/ws/unfinished%']]) {
     const response = await new Promise((resolve, reject) => {
       let body = '';
       const socket = connect(app.port, '127.0.0.1', () => {

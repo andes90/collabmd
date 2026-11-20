@@ -1,3 +1,4 @@
+import { encodeSyncStep1Message } from './helpers/collaboration-protocol.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Y from 'yjs';
@@ -262,6 +263,7 @@ test('CollaborationRoom withholds sync until a reconciled snapshot is saved and 
   assert.equal(room.hydrated, true);
   assert.equal(room.doc.getText('codemirror').toString(), 'external\n');
   assert.equal(room.doc.getArray('comments').get(0).get('id'), 'retained-thread');
+  room.handleMessage(socket, encodeSyncStep1Message(seed));
   assert.equal(sent.length, 1);
   const restored = new Y.Doc();
   t.after(() => restored.destroy());
@@ -385,6 +387,7 @@ test('CollaborationRoom propagates exhausted initial snapshot retries and can re
   assert.equal(attempts, 4);
   assert.equal(room.doc.getText('codemirror').toString(), content);
   assert.equal(room.doc.getArray('comments').length, 1);
+  room.handleMessage(socket, encodeSyncStep1Message(restored));
   assert.equal(sent.length, 1);
   Y.applyUpdate(restored, storedSnapshot);
   assert.equal(restored.getText('codemirror').toString(), content);

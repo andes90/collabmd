@@ -1,17 +1,3 @@
-import * as decoding from 'lib0/decoding';
-
-import { MSG_SYNC } from '../../../domain/collaboration-protocol.js';
-
-function isSyncMessage(payload) {
-  try {
-    const data = payload instanceof Uint8Array ? payload : new Uint8Array(payload);
-    const decoder = decoding.createDecoder(data);
-    return decoding.readVarUint(decoder) === MSG_SYNC;
-  } catch {
-    return false;
-  }
-}
-
 export class ClientSocketSession {
   constructor({
     expiresAt = null,
@@ -31,17 +17,10 @@ export class ClientSocketSession {
     this.isAlive = true;
     this.initialized = false;
     this.closedBeforeReady = false;
-    this.hasReceivedClientSync = false;
     this.pendingMessages = [];
-    this.initialSyncTimer = null;
 
     this.handleMessage = (payload) => {
       if (this.expireAuthentication()) return;
-      if (isSyncMessage(payload)) {
-        this.hasReceivedClientSync = true;
-        this.clearInitialSyncTimer();
-      }
-
       if (!this.initialized) {
         this.pendingMessages.push(payload);
         return;
@@ -53,7 +32,6 @@ export class ClientSocketSession {
       clearTimeout(this.expiryTimer);
       if (!this.initialized) {
         this.closedBeforeReady = true;
-        this.clearInitialSyncTimer();
         this.pendingMessages.length = 0;
         return;
       }
@@ -91,15 +69,6 @@ export class ClientSocketSession {
     this.isAlive = false;
   }
 
-  clearInitialSyncTimer() {
-    if (!this.initialSyncTimer) {
-      return;
-    }
-
-    clearTimeout(this.initialSyncTimer);
-    this.initialSyncTimer = null;
-  }
-
   attach() {
     this.ws.on('message', this.handleMessage);
     this.ws.on('close', this.handleClose);
@@ -112,7 +81,6 @@ export class ClientSocketSession {
     this.ws.off('close', this.handleClose);
     this.ws.off('error', this.handleError);
     this.ws.off('pong', this.handlePong);
-    this.clearInitialSyncTimer();
     clearTimeout(this.expiryTimer);
   }
 
@@ -122,24 +90,7 @@ export class ClientSocketSession {
     }
   }
 
-  scheduleInitialSync() {
-    if (this.hasReceivedClientSync) {
-      return;
-    }
-
-    this.initialSyncTimer = setTimeout(() => {
-      this.initialSyncTimer = null;
-      if (this.hasReceivedClientSync || this.ws.readyState !== this.ws.OPEN) {
-        return;
-      }
-
-      this.room.sendInitialSync(this.ws);
-    }, 0);
-    this.initialSyncTimer.unref?.();
-  }
-
   disconnect() {
-    this.clearInitialSyncTimer();
     this.room.removeClient(this.ws);
     this.detach();
     this.onDisconnected?.(this.roomName);
@@ -155,7 +106,7 @@ export class ClientSocketSession {
     this.scheduleAuthenticationExpiry();
 
     try {
-      await this.room.addClient(this.ws, { sendInitialSync: false });
+      await this.room.addClient(this.ws);
     } catch (error) {
       this.detach();
       console.error(`[ws] Failed to initialize room "${this.roomName}":`, error.message);
@@ -172,7 +123,7 @@ export class ClientSocketSession {
     }
 
     this.flushPendingMessages();
-    this.scheduleInitialSync();
+    this.room.requestClientSync(this.ws);
 
     console.log(`[ws] "${this.roomName}" connected (${this.room.clients.size} active client(s))`);
   }

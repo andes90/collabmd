@@ -4,6 +4,7 @@ import * as Y from 'yjs';
 
 import {
   createCommentThreadSharedType,
+  migrateCommentReactions,
   normalizeCommentQuote,
   normalizeCommentQuoteForComparison,
   serializeCommentThreads,
@@ -217,6 +218,7 @@ test('comment thread serialization ignores malformed reactions', () => {
   });
 
   threads.push([thread]);
+  thread.delete('reactions');
   thread.set('reaction:{', {});
   thread.set('reaction:[]', {});
   thread.set('reaction:["comment-malformed-reactions",42,"user-1"]', {});
@@ -225,4 +227,35 @@ test('comment thread serialization ignores malformed reactions', () => {
 
   const [serialized] = serializeCommentThreads(threads);
   assert.deepEqual(serialized.messages[0].reactions, []);
+});
+
+test('legacy reaction tombstones are migrated without resurrecting removed users', () => {
+  const doc = new Y.Doc();
+  const threads = doc.getArray('comments');
+  const thread = new Y.Map();
+  const messages = new Y.Array();
+  const anchor = { assoc: 0, type: null };
+  for (const [key, value] of Object.entries({
+    anchorEnd: anchor, anchorEndLine: 1, anchorKind: 'line', anchorStart: anchor, anchorStartLine: 1,
+    id: 'legacy-thread', messages,
+  })) {
+    thread.set(key, value);
+  }
+  messages.push([{
+    body: 'A legacy message', id: 'legacy-message',
+    reactions: [{ emoji: '👍', users: [{ userId: 'removed' }, { userId: 'retained' }] }],
+  }]);
+  const tombstone = 'reaction:["legacy-message","👍","removed"]';
+  const added = 'reaction:["legacy-message","👍","added"]';
+  thread.set(tombstone, null);
+  thread.set(added, { userId: 'added', reactedAt: 1 });
+  threads.push([thread]);
+
+  doc.transact(() => migrateCommentReactions(threads));
+  assert.equal(thread.has(tombstone), false);
+  assert.equal(thread.has(added), false);
+  assert.equal(Object.hasOwn(messages.get(0), 'reactions'), false);
+  assert.equal(thread.get('reactions').size, 2);
+  const [serialized] = serializeCommentThreads(threads);
+  assert.deepEqual(serialized.messages[0].reactions[0].users.map(({ userId }) => userId), ['added', 'retained']);
 });

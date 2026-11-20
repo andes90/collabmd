@@ -13,7 +13,7 @@ import {
   MSG_SYNC,
 } from '../../../domain/collaboration-protocol.js';
 import { logPerfEvent } from '../../config/perf-logging.js';
-import { populateCommentThreads, serializeCommentThreads } from '../../../domain/comment-threads.js';
+import { migrateCommentReactions, populateCommentThreads, serializeCommentThreads } from '../../../domain/comment-threads.js';
 import { getVaultFileKind, isCanvasFilePath, isMarkdownFilePath } from '../../../domain/file-kind.js';
 import {
   buildCanvasRoomDocument,
@@ -396,6 +396,7 @@ export class CollaborationRoom {
                   }, 'hydrate');
                 }
 
+                validationDoc.transact(() => migrateCommentReactions(validationDoc.getArray('comments')), 'hydrate');
                 validatedSnapshot = Y.encodeStateAsUpdate(validationDoc);
               } catch (error) {
                 console.warn(
@@ -631,6 +632,7 @@ export class CollaborationRoom {
     const state = {
       backpressureCloseIssued: false,
       controlledClientIds: new Set(),
+      initialSyncSent: false,
       transportCloseIssued: false,
     };
     this.clientStates.set(ws, state);
@@ -934,11 +936,9 @@ export class CollaborationRoom {
     return this.cachedInitialSyncMessage;
   }
 
-  sendInitialSync(ws) {
+  recordInitialSync(initialSyncBytes) {
     this.debugMetrics.initialSyncCount += 1;
     this.debugMetrics.lastInitialSyncAt = Date.now();
-    const initialSyncMessage = this.getInitialSyncMessage();
-    const initialSyncBytes = initialSyncMessage.byteLength;
     if (initialSyncBytes > this.maxInitialSyncBytes) {
       console.warn(
         `[room:${this.name}] Initial sync payload is ${initialSyncBytes} bytes, exceeding ${this.maxInitialSyncBytes} bytes`,
@@ -950,10 +950,35 @@ export class CollaborationRoom {
       event: 'initial-sync',
       exceedsLimit: initialSyncBytes > this.maxInitialSyncBytes,
     });
-    return sendMessage.call(this, ws, initialSyncMessage, this);
   }
 
-  async addClient(ws, { sendInitialSync: shouldSendInitialSync = true } = {}) {
+  requestClientSync(ws) {
+    const encoder = encoding.createEncoder();
+    encoding.writeVarUint(encoder, MSG_SYNC);
+    syncProtocol.writeSyncStep1(encoder, this.doc);
+    sendMessage.call(this, ws, encoding.toUint8Array(encoder), this);
+  }
+
+  replyToClientSync(ws, decoder, encoder) {
+    decoding.readVarUint(decoder);
+    const stateVector = decoding.readVarUint8Array(decoder);
+    let reply;
+    if (stateVector.length === 1 && stateVector[0] === 0) {
+      reply = this.getInitialSyncMessage();
+    } else {
+      syncProtocol.writeSyncStep2(encoder, this.doc, stateVector);
+      reply = encoding.toUint8Array(encoder);
+    }
+
+    const clientState = this.getClientState(ws);
+    if (clientState && !clientState.initialSyncSent) {
+      clientState.initialSyncSent = true;
+      this.recordInitialSync(reply.byteLength);
+    }
+    sendMessage.call(this, ws, reply, this);
+  }
+
+  async addClient(ws) {
     this.shutdownGeneration += 1;
     clearTimeout(this.destroyTimer);
     this.destroyTimer = null;
@@ -961,10 +986,6 @@ export class CollaborationRoom {
 
     this.ensureClientState(ws);
     this.clients.add(ws);
-
-    if (shouldSendInitialSync) {
-      this.sendInitialSync(ws);
-    }
 
     const awarenessStates = this.awareness.getStates();
     if (awarenessStates.size > 0) {
@@ -1202,10 +1223,10 @@ export class CollaborationRoom {
         case MSG_SYNC: {
           const encoder = encoding.createEncoder();
           encoding.writeVarUint(encoder, MSG_SYNC);
-          syncProtocol.readSyncMessage(decoder, encoder, this.doc, ws);
-
-          if (encoding.length(encoder) > 1) {
-            sendMessage.call(this, ws, encoding.toUint8Array(encoder), this);
+          if (decoding.peekVarUint(decoder) === syncProtocol.messageYjsSyncStep1) {
+            this.replyToClientSync(ws, decoder, encoder);
+          } else {
+            syncProtocol.readSyncMessage(decoder, encoder, this.doc, ws);
           }
           break;
         }

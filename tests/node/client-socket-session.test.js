@@ -25,10 +25,10 @@ function createSocket() {
   return socket;
 }
 
-test('ClientSocketSession flushes queued messages and skips server-initiated initial sync after client sync', async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
+test('ClientSocketSession flushes queued messages in order and requests the client state', async () => {
   const socket = createSocket();
   const handledPayloads = [];
+  let syncRequests = 0;
   let addClientResolved;
   const addClientPromise = new Promise((resolve) => {
     addClientResolved = resolve;
@@ -42,9 +42,7 @@ test('ClientSocketSession flushes queued messages and skips server-initiated ini
     removeClient: () => {
       throw new Error('removeClient should not be called');
     },
-    sendInitialSync: () => {
-      throw new Error('sendInitialSync should not be called');
-    },
+    requestClientSync: () => { syncRequests += 1; },
   };
 
   const session = new ClientSocketSession({
@@ -59,39 +57,9 @@ test('ClientSocketSession flushes queued messages and skips server-initiated ini
   socket.emit('message', queuedPayload);
   addClientResolved();
   await initialization;
-  t.mock.timers.tick(1);
-
   assert.deepEqual(handledPayloads, [createSyncMessage(), queuedPayload]);
+  assert.equal(syncRequests, 1);
 });
-
-for (const clientSyncFirst of [true, false]) {
-  test(`ClientSocketSession handles client sync ${clientSyncFirst ? 'before' : 'after'} the initial sync timer`, async (t) => {
-    t.mock.timers.enable({ apis: ['setTimeout'] });
-    const socket = createSocket();
-    const handledPayloads = [];
-    let initialSyncCount = 0;
-    const room = {
-      clients: new Set([socket]),
-      addClient: async () => {},
-      handleMessage: (_ws, payload) => handledPayloads.push(payload),
-      removeClient: () => {},
-      sendInitialSync: () => { initialSyncCount += 1; },
-    };
-    const session = new ClientSocketSession({ room, roomName: 'notes.md', ws: socket });
-    t.after(() => session.detach());
-    await session.initialize();
-
-    if (!clientSyncFirst) {
-      t.mock.timers.tick(1);
-      assert.equal(initialSyncCount, 1);
-    }
-    socket.emit('message', createSyncMessage());
-    t.mock.timers.tick(1);
-
-    assert.equal(initialSyncCount, clientSyncFirst ? 0 : 1);
-    assert.deepEqual(handledPayloads, [createSyncMessage()]);
-  });
-}
 
 test('ClientSocketSession removes room client when socket closes before room initialization finishes', async () => {
   const socket = createSocket();
@@ -108,7 +76,7 @@ test('ClientSocketSession removes room client when socket closes before room ini
     removeClient: (ws) => {
       removedSockets.push(ws);
     },
-    sendInitialSync: () => {},
+    requestClientSync: () => {},
   };
 
   const session = new ClientSocketSession({
@@ -141,7 +109,7 @@ test('expired authentication closes the socket and rejects messages during pendi
     addClient: () => pendingRoom,
     handleMessage: (_ws, message) => handled.push(message),
     removeClient: (ws) => removed.push(ws),
-    sendInitialSync: () => assert.fail('Expired session must not sync'),
+    requestClientSync: () => assert.fail('Expired session must not sync'),
   };
   const session = new ClientSocketSession({ expiresAt: 1_100, room, roomName: 'test.md', ws: socket });
   const initializing = session.initialize();
@@ -164,7 +132,7 @@ test('long-lived sessions expire without overflowing the timer or accepting late
     addClient: async () => {},
     handleMessage: (_ws, message) => handled.push(message),
     removeClient: (ws) => room.clients.delete(ws),
-    sendInitialSync: () => {},
+    requestClientSync: () => {},
   };
   const expiresAt = 1_000 + 2 ** 31 + 100;
   const session = new ClientSocketSession({ expiresAt, room, roomName: 'test.md', ws: socket });

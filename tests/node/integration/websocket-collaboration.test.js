@@ -7,6 +7,7 @@ import WebSocket from 'ws';
 import * as Y from 'yjs';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import * as decoding from 'lib0/decoding';
+import * as syncProtocol from 'y-protocols/sync';
 import * as encoding from 'lib0/encoding';
 import { WebsocketProvider } from 'y-websocket';
 
@@ -429,40 +430,78 @@ test('WebSocket collaboration preserves Yjs history across short reconnect gaps'
 });
 
 for (const waitForServerSync of [false, true]) {
-  test(`WebSocket collaboration preserves content when client syncs ${waitForServerSync ? 'after server sync' : 'immediately'}`, async (t) => {
+  test(`WebSocket sends one sync response when the client requests sync ${waitForServerSync ? 'after the server request' : 'on open'}`, async (t) => {
     const app = await startTestServer();
     t.after(() => app.close());
 
     const clientDoc = new Y.Doc();
     t.after(() => clientDoc.destroy());
-    let syncMessageCount = 0;
+    const receivedSyncTypes = [];
     const ws = new WebSocket(app.wsUrl('test.md'));
     ws.on('message', (data) => {
       if (getMessageType(data) === MSG_SYNC) {
-        syncMessageCount += 1;
-        applySyncMessageToDoc(data, clientDoc, ws);
+        const decoder = decoding.createDecoder(data);
+        decoding.readVarUint(decoder);
+        receivedSyncTypes.push(decoding.readVarUint(decoder));
+        const reply = applySyncMessageToDoc(data, clientDoc, ws);
+        if (reply) ws.send(reply);
       }
     });
     t.after(async () => {
       ws.close();
-      await Promise.allSettled([waitForClose(ws)]);
+      await waitForClose(ws);
     });
 
     await waitForOpen(ws);
     if (waitForServerSync) {
-      await waitForCondition(() => syncMessageCount === 1);
+      await waitForCondition(() => receivedSyncTypes.includes(syncProtocol.messageYjsSyncStep1));
+      assert.deepEqual(receivedSyncTypes, [syncProtocol.messageYjsSyncStep1]);
     }
     const ackPromise = waitForMessage(ws, (data) => getMessageType(data) === MSG_AGENT_FLUSH_ACK);
     ws.send(encodeSyncStep1Message(clientDoc));
     ws.send(encodeRoomFlushRequest('initial-sync'));
     await ackPromise;
+    await waitForCondition(() => receivedSyncTypes.includes(syncProtocol.messageYjsSyncStep1));
 
-    // The fallback can win the race with client SyncStep1; both updates must be safe to apply.
-    const room = app.server.roomRegistry.get('test.md');
-    assert.equal(syncMessageCount, room.debugMetrics.initialSyncCount + 1);
+    assert.deepEqual(receivedSyncTypes.sort(), [syncProtocol.messageYjsSyncStep1, syncProtocol.messageYjsSyncStep2]);
+    assert.equal(app.server.roomRegistry.get('test.md').debugMetrics.initialSyncCount, 1);
     assert.equal(clientDoc.getText('codemirror').toString(), '# Test\n\nHello from test vault.\n');
   });
 }
+
+test('WebSocket waits for the secondary vault before upgrading and accepts the first client frame', async (t) => {
+  const app = await startTestServer({ vaults: [{ id: 'primary' }, { id: 'secondary' }] });
+  t.after(() => app.close());
+  const registry = app.server.vaultRegistry;
+  const getContext = registry.getOrCreateContextAsync.bind(registry);
+  const entered = Promise.withResolvers();
+  const ready = Promise.withResolvers();
+  registry.getOrCreateContextAsync = async (vaultId) => {
+    assert.equal(vaultId, 'secondary');
+    entered.resolve();
+    await ready.promise;
+    return getContext(vaultId);
+  };
+
+  const ws = new WebSocket(`ws://127.0.0.1:${app.port}${app.server.config.wsBasePath}/v/secondary/test.md`);
+  const open = waitForOpen(ws);
+  t.after(() => ws.terminate());
+  const doc = new Y.Doc();
+  t.after(() => doc.destroy());
+  const synced = waitForMessage(ws, (data) => {
+    const decoder = decoding.createDecoder(data);
+    return decoding.readVarUint(decoder) === MSG_SYNC
+      && decoding.readVarUint(decoder) === syncProtocol.messageYjsSyncStep2;
+  });
+  ws.once('open', () => ws.send(encodeSyncStep1Message(doc)));
+
+  await entered.promise;
+  assert.equal(ws.readyState, WebSocket.CONNECTING);
+  ready.resolve();
+  await open;
+  applySyncMessageToDoc(await synced, doc);
+  assert.equal(doc.getText('codemirror').toString(), '# secondary\n');
+});
 
 test('Renaming an active room keeps persistence on the new path', async (t) => {
   const app = await startTestServer();
@@ -597,8 +636,6 @@ test('WebSocket collaboration persists excalidraw room content to .excalidraw fi
   });
 
   await waitForOpen(ws);
-  const initialSync = await waitForMessage(ws, (data) => getMessageType(data) === MSG_SYNC);
-
   const syncedSceneJson = JSON.stringify({
     appState: { gridSize: null, viewBackgroundColor: '#ffffff' },
     elements: [{ id: 'shape-1', type: 'rectangle' }],
@@ -609,10 +646,8 @@ test('WebSocket collaboration persists excalidraw room content to .excalidraw fi
   });
 
   const clientDoc = new Y.Doc();
-  const syncReply = applySyncMessageToDoc(initialSync, clientDoc, ws);
-  if (syncReply) {
-    ws.send(syncReply);
-  }
+  t.after(() => clientDoc.destroy());
+  await syncClientDocWithRoom(ws, clientDoc);
 
   clientDoc.transact(() => {
     replaceExcalidrawRoomScene(clientDoc, JSON.parse(syncedSceneJson));

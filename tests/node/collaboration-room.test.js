@@ -7,8 +7,9 @@ import * as syncProtocol from 'y-protocols/sync';
 import * as Y from 'yjs';
 
 import { CollaborationRoom } from '../../src/server/domain/collaboration/collaboration-room.js';
+import { encodeSyncStep1Message } from './helpers/collaboration-protocol.js';
 import { RoomRegistry } from '../../src/server/domain/collaboration/room-registry.js';
-import { createCommentThreadSharedType } from '../../src/domain/comment-threads.js';
+import { createCommentThreadSharedType, serializeCommentThread } from '../../src/domain/comment-threads.js';
 import {
   EXCALIDRAW_ELEMENTS_KEY,
   EXCALIDRAW_META_KEY,
@@ -40,6 +41,12 @@ function createSocket({ bufferedAmount = 0 } = {}) {
   };
 }
 
+function requestInitialSync(room, socket) {
+  const clientDoc = new Y.Doc();
+  room.handleMessage(socket, encodeSyncStep1Message(clientDoc));
+  clientDoc.destroy();
+}
+
 function getSyncSubmessageType(payload) {
   const decoder = decoding.createDecoder(payload);
   const messageType = decoding.readVarUint(decoder);
@@ -63,6 +70,7 @@ test('CollaborationRoom coalesces rapid awareness updates into one broadcast', a
   const second = createSocket();
   await room.addClient(first);
   await room.addClient(second);
+  requestInitialSync(room, second);
   assert.equal(getMessageType(second.sent[0]), 0);
 
   const remoteDoc = new Y.Doc();
@@ -330,6 +338,7 @@ test('CollaborationRoom allows a single oversized initial sync frame from an emp
   };
 
   await room.addClient(client);
+  requestInitialSync(room, client);
 
   assert.equal(client.sent.length, 1);
   assert.equal(getSyncSubmessageType(client.sent[0]), syncProtocol.messageYjsSyncStep2);
@@ -628,6 +637,8 @@ test('CollaborationRoom reuses cached initial sync payload until the document ch
 
   await room.addClient(socketA);
   await room.addClient(socketB);
+  requestInitialSync(room, socketA);
+  requestInitialSync(room, socketB);
   assert.equal(socketA.sent.length, 1);
   assert.equal(socketB.sent.length, 1);
   assert.equal(socketA.sent[0], socketB.sent[0]);
@@ -637,6 +648,7 @@ test('CollaborationRoom reuses cached initial sync payload until the document ch
   }, 'test-cache-invalidate');
 
   await room.addClient(socketC);
+  requestInitialSync(room, socketC);
   assert.equal(socketC.sent.length, 1);
   assert.notEqual(socketA.sent[0], socketC.sent[0]);
 });
@@ -673,7 +685,9 @@ test('CollaborationRoom emits perf logs for hydrate and initial sync when enable
     },
   });
 
-  await room.addClient(createSocket());
+  const socket = createSocket();
+  await room.addClient(socket);
+  requestInitialSync(room, socket);
   await Promise.resolve();
 
   const roomPerfLogs = perfLogs.filter((line) => line.includes('[perf][room:perf-room.md]'));
@@ -704,7 +718,9 @@ test('CollaborationRoom logs oversized initial sync payloads', async (t) => {
     },
   });
 
-  await room.addClient(createSocket());
+  const socket = createSocket();
+  await room.addClient(socket);
+  requestInitialSync(room, socket);
 
   assert.ok(warnings.some((line) => (
     line.includes('[room:large-sync-room.md]')
@@ -775,7 +791,8 @@ test('CollaborationRoom persists markdown comment threads without rewriting unch
   const hydratedThreads = room.doc.getArray('comments').toArray();
   assert.equal(hydratedThreads.length, 1);
   assert.equal(hydratedThreads[0].get('id'), 'thread-1');
-  assert.deepEqual(hydratedThreads[0].get('messages').toArray()[0].reactions, [{
+  assert.equal(hydratedThreads[0].get('messages').get(0).reactions, undefined);
+  assert.deepEqual(serializeCommentThread(hydratedThreads[0]).messages[0].reactions, [{
     emoji: '👍',
     users: [{
       reactedAt: 1,
