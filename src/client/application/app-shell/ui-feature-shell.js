@@ -1,5 +1,5 @@
 import { getVaultFileKind, supportsBacklinksForFilePath } from '../../../domain/file-kind.js';
-import { revealDisclosureAncestors } from '../../browser-utils.js';
+import { copyTextToClipboard, revealDisclosureAncestors } from '../../browser-utils.js';
 import { isPlainQuickSwitcherShortcut } from '../../domain/keyboard-shortcuts.js';
 import { createFileRouteHash, isCollabMdHashRoute, isGitHashRouteType } from '../../domain/hash-routes.js';
 
@@ -500,10 +500,6 @@ function scrollPreviewToTarget(previewContainer, target, { behavior = 'smooth' }
     behavior,
     top: Math.max(nextScrollTop, 0),
   });
-}
-
-async function copyTextToClipboard(text) {
-  await navigator.clipboard.writeText(text);
 }
 
 function getHeadingLinkLabel(heading) {

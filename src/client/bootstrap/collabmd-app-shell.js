@@ -21,11 +21,11 @@ import { uiFeatureSidebarMethods } from '../application/app-shell/ui-feature-sid
 import { uiFeatureTabActivityMethods } from '../application/app-shell/ui-feature-tab-activity.js';
 import { uiFeatureToolbarMethods } from '../application/app-shell/ui-feature-toolbar.js';
 import { workspaceFeature } from '../application/app-shell/workspace-feature.js';
+import { browserNotifications } from '../browser-utils.js';
 import { LOBBY_CHAT_MESSAGE_MAX_LENGTH } from '../domain/lobby-chat.js';
-import { agentConnectionApiClient } from '../infrastructure/agent-connection-api-client.js';
+import { apiRequest } from '../infrastructure/api-client-utils.js';
 import { BrowserPreferencesPort } from '../infrastructure/browser-preferences-port.js';
 import { hostedApiClient } from '../infrastructure/hosted-api-client.js';
-import { BrowserNotificationPort } from '../infrastructure/browser-notification-port.js';
 import { AppVersionMonitor } from '../infrastructure/app-version-monitor.js';
 import { gitApiClient } from '../infrastructure/git-api-client.js';
 import {
@@ -124,7 +124,7 @@ export class CollabMdAppShell {
       navigateToGitHistory,
     };
     this.preferences = new BrowserPreferencesPort();
-    this.notifications = new BrowserNotificationPort();
+    this.notifications = browserNotifications;
     this.gitApiClient = gitApiClient;
     this.vaultApiClient = vaultApiClient;
     this._session = null;
@@ -168,7 +168,11 @@ export class CollabMdAppShell {
     this.toastController = new ToastController(this.elements.toastContainer);
     this.chatToastController = new ToastController(this.elements.chatToastContainer);
     this.agentConnectionController = new AgentConnectionController({
-      apiClient: agentConnectionApiClient,
+      apiClient: {
+        createConnection: (payload) => apiRequest('/agent/connections', { body: payload, fallback: 'Failed to create Agent Connection', method: 'POST' }),
+        listConnections: () => apiRequest('/agent/connections', { fallback: 'Failed to load Agent Connections' }),
+        revokeConnection: (id) => apiRequest(`/agent/connections/${encodeURIComponent(id)}`, { fallback: 'Failed to revoke Agent Connection', method: 'DELETE' }),
+      },
       closeToolbarMenu: () => this.closeToolbarOverflowMenu(),
       content: this.elements.agentConnectionContent,
       dialog: this.elements.agentConnectionDialog,
