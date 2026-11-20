@@ -1,3 +1,4 @@
+import { replacePathPrefix } from '../../domain/vault-paths.js';
 import {
   getVaultFileExtension,
   isVaultFilePath,
@@ -21,14 +22,6 @@ import { createFileRouteHash } from '../domain/hash-routes.js';
 import { getActiveVaultId } from '../domain/runtime-paths.js';
 import { buttonClassNames } from './components/ui/button.js';
 import { CreateMenuPresenter } from './create-menu-presenter.js';
-
-function replacePathPrefix(pathValue, oldPrefix, newPrefix) {
-  if (pathValue === oldPrefix) {
-    return newPrefix;
-  }
-
-  return `${newPrefix}${pathValue.slice(oldPrefix.length)}`;
-}
 
 function formatCount(value, singularLabel, pluralLabel) {
   return `${value} ${value === 1 ? singularLabel : pluralLabel}`;

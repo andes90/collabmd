@@ -2,6 +2,18 @@ function getWindowRef() {
   return typeof window === 'undefined' ? globalThis : window;
 }
 
+export function replaceChildrenFromHtml(target, html) {
+  const markup = String(html ?? '');
+  if (typeof DOMParser === 'function' && typeof target?.replaceChildren === 'function') {
+    const parsed = new DOMParser().parseFromString(`<body>${markup}</body>`, 'text/html');
+    target.replaceChildren(...parsed.body.childNodes);
+    return;
+  }
+
+  // Node tests use lightweight DOM doubles without parsing APIs.
+  Reflect.set(target, 'innerHTML', markup);
+}
+
 export function revealDisclosureAncestors(target) {
   for (let details = target.parentElement?.closest('details'); details; details = details.parentElement?.closest('details')) {
     if (!details.open && !details.querySelector(':scope > summary')?.contains(target)) {

@@ -24,29 +24,39 @@ function normalizeYouTubeVideoId(candidate = '') {
   return /^[A-Za-z0-9_-]{11}$/u.test(normalized) ? normalized : null;
 }
 
-function getCanonicalYouTubeEmbedUrl(url) {
-  const host = url.hostname.toLowerCase();
-  let videoId = null;
-
-  if (host === 'youtu.be' || host === 'www.youtu.be') {
-    videoId = normalizeYouTubeVideoId(url.pathname.split('/').filter(Boolean)[0] || '');
-  } else if (host.includes('youtube') || host.includes('youtube-nocookie')) {
-    if (url.pathname === '/watch') {
-      videoId = normalizeYouTubeVideoId(url.searchParams.get('v') || '');
-    } else if (url.pathname.startsWith('/embed/')) {
-      videoId = normalizeYouTubeVideoId(url.pathname.split('/').filter(Boolean)[1] || '');
-    }
-  }
-
-  return videoId ? `https://www.youtube-nocookie.com/embed/${videoId}` : null;
-}
-
 function parseVideoUrl(source = '') {
   try {
     return new URL(String(source || '').trim());
   } catch {
     return null;
   }
+}
+
+export function extractYouTubeVideoId(source = '') {
+  const url = source instanceof URL ? source : parseVideoUrl(source);
+  if (!url) return '';
+
+  const host = url.hostname.toLowerCase();
+  if (host === 'youtu.be' || host === 'www.youtu.be') {
+    return url.pathname.split('/').filter(Boolean)[0] || '';
+  }
+
+  if (host.includes('youtube') || host.includes('youtube-nocookie')) {
+    if (url.pathname === '/watch') {
+      return url.searchParams.get('v') || '';
+    }
+
+    if (url.pathname.startsWith('/embed/')) {
+      return url.pathname.split('/').filter(Boolean)[1] || '';
+    }
+  }
+
+  return '';
+}
+
+function getCanonicalYouTubeEmbedUrl(url) {
+  const videoId = normalizeYouTubeVideoId(extractYouTubeVideoId(url));
+  return videoId ? `https://www.youtube-nocookie.com/embed/${videoId}` : null;
 }
 
 export function isPublicVideoEmbedCandidate(source = '') {

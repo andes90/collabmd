@@ -7,22 +7,10 @@ import {
   segmentedButtonClassNames,
   segmentedControlClassNames,
 } from './components/ui/button.js';
-import { downloadBlob, parseDownloadFileName } from '../browser-utils.js';
+import { downloadBlob, parseDownloadFileName, replaceChildrenFromHtml } from '../browser-utils.js';
 
 function createShellKey() {
   return `base-${crypto.randomUUID()}`;
-}
-
-function replaceChildrenFromHtml(target, html) {
-  const markup = String(html ?? '');
-  if (typeof DOMParser === 'function' && typeof target?.replaceChildren === 'function') {
-    const parsed = new DOMParser().parseFromString(`<body>${markup}</body>`, 'text/html');
-    target.replaceChildren(...parsed.body.childNodes);
-    return;
-  }
-
-  // Node tests use lightweight DOM doubles without parsing APIs.
-  Reflect.set(target, 'innerHTML', markup);
 }
 
 function insertAfterFromHtml(target, html) {

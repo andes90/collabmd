@@ -18,12 +18,13 @@ import {
 } from '../application/preview-diagram-utils.js';
 import { isMarkdownFilePath, stripVaultFileExtension } from '../../domain/file-kind.js';
 import { resolveVaultRelativePath } from '../../domain/vault-paths.js';
+import { extractYouTubeVideoId } from '../../domain/video-embed.js';
 import { resolveWikiTargetPath } from '../../domain/wiki-link-resolver.js';
 import { createExcalidrawExportOptions, parseSceneJson } from '../domain/excalidraw-scene.js';
 import { escapeHtml } from '../domain/vault-utils.js';
 import { hasRenderedMath } from '../domain/markdown-math.js';
 import { prepareMermaidRenderSource } from '../domain/mermaid-source.js';
-import { downloadBlob } from '../browser-utils.js';
+import { downloadBlob, replaceChildrenFromHtml } from '../browser-utils.js';
 import { resolveApiUrl, resolveAppUrl } from '../infrastructure/runtime-config.js';
 import { parseApiResponse } from '../infrastructure/api-client-utils.js';
 
@@ -189,11 +190,6 @@ function rewriteDirectoryDocumentLinks(container, { fileList, sourceFilePath }) 
     link.removeAttribute('target');
     link.removeAttribute('rel');
   });
-}
-
-function replaceChildrenFromHtml(target, html) {
-  const parsed = new DOMParser().parseFromString(`<body>${String(html ?? '')}</body>`, 'text/html');
-  target.replaceChildren(...parsed.body.childNodes);
 }
 
 const DOCX_WHITESPACE_BLOCK_TAGS = new Set([
@@ -399,32 +395,6 @@ function buildWikiLinkHref(target) {
   const baseUrl = new URL(resolveAppUrl('/'), window.location.origin);
   baseUrl.hash = new URLSearchParams({ file: target }).toString();
   return baseUrl.toString();
-}
-
-function extractYouTubeVideoId(source = '') {
-  let url;
-  try {
-    url = new URL(String(source || '').trim());
-  } catch {
-    return '';
-  }
-
-  const host = url.hostname.toLowerCase();
-  if (host === 'youtu.be' || host === 'www.youtu.be') {
-    return url.pathname.split('/').filter(Boolean)[0] || '';
-  }
-
-  if (host.includes('youtube') || host.includes('youtube-nocookie')) {
-    if (url.pathname === '/watch') {
-      return url.searchParams.get('v') || '';
-    }
-
-    if (url.pathname.startsWith('/embed/')) {
-      return url.pathname.split('/').filter(Boolean)[1] || '';
-    }
-  }
-
-  return '';
 }
 
 function createVideoPosterElement(element, {

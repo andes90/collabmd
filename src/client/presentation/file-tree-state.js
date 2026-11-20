@@ -1,4 +1,5 @@
 import { isImageAttachmentFilePath } from '../../domain/file-kind.js';
+import { replacePathPrefix } from '../../domain/vault-paths.js';
 import { normalizeVaultPathInput } from '../domain/vault-paths.js';
 
 export function flattenTree(nodes, files = [], searchEntries = [], fileEntries = []) {
@@ -65,14 +66,6 @@ function countDirectoryDescendants(node) {
   }
 
   return { directoryCount, fileCount };
-}
-
-function replacePathPrefix(pathValue, oldPrefix, newPrefix) {
-  if (pathValue === oldPrefix) {
-    return newPrefix;
-  }
-
-  return `${newPrefix}${pathValue.slice(oldPrefix.length)}`;
 }
 
 export class FileTreeState {

@@ -39,3 +39,11 @@ export function resolveVaultRelativePath(fromFilePath = '', relativePath = '') {
 
   return resolvedSegments.join('/');
 }
+
+export function replacePathPrefix(pathValue, oldPrefix, newPrefix) {
+  if (pathValue === oldPrefix) {
+    return newPrefix;
+  }
+
+  return `${newPrefix}${pathValue.slice(oldPrefix.length)}`;
+}

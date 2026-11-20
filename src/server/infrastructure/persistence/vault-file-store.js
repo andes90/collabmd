@@ -12,6 +12,7 @@ import {
   supportsCommentsForFilePath,
 } from '../../../domain/file-kind.js';
 import { parseCanvasJson } from '../../../domain/canvas-room-codec.js';
+import { replacePathPrefix } from '../../../domain/vault-paths.js';
 import { createCommentOverview } from '../../domain/comment-overview.js';
 import { scanWorkspaceState as scanWorkspaceStateFromAdapter } from '../../domain/workspace-state.js';
 import {
@@ -105,14 +106,6 @@ async function pathExists(pathValue) {
 
     throw error;
   }
-}
-
-function replacePathPrefix(pathValue, oldPrefix, newPrefix) {
-  if (pathValue === oldPrefix) {
-    return newPrefix;
-  }
-
-  return `${newPrefix}${pathValue.slice(oldPrefix.length)}`;
 }
 
 function collectAncestorDirectoryPaths(pathValue) {
