@@ -24,7 +24,7 @@ export function createPasswordStrategy(authConfig, sessionCookieManager, clientC
   const expectedPasswordHash = hashPassword(authConfig.password);
 
   function hasValidSession(req) {
-    const session = sessionCookieManager.readSession(req);
+    const session = sessionCookieManager.read(req);
     return session?.strategy === AUTH_STRATEGY_PASSWORD && !hasExpiredSession(session);
   }
 
@@ -32,7 +32,7 @@ export function createPasswordStrategy(authConfig, sessionCookieManager, clientC
     clearSession(req) {
       return createResponse(200, { ok: true }, {
         kind: 'logout_ok',
-        setCookie: sessionCookieManager.clearSession(req),
+        setCookie: sessionCookieManager.clear(req),
       });
     },
 
@@ -62,7 +62,7 @@ export function createPasswordStrategy(authConfig, sessionCookieManager, clientC
         user: null,
       }, {
         kind: 'session_created',
-        setCookie: sessionCookieManager.createSessionCookie(req, {
+        setCookie: sessionCookieManager.create(req, {
           authenticatedAt: Date.now(),
           ...(Number.isFinite(expiresAt) ? { expiresAt } : {}),
           strategy: AUTH_STRATEGY_PASSWORD,
@@ -122,7 +122,7 @@ export function createOidcStrategy(authConfig, sessionCookieManager, flowCookieM
   function clearOidcCookies(req, includeSession = true) {
     const cookies = [flowCookieManager.clear(req)];
     if (includeSession) {
-      cookies.unshift(sessionCookieManager.clearSession(req));
+      cookies.unshift(sessionCookieManager.clear(req));
     }
     return cookies;
   }
@@ -272,7 +272,7 @@ export function createOidcStrategy(authConfig, sessionCookieManager, flowCookieM
           kind: 'redirect',
           redirectTo: returnTo,
           setCookie: [
-            sessionCookieManager.createSessionCookie(req, {
+            sessionCookieManager.create(req, {
               authenticatedAt: Date.now(),
               expiresAt,
               strategy: AUTH_STRATEGY_OIDC,

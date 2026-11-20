@@ -1,4 +1,4 @@
-import { createSessionCookieManager, createSignedCookieManager } from './session-cookie.js';
+import { createSignedCookieManager } from './session-cookie.js';
 import {
   AUTH_STRATEGY_NONE,
   AUTH_STRATEGY_OIDC,
@@ -42,7 +42,7 @@ export function createAuthService(config) {
   const clientConfig = buildClientConfig(authConfig, {
     basePath: config.basePath ?? '',
   });
-  const sessionCookieManager = createSessionCookieManager({
+  const sessionCookieManager = createSignedCookieManager({
     cookieName: authConfig.sessionCookieName,
     cookiePath: config.basePath || '/',
     secret: authConfig.sessionSecret,
@@ -100,7 +100,7 @@ export function createAuthService(config) {
       }
       if (strategy.isAuthenticated(req)) {
         const expiresAt = authConfig.strategy === AUTH_STRATEGY_NONE
-          ? null : sessionCookieManager.readSession(req)?.expiresAt;
+          ? null : sessionCookieManager.read(req)?.expiresAt;
         return { ok: true, expiresAt: Number.isFinite(expiresAt) ? expiresAt : null };
       }
 

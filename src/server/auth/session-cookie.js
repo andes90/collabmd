@@ -39,32 +39,6 @@ function hasSecureRequestHeaders(req) {
   return forwardedProto === 'https';
 }
 
-export function createSessionCookieManager({
-  cookieName,
-  cookiePath = '/',
-  secret,
-}) {
-  const signedCookieManager = createSignedCookieManager({
-    cookieName,
-    cookiePath,
-    secret,
-  });
-
-  return {
-    clearSession(req) {
-      return signedCookieManager.clear(req);
-    },
-
-    createSessionCookie(req, payload, options = {}) {
-      return signedCookieManager.create(req, payload, options);
-    },
-
-    readSession(req) {
-      return signedCookieManager.read(req);
-    },
-  };
-}
-
 export function createSignedCookieManager({
   cookieName,
   cookiePath = '/',

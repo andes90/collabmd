@@ -131,7 +131,7 @@ export function hasExpiredSession(session) {
 }
 
 export function readAuthenticatedOidcSession(sessionCookieManager, req) {
-  const session = sessionCookieManager.readSession(req);
+  const session = sessionCookieManager.read(req);
   if (session?.strategy !== AUTH_STRATEGY_OIDC) {
     return null;
   }

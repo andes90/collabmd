@@ -3,16 +3,16 @@ import test from 'node:test';
 import { connect } from 'node:net';
 import WebSocket from 'ws';
 
-import { createSessionCookieManager } from '../../../src/server/auth/session-cookie.js';
+import { createSignedCookieManager } from '../../../src/server/auth/session-cookie.js';
 import { startTestServer, waitForCondition } from '../helpers/test-server.js';
 import { waitForClose, waitForOpen, waitForUnexpectedResponse } from '../helpers/collaboration-protocol.js';
 
 function createCookie(app, expiresAt = Date.now() + 60_000) {
   const auth = app.server.config.auth;
-  return createSessionCookieManager({
+  return createSignedCookieManager({
     cookieName: auth.sessionCookieName,
     secret: auth.sessionSecret,
-  }).createSessionCookie({ headers: {} }, {
+  }).create({ headers: {} }, {
     expiresAt,
     strategy: auth.strategy,
     user: { email: 'member@example.com', name: 'Member', sub: 'google-1' },

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createSessionCookieManager, createSignedCookieManager } from '../../src/server/auth/session-cookie.js';
+import { createSignedCookieManager } from '../../src/server/auth/session-cookie.js';
 
 function createCookieHeader(manager, payload) {
   const setCookie = manager.create({ headers: {} }, payload);
@@ -35,15 +35,15 @@ test('signed cookie reads reject forged signatures', () => {
   assert.equal(manager.read({ headers: {} }), null);
 });
 
-test('session cookie manager round-trips through the signed manager', () => {
-  const manager = createSessionCookieManager({
+test('signed cookie manager caches reads per request across strategy payloads', () => {
+  const manager = createSignedCookieManager({
     cookieName: 'session',
     secret: 'test-secret',
   });
-  const setCookie = manager.createSessionCookie({ headers: {} }, { strategy: 'password' });
+  const setCookie = manager.create({ headers: {} }, { strategy: 'password' });
   const req = { headers: { cookie: String(setCookie).split(';')[0] } };
 
-  const first = manager.readSession(req);
+  const first = manager.read(req);
   assert.deepEqual(first, { strategy: 'password' });
-  assert.ok(first === manager.readSession(req));
+  assert.ok(first === manager.read(req));
 });
