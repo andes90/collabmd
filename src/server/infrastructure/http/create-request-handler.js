@@ -6,6 +6,7 @@ import { createGitApiCommandHandler } from './create-git-api-command-handler.js'
 import { createGitApiQueryHandler } from './create-git-api-query-handler.js';
 import { createHostedApiHandler } from './create-hosted-api-handler.js';
 import { createStaticHandler } from './create-static-handler.js';
+import { createTestApiHandler } from './create-test-api-handler.js';
 import { createStructurizrApiHandler } from './create-structurizr-api-handler.js';
 import { createVaultApiCommandHandler } from './create-vault-api-command-handler.js';
 import { createVaultApiQueryHandler } from './create-vault-api-query-handler.js';
@@ -53,7 +54,7 @@ async function handlePlantUmlApi(req, res, requestUrl, plantUmlRenderer) {
   return true;
 }
 
-export function createRequestHandler(
+export function createRequestHandler({
   config,
   authService,
   vaultFileStore,
@@ -72,7 +73,7 @@ export function createRequestHandler(
   structurizrWorkspaceService = null,
   agentIntegration = null,
   vaultRegistry = null,
-) {
+}) {
   const handleStaticRequest = createStaticHandler(config, authService, searchService);
   const handleAuthApi = createAuthApiHandler({ authService });
   const handleHostedApi = createHostedApiHandler({
@@ -80,7 +81,6 @@ export function createRequestHandler(
     githubSetupFlow,
     hostedWorkspaceService,
   });
-  // ponytail: one builder for legacy primary paths and scoped vaults; only the parts differ
   const vaultHandlerCache = new Map();
   function getVaultHandlers(id, parts) {
     let handlers = vaultHandlerCache.get(id);
@@ -138,6 +138,30 @@ export function createRequestHandler(
       })
     : async () => false;
 
+  const handleTestEndpoints = createTestApiHandler({
+    backlinkIndex,
+    fileSystemSyncService,
+    nodeEnv: config.nodeEnv,
+    roomRegistry,
+    testControls,
+    workspaceMutationCoordinator,
+  });
+
+  async function handleVaultApi(req, res, route, handlers, vaultGitService) {
+    if (await handlers.query(req, res, route) || await handlers.command(req, res, route)) {
+      return true;
+    }
+    if (route.pathname !== '/api/git' && !route.pathname.startsWith('/api/git/')) {
+      return false;
+    }
+    if (!vaultGitService) {
+      jsonResponse(req, res, 503, { error: 'Git integration is not configured' });
+    } else if (!await handlers.gitQuery(req, res, route) && !await handlers.gitCommand(req, res, route)) {
+      jsonResponse(req, res, 404, { error: 'Git API endpoint not found' });
+    }
+    return true;
+  }
+
   function parseVaultScope(pathname) {
     if (!pathname.startsWith('/api/v/')) {
       return null;
@@ -157,7 +181,8 @@ export function createRequestHandler(
   async function handleVaultScopedApi(req, res, requestUrl) {
     const scope = parseVaultScope(requestUrl.pathname);
     if (!scope || !vaultRegistry) {
-      return false;
+      jsonResponse(req, res, 404, { error: 'Vault API endpoint not found' });
+      return;
     }
     let context;
     try {
@@ -166,26 +191,11 @@ export function createRequestHandler(
       jsonResponse(req, res, error?.statusCode || 500, { error: error?.message || 'Vault unavailable' });
       return true;
     }
-    const subUrl = new URL(requestUrl.toString());
-    subUrl.pathname = scope.subPath;
+    const route = { pathname: scope.subPath, searchParams: requestUrl.searchParams };
     const handlers = getVaultHandlers(context.def.id, context);
-    if (await handlers.query(req, res, subUrl)) {
-      return true;
+    if (!await handleVaultApi(req, res, route, handlers, context.gitService)) {
+      jsonResponse(req, res, 404, { error: 'Vault API endpoint not found' });
     }
-    if (await handlers.command(req, res, subUrl)) {
-      return true;
-    }
-    if (subUrl.pathname.startsWith('/api/git')) {
-      if (await handlers.gitQuery(req, res, subUrl)) {
-        return true;
-      }
-      if (await handlers.gitCommand(req, res, subUrl)) {
-        return true;
-      }
-      jsonResponse(req, res, 404, { error: 'Git API endpoint not found' });
-      return true;
-    }
-    return false;
   }
 
   function handleBasePathRedirect(req, res, originalRequestUrl) {
@@ -231,36 +241,6 @@ export function createRequestHandler(
     return false;
   }
 
-  async function handleTestEndpoints(req, res, requestUrl) {
-    if (config.nodeEnv !== 'test') {
-      return false;
-    }
-
-    if (requestUrl.pathname === '/api/test/reset-state' && req.method === 'POST') {
-      await fileSystemSyncService?.resetForExternalStateChange?.();
-      await roomRegistry?.reset?.();
-      await backlinkIndex?.build?.();
-      await workspaceMutationCoordinator?.initialize?.();
-      await fileSystemSyncService?.resetForExternalStateChange?.();
-      jsonResponse(req, res, 200, { ok: true });
-      return true;
-    }
-
-    if (requestUrl.pathname === '/api/test/hydrate-delay' && req.method === 'POST') {
-      const body = await parseJsonBody(req).catch(() => ({}));
-      testControls.wsRoomHydrateDelayMs = Math.max(0, Number(body?.delayMs) || 0);
-      await fileSystemSyncService?.resetForExternalStateChange?.();
-      await roomRegistry?.reset?.();
-      await backlinkIndex?.build?.();
-      await workspaceMutationCoordinator?.initialize?.();
-      await fileSystemSyncService?.resetForExternalStateChange?.();
-      jsonResponse(req, res, 200, { delayMs: testControls.wsRoomHydrateDelayMs, ok: true });
-      return true;
-    }
-
-    return false;
-  }
-
   return async function handleRequest(req, res) {
     const originalRequestUrl = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
 
@@ -300,7 +280,8 @@ export function createRequestHandler(
       return;
     }
 
-    if (requestUrl.pathname.startsWith('/api/') || handleStructurizrApi.requiresAuthorization(requestUrl)) {
+    const isApiPath = requestUrl.pathname === '/api' || requestUrl.pathname.startsWith('/api/');
+    if (isApiPath || handleStructurizrApi.requiresAuthorization(requestUrl)) {
       const authorization = authService.authorizeApiRequest(req);
       if (!authorization.ok) {
         jsonResponse(req, res, authorization.statusCode, authorization.body);
@@ -324,33 +305,15 @@ export function createRequestHandler(
       return;
     }
 
-    if (requestUrl.pathname.startsWith('/api/')) {
-      if (await handleVaultScopedApi(req, res, requestUrl)) {
-        return;
-      }
-      if (await primaryHandlers.query(req, res, requestUrl)) {
-        return;
-      }
-      if (await primaryHandlers.command(req, res, requestUrl)) {
-        return;
-      }
-      if (await handlePlantUmlApi(req, res, requestUrl, plantUmlRenderer)) {
-        return;
-      }
+    if (requestUrl.pathname === '/api/v' || requestUrl.pathname.startsWith('/api/v/')) {
+      await handleVaultScopedApi(req, res, requestUrl);
+      return;
     }
 
-    if (requestUrl.pathname.startsWith('/api/git')) {
-      if (!gitService) {
-        jsonResponse(req, res, 503, { error: 'Git integration is not configured' });
-        return;
-      }
-      if (await primaryHandlers.gitQuery(req, res, requestUrl)) {
-        return;
-      }
-      if (await primaryHandlers.gitCommand(req, res, requestUrl)) {
-        return;
-      }
-      jsonResponse(req, res, 404, { error: 'Git API endpoint not found' });
+    if (isApiPath) {
+      if (await handleVaultApi(req, res, requestUrl, primaryHandlers, gitService)) return;
+      if (await handlePlantUmlApi(req, res, requestUrl, plantUmlRenderer)) return;
+      jsonResponse(req, res, 404, { error: 'API endpoint not found' });
       return;
     }
 

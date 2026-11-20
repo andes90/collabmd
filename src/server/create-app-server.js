@@ -103,7 +103,7 @@ export function createAppServer(config = loadConfig()) {
     vaultFileStore,
     workspaceMutationCoordinator,
   });
-  const requestHandler = createRequestHandler(
+  const requestHandler = createRequestHandler({
     config,
     authService,
     vaultFileStore,
@@ -120,12 +120,12 @@ export function createAppServer(config = loadConfig()) {
     hostedWorkspaceService,
     githubSetupFlow,
     structurizrWorkspaceService,
-    {
+    agentIntegration: {
       connectionService: agentConnectionService,
       contentService: agentContentService,
     },
     vaultRegistry,
-  );
+  });
   const httpServer = createServer((req, res) => {
     requestHandler(req, res).catch((error) => {
       console.error('[http] Unhandled request error:', error.message);

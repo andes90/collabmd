@@ -45,6 +45,7 @@ function httpRequest(url, { method = 'GET', headers = {}, body } = {}) {
       res.on('end', () => {
         resolve({
           body: Buffer.concat(chunks).toString('utf-8'),
+          headers: res.headers,
           statusCode: res.statusCode,
         });
       });
@@ -97,6 +98,12 @@ test('vault routing lists vaults and isolates file trees', async (t) => {
 
   const unknownResponse = await httpRequest(`${app.baseUrl}/api/v/gamma/files`);
   assert.equal(unknownResponse.statusCode, 404);
+  for (const path of ['/api/unknown', '/api/v/beta', '/api/v/beta/unknown', '/api/v/beta/test/reset-state']) {
+    const response = await httpRequest(`${app.baseUrl}${path}`, { method: path.endsWith('reset-state') ? 'POST' : 'GET' });
+    assert.equal(response.statusCode, 404, path);
+    assert.match(response.headers['content-type'], /application\/json/);
+    assert.equal(typeof JSON.parse(response.body).error, 'string');
+  }
 });
 
 test('vault routing scopes writes to the addressed vault', async (t) => {
