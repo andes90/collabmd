@@ -2,6 +2,14 @@ function getWindowRef() {
   return typeof window === 'undefined' ? globalThis : window;
 }
 
+export function revealDisclosureAncestors(target) {
+  for (let details = target.parentElement?.closest('details'); details; details = details.parentElement?.closest('details')) {
+    if (!details.open && !details.querySelector(':scope > summary')?.contains(target)) {
+      details.open = true;
+    }
+  }
+}
+
 export function pickFiles({ accept = '', multiple = false } = {}) {
   return new Promise((resolve) => {
     const input = document.createElement('input');

@@ -1,6 +1,7 @@
 import { resolveVaultRelativePath } from '../../domain/vault-paths.js';
 import { resolveWikiTargetPath } from '../../domain/wiki-link-resolver.js';
 import { PreviewRenderer } from '../application/preview-renderer.js';
+import { revealDisclosureAncestors } from '../browser-utils.js';
 import { canvasFilePath } from '../domain/canvas-view.js';
 import { BasesPreviewController } from '../presentation/bases-preview-controller.js';
 import { DrawioEmbedController } from '../presentation/drawio-embed-controller.js';
@@ -58,9 +59,14 @@ export function createCanvasMarkdownPreview({
       let anchor;
       try { anchor = decodeURIComponent(href.slice(1)); } catch { return; }
       const heading = [...previewElement.querySelectorAll('[id]')].find((entry) => entry.id === anchor);
-      if (heading) heading.scrollIntoView({ block: 'nearest' });
-      else if (!anchor || anchor === 'top') options.previewContainer.scrollTo({ top: 0 });
-      else onOpenFile(sourceFilePath, href);
+      if (heading) {
+        revealDisclosureAncestors(heading);
+        heading.scrollIntoView({ block: 'nearest' });
+      } else if (!anchor || anchor === 'top') {
+        options.previewContainer.scrollTo({ top: 0 });
+      } else {
+        onOpenFile(sourceFilePath, href);
+      }
     } else if (!/^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(href)) {
       event.preventDefault();
       const [target, anchor] = href.split('#');

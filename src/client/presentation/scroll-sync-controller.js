@@ -6,7 +6,7 @@ const LARGE_DOCUMENT_EDITOR_IDLE_MS = 120;
 const MIN_VIEWPORT_FOCUS_OFFSET = 12;
 const TOP_SCROLL_EPSILON = 2;
 // SVG renderers may expose source lines relative to the diagram, not the document.
-const SOURCE_BLOCK_SELECTOR = '[data-source-line]:not(svg, svg *)';
+const SOURCE_BLOCK_SELECTOR = '[data-source-line]:not(svg, svg *, details:not([open]) > :not(summary:first-of-type), details:not([open]) > :not(summary:first-of-type) *)';
 const SCROLL_INPUT_EVENTS = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
 
 function getScrollableRange(element) {
@@ -29,15 +29,6 @@ function getElementScrollTop(container, element) {
   const containerRect = container.getBoundingClientRect();
   const elementRect = element.getBoundingClientRect();
   return elementRect.top - containerRect.top + container.scrollTop;
-}
-
-function isVisibleDisclosureBlock(element) {
-  for (let details = element.closest('details'); details; details = details.parentElement?.closest('details')) {
-    if (!details.open && !details.querySelector(':scope > summary')?.contains(element)) {
-      return false;
-    }
-  }
-  return true;
 }
 
 function isLeafSourceBlock(element) {
@@ -434,7 +425,6 @@ export class ScrollSyncController {
 
   buildPreviewBlocks() {
     const allBlocks = Array.from(this.previewElement.querySelectorAll(SOURCE_BLOCK_SELECTOR))
-      .filter(isVisibleDisclosureBlock)
       .map((element) => {
         const start = Number.parseInt(element.getAttribute('data-source-line') || '', 10);
         const end = Number.parseInt(element.getAttribute('data-source-line-end') || '', 10);

@@ -60,6 +60,9 @@ async function bootstrap() {
       ? await prepareDirectoryExportSnapshot(payload)
       : await prepareExportSnapshot(payload);
     const mount = renderSnapshot(snapshot);
+    if (payload.action === 'pdf') {
+      mount?.querySelectorAll('details').forEach((details) => { details.open = true; });
+    }
     snapshot.html = await waitForRenderedExportContent(mount);
     setStatus(payload.action === 'pdf'
       ? 'Opening print dialog…'

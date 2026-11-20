@@ -14,7 +14,8 @@ it('expands and collapses a disclosure rendered by the preview worker', async ()
       worker.postMessage({ markdownText, renderVersion: 1 });
     });
     expect(result.error).toBeUndefined();
-    expect(result.html).toBe(compilePreviewDocument({ markdownText }).html);
+    const normalizeTaskIds = (html) => html.replace(/_task-[a-z0-9]+/gu, '_task-id');
+    expect(normalizeTaskIds(result.html)).toBe(normalizeTaskIds(compilePreviewDocument({ markdownText }).html));
     document.body.innerHTML = result.html;
     const details = document.querySelector('details');
     const heading = document.querySelector('h2');

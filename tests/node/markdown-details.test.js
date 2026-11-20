@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { compilePreviewDocument } from '../../src/client/application/preview-render-compiler.js';
+import { getMarkdownHeadings } from '../../src/client/domain/markdown-headings.js';
 
 test('compilePreviewDocument renders disclosures with Markdown, nesting, and source lines', () => {
   const markdownText = [
@@ -67,4 +68,50 @@ test('compilePreviewDocument keeps disclosure markup in code and rejects unsafe 
   assert.match(html, /&lt;summary&gt;Indented code&lt;\/summary&gt;/u);
   assert.match(compilePreviewDocument({ markdownText: '<details>\n<summary>Unclosed</summary>' }).html, /&lt;details&gt;/u);
   assert.match(compilePreviewDocument({ markdownText: '<summary>Outside</summary>' }).html, /&lt;summary&gt;/u);
+});
+
+test('disclosure boundaries ignore literal tags in list-nested fences and indented code', () => {
+  const markdownText = [
+    '<details>',
+    '<summary>Examples</summary>',
+    '',
+    '- ```',
+    '  </details>',
+    '  ```',
+    '',
+    '      <summary>Indented example</summary>',
+    '',
+    'Still inside.',
+    '</details>',
+    '',
+    'Outside.',
+  ].join('\n');
+  const { html } = compilePreviewDocument({ markdownText });
+  assert.match(html, /<pre[^>]*><code[^>]*>&lt;\/details&gt;\n<\/code><\/pre>/u);
+  assert.match(html, /<pre[^>]*><code[^>]*>&lt;summary&gt;Indented example&lt;\/summary&gt;\n<\/code><\/pre>/u);
+  assert.match(html, /Still inside\.<\/p>\n<\/details>\n<p[^>]*>Outside\.<\/p>/u);
+});
+
+test('a standalone close cannot pair with an opening tag in a different list item', () => {
+  const markdownText = '- <details>\n  <summary>Unclosed</summary>\n- </details>\n\nAfter.';
+  const { html } = compilePreviewDocument({ markdownText });
+  assert.doesNotMatch(html, /<details[ >]/u);
+  assert.match(html, /&lt;details&gt;/u);
+  assert.match(html, /&lt;\/details&gt;/u);
+});
+
+test('an invalid backtick fence opener does not hide the disclosure close', () => {
+  const markdownText = '<details>\n<summary>Template</summary>\n\n```not`a-fence\n</details>\n\nOutside.';
+  const { html } = compilePreviewDocument({ markdownText });
+  assert.match(html, /```not`a-fence<\/p>\n<\/details>\n<p[^>]*>Outside\.<\/p>/u);
+});
+
+test('the Canvas heading picker and excerpt agree on an underlined heading after a summary', () => {
+  const markdownText = '<details>\n<summary>Template</summary>\nAgenda\n------\n\nMeeting body.\n\n</details>';
+  const headings = getMarkdownHeadings(markdownText);
+  assert.deepEqual(headings, [{ id: 'agenda', text: 'Agenda' }]);
+  const { html } = compilePreviewDocument({ markdownText, subpath: `#${headings[0].id}` });
+  assert.match(html, /^<details[^>]* open="">/u);
+  assert.match(html, /<h2[^>]* id="agenda">Agenda<\/h2>/u);
+  assert.match(html, /Meeting body\.<\/p>\n<\/details>\n$/u);
 });
