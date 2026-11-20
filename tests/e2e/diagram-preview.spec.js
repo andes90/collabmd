@@ -1173,8 +1173,11 @@ test('switching directly between excalidraw files updates the reused iframe scen
   await page.goto('/?test=1#file=sample-excalidraw.excalidraw');
   await expect.poll(async () => {
     try {
-      const frame = await waitForExcalidrawFrameHarness(page);
-      return frame.evaluate(() => window.__COLLABMD_EXCALIDRAW_TEST__.getElementIds());
+      const frame = await waitForExcalidrawFrameHarness(
+        page,
+        '#previewContent .excalidraw-embed[data-file="sample-excalidraw.excalidraw"] iframe',
+      );
+      return await frame.evaluate(() => window.__COLLABMD_EXCALIDRAW_TEST__.getElementIds());
     } catch {
       return null;
     }
@@ -1185,8 +1188,11 @@ test('switching directly between excalidraw files updates the reused iframe scen
 
   await expect.poll(async () => {
     try {
-      const frame = await waitForExcalidrawFrameHarness(page);
-      return frame.evaluate(() => window.__COLLABMD_EXCALIDRAW_TEST__.getElementIds());
+      const frame = await waitForExcalidrawFrameHarness(
+        page,
+        '#previewContent .excalidraw-embed[data-file="new-diagram.excalidraw"] iframe',
+      );
+      return await frame.evaluate(() => window.__COLLABMD_EXCALIDRAW_TEST__.getElementIds());
     } catch {
       return null;
     }
