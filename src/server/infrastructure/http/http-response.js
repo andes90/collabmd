@@ -49,16 +49,19 @@ function appendVaryHeader(res, token) {
 }
 
 function resolveCompressionEncoding(acceptEncodingHeader) {
-  const value = String(acceptEncodingHeader || '').toLowerCase();
-  if (value.includes('br')) {
-    return 'br';
+  const weights = new Map();
+  for (const item of String(acceptEncodingHeader || '').toLowerCase().split(',')) {
+    const [encoding, parameter, ...rest] = item.split(';').map((part) => part.trim());
+    if (!encoding) continue;
+    const quality = parameter?.match(/^q\s*=\s*([01](?:\.\d{0,3})?)$/);
+    const weight = parameter === undefined ? 1 : Number(quality?.[1]);
+    weights.set(encoding, !rest.length && weight >= 0 && weight <= 1 ? weight : 0);
   }
-
-  if (value.includes('gzip')) {
-    return 'gzip';
-  }
-
-  return null;
+  const wildcard = weights.get('*') ?? 0;
+  const brotli = weights.get('br') ?? wildcard;
+  const gzipWeight = weights.get('gzip') ?? wildcard;
+  if (brotli > 0 && brotli >= gzipWeight) return 'br';
+  return gzipWeight > 0 ? 'gzip' : null;
 }
 
 function prepareBody(req, body, contentType) {

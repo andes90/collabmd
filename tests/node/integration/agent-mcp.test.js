@@ -47,6 +47,7 @@ test('no-auth MCP searches, reads, edits, and creates Vault Content anonymously'
     agentAccess: { enabled: true },
   });
   const client = await connectMcp(t, app);
+  assert.equal(client.getServerVersion().version, app.server.config.build.packageVersion);
 
   const tools = await client.listTools();
   assert.deepEqual(

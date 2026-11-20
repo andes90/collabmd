@@ -7,7 +7,6 @@ import { CollaborationRoom } from './domain/collaboration/collaboration-room.js'
 import { RoomRegistry } from './domain/collaboration/room-registry.js';
 import { isDrawioLeaseRoom } from '../domain/drawio-room.js';
 import { WORKSPACE_ROOM_NAME } from '../domain/workspace-room.js';
-import { workspaceStateMetadataEqual } from './domain/workspace-state.js';
 import { GitService } from './infrastructure/git/git-service.js';
 import { ensureCollabMetadataGitExclude } from './infrastructure/git/local-exclude.js';
 import { RipgrepSearchService } from './infrastructure/search/ripgrep-search-service.js';
@@ -112,6 +111,7 @@ async function initializeVaultContext(context, { config }) {
     vault: def.id,
   });
 
+  if (config.fileWatcherEnabled !== false) context.fileSystemSyncService.observeStartupChanges();
   const initialWorkspaceScanStartedAt = Date.now();
   const initialWorkspaceSnapshot = await context.vaultFileStore.scanWorkspaceState();
   context.vaultFileCount = initialWorkspaceSnapshot.vaultFileCount ?? 0;
@@ -131,31 +131,8 @@ async function initializeVaultContext(context, { config }) {
     vault: def.id,
   });
 
-  const liveWorkspaceScanStartedAt = Date.now();
-  const liveWorkspaceSnapshot = await context.vaultFileStore.scanWorkspaceState();
-  const workspaceChangedDuringStartup = !workspaceStateMetadataEqual(initialWorkspaceSnapshot, liveWorkspaceSnapshot);
-  context.vaultFileCount = liveWorkspaceSnapshot.vaultFileCount ?? context.vaultFileCount;
-  logPerfEvent(config.perfLoggingEnabled, 'startup', {
-    changedDuringStartup: workspaceChangedDuringStartup,
-    durationMs: Date.now() - liveWorkspaceScanStartedAt,
-    phase: 'workspace-rescan',
-    vault: def.id,
-    vaultFileCount: context.vaultFileCount,
-  });
-
-  if (workspaceChangedDuringStartup) {
-    const backlinkRebuildStartedAt = Date.now();
-    await context.backlinkIndex.build({ workspaceState: liveWorkspaceSnapshot });
-    logPerfEvent(config.perfLoggingEnabled, 'startup', {
-      durationMs: Date.now() - backlinkRebuildStartedAt,
-      markdownFileCount: liveWorkspaceSnapshot.markdownPaths?.length ?? 0,
-      phase: 'backlink-rebuild',
-      vault: def.id,
-    });
-  }
-
   const workspaceInitStartedAt = Date.now();
-  await context.workspaceMutationCoordinator.initialize({ snapshot: liveWorkspaceSnapshot });
+  await context.workspaceMutationCoordinator.initialize({ snapshot: initialWorkspaceSnapshot });
   logPerfEvent(config.perfLoggingEnabled, 'startup', {
     durationMs: Date.now() - workspaceInitStartedAt,
     phase: 'workspace-init',
@@ -164,14 +141,14 @@ async function initializeVaultContext(context, { config }) {
 
   if (config.fileWatcherEnabled !== false) {
     const watcherStartStartedAt = Date.now();
-    await context.fileSystemSyncService.start({ snapshot: liveWorkspaceSnapshot });
+    await context.fileSystemSyncService.start({ snapshot: initialWorkspaceSnapshot });
     logPerfEvent(config.perfLoggingEnabled, 'startup', {
       durationMs: Date.now() - watcherStartStartedAt,
       phase: 'watcher-start',
       vault: def.id,
     });
   } else {
-    context.fileSystemSyncService.initializeFromSnapshot({ snapshot: liveWorkspaceSnapshot });
+    context.fileSystemSyncService.initializeFromSnapshot({ snapshot: initialWorkspaceSnapshot });
     logPerfEvent(config.perfLoggingEnabled, 'startup', {
       durationMs: 0,
       phase: 'watcher-skipped',
@@ -179,7 +156,9 @@ async function initializeVaultContext(context, { config }) {
     });
   }
 
-  return { searchCapability, snapshot: liveWorkspaceSnapshot, vaultFileCount: context.vaultFileCount };
+  const snapshot = context.workspaceMutationCoordinator.workspaceState ?? initialWorkspaceSnapshot;
+  context.vaultFileCount = snapshot.vaultFileCount ?? context.vaultFileCount;
+  return { searchCapability, snapshot, vaultFileCount: context.vaultFileCount };
 }
 
 export function createVaultRegistry({ config, testControls }) {

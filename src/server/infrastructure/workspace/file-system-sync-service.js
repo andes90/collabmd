@@ -66,17 +66,29 @@ export class FileSystemSyncService {
     this.lastState = null;
     this.pendingEventTypesByPath = new Map();
     this.forceFullScan = false;
-    this.suspendWatchEventsUntil = 0;
+    this.pauseWatchFlush = false;
     this.retryCount = 0;
     this.closed = false;
+  }
+
+  observeStartupChanges() {
+    this.pauseWatchFlush = true;
+    this.watchVault();
+  }
+
+  watchVault() {
+    if (this.watcher) return;
+    this.watcher = watch(this.vaultFileStore.vaultDir, { recursive: true }, (eventType, filename) => {
+      this.handleWatchEvent(eventType, filename);
+    });
   }
 
   async start({ snapshot = null } = {}) {
     this.closed = false;
     this.lastState = snapshot ?? this.mutationCoordinator.workspaceState ?? await this.vaultFileStore.scanWorkspaceState();
-    this.watcher = watch(this.vaultFileStore.vaultDir, { recursive: true }, (eventType, filename) => {
-      this.handleWatchEvent(eventType, filename);
-    });
+    this.watchVault();
+    this.pauseWatchFlush = false;
+    await this.flushPendingChanges();
   }
 
   initializeFromSnapshot({ snapshot = null } = {}) {
@@ -84,10 +96,6 @@ export class FileSystemSyncService {
   }
 
   handleWatchEvent(eventType, filename) {
-    if (Date.now() <= this.suspendWatchEventsUntil) {
-      return;
-    }
-
     const normalizedPath = normalizeWatchedPath(filename);
     if (!normalizedPath) {
       this.forceFullScan = true;
@@ -113,7 +121,7 @@ export class FileSystemSyncService {
   }
 
   scheduleFlush(delayMs = this.debounceMs) {
-    if (this.closed) return;
+    if (this.closed || this.pauseWatchFlush) return;
     clearTimeout(this.debounceTimer);
     this.debounceTimer = setTimeout(() => {
       this.debounceTimer = null;
@@ -129,24 +137,24 @@ export class FileSystemSyncService {
   }
 
   async resetForExternalStateChange({ snapshot = null } = {}) {
-    this.suspendWatchEventsUntil = Math.max(this.suspendWatchEventsUntil, Date.now() + 750);
+    const wasPaused = this.pauseWatchFlush;
+    this.pauseWatchFlush = true;
     clearTimeout(this.debounceTimer);
     this.debounceTimer = null;
     this.pendingEventTypesByPath.clear();
     this.forceFullScan = false;
 
     try {
-      await this.runningFlush;
-    } catch {
-      // Ignore stale flush failures while rebaselining around an external reset.
+      await this.runningFlush?.catch(() => {});
+      this.lastState = snapshot ?? this.mutationCoordinator.workspaceState ?? await this.vaultFileStore.scanWorkspaceState();
+    } finally {
+      this.pauseWatchFlush = wasPaused;
+      if (this.pendingEventTypesByPath.size || this.forceFullScan) this.scheduleFlush();
     }
-
-    this.pendingEventTypesByPath.clear();
-    this.forceFullScan = false;
-    this.lastState = snapshot ?? this.mutationCoordinator.workspaceState ?? await this.vaultFileStore.scanWorkspaceState();
   }
 
   async flushPendingChanges() {
+    if (this.pauseWatchFlush) return;
     clearTimeout(this.debounceTimer);
     this.debounceTimer = null;
 
@@ -168,21 +176,14 @@ export class FileSystemSyncService {
     return readWorkspacePathSnapshotFromAdapter(this.workspaceStateAdapter, pathValue);
   }
 
-  async buildIncrementalResult() {
+  async buildIncrementalResult({ forceFullScan, pendingPaths }) {
     return deriveIncrementalWorkspaceState(this.workspaceStateAdapter, {
-      forceFullScan: this.forceFullScan,
+      forceFullScan,
       maxPendingPaths: MAX_INCREMENTAL_PENDING_PATHS,
-      pendingPaths: Array.from(this.pendingEventTypesByPath.keys()),
+      pendingPaths,
       previousState: this.lastState,
       readPathSnapshot: (pathValue) => this.readWorkspacePathSnapshot(pathValue),
     });
-  }
-
-  consumePendingEvents() {
-    const hadPendingEvents = this.pendingEventTypesByPath.size > 0 || this.forceFullScan;
-    this.pendingEventTypesByPath.clear();
-    this.forceFullScan = false;
-    return hadPendingEvents;
   }
 
   async flush() {
@@ -199,9 +200,12 @@ export class FileSystemSyncService {
 
   async reconcilePendingChanges() {
     const startedAt = Date.now();
-    const pendingPathCount = this.pendingEventTypesByPath.size;
-    const { fallbackReason, incrementalResult } = await this.buildIncrementalResult();
-    this.consumePendingEvents();
+    const pendingPaths = [...this.pendingEventTypesByPath.keys()];
+    const pendingPathCount = pendingPaths.length;
+    const forceFullScan = this.forceFullScan;
+    this.pendingEventTypesByPath.clear();
+    this.forceFullScan = false;
+    const { fallbackReason, incrementalResult } = await this.buildIncrementalResult({ forceFullScan, pendingPaths });
 
     const previousWorkspaceState = this.mutationCoordinator.workspaceState;
     const authoritativePreviousState = previousWorkspaceState ?? this.lastState;

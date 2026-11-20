@@ -289,6 +289,19 @@ test('HTTP server compresses large JSON API responses without changing payloads'
   const payload = JSON.parse(gunzipSync(fileResponse.bodyBuffer).toString('utf8'));
   assert.equal(payload.path, 'large.md');
   assert.equal(payload.content, largeContent);
+
+  for (const [accepted, encoding] of [
+    ['br;q=0, *;q=0.5', 'gzip'],
+    ['br;q=0.2, gzip;q=0.8', 'gzip'],
+    ['gzip;q=0.4, BR;q=0.4', 'br'],
+    ['brotli, x-gzip, *;q=0', undefined],
+  ]) {
+    const response = await httpRequest(`${app.baseUrl}/api/file?path=large.md`, {
+      headers: { 'Accept-Encoding': accepted },
+    });
+    assert.equal(response.headers['content-encoding'], encoding, accepted);
+    assert.match(response.headers.vary, /Accept-Encoding/);
+  }
 });
 
 test('HTTP server searches vault text with ripgrep-backed API', async (t) => {
@@ -1277,6 +1290,15 @@ test('HTTP server rejects unsupported /api/file mutations outside the vault file
   t.after(() => app.close());
 
   await writeFile(join(app.vaultDir, 'secret.txt'), 'not markdown', 'utf-8');
+  await writeFile(join(app.vaultDir, 'exists.md'), 'existing content', 'utf-8');
+  for (const [path, status] of [['secret.txt', 400], ['exists.md', 409]]) {
+    const response = await httpRequest(`${app.baseUrl}/api/file`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path }),
+    });
+    assert.equal(response.statusCode, status);
+  }
 
   const deleteResponse = await httpRequest(`${app.baseUrl}/api/file?path=${encodeURIComponent('secret.txt')}`, {
     method: 'DELETE',

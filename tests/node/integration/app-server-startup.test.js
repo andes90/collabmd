@@ -24,7 +24,7 @@ async function createVault(t, files = {}) {
   return vaultDir;
 }
 
-test('createAppServer rescans before workspace init and watcher startup', async (t) => {
+test('createAppServer shares one baseline across indexing, workspace init, and watching', async (t) => {
   const vaultDir = await createVault(t, {
     'docs/guide.md': '# Guide\n',
     'docs/diagram.mmd': 'graph TD;\n',
@@ -80,24 +80,24 @@ test('createAppServer rescans before workspace init and watcher startup', async 
   };
 
   let watcherSnapshot = null;
+  const startWatcher = server.fileSystemSyncService.start.bind(server.fileSystemSyncService);
   server.fileSystemSyncService.start = async ({ snapshot = null } = {}) => {
     watcherSnapshot = snapshot;
-    await server.fileSystemSyncService.resetForExternalStateChange({ snapshot });
+    await startWatcher({ snapshot });
   };
 
   const listenInfo = await server.listen();
 
-  assert.equal(scanCalls, 2);
+  assert.equal(scanCalls, 1);
   assert.equal(backlinkSnapshots.length, 1);
   assert.equal(backlinkSnapshots[0], scannedSnapshots[0]);
-  assert.equal(initializedSnapshot, scannedSnapshots[1]);
-  assert.equal(watcherSnapshot, scannedSnapshots[1]);
-  assert.equal(server.vaultFileCount, scannedSnapshots[1].vaultFileCount);
-  assert.deepEqual(scannedSnapshots[1].markdownPaths, ['docs/guide.md', 'notes/today.md']);
+  assert.equal(initializedSnapshot, scannedSnapshots[0]);
+  assert.equal(watcherSnapshot, scannedSnapshots[0]);
+  assert.equal(server.vaultFileCount, scannedSnapshots[0].vaultFileCount);
+  assert.deepEqual(scannedSnapshots[0].markdownPaths, ['docs/guide.md', 'notes/today.md']);
   assert.equal(typeof listenInfo.port, 'number');
   assert.match(listenInfo.wsPath, /\/ws\/:file$/);
   assert.ok(perfLogs.some((line) => line.includes('[perf][startup]') && line.includes('phase=workspace-scan')));
-  assert.ok(perfLogs.some((line) => line.includes('[perf][startup]') && line.includes('phase=workspace-rescan')));
   assert.ok(perfLogs.some((line) => line.includes('[perf][startup-total]')));
 });
 
@@ -125,7 +125,7 @@ test('createAppServer excludes CollabMD metadata from git on startup', async (t)
   );
 });
 
-test('createAppServer rebuilds backlinks if the workspace changes during startup', async (t) => {
+test('createAppServer reconciles watcher events received during its initial scan', async (t) => {
   const vaultDir = await createVault(t, {
     'docs/guide.md': '# Guide\n',
   });
@@ -146,14 +146,13 @@ test('createAppServer rebuilds backlinks if the workspace changes during startup
   });
 
   let scanCalls = 0;
-  const scannedSnapshots = [];
   const originalScanWorkspaceState = server.vaultFileStore.scanWorkspaceState.bind(server.vaultFileStore);
   server.vaultFileStore.scanWorkspaceState = async (...args) => {
     scanCalls += 1;
     const snapshot = await originalScanWorkspaceState(...args);
-    scannedSnapshots.push(snapshot);
     if (scanCalls === 1) {
       await writeFile(join(vaultDir, 'docs', 'new-note.md'), '# New note\n', 'utf8');
+      server.fileSystemSyncService.handleWatchEvent('rename', 'docs/new-note.md');
     }
     return snapshot;
   };
@@ -165,15 +164,11 @@ test('createAppServer rebuilds backlinks if the workspace changes during startup
     return originalBuild({ workspaceState });
   };
 
-  server.fileSystemSyncService.start = async ({ snapshot = null } = {}) => {
-    await server.fileSystemSyncService.resetForExternalStateChange({ snapshot });
-  };
-
   await server.listen();
 
-  assert.equal(scanCalls, 2);
-  assert.equal(backlinkSnapshots.length, 2);
+  assert.equal(scanCalls, 1);
+  assert.equal(backlinkSnapshots.length, 1);
   assert.deepEqual(backlinkSnapshots[0].markdownPaths, ['docs/guide.md']);
-  assert.deepEqual(backlinkSnapshots[1].markdownPaths, ['docs/guide.md', 'docs/new-note.md']);
+  assert.deepEqual(server.workspaceMutationCoordinator.workspaceState.markdownPaths, ['docs/guide.md', 'docs/new-note.md']);
   assert.equal(server.vaultFileCount, 2);
 });

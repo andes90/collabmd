@@ -322,7 +322,7 @@ async function handleDirectoryDownload(req, res, requestUrl, { config, vaultFile
   try {
     const result = await vaultFileStore.resolveDirectoryDownloadRoot(directoryPath);
     if (!result.ok) {
-      jsonResponse(req, res, result.error === 'Directory not found' ? 404 : 400, { error: result.error });
+      jsonResponse(req, res, result.statusCode ?? 400, { error: result.error });
       return;
     }
     const maxArchiveEntries = config.maxArchiveEntries ?? DEFAULT_MAX_ARCHIVE_ENTRIES;

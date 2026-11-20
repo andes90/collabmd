@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { access, mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from 'fs/promises';
+import { access, mkdtemp, mkdir, readdir, readFile, rm, stat, symlink, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import sharp from 'sharp';
@@ -261,6 +261,7 @@ test('VaultFileStore persists content, comments, and snapshot as one staged coll
   assert.equal(await store.readMarkdownFile('README.md'), '# Updated atomically\n');
   assert.deepEqual(await store.readCommentThreads('README.md'), threads);
   assert.deepEqual(Array.from(await store.readCollaborationSnapshot('README.md') ?? []), Array.from(snapshot));
+  assert.deepEqual(await readdir(join(store.vaultDir, '.collabmd/.tmp')), []);
 });
 
 test('VaultFileStore keeps live content readable while collaboration state is replaced', async (t) => {
@@ -730,6 +731,26 @@ test('VaultFileStore converts PNG attachments to WebP next to their source markd
     assetsDirectory.children.map((node) => ({ name: node.name, type: node.type })),
     [{ name: 'product-screenshot-20260316-153012.webp', type: 'image' }],
   );
+});
+
+test('VaultFileStore gives concurrent uploads distinct filenames', async (t) => {
+  const { store, cleanup } = await createVaultStore();
+  t.after(cleanup);
+  const options = {
+    content: await createImageBuffer('png'),
+    mimeType: 'image/png',
+    now: new Date(2026, 2, 16, 15, 30, 12),
+    originalFileName: 'Image.png',
+  };
+  const results = await Promise.all([
+    store.writeImageAttachmentForDocument('README.md', options),
+    store.writeImageAttachmentForDocument('README.md', options),
+  ]);
+  assert.ok(results.every(({ ok }) => ok));
+  assert.deepEqual(results.map(({ path }) => path).sort(), [
+    'assets/image-20260316-153012-2.webp',
+    'assets/image-20260316-153012.webp',
+  ]);
 });
 
 test('VaultFileStore converts JPEG attachments to WebP', async (t) => {

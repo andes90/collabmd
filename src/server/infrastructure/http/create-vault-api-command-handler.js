@@ -42,10 +42,6 @@ function decodeHeaderMetadata(value, label = 'attachment') {
   }
 }
 
-function getDirectoryDeleteStatusCode(message = '') {
-  return String(message).includes('Directory is not empty') ? 409 : 400;
-}
-
 async function handleExportDocx({ renderDocx }, req, res) {
   try {
     const body = await parseJsonBody(req, DOCX_EXPORT_REQUEST_LIMIT_BYTES);
@@ -89,7 +85,7 @@ async function handleWriteFile({ workspaceMutationCoordinator }, req, res) {
       requestId: readRequestId(req),
     });
     if (!result.ok) {
-      jsonResponse(req, res, 400, { error: result.error });
+      jsonResponse(req, res, result.statusCode ?? 400, { error: result.error });
       return true;
     }
 
@@ -120,7 +116,7 @@ async function handleUploadAttachment({ workspaceMutationCoordinator }, req, res
       sourceDocumentPath,
     });
     if (!result.ok) {
-      jsonResponse(req, res, 400, { error: result.error });
+      jsonResponse(req, res, result.statusCode ?? 400, { error: result.error });
       return true;
     }
 
@@ -173,7 +169,7 @@ async function handleUploadFile({ maxPdfUploadBytes, workspaceMutationCoordinato
       requestId: readRequestId(req),
     });
     if (!result.ok) {
-      jsonResponse(req, res, result.error === 'File already exists' ? 409 : 400, { error: result.error });
+      jsonResponse(req, res, result.statusCode ?? 400, { error: result.error });
       return true;
     }
 
@@ -198,7 +194,7 @@ async function handleCreateFile({ workspaceMutationCoordinator }, req, res) {
       requestId: readRequestId(req),
     });
     if (!result.ok) {
-      jsonResponse(req, res, 409, { error: result.error });
+      jsonResponse(req, res, result.statusCode ?? 400, { error: result.error });
       return true;
     }
     jsonResponse(req, res, 201, { ok: true, path: body.path });
@@ -221,7 +217,7 @@ async function handleDeleteFile({ workspaceMutationCoordinator }, req, res, requ
       requestId: readRequestId(req),
     });
     if (!result.ok) {
-      jsonResponse(req, res, 400, { error: result.error });
+      jsonResponse(req, res, result.statusCode ?? 400, { error: result.error });
       return true;
     }
     jsonResponse(req, res, 200, { ok: true });
@@ -246,7 +242,7 @@ async function handleRenameFile({ workspaceMutationCoordinator }, req, res) {
       requestId: readRequestId(req),
     });
     if (!result.ok) {
-      jsonResponse(req, res, 400, { error: result.error });
+      jsonResponse(req, res, result.statusCode ?? 400, { error: result.error });
       return true;
     }
     jsonResponse(req, res, 200, { ok: true, path: body.newPath });
@@ -269,7 +265,7 @@ async function handleCreateDirectory({ workspaceMutationCoordinator }, req, res)
       requestId: readRequestId(req),
     });
     if (!result.ok) {
-      jsonResponse(req, res, 400, { error: result.error });
+      jsonResponse(req, res, result.statusCode ?? 400, { error: result.error });
       return true;
     }
 
@@ -294,7 +290,7 @@ async function handleRenameDirectory({ workspaceMutationCoordinator }, req, res)
       requestId: readRequestId(req),
     });
     if (!result.ok) {
-      jsonResponse(req, res, 400, { error: result.error });
+      jsonResponse(req, res, result.statusCode ?? 400, { error: result.error });
       return true;
     }
 
@@ -320,7 +316,7 @@ async function handleDeleteDirectory({ workspaceMutationCoordinator }, req, res,
       requestId: readRequestId(req),
     });
     if (!result.ok) {
-      jsonResponse(req, res, getDirectoryDeleteStatusCode(result.error), { error: result.error });
+      jsonResponse(req, res, result.statusCode ?? 400, { error: result.error });
       return true;
     }
 

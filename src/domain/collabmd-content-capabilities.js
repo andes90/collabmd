@@ -11,7 +11,7 @@ import {
   PLANTUML_FILE_EXTENSIONS,
   STRUCTURIZR_FILE_EXTENSIONS,
   getVaultFileKind,
-  supportsCommentsForFilePath,
+  supportsCommentsForFileKind,
 } from './file-kind.js';
 
 const EXCALIDRAW_DESIGN_GUIDE = [
@@ -66,56 +66,49 @@ const EXCALIDRAW_CREATION_EXAMPLES = [
 
 const CAPABILITIES = Object.freeze({
   canvas: {
-    agentCreatable: false,
-    agentEditable: false,
+    agentWriteMode: null,
     editable: true,
     extensions: [CANVAS_FILE_EXTENSION],
     guide: 'Standard JSON Canvas 1.0 document edited collaboratively in CollabMD. Collaboration metadata is stored separately. Agent writes are disabled.',
     examples: ['{"nodes": [], "edges": []}'],
   },
   base: {
-    agentCreatable: true,
-    agentEditable: true,
+    agentWriteMode: 'text',
     editable: true,
     extensions: [BASE_FILE_EXTENSION],
     guide: 'YAML Base definition. Embed a file with ![[query.base]] or an inline query with a fenced base block. Create and edit with create_document and apply_text_edits. After writing, use query_base to inspect filtered rows.',
     examples: ['```base\nfilters:\n  and: []\n```', '![[tasks.base]]'],
   },
   drawio: {
-    agentCreatable: false,
-    agentEditable: false,
+    agentWriteMode: null,
     editable: true,
     extensions: [DRAWIO_FILE_EXTENSION],
     guide: 'diagrams.net XML managed by the embedded draw.io editor. Embed with ![[architecture.drawio]]. Agent writes are disabled.',
     examples: ['![[architecture.drawio]]'],
   },
   excalidraw: {
-    agentCreatable: true,
-    agentEditable: true,
+    agentWriteMode: 'structured',
     editable: true,
     extensions: [EXCALIDRAW_FILE_EXTENSION],
     guide: 'Excalidraw scene JSON managed by the canvas editor. Use create_excalidraw and edit_excalidraw rather than raw text edits. Element order is back-to-front; create supports beforeElementId and afterElementId, while edit supports relationship-aware translation, reorder, same-ID replacement, and bound-text placement normalization. Container or group translation also moves bound text and grouped members. Standalone auto-resizing text recalculates its bounds when text metrics change; bound text whose font, size, line height, or content changes is re-centered and remeasured vertically. Line, arrow, and freedraw dimensions are derived from points. Creation and editing support inline inspection and optional rendering; verify_excalidraw can return compact layout diagnostics without an image. Remote fallback renders report preview-not-pixel-identical. Supported agent element types: rectangle, ellipse, diamond, text, arrow, line, and freedraw. Embed with ![[drawing.excalidraw]].',
     examples: ['![[drawing.excalidraw]]'],
   },
   html: {
-    agentCreatable: true,
-    agentEditable: true,
+    agentWriteMode: 'text',
     editable: true,
     extensions: [...HTML_FILE_EXTENSIONS],
     guide: 'Standalone HTML file. Raw HTML inside Markdown is escaped; use a standalone .html or .htm file when HTML is required.',
     examples: ['<!doctype html>\n<html lang="en"><body><h1>Title</h1></body></html>'],
   },
   image: {
-    agentCreatable: false,
-    agentEditable: false,
+    agentWriteMode: null,
     editable: false,
     extensions: [...IMAGE_ATTACHMENT_EXTENSIONS],
     guide: 'Binary or SVG attachment. Reference from Markdown with a relative image path. Use attachment upload rather than create_document.',
     examples: ['![Diagram](assets/diagram.png)'],
   },
   markdown: {
-    agentCreatable: true,
-    agentEditable: true,
+    agentWriteMode: 'text',
     editable: true,
     extensions: [...MARKDOWN_FILE_EXTENSIONS],
     guide: 'Markdown-it syntax with YAML frontmatter, headings, tables, task lists, fenced code, linkified URLs, [[wiki-links]], aliases, and embeds. Use $...$ for inline math and $$...$$ on its own lines for display math (KaTeX). Use ![[file.ext]] for Base, draw.io, Excalidraw, Mermaid, or PlantUML Vault embeds. Use ![Label](https://...) for public video embeds: valid YouTube URLs or direct public HTTPS URLs ending in .mp4, .webm, or .ogg. Use relative Markdown image paths for Vault image attachments. Raw HTML is disabled.',
@@ -128,32 +121,28 @@ const CAPABILITIES = Object.freeze({
     ],
   },
   mermaid: {
-    agentCreatable: true,
-    agentEditable: true,
+    agentWriteMode: 'text',
     editable: true,
     extensions: [...MERMAID_FILE_EXTENSIONS],
     guide: 'Standalone Mermaid source. Markdown also supports fenced mermaid blocks and ![[diagram.mmd]] embeds.',
     examples: ['flowchart LR\n  A[Start] --> B[Done]'],
   },
   pdf: {
-    agentCreatable: false,
-    agentEditable: false,
+    agentWriteMode: null,
     editable: false,
     extensions: [PDF_FILE_EXTENSION],
     guide: 'Readonly PDF Vault Content. Agent text tools do not read or write PDF bytes.',
     examples: [],
   },
   plantuml: {
-    agentCreatable: true,
-    agentEditable: true,
+    agentWriteMode: 'text',
     editable: true,
     extensions: [...PLANTUML_FILE_EXTENSIONS],
     guide: 'Standalone PlantUML source, normally enclosed by @startuml and @enduml. Markdown supports plantuml or puml fences and ![[diagram.puml]] embeds.',
     examples: ['@startuml\nAlice -> Bob : Hello\n@enduml'],
   },
   structurizr: {
-    agentCreatable: true,
-    agentEditable: true,
+    agentWriteMode: 'text',
     editable: true,
     extensions: [...STRUCTURIZR_FILE_EXTENSIONS],
     guide: 'Structurizr DSL C4 workspace. Preview requires configured Structurizr renderer.',
@@ -169,11 +158,12 @@ function resolveKind(kindOrPath) {
 export function getCollabMdContentCapability(kindOrPath) {
   const kind = resolveKind(kindOrPath);
   if (!kind || !CAPABILITIES[kind]) return null;
-  const capability = CAPABILITIES[kind];
-  const commentPath = capability.extensions[0] ? `file${capability.extensions[0]}` : '';
+  const { agentWriteMode, ...capability } = CAPABILITIES[kind];
   return {
     ...capability,
-    commentsSupported: commentPath ? supportsCommentsForFilePath(commentPath) : false,
+    agentCreatable: agentWriteMode !== null,
+    agentEditable: agentWriteMode !== null,
+    commentsSupported: supportsCommentsForFileKind(kind),
     kind,
     readable: capability.editable,
     searchable: kind !== 'image' && kind !== 'pdf' && kind !== 'canvas',
@@ -203,11 +193,9 @@ export function isAgentReadablePath(path) {
 }
 
 export function isAgentEditablePath(path) {
-  const capability = getCollabMdContentCapability(path);
-  return Boolean(capability?.agentEditable && capability.kind !== 'excalidraw');
+  return CAPABILITIES[resolveKind(path)]?.agentWriteMode === 'text';
 }
 
 export function isAgentCreatablePath(path) {
-  const capability = getCollabMdContentCapability(path);
-  return Boolean(capability?.agentCreatable && capability.kind !== 'excalidraw');
+  return CAPABILITIES[resolveKind(path)]?.agentWriteMode === 'text';
 }

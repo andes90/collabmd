@@ -60,6 +60,12 @@ function normalizeMutationPath(path) {
   return normalizeWorkspacePath(path).replace(/\/{2,}/gu, '/').replace(/\/$/u, '');
 }
 
+function samePathMetadata(expected, actual) {
+  if (!expected || !actual) return !expected && !actual;
+  return expected.type === actual.type && expected.inode === actual.inode
+    && expected.size === actual.size && expected.mtimeMs === actual.mtimeMs;
+}
+
 export class WorkspaceReconciliation {
   constructor({
     backlinkIndex,
@@ -67,23 +73,25 @@ export class WorkspaceReconciliation {
     roomRegistry,
     vaultFileStore,
     workspaceStateAdapter,
-    managedWriteWindowMs = 1200,
   }) {
     this.backlinkIndex = backlinkIndex ?? null;
     this.baseQueryService = baseQueryService ?? null;
     this.roomRegistry = roomRegistry;
     this.vaultFileStore = vaultFileStore;
     this.workspaceStateAdapter = workspaceStateAdapter;
-    this.managedWriteWindowMs = managedWriteWindowMs;
-    this.managedPathExpiry = new Map();
     this.managedPathMetadata = new Map();
     this.activeManagedWrites = new Set();
-    this.globalSuppressionUntil = 0;
+    this.activeWorkspaceMutations = 0;
     this.workspaceState = null;
     this.workspaceTree = [];
   }
 
   replaceWorkspaceState(nextState) {
+    if (nextState) {
+      for (const [path, expected] of this.managedPathMetadata) {
+        if (samePathMetadata(expected, nextState.metadata.get(path))) this.managedPathMetadata.delete(path);
+      }
+    }
     this.workspaceState = nextState ?? null;
     this.workspaceTree = createWorkspaceTree(nextState?.entries ?? new Map());
     return this.workspaceState;
@@ -132,13 +140,6 @@ export class WorkspaceReconciliation {
     return effectiveSnapshot;
   }
 
-  markManagedPaths(paths = [], { durationMs = this.managedWriteWindowMs } = {}) {
-    const expiresAt = Date.now() + durationMs;
-    normalizePaths(paths).forEach((pathValue) => {
-      this.managedPathExpiry.set(pathValue, expiresAt);
-    });
-  }
-
   runManagedWrite(paths = [], operation, expectedContent) {
     return this.trackManagedWrite(async () => {
       const result = await operation();
@@ -150,7 +151,6 @@ export class WorkspaceReconciliation {
         }
         this.managedPathMetadata.set(path, state?.metadata ?? null);
       }));
-      this.markManagedPaths(paths);
       return result;
     });
   }
@@ -169,45 +169,24 @@ export class WorkspaceReconciliation {
 
   runManagedWorkspaceMutation(operation) {
     return this.trackManagedWrite(async () => {
-      this.globalSuppressionUntil = Math.max(this.globalSuppressionUntil, Date.now() + this.managedWriteWindowMs);
+      this.activeWorkspaceMutations += 1;
       try {
         return await operation();
       } finally {
-        this.globalSuppressionUntil = Math.max(this.globalSuppressionUntil, Date.now() + this.managedWriteWindowMs);
+        this.activeWorkspaceMutations -= 1;
       }
     });
   }
 
   isGloballySuppressed() {
-    return Date.now() <= this.globalSuppressionUntil;
-  }
-
-  cleanupExpiredManagedPaths() {
-    const now = Date.now();
-    Array.from(this.managedPathExpiry.entries()).forEach(([pathValue, expiresAt]) => {
-      if (expiresAt <= now) {
-        this.managedPathExpiry.delete(pathValue);
-        this.managedPathMetadata.delete(pathValue);
-      }
-    });
-  }
-
-  isManagedPath(pathValue) {
-    this.cleanupExpiredManagedPaths();
-    const expiresAt = this.managedPathExpiry.get(pathValue);
-    return Number.isFinite(expiresAt) && expiresAt > Date.now();
+    return this.activeWorkspaceMutations > 0;
   }
 
   filterManagedWorkspaceChange(workspaceChange = {}, nextState) {
     const matchesManagedPath = (path) => {
-      const global = this.isGloballySuppressed();
-      const managed = this.isManagedPath(path) && this.managedPathMetadata.has(path);
-      if (!managed && !global) return false;
-      const expected = managed ? this.managedPathMetadata.get(path) : this.workspaceState?.metadata.get(path);
       const actual = nextState?.metadata.get(path);
-      if (!expected || !actual) return !expected && !actual;
-      return expected.type === actual.type && expected.inode === actual.inode
-        && expected.size === actual.size && expected.mtimeMs === actual.mtimeMs;
+      return (this.managedPathMetadata.has(path) && samePathMetadata(this.managedPathMetadata.get(path), actual))
+        || Boolean(this.workspaceState && samePathMetadata(this.workspaceState.metadata.get(path), actual));
     };
 
     const filtered = createWorkspaceChange({

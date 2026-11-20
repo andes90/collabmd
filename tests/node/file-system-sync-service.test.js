@@ -99,6 +99,44 @@ test('persistent watcher failures stop retrying and close cancels pending retrie
   assert.equal(attempts, 4);
 });
 
+test('watcher retains events that arrive during an incremental snapshot', async (t) => {
+  const { cleanup, store, vaultDir } = await createVault();
+  t.after(cleanup);
+  const coordinator = {
+    workspaceState: await store.scanWorkspaceState(),
+    filterManagedWorkspaceChange: (change) => change,
+    changes: [],
+    async apply({ nextState, workspaceChange }) {
+      this.workspaceState = nextState;
+      this.changes.push(...workspaceChange.changedPaths);
+    },
+  };
+  const service = new FileSystemSyncService({ mutationCoordinator: coordinator, vaultFileStore: store });
+  t.after(() => service.close());
+  service.initializeFromSnapshot();
+  const read = service.readWorkspacePathSnapshot.bind(service);
+  const reading = Promise.withResolvers();
+  const resume = Promise.withResolvers();
+  t.mock.method(service, 'readWorkspacePathSnapshot', async (path) => {
+    if (path === 'README.md') {
+      reading.resolve();
+      await resume.promise;
+    }
+    return read(path);
+  });
+
+  await writeFile(join(vaultDir, 'README.md'), 'First external change');
+  service.handleWatchEvent('change', 'README.md');
+  const first = service.flushPendingChanges();
+  await reading.promise;
+  await writeFile(join(vaultDir, 'docs/guide.md'), 'Second external change');
+  service.handleWatchEvent('change', 'docs/guide.md');
+  resume.resolve();
+  await first;
+  await service.flushPendingChanges();
+  assert.deepEqual(coordinator.changes, ['README.md', 'docs/guide.md']);
+});
+
 test('FileSystemSyncService applies single-file content changes without a full workspace rescan', async (t) => {
   const { cleanup, store, vaultDir } = await createVault();
   t.after(cleanup);

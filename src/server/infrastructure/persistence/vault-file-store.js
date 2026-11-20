@@ -1,6 +1,5 @@
 import { createReadStream } from 'fs';
-import { copyFile, mkdir, readFile, readdir, rename, rm, rmdir, stat, writeFile } from 'fs/promises';
-import { randomUUID } from 'node:crypto';
+import { copyFile, mkdir, mkdtemp, readFile, readdir, rename, rm, rmdir, stat, writeFile } from 'fs/promises';
 import { basename, dirname, extname, join, relative, resolve } from 'path';
 import sharp from 'sharp';
 
@@ -25,6 +24,9 @@ import {
   sanitizeVaultPath,
   toVaultRelativePath,
 } from './path-utils.js';
+import { SidecarStore } from './sidecar-store.js';
+import { createWorkspaceStateFileSystemAdapter } from '../workspace/workspace-state-file-system-adapter.js';
+import { IMAGE_EXTENSION_TO_MIME_TYPE } from '../../shared/image-mime.js';
 
 const EDITABLE_VAULT_CONTENT_PATH_ERRORS = {
   base: 'Invalid file path — must end in .base',
@@ -57,9 +59,6 @@ function getEditableVaultContentKind(filePath) {
     ? { invalidPathError: EDITABLE_VAULT_CONTENT_PATH_ERRORS[kind], kind }
     : null;
 }
-import { SidecarStore } from './sidecar-store.js';
-import { createWorkspaceStateFileSystemAdapter } from '../workspace/workspace-state-file-system-adapter.js';
-import { IMAGE_EXTENSION_TO_MIME_TYPE } from '../../shared/image-mime.js';
 
 const MIME_TYPE_TO_IMAGE_EXTENSION = Object.freeze({
   'image/gif': '.gif',
@@ -83,10 +82,6 @@ const TEXT_FILE_MIME_TYPES = Object.freeze({
   plantuml: 'text/plain; charset=utf-8',
   structurizr: 'text/plain; charset=utf-8',
 });
-
-function createTransactionalPath(targetPath, label) {
-  return `${targetPath}.collabmd-${label}-${process.pid}-${Date.now()}-${randomUUID()}`;
-}
 
 function createCommentThreadsPayload(threads = []) {
   return `${JSON.stringify({
@@ -161,10 +156,6 @@ function sortDirectoryEntries(entries = []) {
     if (!left.isDirectory() && right.isDirectory()) return 1;
     return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
   });
-}
-
-async function cleanupPaths(paths = []) {
-  await Promise.allSettled(paths.filter(Boolean).map((pathValue) => rm(pathValue, { force: true })));
 }
 
 function normalizeAttachmentMimeType(value) {
@@ -374,11 +365,12 @@ export class VaultFileStore {
       return {
         ok: false,
         error: getEditableVaultContentKind(filePath)?.invalidPathError ?? INVALID_VAULT_FILE_PATH_ERROR,
+        statusCode: 400,
       };
     }
 
     const validationError = getContentValidationError(filePath, content);
-    if (validationError) return { ok: false, error: validationError };
+    if (validationError) return { ok: false, error: validationError, statusCode: 400 };
 
     try {
       await this.runManagedWrite([filePath], async () => {
@@ -389,8 +381,8 @@ export class VaultFileStore {
         }
       }, String(content));
       return { ok: true };
-    } catch (error) {
-      return { ok: false, error: error.message };
+    } catch {
+      return { ok: false, error: 'Could not update vault content', statusCode: 500 };
     }
   }
 
@@ -461,11 +453,11 @@ export class VaultFileStore {
     now = new Date(),
   } = {}) {
     if (!Buffer.isBuffer(content) || content.byteLength === 0) {
-      return { ok: false, error: 'Missing attachment content' };
+      return { ok: false, error: 'Missing attachment content', statusCode: 400 };
     }
 
     if (!isMarkdownFilePath(sourceDocumentPath)) {
-      return { ok: false, error: 'Source document must be a markdown file' };
+      return { ok: false, error: 'Source document must be a markdown file', statusCode: 400 };
     }
 
     const preparedAttachment = await prepareImageAttachmentForStorage({
@@ -474,7 +466,7 @@ export class VaultFileStore {
       originalFileName,
     });
     if (!preparedAttachment.ok) {
-      return { ok: false, error: preparedAttachment.error };
+      return { ok: false, error: preparedAttachment.error, statusCode: 400 };
     }
 
     const stemSource = basename(String(originalFileName ?? ''), extname(String(originalFileName ?? '')));
@@ -482,28 +474,27 @@ export class VaultFileStore {
     const attachmentDirPath = createDocumentAttachmentDirectoryPath(sourceDocumentPath);
     const timestamp = createAttachmentTimestamp(now);
     const baseFileName = `${attachmentStem}-${timestamp}`;
-    let collisionIndex = 0;
     let storedPath;
-    let absolutePath;
-
-    do {
+    for (let collisionIndex = 0; ; collisionIndex += 1) {
       const suffix = collisionIndex > 0 ? `-${collisionIndex + 1}` : '';
       storedPath = `${attachmentDirPath}/${baseFileName}${suffix}${preparedAttachment.extension}`;
-      absolutePath = this.resolveContentPath(storedPath, { requireVaultFile: false });
-      collisionIndex += 1;
-    } while (absolutePath && await pathExists(absolutePath));
-
-    if (!absolutePath || !isImageAttachmentFilePath(storedPath)) {
-      return { ok: false, error: INVALID_VAULT_FILE_PATH_ERROR };
-    }
-
-    try {
-      await this.runManagedWrite([storedPath], async () => {
+      const absolutePath = this.resolveContentPath(storedPath);
+      if (!absolutePath || !isImageAttachmentFilePath(storedPath)) {
+        return { ok: false, error: INVALID_VAULT_FILE_PATH_ERROR, statusCode: 400 };
+      }
+      try {
         await mkdir(dirname(absolutePath), { recursive: true });
-        await writeFile(absolutePath, preparedAttachment.content);
-      });
-    } catch (error) {
-      return { ok: false, error: error.message };
+      } catch {
+        return { ok: false, error: 'Could not prepare the attachment directory', statusCode: 500 };
+      }
+      try {
+        await this.runManagedWrite([storedPath], () => writeFile(absolutePath, preparedAttachment.content, { flag: 'wx' }));
+        break;
+      } catch (error) {
+        if (error.code !== 'EEXIST') {
+          return { ok: false, error: 'Could not write image attachment', statusCode: 500 };
+        }
+      }
     }
 
     const altText = createAttachmentAltText(originalFileName);
@@ -569,11 +560,12 @@ export class VaultFileStore {
       return {
         ok: false,
         error: getEditableVaultContentKind(filePath)?.invalidPathError ?? INVALID_VAULT_FILE_PATH_ERROR,
+        statusCode: 400,
       };
     }
 
     const validationError = includeContent && getContentValidationError(filePath, content);
-    if (validationError) return { ok: false, error: validationError };
+    if (validationError) return { ok: false, error: validationError, statusCode: 400 };
 
     const commentPath = this.sidecarStore.getCommentThreadPath(filePath);
     const snapshotPath = this.sidecarStore.getSnapshotPath(filePath);
@@ -601,79 +593,44 @@ export class VaultFileStore {
       } : null,
     ].filter((operation) => operation?.targetPath);
 
-    const stagedWrites = [];
-    const committedOperations = [];
+    const stagingRoot = sanitizeVaultPath(this.vaultDir, '.collabmd/.tmp', { allowIgnored: true });
+    if (!stagingRoot) return { ok: false, error: 'Invalid collaboration staging path' };
 
     try {
       const persist = async () => {
-        for (const operation of operations) {
-          if (operation.kind !== 'write') {
-            continue;
+        await mkdir(stagingRoot, { recursive: true });
+        const stagingDir = await mkdtemp(join(stagingRoot, 'transaction-'));
+        const committedOperations = [];
+        try {
+          for (const [index, operation] of operations.entries()) {
+            if (operation.kind !== 'write') continue;
+            operation.tempPath = join(stagingDir, `write-${index}`);
+            await mkdir(dirname(operation.targetPath), { recursive: true });
+            await writeFile(operation.tempPath, operation.value, operation.writeOptions);
           }
-
-          const tempPath = createTransactionalPath(operation.targetPath, 'tmp');
-          await mkdir(dirname(operation.targetPath), { recursive: true });
-          await writeFile(tempPath, operation.value, operation.writeOptions);
-          operation.tempPath = tempPath;
-          stagedWrites.push(tempPath);
-        }
-
-        for (const operation of operations) {
-          const hadExistingTarget = await pathExists(operation.targetPath);
-          const backupPath = hadExistingTarget
-            ? createTransactionalPath(operation.targetPath, 'bak')
-            : null;
-
-          if (backupPath) {
+          for (const [index, operation] of operations.entries()) {
+            const backupPath = await pathExists(operation.targetPath) ? join(stagingDir, `backup-${index}`) : null;
             if (operation.kind === 'write') {
-              await copyFile(operation.targetPath, backupPath);
-            } else {
+              if (backupPath) await copyFile(operation.targetPath, backupPath);
+              await rename(operation.tempPath, operation.targetPath);
+            } else if (backupPath) {
               await rename(operation.targetPath, backupPath);
             }
+            committedOperations.push({ backupPath, targetPath: operation.targetPath, kind: operation.kind });
           }
-
-          try {
-            if (operation.kind === 'write') {
-              await rename(operation.tempPath, operation.targetPath);
-              const stagedIndex = stagedWrites.indexOf(operation.tempPath);
-              if (stagedIndex >= 0) {
-                stagedWrites.splice(stagedIndex, 1);
-              }
-            }
-          } catch (error) {
-            if (backupPath) {
-              if (operation.kind === 'write') {
-                await rm(operation.targetPath, { force: true });
-              }
-              await rename(backupPath, operation.targetPath);
-            }
-            throw error;
+        } catch (error) {
+          for (const operation of committedOperations.reverse()) {
+            if (operation.backupPath) await rename(operation.backupPath, operation.targetPath);
+            else if (operation.kind === 'write') await rm(operation.targetPath, { force: true });
           }
-
-          committedOperations.push({
-            backupPath,
-            kind: operation.kind,
-            targetPath: operation.targetPath,
-          });
+          await rm(stagingDir, { force: true, recursive: true }).catch(() => {});
+          throw error;
         }
+        await rm(stagingDir, { force: true, recursive: true }).catch(() => {});
       };
       await (includeContent ? this.runManagedWrite([filePath], persist, content) : persist());
-
-      await cleanupPaths(committedOperations.map((operation) => operation.backupPath));
       return { ok: true };
     } catch (error) {
-      for (const operation of committedOperations.reverse()) {
-        if (operation.kind === 'write') {
-          await rm(operation.targetPath, { force: true });
-        }
-
-        if (operation.backupPath) {
-          await rename(operation.backupPath, operation.targetPath);
-        }
-      }
-
-      await cleanupPaths(stagedWrites);
-      await cleanupPaths(committedOperations.map((operation) => operation.backupPath));
       return { ok: false, error: error.message };
     }
   }
@@ -711,11 +668,11 @@ export class VaultFileStore {
   async createFile(filePath, content = '') {
     const { absolute, error } = resolveVaultFilePath(this.vaultDir, filePath);
     if (!absolute) {
-      return { ok: false, error };
+      return { ok: false, error, statusCode: 400 };
     }
 
     const validationError = getContentValidationError(filePath, content);
-    if (validationError) return { ok: false, error: validationError };
+    if (validationError) return { ok: false, error: validationError, statusCode: 400 };
 
     try {
       await this.runManagedWrite([filePath], async () => {
@@ -724,7 +681,7 @@ export class VaultFileStore {
         await this.deleteCollaborationSnapshot(filePath);
       }, getEditableVaultContentKind(filePath) ? content.toString() : undefined);
     } catch (error) {
-      if (error.code === 'EEXIST') return { ok: false, error: 'File already exists' };
+      if (error.code === 'EEXIST') return { ok: false, error: 'File already exists', statusCode: 409 };
       throw error;
     }
     return { ok: true };
@@ -786,17 +743,17 @@ export class VaultFileStore {
     const normalizedPath = String(dirPath ?? '').replace(/\\/g, '/').trim();
     const { absolute, error } = resolveVaultDirectoryPath(this.vaultDir, normalizedPath);
     if (!absolute) {
-      return { ok: false, error };
+      return { ok: false, error, statusCode: 400 };
     }
 
     try {
       const info = await stat(absolute);
       if (!info.isDirectory()) {
-        return { ok: false, error: 'Directory not found' };
+        return { ok: false, error: 'Directory not found', statusCode: 404 };
       }
     } catch (statError) {
-      if (statError.code === 'ENOENT') {
-        return { ok: false, error: 'Directory not found' };
+      if (statError.code === 'ENOENT' || statError.code === 'ENOTDIR') {
+        return { ok: false, error: 'Directory not found', statusCode: 404 };
       }
 
       throw statError;
@@ -864,7 +821,7 @@ export class VaultFileStore {
   async deleteFile(filePath) {
     const { absolute, error } = resolveVaultFilePath(this.vaultDir, filePath);
     if (!absolute) {
-      return { ok: false, error };
+      return { ok: false, error, statusCode: 400 };
     }
 
     try {
@@ -873,23 +830,26 @@ export class VaultFileStore {
         await this.sidecarStore.deleteAllForFile(filePath);
       });
       return { ok: true };
-    } catch (error) {
-      return { ok: false, error: error.message };
+    } catch {
+      return { ok: false, error: 'Could not update vault content', statusCode: 500 };
     }
   }
 
   async renameFile(oldPath, newPath) {
     const { absoluteNew, absoluteOld, error } = resolveVaultRenamePaths(this.vaultDir, oldPath, newPath);
     if (!absoluteOld || !absoluteNew) {
-      return { ok: false, error };
+      return { ok: false, error, statusCode: 400 };
     }
 
     try {
       if (!(await stat(absoluteOld)).isFile()) {
-        return { ok: false, error: 'Path is not a file' };
+        return { ok: false, error: 'Path is not a file', statusCode: 400 };
       }
-    } catch {
-      return { ok: false, error: 'File not found' };
+    } catch (error) {
+      if (error.code === 'ENOENT' || error.code === 'ENOTDIR') {
+        return { ok: false, error: 'File not found', statusCode: 404 };
+      }
+      throw error;
     }
 
     if (absoluteOld === absoluteNew) {
@@ -897,7 +857,7 @@ export class VaultFileStore {
     }
 
     if (await pathExists(absoluteNew)) {
-      return { ok: false, error: 'Target path already exists' };
+      return { ok: false, error: 'Target path already exists', statusCode: 409 };
     }
 
     try {
@@ -907,37 +867,40 @@ export class VaultFileStore {
         await this.sidecarStore.renameAllForFile(oldPath, newPath);
       });
       return { ok: true };
-    } catch (error) {
-      return { ok: false, error: error.message };
+    } catch {
+      return { ok: false, error: 'Could not update vault content', statusCode: 500 };
     }
   }
 
   async createDirectory(dirPath) {
     const { absolute, error } = resolveVaultDirectoryPath(this.vaultDir, dirPath);
     if (!absolute) {
-      return { ok: false, error };
+      return { ok: false, error, statusCode: 400 };
     }
 
     try {
       await this.runManagedWrite([dirPath], () => mkdir(absolute, { recursive: true }));
       return { ok: true };
-    } catch (error) {
-      return { ok: false, error: error.message };
+    } catch {
+      return { ok: false, error: 'Could not update vault content', statusCode: 500 };
     }
   }
 
   async renameDirectory(oldPath, newPath) {
     const { absoluteNew, absoluteOld, error } = resolveVaultDirectoryRenamePaths(this.vaultDir, oldPath, newPath);
     if (!absoluteOld || !absoluteNew) {
-      return { ok: false, error };
+      return { ok: false, error, statusCode: 400 };
     }
 
     try {
       if (!(await stat(absoluteOld)).isDirectory()) {
-        return { ok: false, error: 'Path is not a directory' };
+        return { ok: false, error: 'Path is not a directory', statusCode: 400 };
       }
-    } catch {
-      return { ok: false, error: 'Directory not found' };
+    } catch (error) {
+      if (error.code === 'ENOENT' || error.code === 'ENOTDIR') {
+        return { ok: false, error: 'Directory not found', statusCode: 404 };
+      }
+      throw error;
     }
 
     if (absoluteOld === absoluteNew) {
@@ -945,7 +908,7 @@ export class VaultFileStore {
     }
 
     if (await pathExists(absoluteNew)) {
-      return { ok: false, error: 'Target path already exists' };
+      return { ok: false, error: 'Target path already exists', statusCode: 409 };
     }
 
     const managedPaths = await this.listWorkspacePathsUnder(oldPath);
@@ -960,15 +923,15 @@ export class VaultFileStore {
         );
       });
       return { ok: true };
-    } catch (renameError) {
-      return { ok: false, error: renameError.message };
+    } catch {
+      return { ok: false, error: 'Could not rename directory', statusCode: 500 };
     }
   }
 
   async deleteDirectory(dirPath, { recursive = false } = {}) {
     const { absolute, error } = resolveVaultDirectoryPath(this.vaultDir, dirPath);
     if (!absolute) {
-      return { ok: false, error };
+      return { ok: false, error, statusCode: 400 };
     }
 
     const managedPaths = await this.listWorkspacePathsUnder(dirPath);
@@ -976,21 +939,21 @@ export class VaultFileStore {
     try {
       const info = await stat(absolute);
       if (!info.isDirectory()) {
-        return { ok: false, error: 'Path is not a directory' };
+        return { ok: false, error: 'Path is not a directory', statusCode: 400 };
       }
     } catch (statError) {
       if (statError.code === 'ENOENT') {
         return { ok: true };
       }
 
-      return { ok: false, error: statError.message };
+      return { ok: false, error: 'Could not inspect directory', statusCode: 500 };
     }
 
     try {
       if (!recursive) {
         const contents = await readdir(absolute);
         if (contents.length > 0) {
-          return { ok: false, error: 'Directory is not empty' };
+          return { ok: false, error: 'Directory is not empty', statusCode: 409 };
         }
       }
 
@@ -1006,7 +969,10 @@ export class VaultFileStore {
       });
       return { ok: true };
     } catch (deleteError) {
-      return { ok: false, error: deleteError.message };
+      if (deleteError.code === 'ENOTEMPTY' || deleteError.code === 'EEXIST') {
+        return { ok: false, error: 'Directory is not empty', statusCode: 409 };
+      }
+      return { ok: false, error: 'Could not delete directory', statusCode: 500 };
     }
   }
 

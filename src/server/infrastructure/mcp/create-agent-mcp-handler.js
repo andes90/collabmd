@@ -1,7 +1,7 @@
 import { createMcpHandler, fromJsonSchema, McpServer } from '@modelcontextprotocol/server';
 import { toNodeHandler } from '@modelcontextprotocol/node';
 
-import { listAgentToolDefinitions } from '../../../domain/agent-tool-definitions.js';
+import { AGENT_TOOL_DEFINITIONS } from '../../../domain/agent-tool-definitions.js';
 import { encodeAgentToolImage } from '../../shared/agent-tool-image.js';
 import { jsonResponse } from '../http/http-response.js';
 import { readRequestId } from '../http/http-request-helpers.js';
@@ -83,18 +83,21 @@ function registerTool(server, name, config, handler, {
   });
 }
 
+const TOOL_SCHEMAS = new Map(AGENT_TOOL_DEFINITIONS.map((definition) => [definition.name, {
+  annotations: definition.annotations,
+  description: definition.description,
+  inputSchema: fromJsonSchema(definition.inputSchema),
+  outputSchema: fromJsonSchema(definition.outputSchema),
+}]));
+
 function buildAgentServer({ actor, agentContentService, rateLimiter, version }) {
   const server = new McpServer(
     { name: 'collabmd', version },
     { instructions: SERVER_INSTRUCTIONS },
   );
-  for (const definition of listAgentToolDefinitions(actor.scopes)) {
-    registerTool(server, definition.name, {
-      annotations: definition.annotations,
-      description: definition.description,
-      inputSchema: fromJsonSchema(definition.inputSchema),
-      outputSchema: fromJsonSchema(definition.outputSchema),
-    }, (input, context) => agentContentService[definition.method](actor, {
+  for (const definition of AGENT_TOOL_DEFINITIONS) {
+    if (!actor.scopes.includes(definition.scope)) continue;
+    registerTool(server, definition.name, TOOL_SCHEMAS.get(definition.name), (input, context) => agentContentService[definition.method](actor, {
       ...input,
       signal: context.signal,
     }), {
@@ -130,7 +133,7 @@ export function createAgentMcpHandler({
     actor: authInfo.extra.actor,
     agentContentService,
     rateLimiter,
-    version: config.build?.version || '0.1.0',
+    version: config.build?.packageVersion || config.build?.version || '0.1.0',
   }));
   const nodeHandler = toNodeHandler(mcpHandler, {
     onerror: (error) => console.error('[mcp] Transport failed:', error.message),
