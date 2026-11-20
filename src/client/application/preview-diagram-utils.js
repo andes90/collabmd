@@ -104,12 +104,12 @@ export function easeOutCubic(progress) {
   return 1 - ((1 - progress) ** 3);
 }
 
-export function createMermaidPlaceholderCardWithMessage(key, { label = 'Mermaid diagram', message = 'Loads when visible' } = {}) {
+function createDiagramPlaceholderCard(kind, key, { label, message }) {
   const card = document.createElement('div');
-  card.className = 'mermaid-placeholder-card';
+  card.className = `${kind}-placeholder-card`;
 
   const copy = document.createElement('div');
-  copy.className = 'mermaid-placeholder-copy';
+  copy.className = `${kind}-placeholder-copy`;
 
   const title = document.createElement('strong');
   title.textContent = label;
@@ -119,8 +119,8 @@ export function createMermaidPlaceholderCardWithMessage(key, { label = 'Mermaid 
 
   const button = document.createElement('button');
   button.type = 'button';
-  button.className = 'mermaid-placeholder-btn';
-  button.dataset.mermaidKey = key;
+  button.className = `${kind}-placeholder-btn`;
+  button.dataset[`${kind}Key`] = key;
   button.textContent = 'Render';
 
   copy.append(title, subtitle);
@@ -128,28 +128,12 @@ export function createMermaidPlaceholderCardWithMessage(key, { label = 'Mermaid 
   return card;
 }
 
+export function createMermaidPlaceholderCardWithMessage(key, { label = 'Mermaid diagram', message = 'Loads when visible' } = {}) {
+  return createDiagramPlaceholderCard('mermaid', key, { label, message });
+}
+
 export function createPlantUmlPlaceholderCard(key, message = 'Renders server-side when visible') {
-  const card = document.createElement('div');
-  card.className = 'plantuml-placeholder-card';
-
-  const copy = document.createElement('div');
-  copy.className = 'plantuml-placeholder-copy';
-
-  const title = document.createElement('strong');
-  title.textContent = 'PlantUML diagram';
-
-  const subtitle = document.createElement('span');
-  subtitle.textContent = message;
-
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'plantuml-placeholder-btn';
-  button.dataset.plantumlKey = key;
-  button.textContent = 'Render';
-
-  copy.append(title, subtitle);
-  card.append(copy, button);
-  return card;
+  return createDiagramPlaceholderCard('plantuml', key, { label: 'PlantUML diagram', message });
 }
 
 export function getDiagramErrorLocation(message = '') {

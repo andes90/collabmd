@@ -45,25 +45,8 @@ async function canvasToPngBlob(canvas) {
     }
   }
 
-  const dataUrl = canvas.toDataURL('image/png');
-  return dataUrlToBlob(dataUrl);
-}
-
-function dataUrlToBlob(dataUrl) {
-  const [header = '', payload = ''] = String(dataUrl).split(',', 2);
-  const mimeMatch = header.match(/^data:([^;,]+)?/u);
-  const mimeType = mimeMatch?.[1] || 'application/octet-stream';
-
-  if (header.includes(';base64')) {
-    const binary = atob(payload);
-    const bytes = new Uint8Array(binary.length);
-    for (let index = 0; index < binary.length; index += 1) {
-      bytes[index] = binary.charCodeAt(index);
-    }
-    return new Blob([bytes], { type: mimeType });
-  }
-
-  return new Blob([decodeURIComponent(payload)], { type: mimeType });
+  const [, payload = ''] = canvas.toDataURL('image/png').split(',', 2);
+  return new Blob([Uint8Array.fromBase64(payload)], { type: 'image/png' });
 }
 
 function cleanupExportSvg(svgElement) {
@@ -72,11 +55,9 @@ function cleanupExportSvg(svgElement) {
     throw new Error('Renderer returned invalid SVG');
   }
 
-  clonedSvg.style.removeProperty('display');
-  clonedSvg.style.removeProperty('margin');
-  clonedSvg.style.removeProperty('max-width');
-  clonedSvg.style.removeProperty('height');
-  clonedSvg.style.removeProperty('width');
+  for (const prop of ['display', 'margin', 'max-width', 'height', 'width']) {
+    clonedSvg.style.removeProperty(prop);
+  }
   clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
 
   const { width, height } = resolveSvgDimensions(clonedSvg);
@@ -86,36 +67,57 @@ function cleanupExportSvg(svgElement) {
   return clonedSvg;
 }
 
-function trimExportSvgElement(svgElement, { padding = 16 } = {}) {
-  const cleanedSvg = cleanupExportSvg(svgElement);
-
-  if (typeof svgElement.getBBox !== 'function') {
-    return cleanedSvg;
+function applyTrimmedSvgBounds(targetSvg, measuredSvg, padding = 16) {
+  if (typeof measuredSvg.getBBox !== 'function') {
+    return false;
   }
 
   try {
-    const bounds = svgElement.getBBox();
+    const bounds = measuredSvg.getBBox();
     if (!bounds || bounds.width <= 0 || bounds.height <= 0) {
-      return cleanedSvg;
+      return false;
     }
 
     const inset = Math.max(0, Number(padding) || 0);
     const width = Math.ceil(bounds.width + (inset * 2));
     const height = Math.ceil(bounds.height + (inset * 2));
-    const viewBox = [
-      Math.floor(bounds.x - inset),
-      Math.floor(bounds.y - inset),
-      width,
-      height,
-    ];
-
-    cleanedSvg.setAttribute('viewBox', viewBox.join(' '));
-    cleanedSvg.setAttribute('width', String(width));
-    cleanedSvg.setAttribute('height', String(height));
-    cleanedSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-    return cleanedSvg;
+    targetSvg.setAttribute('viewBox', `${Math.floor(bounds.x - inset)} ${Math.floor(bounds.y - inset)} ${width} ${height}`);
+    targetSvg.setAttribute('width', String(width));
+    targetSvg.setAttribute('height', String(height));
+    targetSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    return true;
   } catch {
-    return cleanedSvg;
+    return false;
+  }
+}
+
+function trimExportSvgElement(svgElement, { padding = 16 } = {}) {
+  const cleanedSvg = cleanupExportSvg(svgElement);
+  applyTrimmedSvgBounds(cleanedSvg, svgElement, padding);
+  return cleanedSvg;
+}
+
+export function trimSvgMarkup(svgMarkup, { padding = 16 } = {}) {
+  const probe = document.createElement('div');
+  Object.assign(probe.style, {
+    left: '-10000px',
+    pointerEvents: 'none',
+    position: 'fixed',
+    top: '0',
+    visibility: 'hidden',
+  });
+  const parsed = new DOMParser().parseFromString(`<body>${String(svgMarkup ?? '')}</body>`, 'text/html');
+  probe.replaceChildren(...parsed.body.childNodes);
+  document.body.appendChild(probe);
+
+  try {
+    const svgElement = probe.querySelector('svg');
+    if (!(svgElement instanceof SVGSVGElement)) {
+      return svgMarkup;
+    }
+    return applyTrimmedSvgBounds(svgElement, svgElement, padding) ? svgElement.outerHTML : svgMarkup;
+  } finally {
+    probe.remove();
   }
 }
 
@@ -141,11 +143,7 @@ export function createDiagramExportBaseName({
     return currentStem;
   }
 
-  if (sourceLine) {
-    return `${currentStem}-${diagramKind}-L${sourceLine}`;
-  }
-
-  return `${currentStem}-${diagramKind}`;
+  return sourceLine ? `${currentStem}-${diagramKind}-L${sourceLine}` : `${currentStem}-${diagramKind}`;
 }
 
 export function createDiagramExportFileNames(options = {}) {
@@ -158,8 +156,7 @@ export function createDiagramExportFileNames(options = {}) {
 }
 
 export function exportSvgMarkupFromElement(svgElement) {
-  const cleanedSvg = cleanupExportSvg(svgElement);
-  return serializeSvgElement(cleanedSvg);
+  return serializeSvgElement(cleanupExportSvg(svgElement));
 }
 
 export function exportTrimmedSvgMarkupFromElement(svgElement, options = {}) {
@@ -191,12 +188,14 @@ export async function renderMermaidExportSvgMarkup(mermaid, source) {
   mermaid.initialize(LIGHT_EXPORT_MERMAID_CONFIG);
 
   const renderHost = document.createElement('div');
-  renderHost.style.position = 'fixed';
-  renderHost.style.left = '-10000px';
-  renderHost.style.top = '0';
-  renderHost.style.width = '1200px';
-  renderHost.style.visibility = 'hidden';
-  renderHost.style.pointerEvents = 'none';
+  Object.assign(renderHost.style, {
+    left: '-10000px',
+    pointerEvents: 'none',
+    position: 'fixed',
+    top: '0',
+    visibility: 'hidden',
+    width: '1200px',
+  });
   document.body.appendChild(renderHost);
 
   try {
@@ -218,12 +217,23 @@ export async function renderMermaidExportSvgMarkup(mermaid, source) {
   }
 }
 
-export async function rasterizeSvgMarkupToPngBlob(svgMarkup) {
+async function rasterizeSvgMarkupToCanvas(svgMarkup) {
   const safeSvgMarkup = sanitizeSvgMarkup(svgMarkup);
-  const image = await loadImage(encodeSvgDataUrl(safeSvgMarkup));
+  const svgBlobUrl = URL.createObjectURL(new Blob([safeSvgMarkup], { type: 'image/svg+xml;charset=utf-8' }));
+  let image;
+  try {
+    try {
+      image = await loadImage(svgBlobUrl);
+    } catch {
+      image = await loadImage(encodeSvgDataUrl(safeSvgMarkup));
+    }
+  } finally {
+    URL.revokeObjectURL(svgBlobUrl);
+  }
 
   const probe = document.createElement('div');
-  probe.innerHTML = safeSvgMarkup;
+  const parsed = new DOMParser().parseFromString(`<body>${safeSvgMarkup}</body>`, 'text/html');
+  probe.replaceChildren(...parsed.body.childNodes);
   const svgElement = probe.querySelector('svg');
   const { width, height } = svgElement
     ? resolveSvgDimensions(svgElement)
@@ -244,7 +254,15 @@ export async function rasterizeSvgMarkupToPngBlob(svgMarkup) {
   context.fillStyle = '#ffffff';
   context.fillRect(0, 0, canvas.width, canvas.height);
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
-  return canvasToPngBlob(canvas);
+  return canvas;
+}
+
+export async function rasterizeSvgMarkupToPngBlob(svgMarkup) {
+  return canvasToPngBlob(await rasterizeSvgMarkupToCanvas(svgMarkup));
+}
+
+export async function rasterizeSvgMarkupToPngDataUrl(svgMarkup) {
+  return (await rasterizeSvgMarkupToCanvas(svgMarkup)).toDataURL('image/png');
 }
 
 export async function writeBlobToClipboard(blob) {

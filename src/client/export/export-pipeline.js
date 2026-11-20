@@ -7,6 +7,10 @@ import exportStyles from '../styles/export-document.css?inline';
 import highlightStyles from '../assets/vendor/highlight/github.min.css?inline';
 import katexExportCss from 'katex/dist/katex.min.css?inline';
 import {
+  rasterizeSvgMarkupToPngDataUrl,
+  trimSvgMarkup,
+} from '../application/diagram-preview-export.js';
+import {
   encodeSvgDataUrl,
   loadImage,
   resolveSvgDimensions,
@@ -233,10 +237,6 @@ function normalizeDocxWhitespace(root) {
   }
 }
 
-function encodeSvgBase64DataUrl(svgMarkup) {
-  return `data:image/svg+xml;base64,${new TextEncoder().encode(String(svgMarkup ?? '')).toBase64()}`;
-}
-
 function waitForAnimationFrame() {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
@@ -250,93 +250,8 @@ function blobToDataUrl(blob) {
   });
 }
 
-function trimSvgCanvas(svgMarkup, { padding = 16 } = {}) {
-  const probe = document.createElement('div');
-  probe.style.position = 'fixed';
-  probe.style.left = '-10000px';
-  probe.style.top = '0';
-  probe.style.visibility = 'hidden';
-  probe.style.pointerEvents = 'none';
-  replaceChildrenFromHtml(probe, svgMarkup);
-  document.body.appendChild(probe);
-
-  try {
-    const svgElement = probe.querySelector('svg');
-    if (!(svgElement instanceof SVGSVGElement)) {
-      return svgMarkup;
-    }
-
-    let bounds = null;
-    try {
-      bounds = svgElement.getBBox();
-    } catch {
-      return svgMarkup;
-    }
-
-    if (!bounds || bounds.width <= 0 || bounds.height <= 0) {
-      return svgMarkup;
-    }
-
-    const inset = Math.max(0, Number(padding) || 0);
-    const nextViewBox = [
-      Math.floor(bounds.x - inset),
-      Math.floor(bounds.y - inset),
-      Math.ceil(bounds.width + (inset * 2)),
-      Math.ceil(bounds.height + (inset * 2)),
-    ];
-
-    const trimmedWidth = Math.ceil(bounds.width + (inset * 2));
-    const trimmedHeight = Math.ceil(bounds.height + (inset * 2));
-
-    svgElement.setAttribute('viewBox', nextViewBox.join(' '));
-    svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-    svgElement.setAttribute('width', String(trimmedWidth));
-    svgElement.setAttribute('height', String(trimmedHeight));
-    return svgElement.outerHTML;
-  } finally {
-    probe.remove();
-  }
-}
-
 function normalizeExportSvgMarkup(svgMarkup, options = {}) {
-  return trimSvgCanvas(sanitizeSvgMarkup(svgMarkup), options);
-}
-
-async function svgMarkupToPngDataUrl(svgMarkup) {
-  const svgBlobUrl = URL.createObjectURL(new Blob([svgMarkup], {
-    type: 'image/svg+xml;charset=utf-8',
-  }));
-  const svgProbe = document.createElement('div');
-  replaceChildrenFromHtml(svgProbe, svgMarkup);
-  const svgElement = svgProbe.querySelector('svg');
-
-  try {
-    let image;
-    try {
-      image = await loadImage(svgBlobUrl);
-    } catch {
-      image = await loadImage(encodeSvgBase64DataUrl(svgMarkup));
-    }
-    const { width, height } = svgElement ? resolveSvgDimensions(svgElement) : {
-      height: image.naturalHeight || 800,
-      width: image.naturalWidth || 1200,
-    };
-
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.ceil(width));
-    canvas.height = Math.max(1, Math.ceil(height));
-    const context = canvas.getContext('2d');
-    if (!context) {
-      throw new Error('Canvas is unavailable');
-    }
-
-    context.fillStyle = '#ffffff';
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL('image/png');
-  } finally {
-    URL.revokeObjectURL(svgBlobUrl);
-  }
+  return trimSvgMarkup(sanitizeSvgMarkup(svgMarkup), options);
 }
 
 async function imageDataUrlToPngDataUrl(dataUrl) {
@@ -981,7 +896,7 @@ async function resolveDiagramShell(snapshot, shell, { label, prefix, render }) {
 
   const svgMarkup = await render(source, target);
   const svgDataUrl = encodeSvgDataUrl(svgMarkup);
-  const docxDataUrl = await svgMarkupToPngDataUrl(svgMarkup).catch(() => svgDataUrl);
+  const docxDataUrl = await rasterizeSvgMarkupToPngDataUrl(svgMarkup).catch(() => svgDataUrl);
   const assetId = registerAsset(snapshot, {
     dataUrl: svgDataUrl,
     id: createAssetId(prefix),
@@ -1102,7 +1017,7 @@ async function resolveExcalidrawEmbed(snapshot, placeholder) {
 
   const svgMarkup = await renderExcalidrawToSvgMarkup(target);
   const svgDataUrl = encodeSvgDataUrl(svgMarkup);
-  const docxDataUrl = await svgMarkupToPngDataUrl(svgMarkup).catch(() => svgDataUrl);
+  const docxDataUrl = await rasterizeSvgMarkupToPngDataUrl(svgMarkup).catch(() => svgDataUrl);
   const assetId = registerAsset(snapshot, {
     dataUrl: svgDataUrl,
     id: createAssetId('excalidraw'),

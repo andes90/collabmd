@@ -1,7 +1,7 @@
 import darkHighlightThemeUrl from '../assets/vendor/highlight/github-dark.min.css?url';
 import lightHighlightThemeUrl from '../assets/vendor/highlight/github.min.css?url';
 
-export function ensureHighlightThemeStylesheet() {
+export function ensureHighlightThemeStylesheet({ theme = 'dark' } = {}) {
   let themeStylesheet = document.getElementById('hljs-theme');
   if (!(themeStylesheet instanceof HTMLLinkElement)) {
     themeStylesheet = document.createElement('link');
@@ -10,7 +10,7 @@ export function ensureHighlightThemeStylesheet() {
     document.head.append(themeStylesheet);
   }
 
-  themeStylesheet.href = darkHighlightThemeUrl;
+  themeStylesheet.href = theme === 'light' ? lightHighlightThemeUrl : darkHighlightThemeUrl;
   themeStylesheet.dataset.darkHref = darkHighlightThemeUrl;
   themeStylesheet.dataset.lightHref = lightHighlightThemeUrl;
 }
