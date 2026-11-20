@@ -12,10 +12,9 @@ import {
   MSG_AWARENESS,
   MSG_SYNC,
 } from '../../../domain/collaboration-protocol.js';
-import { CollaborationDocumentStore } from './collaboration-document-store.js';
 import { logPerfEvent } from '../../config/perf-logging.js';
 import { populateCommentThreads, serializeCommentThreads } from '../../../domain/comment-threads.js';
-import { getVaultFileKind, isCanvasFilePath } from '../../../domain/file-kind.js';
+import { getVaultFileKind, isCanvasFilePath, isMarkdownFilePath } from '../../../domain/file-kind.js';
 import {
   buildCanvasRoomDocument,
   CANVAS_EDGES_KEY,
@@ -224,17 +223,24 @@ function reconcileTextContent(baselineContent, currentContent, externalContent) 
   };
 }
 
+function assertWriteSucceeded(result, operation, filePath) {
+  if (!result || result.ok !== false) {
+    return;
+  }
+
+  throw new Error(`Failed to ${operation} for "${filePath}": ${result.error || 'Unknown error'}`);
+}
+
 export class CollaborationRoom {
   constructor({
-    documentStore = null,
     getHydrateDelayMs = null,
     name,
     idleGraceMs = 0,
     maxInitialSyncBytes = 16_777_216,
     maxBufferedAmountBytes,
     perfLoggingEnabled = false,
-    vaultFileStore,
-    backlinkIndex,
+    vaultFileStore = null,
+    backlinkIndex = null,
     onEmpty,
   }) {
     this.name = name;
@@ -242,11 +248,8 @@ export class CollaborationRoom {
     this.maxInitialSyncBytes = maxInitialSyncBytes;
     this.maxBufferedAmountBytes = maxBufferedAmountBytes;
     this.perfLoggingEnabled = perfLoggingEnabled;
-    this.documentStore = documentStore ?? new CollaborationDocumentStore({
-      backlinkIndex,
-      name,
-      vaultFileStore,
-    });
+    this.vaultFileStore = vaultFileStore;
+    this.backlinkIndex = backlinkIndex;
     this.getHydrateDelayMs = getHydrateDelayMs;
     this.onEmpty = onEmpty;
     this.doc = new Y.Doc({ gc: true });
@@ -280,6 +283,42 @@ export class CollaborationRoom {
     this.registerContentDirtyListeners();
   }
 
+  hasPersistence() {
+    return Boolean(this.vaultFileStore);
+  }
+
+  async persistState({
+    commentThreads = [],
+    content = '',
+    includeContent = true,
+    snapshot = null,
+  } = {}) {
+    if (!this.vaultFileStore) {
+      return;
+    }
+
+    const result = await this.vaultFileStore.persistCollaborationState(this.name, {
+      commentThreads,
+      content,
+      includeContent,
+      snapshot,
+    });
+    assertWriteSucceeded(result, 'persist collaboration state', this.name);
+
+    if (includeContent && this.backlinkIndex && isMarkdownFilePath(this.name)) {
+      this.backlinkIndex.updateFile(this.name, content);
+    }
+  }
+
+  async writeSnapshot(snapshot) {
+    if (!snapshot || !this.vaultFileStore?.writeCollaborationSnapshot) {
+      return;
+    }
+
+    const result = await this.vaultFileStore.writeCollaborationSnapshot(this.name, snapshot);
+    assertWriteSucceeded(result, 'write collaboration snapshot', this.name);
+  }
+
   async hydrate() {
     if (this.hydrated) {
       return;
@@ -301,15 +340,15 @@ export class CollaborationRoom {
             await delay(hydrateDelayMs);
           }
 
-          if (this.documentStore?.hasPersistence()) {
+          if (this.hasPersistence()) {
             const snapshotReadStartedAt = Date.now();
-            const snapshot = await this.documentStore.readSnapshot();
+            const snapshot = await (this.vaultFileStore?.readCollaborationSnapshot?.(this.name) ?? null);
             snapshotReadDurationMs = Date.now() - snapshotReadStartedAt;
             if (snapshot) {
               snapshotExists = true;
               // Disk is authoritative. Keep read failures outside snapshot validation
               // so a retry cannot reuse stale state or a partially hydrated document.
-              const content = await this.documentStore.readContent();
+              const content = await (this.vaultFileStore?.readEditableVaultContent(this.name) ?? null);
               if (content === null) {
                 throw new Error('Vault file is unavailable');
               }
@@ -368,7 +407,7 @@ export class CollaborationRoom {
               if (validatedSnapshot) {
                 // Persist new Yjs operation IDs before clients can retain them across restarts.
                 if (!isDeepStrictEqual(snapshot, validatedSnapshot)) {
-                  await this.documentStore.writeSnapshot(validatedSnapshot);
+                  await this.writeSnapshot(validatedSnapshot);
                 }
                 Y.applyUpdate(this.doc, validatedSnapshot, 'hydrate');
                 snapshotValid = true;
@@ -380,8 +419,8 @@ export class CollaborationRoom {
 
             const fallbackStartedAt = Date.now();
             const [content, commentThreads] = await Promise.all([
-              this.documentStore.readContent(),
-              this.documentStore.readCommentThreads(),
+              this.vaultFileStore?.readEditableVaultContent(this.name) ?? null,
+              this.vaultFileStore?.readCommentThreads?.(this.name) ?? [],
             ]);
             contentFallbackDurationMs = Date.now() - fallbackStartedAt;
             commentThreadCount = commentThreads.length;
@@ -415,7 +454,7 @@ export class CollaborationRoom {
                 // Clients must only see operation IDs that survive a server restart.
                 for (let attempt = 0; attempt < 3; attempt += 1) {
                   try {
-                    await this.documentStore.writeSnapshot(replacementSnapshot);
+                    await this.writeSnapshot(replacementSnapshot);
                     break;
                   } catch (error) {
                     if (attempt === 2) throw error;
@@ -617,7 +656,7 @@ export class CollaborationRoom {
   }
 
   schedulePersist() {
-    if (!this.documentStore?.hasPersistence() || this.persistencePauseCount > 0) {
+    if (!this.hasPersistence() || this.persistencePauseCount > 0) {
       return;
     }
 
@@ -630,14 +669,14 @@ export class CollaborationRoom {
   }
 
   async persist() {
-    if (!this.documentStore?.hasPersistence() || this.deleted || this.persistencePauseCount > 0) {
+    if (!this.hasPersistence() || this.deleted || this.persistencePauseCount > 0) {
       return;
     }
 
     const previousPersistPromise = this.activePersistPromise;
     const persistPromise = (async () => {
       await previousPersistPromise?.catch(() => {});
-      if (!this.documentStore?.hasPersistence() || this.deleted || this.persistencePauseCount > 0) {
+      if (!this.hasPersistence() || this.deleted || this.persistencePauseCount > 0) {
         return;
       }
 
@@ -647,7 +686,7 @@ export class CollaborationRoom {
         return;
       }
       if (isCanvasFilePath(this.name) && content !== this.persistedContentBaseline && !this.doc.getMap(CANVAS_META_KEY).has('externalConflict')) {
-        const externalContent = await this.documentStore.readContent();
+        const externalContent = await (this.vaultFileStore?.readEditableVaultContent(this.name) ?? null);
         if (this.deleted || this.destroyed) return;
         if (externalContent === null) {
           this.markDeleted();
@@ -674,7 +713,7 @@ export class CollaborationRoom {
       this.contentDirty = content !== this.persistedContentBaseline;
       const includeContent = this.contentDirty && !conflict;
       const commentThreads = serializeCommentThreads(this.doc.getArray('comments'));
-      await this.documentStore.persistState({
+      await this.persistState({
         commentThreads,
         content,
         includeContent,
@@ -714,13 +753,13 @@ export class CollaborationRoom {
   }
 
   async reloadFromDisk() {
-    if (!this.documentStore?.hasPersistence() || this.deleted || this.destroyed) {
+    if (!this.hasPersistence() || this.deleted || this.destroyed) {
       return false;
     }
 
     const [content, commentThreads] = await Promise.all([
-      this.documentStore.readContent(),
-      this.documentStore.readCommentThreads(),
+      this.vaultFileStore?.readEditableVaultContent(this.name) ?? null,
+      this.vaultFileStore?.readCommentThreads?.(this.name) ?? [],
     ]);
     if (content === null) {
       this.markDeleted();
@@ -858,7 +897,6 @@ export class CollaborationRoom {
     }
 
     this.name = nextName;
-    this.documentStore?.rename(nextName);
   }
 
   cancelPersistenceTimers() {
@@ -1201,7 +1239,7 @@ export class CollaborationRoom {
           const acknowledge = () => sendMessage.call(this, ws, encoding.toUint8Array(encoder), this);
           if (isCanvasFilePath(this.name)) {
             const available = () => this.hydrated && !this.deleted && !this.destroyed
-              && this.documentStore?.hasPersistence() && this.getPersistedContent() !== null;
+              && this.hasPersistence() && this.getPersistedContent() !== null;
             if (available()) {
               void this.persist().then(() => {
                 if (available()) acknowledge();

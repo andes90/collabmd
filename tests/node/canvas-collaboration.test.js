@@ -62,11 +62,11 @@ function requestFlush(room, requestId = 'canvas-flush') {
 
 test('Canvas flush acknowledgement waits for queued content and snapshot writes', async (t) => {
   const { room, state } = await createRoom(t);
-  const originalPersist = room.documentStore.persistState.bind(room.documentStore);
+  const originalPersist = room.persistState.bind(room);
   const gates = [Promise.withResolvers(), Promise.withResolvers()];
   const started = [Promise.withResolvers(), Promise.withResolvers()];
   let writeCount = 0;
-  room.documentStore.persistState = async (options) => {
+  room.persistState = async (options) => {
     const index = writeCount++;
     started[index].resolve();
     await gates[index].promise;
@@ -99,7 +99,7 @@ test('Canvas flush acknowledgement waits for queued content and snapshot writes'
 test('Canvas flush withholds acknowledgement after failed persistence or for unavailable data', async (t) => {
   const { room, state } = await createRoom(t);
   room.doc.transact(() => updateCanvasNode(room.doc, 'a', { text: 'Pending' }), 'client');
-  room.documentStore.vaultFileStore.persistCollaborationState = async () => ({ ok: false, error: 'Write failed' });
+  room.vaultFileStore.persistCollaborationState = async () => ({ ok: false, error: 'Write failed' });
   const failed = requestFlush(room);
   await assert.rejects(room.activePersistPromise, /Write failed/);
   await new Promise(setImmediate);
@@ -120,8 +120,8 @@ test('Canvas flush acknowledges preserved external conflicts only after their si
   state.content = '{external malformed';
   const gate = Promise.withResolvers();
   const started = Promise.withResolvers();
-  const originalPersist = room.documentStore.persistState.bind(room.documentStore);
-  room.documentStore.persistState = async (options) => {
+  const originalPersist = room.persistState.bind(room);
+  room.persistState = async (options) => {
     started.resolve();
     await gate.promise;
     return originalPersist(options);

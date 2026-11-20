@@ -87,8 +87,8 @@ for (const mutation of ['delete-file', 'delete-directory', 'rename-file', 'renam
     room.doc.getText('codemirror').insert(0, 'edited ');
     const entered = Promise.withResolvers();
     const release = Promise.withResolvers();
-    const persistState = room.documentStore.persistState.bind(room.documentStore);
-    room.documentStore.persistState = async (state) => {
+    const persistState = room.persistState.bind(room);
+    room.persistState = async (state) => {
       entered.resolve();
       await release.promise;
       return persistState(state);

@@ -1,16 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { CollaborationDocumentStore } from '../../src/server/domain/collaboration/collaboration-document-store.js';
+import { CollaborationRoom } from '../../src/server/domain/collaboration/collaboration-room.js';
 
-function createDocumentStore({ persistResult = { ok: true }, snapshotResult = { ok: true } } = {}) {
+function createRoom({ persistResult = { ok: true }, snapshotResult = { ok: true } } = {}) {
   const calls = { atomic: [], backlinks: [], snapshots: [] };
-  const store = new CollaborationDocumentStore({
+  const room = new CollaborationRoom({
     backlinkIndex: {
       updateFile(path, content) {
         calls.backlinks.push({ content, path });
       },
     },
+    maxBufferedAmountBytes: 1024,
     name: 'notes.md',
     vaultFileStore: {
       async persistCollaborationState(path, state) {
@@ -23,28 +24,30 @@ function createDocumentStore({ persistResult = { ok: true }, snapshotResult = { 
       },
     },
   });
-  return { calls, store };
+  return { calls, room };
 }
 
-test('CollaborationDocumentStore rejects failed atomic persistence', async () => {
-  const { calls, store } = createDocumentStore({
+test('CollaborationRoom rejects failed atomic persistence', async (t) => {
+  const { calls, room } = createRoom({
     persistResult: { ok: false, error: 'disk full' },
   });
+  t.after(() => room.destroy());
 
   await assert.rejects(
-    () => store.persistState({ content: '# Draft\n' }),
+    () => room.persistState({ content: '# Draft\n' }),
     /Failed to persist collaboration state for "notes\.md": disk full/,
   );
   assert.equal(calls.atomic.length, 1);
   assert.equal(calls.backlinks.length, 0);
 });
 
-test('CollaborationDocumentStore persists state atomically and refreshes markdown backlinks', async () => {
-  const { calls, store } = createDocumentStore();
+test('CollaborationRoom persists state atomically and refreshes markdown backlinks', async (t) => {
+  const { calls, room } = createRoom();
+  t.after(() => room.destroy());
   const snapshot = Uint8Array.from([4, 5, 6]);
   const commentThreads = [{ id: 'thread-1' }];
 
-  await store.persistState({ commentThreads, content: '# Atomic\n', snapshot });
+  await room.persistState({ commentThreads, content: '# Atomic\n', snapshot });
 
   assert.deepEqual(calls.atomic, [{
     path: 'notes.md',
@@ -53,13 +56,14 @@ test('CollaborationDocumentStore persists state atomically and refreshes markdow
   assert.deepEqual(calls.backlinks, [{ content: '# Atomic\n', path: 'notes.md' }]);
 });
 
-test('CollaborationDocumentStore reports replacement snapshot failures', async () => {
-  const { store } = createDocumentStore({
+test('CollaborationRoom reports replacement snapshot failures', async (t) => {
+  const { room } = createRoom({
     snapshotResult: { ok: false, error: 'snapshot path unavailable' },
   });
+  t.after(() => room.destroy());
 
   await assert.rejects(
-    () => store.writeSnapshot(Uint8Array.from([1])),
+    () => room.writeSnapshot(Uint8Array.from([1])),
     /Failed to write collaboration snapshot for "notes\.md": snapshot path unavailable/,
   );
 });

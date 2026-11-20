@@ -3,7 +3,6 @@ import { basename } from 'node:path';
 import { logPerfEvent } from './config/perf-logging.js';
 import { BacklinkIndex } from './domain/backlink-index.js';
 import { BaseQueryService } from './domain/bases/base-query-service.js';
-import { CollaborationDocumentStore } from './domain/collaboration/collaboration-document-store.js';
 import { CollaborationRoom } from './domain/collaboration/collaboration-room.js';
 import { RoomRegistry } from './domain/collaboration/room-registry.js';
 import { isDrawioLeaseRoom } from '../domain/drawio-room.js';
@@ -53,11 +52,7 @@ function buildVaultContext(def, { config, testControls }) {
     createRoom: ({ name, onEmpty }) => {
       const isTransientRoom = name === '__lobby__' || name === WORKSPACE_ROOM_NAME || isDrawioLeaseRoom(name);
       const room = new CollaborationRoom({
-        documentStore: new CollaborationDocumentStore({
-          backlinkIndex: isTransientRoom ? null : backlinkIndex,
-          name,
-          vaultFileStore: isTransientRoom ? null : vaultFileStore,
-        }),
+        backlinkIndex: isTransientRoom ? null : backlinkIndex,
         getHydrateDelayMs: () => testControls.wsRoomHydrateDelayMs,
         idleGraceMs: config.wsRoomIdleGraceMs,
         maxInitialSyncBytes: config.maxInitialSyncBytes,
@@ -65,6 +60,7 @@ function buildVaultContext(def, { config, testControls }) {
         name,
         onEmpty,
         perfLoggingEnabled: config.perfLoggingEnabled,
+        vaultFileStore: isTransientRoom ? null : vaultFileStore,
       });
 
       if (name === WORKSPACE_ROOM_NAME && context.workspaceMutationCoordinator?.workspaceState) {
