@@ -1,19 +1,19 @@
 import { randomUUID, timingSafeEqual, createHash } from 'node:crypto';
 
+import { normalizeEmailAddress } from '../auth/auth-common.js';
 import {
   HOSTED_ROLE_ADMIN,
   HOSTED_ROLE_COLLABORATOR,
   createHostedError,
-  normalizeHostedEmail,
   normalizeHostedRole,
 } from './hosted-workspace-contract.js';
 
 export {
   HOSTED_ROLE_ADMIN,
   HOSTED_ROLE_COLLABORATOR,
-  normalizeHostedEmail,
   normalizeHostedRole,
 } from './hosted-workspace-contract.js';
+export { normalizeEmailAddress as normalizeHostedEmail } from '../auth/auth-common.js';
 
 export const HOSTED_INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const HOSTED_CLAIM_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -141,7 +141,7 @@ function publicVaultSource(record = null) {
 }
 
 function resolveUser(user = null) {
-  const email = normalizeHostedEmail(user?.email);
+  const email = normalizeEmailAddress(user?.email);
   if (!email) {
     return null;
   }
@@ -247,7 +247,7 @@ export class HostedWorkspaceService {
   }
 
   emitAccessChanged(email) {
-    const normalizedEmail = normalizeHostedEmail(email);
+    const normalizedEmail = normalizeEmailAddress(email);
     for (const listener of this.accessListeners) {
       try {
         listener({ email: normalizedEmail });
@@ -263,7 +263,7 @@ export class HostedWorkspaceService {
       return;
     }
 
-    const email = normalizeHostedEmail(this.claim?.email);
+    const email = normalizeEmailAddress(this.claim?.email);
     const token = String(this.claim?.token ?? '');
     if (!email || !token) {
       return;
@@ -534,7 +534,7 @@ export class HostedWorkspaceService {
       throw createHostedError(409, 'Workspace setup must complete before inviting collaborators.', 'HOSTED_SETUP_INCOMPLETE');
     }
 
-    const normalizedEmail = normalizeHostedEmail(email);
+    const normalizedEmail = normalizeEmailAddress(email);
     const normalizedRole = normalizeHostedRole(role) || HOSTED_ROLE_COLLABORATOR;
     if (!normalizedEmail) {
       throw createHostedError(400, 'Invitation email is required.', 'HOSTED_EMAIL_REQUIRED');

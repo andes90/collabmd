@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { normalizeHostedEmail } from '../../domain/hosted-workspace-contract.js';
+import { normalizeEmailAddress } from '../../auth/auth-common.js';
 
 const GITHUB_SETUP_FLOW_TTL_MS = 15 * 60 * 1000;
 
@@ -34,7 +34,7 @@ export class GitHubSetupFlow {
     return {
       expiresAt,
       setCookie: this.cookieManager.create(req, {
-        adminEmail: normalizeHostedEmail(admin?.email),
+        adminEmail: normalizeEmailAddress(admin?.email),
         createdAt,
         expiresAt,
         state,
@@ -63,7 +63,7 @@ export class GitHubSetupFlow {
       throw createFlowError(403, 'GitHub setup state did not match.', 'HOSTED_GITHUB_SETUP_STATE_MISMATCH');
     }
 
-    if (normalizeHostedEmail(flow.adminEmail) !== normalizeHostedEmail(admin?.email)) {
+    if (normalizeEmailAddress(flow.adminEmail) !== normalizeEmailAddress(admin?.email)) {
       throw createFlowError(403, 'GitHub setup must be completed by the Team Admin who started it.', 'HOSTED_GITHUB_SETUP_ADMIN_MISMATCH');
     }
 

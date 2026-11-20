@@ -147,15 +147,6 @@ export function createAuthService(config) {
       return clientConfig;
     },
 
-    getStartupInfo() {
-      return {
-        generatedPassword: authConfig.generatedPassword || '',
-        password: authConfig.password || '',
-        passwordWasGenerated: Boolean(authConfig.passwordWasGenerated),
-        strategy: authConfig.strategy,
-      };
-    },
-
     getStatus(req) {
       return strategy.getStatus(req);
     },

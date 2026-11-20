@@ -1,5 +1,3 @@
-import { normalizeEmailAddress } from '../auth/auth-common.js';
-
 export const HOSTED_ROLE_ADMIN = 'admin';
 export const HOSTED_ROLE_COLLABORATOR = 'collaborator';
 
@@ -10,10 +8,6 @@ export function createHostedError(statusCode, message, code) {
   error.statusCode = statusCode;
   error.code = code;
   return error;
-}
-
-export function normalizeHostedEmail(value) {
-  return normalizeEmailAddress(value);
 }
 
 export function normalizeHostedRole(value) {

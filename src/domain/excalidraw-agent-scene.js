@@ -443,10 +443,6 @@ export function createAgentExcalidrawScene(rawElements) {
   };
 }
 
-export function applyAgentExcalidrawEdits(scene, edits = {}) {
-  return applyAgentExcalidrawEditsWithSummary(scene, edits).scene;
-}
-
 export function applyAgentExcalidrawEditsWithSummary(scene, edits = {}) {
   requireObject(scene, 'Excalidraw scene');
   if (scene.type !== 'excalidraw' || !Array.isArray(scene.elements)) {

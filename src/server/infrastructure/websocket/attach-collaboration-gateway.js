@@ -1,6 +1,6 @@
 import { WebSocketServer } from 'ws';
 
-import { normalizeHostedEmail } from '../../domain/hosted-workspace-contract.js';
+import { normalizeEmailAddress } from '../../auth/auth-common.js';
 import {
   createRequestUrlWithPathname,
   stripBasePath,
@@ -138,7 +138,7 @@ export function attachCollaborationGateway({
       });
       socketSessions.set(ws, {
         session,
-        userEmail: normalizeHostedEmail(user?.email),
+        userEmail: normalizeEmailAddress(user?.email),
       });
       void session.initialize();
     }).catch((error) => {

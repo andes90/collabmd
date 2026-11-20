@@ -5,11 +5,11 @@ import { createAuthApiHandler } from './create-auth-api-handler.js';
 import { createGitApiCommandHandler } from './create-git-api-command-handler.js';
 import { createGitApiQueryHandler } from './create-git-api-query-handler.js';
 import { createHostedApiHandler } from './create-hosted-api-handler.js';
-import { createPlantUmlApiHandler } from './create-plantuml-api-handler.js';
 import { createStaticHandler } from './create-static-handler.js';
 import { createStructurizrApiHandler } from './create-structurizr-api-handler.js';
 import { createVaultApiCommandHandler } from './create-vault-api-command-handler.js';
 import { createVaultApiQueryHandler } from './create-vault-api-query-handler.js';
+import { getRequestErrorStatusCode } from './http-errors.js';
 import { parseJsonBody } from './request-body.js';
 import {
   createRequestUrlWithPathname,
@@ -23,6 +23,35 @@ import {
   isSameOriginWriteRequest,
   WRITE_METHODS,
 } from './http-response.js';
+
+async function handlePlantUmlApi(req, res, requestUrl, plantUmlRenderer) {
+  if (!(requestUrl.pathname === '/api/plantuml/render' && req.method === 'POST')) {
+    return false;
+  }
+  try {
+    const body = await parseJsonBody(req);
+    if (typeof body.source !== 'string') {
+      jsonResponse(req, res, 400, { error: 'Missing PlantUML source' });
+      return true;
+    }
+    if (!plantUmlRenderer) {
+      jsonResponse(req, res, 503, { error: 'PlantUML renderer is not configured' });
+      return true;
+    }
+    jsonResponse(req, res, 200, { ok: true, svg: await plantUmlRenderer.renderSvg(body.source) });
+  } catch (error) {
+    const statusCode = getRequestErrorStatusCode(error);
+    if (statusCode) {
+      jsonResponse(req, res, statusCode, { error: error.message });
+      return true;
+    }
+    console.error('[api] Failed to render PlantUML:', error.message);
+    jsonResponse(req, res, Number.isInteger(error?.statusCode) ? error.statusCode : 502, {
+      error: error instanceof Error ? error.message : 'Failed to render PlantUML',
+    });
+  }
+  return true;
+}
 
 export function createRequestHandler(
   config,
@@ -88,7 +117,6 @@ export function createRequestHandler(
     vaultRegistry?.getPrimaryContext?.()?.def.id ?? '__primary__',
     { backlinkIndex, baseQueryService, gitService, roomRegistry, searchService, vaultFileStore, workspaceMutationCoordinator },
   );
-  const handlePlantUmlApi = createPlantUmlApiHandler({ plantUmlRenderer });
   const handleStructurizrApi = createStructurizrApiHandler({
     basePath: config.basePath,
     service: structurizrWorkspaceService,
@@ -306,7 +334,7 @@ export function createRequestHandler(
       if (await primaryHandlers.command(req, res, requestUrl)) {
         return;
       }
-      if (await handlePlantUmlApi(req, res, requestUrl)) {
+      if (await handlePlantUmlApi(req, res, requestUrl, plantUmlRenderer)) {
         return;
       }
     }
