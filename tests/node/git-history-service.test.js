@@ -3,6 +3,41 @@ import test from 'node:test';
 
 import { GitHistoryService } from '../../src/server/infrastructure/git/history-service.js';
 
+test('file history pins both Git reads to the same commit and matches stats by hash', async () => {
+  const head = 'a'.repeat(40);
+  const previous = 'b'.repeat(40);
+  const chunk = (hash, detail) => ['\x1e', hash, '\x1f', hash.slice(0, 7), '\n', detail, '\n'].join('');
+  const service = new GitHistoryService({
+    commandRunner: {
+      isGitRepo: async () => true,
+      execGit: async ([command, ref, ...args]) => {
+        if (command === 'rev-parse') return head;
+        assert.equal(ref, head);
+        if (args.includes('--numstat')) return chunk(previous, '3\t4\tnote.md') + chunk(head, '1\t2\tnote.md');
+        return chunk(head, 'M\tnote.md') + chunk(previous, 'A\tnote.md');
+      },
+    },
+  });
+  const { commits } = await service.listFileHistory({ path: 'note.md' });
+  assert.deepEqual(commits.map(({ additions, deletions }) => [additions, deletions]), [[1, 2], [3, 4]]);
+});
+
+test('commit stats match paths even when entries are reordered or omitted', () => {
+  const service = new GitHistoryService({});
+  const entries = [
+    { path: 'notes/new name.md', oldPath: 'notes/old name.md' },
+    { path: 'other.md', oldPath: null },
+    { path: 'missing.md', oldPath: null },
+  ];
+  const stats = ['8\t9\tother.md', '1\t2\t', 'notes/old name.md', 'notes/new name.md', ''].join('\0');
+  const files = service.mergeCommitMetadataFiles(entries, stats);
+  assert.deepEqual(files.map(({ stats }) => stats), [
+    { additions: 1, deletions: 2 },
+    { additions: 8, deletions: 9 },
+    { additions: 0, deletions: 0 },
+  ]);
+});
+
 test('GitHistoryService bounds response entries and sweeps expired unique keys', async (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: 1_000 });
   let reads = 0;

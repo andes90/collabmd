@@ -68,6 +68,10 @@ class FakeElement {
     }
   }
 
+  setAttribute(name, value) {
+    this.attributes[name] = value;
+  }
+
   getAttribute(name) {
     return this.attributes[name] ?? null;
   }
@@ -666,4 +670,54 @@ test('GitDiffViewController renders draw.io changes as visual panes plus XML fal
   assert.match(markup, /XML source/);
   assert.match(markup, /diff-drawio-preview/);
   assert.match(markup, /shape-2/);
+});
+
+test('scrolling a stacked commit updates selection without replacing diff markup', (t) => {
+  const harness = createHarness();
+  t.after(() => harness.restore());
+  const controller = new GitDiffViewController();
+  const paths = ['first.md', 'second.excalidraw'];
+  const sections = paths.map((path, index) => {
+    const section = new FakeElement({ attributes: { 'data-diff-section-path': path } });
+    section.getBoundingClientRect = () => ({ top: 10 + index * 100 });
+    return section;
+  });
+  const items = paths.map((path) => new FakeElement({ attributes: { 'data-diff-index-path': path } }));
+  controller.content.queryMap['[data-diff-section-path]'] = sections;
+  controller.content.queryMap['[data-diff-index-path]'] = items;
+  sections[0].classList.add('active');
+  items[0].classList.add('active');
+  controller.data = { files: paths.map((path) => ({ path })) };
+  controller.source = 'commit';
+  controller.layoutMode = 'stacked';
+  controller.setActiveFilePath(paths[0]);
+  controller.render = () => assert.fail('Scroll replaced the diff');
+
+  controller.handleScrollSelection();
+
+  assert.equal(controller.currentIndex, 1);
+  assert.equal(sections[0].classList.contains('active'), false);
+  assert.equal(sections[1].classList.contains('active'), true);
+  assert.equal(items[0].getAttribute('aria-current'), 'false');
+  assert.equal(items[1].getAttribute('aria-current'), 'true');
+});
+
+test('Excalidraw diff summarizes full staged and working-tree snapshots with a partial patch', async (t) => {
+  const harness = createHarness();
+  t.after(() => harness.restore());
+  const staged = JSON.stringify({ elements: [{ id: 'shape', x: 10 }] });
+  const working = JSON.stringify({ elements: [{ id: 'shape', x: 20 }, { id: 'another' }] });
+  const diagram = { path: 'diagram.excalidraw', status: 'modified', hunks: [{ lines: [{ content: '"x": 20,', type: 'addition' }] }] };
+  const controller = new GitDiffViewController({
+    gitApiClient: {
+      readDiff: async () => ({ files: [diagram] }),
+      readFileSnapshot: async ({ ref }) => { assert.equal(ref, 'INDEX'); return { content: staged }; },
+    },
+    vaultApiClient: { readFile: async () => ({ content: working }) },
+  });
+  await controller.openWorkspaceDiff({ path: diagram.path, scope: 'working-tree' });
+
+  assert.match(controller.content.innerHTML, /<strong>\+1<\/strong>/u);
+  assert.match(controller.content.innerHTML, /<strong>~1<\/strong>/u);
+  assert.match(controller.content.innerHTML, /another/u);
 });

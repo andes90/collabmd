@@ -6,6 +6,7 @@ import {
   countPatchLines,
   parseGitLogHeader,
   parseNumstatEntries,
+  parseNulNumstatEntries,
   parseNameStatusEntries,
   parseUnifiedDiff,
 } from './parsers.js';
@@ -230,8 +231,8 @@ export class GitHistoryService {
     }
 
     return this.runRequest(cacheKey, async () => {
-      const hasHeadCommit = await this.hasHeadCommit();
-      if (!hasHeadCommit) {
+      const headCommit = await this.resolveHeadCommit();
+      if (!headCommit) {
         return setCachedValue(this.historyCache, cacheKey, {
           commits: [],
           hasMore: false,
@@ -244,7 +245,7 @@ export class GitHistoryService {
 
       const logArgs = [
         'log',
-        'HEAD',
+        headCommit,
         `--skip=${normalizedOffset}`,
         '-n',
         String(normalizedLimit + 1),
@@ -428,9 +429,10 @@ export class GitHistoryService {
     });
   }
 
-  async getFileSnapshot({ hash, path } = {}) {
+  async getFileSnapshot({ hash, path, ref } = {}) {
     const isGitRepo = await this.commandRunner.isGitRepo();
-    const normalizedHash = this.normalizeCommitHash(hash);
+    const isWorkspaceRef = ref === 'HEAD' || ref === 'INDEX';
+    const normalizedHash = isWorkspaceRef ? ref : this.normalizeCommitHash(hash);
     const normalizedPath = normalizeRelativeGitPath(path);
 
     if (!isGitRepo) {
@@ -457,7 +459,7 @@ export class GitHistoryService {
       path: normalizedPath,
       type: 'file-snapshot',
     });
-    const cached = getCachedValue(this.commitCache, cacheKey);
+    const cached = !isWorkspaceRef && getCachedValue(this.commitCache, cacheKey);
     if (cached) {
       return cached;
     }
@@ -465,18 +467,20 @@ export class GitHistoryService {
     return this.runRequest(cacheKey, async () => {
       let content;
       try {
-        content = await this.commandRunner.execGit(['show', `${normalizedHash}:${normalizedPath}`]);
+        const object = normalizedHash === 'INDEX' ? `:0:${normalizedPath}` : `${normalizedHash}:${normalizedPath}`;
+        content = await this.commandRunner.execGit(['show', object]);
       } catch {
         throw createGitRequestError(404, 'Commit file not found');
       }
 
-      return setCachedValue(this.commitCache, cacheKey, {
+      const snapshot = {
         content,
         fileKind,
         hash: normalizedHash,
         isGitRepo: true,
         path: normalizedPath,
-      }, this.responseCacheTtlMs);
+      };
+      return isWorkspaceRef ? snapshot : setCachedValue(this.commitCache, cacheKey, snapshot, this.responseCacheTtlMs);
     });
   }
 
@@ -538,11 +542,14 @@ export class GitHistoryService {
   }
 
   async hasHeadCommit() {
+    return (await this.resolveHeadCommit()) !== null;
+  }
+
+  async resolveHeadCommit() {
     try {
-      await this.commandRunner.execGit(['rev-parse', '--verify', 'HEAD']);
-      return true;
+      return (await this.commandRunner.execGit(['rev-parse', '--verify', 'HEAD'])).trim();
     } catch {
-      return false;
+      return null;
     }
   }
 
@@ -645,10 +652,11 @@ export class GitHistoryService {
       .map((chunk) => chunk.trim())
       .filter(Boolean)
       .map((chunk) => this.parseFileHistoryChunk(chunk));
+    const numstatByHash = new Map(numstatChunks.map((chunk) => [chunk.hash, chunk.detailLines.join('\n')]));
 
-    return nameStatusChunks.map((chunk, index) => {
+    return nameStatusChunks.map((chunk) => {
       const nameStatusEntry = parseNameStatusEntries(chunk.detailLines.join('\n'))[0] ?? null;
-      const numstatEntry = parseNumstatEntries(numstatChunks[index]?.detailLines?.join('\n') ?? '')[0] ?? null;
+      const numstatEntry = parseNumstatEntries(numstatByHash.get(chunk.hash))[0] ?? null;
       return {
         additions: Number(numstatEntry?.additions || 0),
         authorEmail: chunk.authorEmail,
@@ -713,6 +721,7 @@ export class GitHistoryService {
       'diff',
       '--find-renames',
       '--numstat',
+      '-z',
       baseRef,
       commitHash,
     ]);
@@ -742,10 +751,11 @@ export class GitHistoryService {
   }
 
   mergeCommitMetadataFiles(nameStatusEntries, numstatOutput) {
-    const numstatEntries = parseNumstatEntries(numstatOutput);
+    const entryKey = ({ path, oldPath }) => JSON.stringify([path, oldPath]);
+    const numstatByPath = new Map(parseNulNumstatEntries(numstatOutput).map((entry) => [entryKey(entry), entry]));
 
-    return nameStatusEntries.map((entry, index) => {
-      const numstatEntry = numstatEntries[index];
+    return nameStatusEntries.map((entry) => {
+      const numstatEntry = numstatByPath.get(entryKey(entry));
       return {
         ...entry,
         fileKind: getVaultFileKind(entry.path),

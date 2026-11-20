@@ -336,8 +336,8 @@ export class GitService {
     });
   }
 
-  async getFileSnapshot({ hash, path } = {}) {
-    return this.historyService.getFileSnapshot({ hash, path });
+  async getFileSnapshot(options = {}) {
+    return this.historyService.getFileSnapshot(options);
   }
 
   async getFileAttachment({ hash, path } = {}) {

@@ -1006,6 +1006,14 @@ test('GitService returns historical file snapshots for text vault files', async 
     gitService.getFileSnapshot({ hash: 'HEAD', path: 'tracked.md' }),
     (error) => error?.statusCode === 400,
   );
+
+  await writeFile(join(repoDir, 'tracked.md'), '# Staged\n', 'utf8');
+  await runGit(repoDir, ['add', 'tracked.md']);
+  await writeFile(join(repoDir, 'tracked.md'), '# Unstaged\n', 'utf8');
+  assert.equal((await gitService.getFileSnapshot({ path: 'tracked.md', ref: 'HEAD' })).content, snapshot.content);
+  assert.equal((await gitService.getFileSnapshot({ path: 'tracked.md', ref: 'INDEX' })).content, '# Staged\n');
+  await runGit(repoDir, ['add', 'tracked.md']);
+  assert.equal((await gitService.getFileSnapshot({ path: 'tracked.md', ref: 'INDEX' })).content, '# Unstaged\n');
 });
 
 test('GitService guards large commit file diffs and deduplicates repeated identical requests', async (t) => {

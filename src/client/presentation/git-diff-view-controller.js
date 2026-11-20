@@ -73,8 +73,8 @@ function getExcalidrawSceneSources(detail = {}) {
     }
   }
 
-  const beforeSource = pickExcalidrawSceneSource(beforeLines);
-  const afterSource = pickExcalidrawSceneSource(afterLines);
+  const beforeSource = detail.excalidrawBeforeSource ?? pickExcalidrawSceneSource(beforeLines);
+  const afterSource = detail.excalidrawAfterSource ?? pickExcalidrawSceneSource(afterLines);
   const isAdded = detail.status === 'added' || detail.status === 'untracked';
   const isDeleted = detail.status === 'deleted';
 
@@ -450,6 +450,7 @@ export class GitDiffViewController {
     this.loadingFiles = new Set();
     this.collapsedFiles = new Set();
     this.fileLoadPromises = new Map();
+    this.renderVersion = 0;
     this.excalidrawPreviewPayloads = new Map();
     this.excalidrawPreviewCounter = 0;
     this.drawioPreviewPayloads = new Map();
@@ -590,6 +591,7 @@ export class GitDiffViewController {
   }
 
   hide() {
+    this.renderVersion += 1;
     this.isActive = false;
     this.page?.classList.add('hidden');
     if (this.content) {
@@ -781,6 +783,7 @@ export class GitDiffViewController {
     if (!this.isActive) {
       return;
     }
+    this.renderVersion += 1;
     this.page?.classList.remove('hidden');
     if (this.content) {
       // pi-lens-ignore: ast-grep:no-inner-html-js
@@ -794,6 +797,7 @@ export class GitDiffViewController {
     if (!this.isActive) {
       return;
     }
+    this.renderVersion += 1;
     this.page?.classList.remove('hidden');
     if (this.content) {
       // pi-lens-ignore: ast-grep:no-inner-html-js
@@ -997,13 +1001,13 @@ export class GitDiffViewController {
             emptyLabel: 'No previous scene',
             label: 'Before',
             scene: scenes.before,
-            source: scenes.beforeSource ? JSON.stringify(scenes.before || parseExcalidrawScene(scenes.beforeSource), null, 2) : '',
+            source: scenes.before ? JSON.stringify(scenes.before, null, 2) : scenes.beforeSource,
           })}
           ${this.renderExcalidrawPane({
             emptyLabel: file.tooLarge ? 'Load the full diff to preview this scene' : 'No scene in this revision',
             label: 'After',
             scene: scenes.after,
-            source: scenes.afterSource ? JSON.stringify(scenes.after || parseExcalidrawScene(scenes.afterSource), null, 2) : '',
+            source: scenes.after ? JSON.stringify(scenes.after, null, 2) : scenes.afterSource,
           })}
         </div>
         ${loadButton}
@@ -1012,58 +1016,30 @@ export class GitDiffViewController {
     `;
   }
 
-  async readDrawioSource({ hash = null, path = null, current = false } = {}) {
-    if (!path) {
-      return '';
-    }
+  async readDiagramSource({ hash = null, ref = null, path, current = false } = {}) {
+    if (!path) return null;
 
     try {
-      if (current) {
-        const response = await this.vaultApiClient?.readFile?.(path);
-        return typeof response?.content === 'string' ? response.content : '';
-      }
-
-      if (!hash || typeof this.gitApiClient?.readFileSnapshot !== 'function') {
-        return '';
-      }
-
-      const response = await this.gitApiClient.readFileSnapshot({ hash, path });
-      return typeof response?.content === 'string' ? response.content : '';
+      const response = current
+        ? await this.vaultApiClient?.readFile?.(path)
+        : ((hash || ref) ? await this.gitApiClient?.readFileSnapshot?.({ hash, path, ref }) : null);
+      return typeof response?.content === 'string' ? response.content : null;
     } catch {
-      return '';
+      return null;
     }
   }
 
-  async enrichDrawioDetail(detail) {
-    const sources = getDrawioSourcePair(detail);
-    let beforeSource = sources.before;
-    let afterSource = sources.after;
+  async enrichDiagramDetail(detail, kind, { commitBaseRef, commitHash, scope, source }) {
+    const isCommit = source === 'commit';
     const isAdded = detail.status === 'added' || detail.status === 'untracked';
     const isDeleted = detail.status === 'deleted';
-    const beforePath = detail.oldPath || detail.path;
-    const afterPath = detail.path;
-
-    if (!isAdded && !hasDrawioSourceRoot(beforeSource)) {
-      beforeSource = await this.readDrawioSource({
-        current: false,
-        hash: this.source === 'commit' ? this.commitBaseRef : 'HEAD',
-        path: beforePath,
-      });
-    }
-
-    if (!isDeleted && !hasDrawioSourceRoot(afterSource)) {
-      afterSource = await this.readDrawioSource({
-        current: this.source !== 'commit',
-        hash: this.source === 'commit' ? this.commitHash : null,
-        path: afterPath,
-      });
-    }
-
-    return {
-      ...detail,
-      drawioAfterSource: afterSource,
-      drawioBeforeSource: beforeSource,
-    };
+    const beforeRef = isCommit ? null : (scope === 'working-tree' ? 'INDEX' : 'HEAD');
+    const afterRef = !isCommit && scope === 'staged' ? 'INDEX' : null;
+    const [before, after] = await Promise.all([
+      isAdded ? '' : this.readDiagramSource({ hash: commitBaseRef, path: detail.oldPath || detail.path, ref: beforeRef }),
+      isDeleted ? '' : this.readDiagramSource({ current: !isCommit && !afterRef, hash: commitHash, path: detail.path, ref: afterRef }),
+    ]);
+    return { ...detail, [`${kind}BeforeSource`]: before, [`${kind}AfterSource`]: after };
   }
 
   registerDrawioPreview(source) {
@@ -1161,7 +1137,7 @@ export class GitDiffViewController {
     `;
   }
 
-  async hydrateExcalidrawPreviews() {
+  async hydrateExcalidrawPreviews(version = this.renderVersion) {
     if (this.excalidrawPreviewPayloads.size === 0 || !this.content) {
       return;
     }
@@ -1175,6 +1151,7 @@ export class GitDiffViewController {
     }
 
     for (const [previewId, scene] of this.excalidrawPreviewPayloads) {
+      if (version !== this.renderVersion) return;
       const preview = this.content.querySelector?.(`[data-diff-excalidraw-preview="${previewId}"]`);
       if (!preview) {
         continue;
@@ -1182,9 +1159,11 @@ export class GitDiffViewController {
 
       try {
         const svg = await exportScene({ ...createExcalidrawExportOptions(scene), type: 'svg' });
+        if (version !== this.renderVersion) return;
         preview.replaceChildren(svg);
         preview.classList.add('is-ready');
       } catch (error) {
+        if (version !== this.renderVersion) return;
         console.warn('[git-diff] Failed to render Excalidraw scene preview:', error);
         preview.textContent = 'Visual preview unavailable';
         preview.classList.add('is-error');
@@ -1192,12 +1171,13 @@ export class GitDiffViewController {
     }
   }
 
-  async hydrateDrawioPreviews() {
+  async hydrateDrawioPreviews(version = this.renderVersion) {
     if (this.drawioPreviewPayloads.size === 0 || !this.content) {
       return;
     }
 
     for (const [previewId, source] of this.drawioPreviewPayloads) {
+      if (version !== this.renderVersion) return;
       const preview = this.content.querySelector?.(`[data-diff-drawio-preview="${previewId}"]`);
       if (!preview) {
         continue;
@@ -1207,11 +1187,14 @@ export class GitDiffViewController {
         await renderDrawioViewer(preview, {
           ariaLabel: 'draw.io diagram diff preview',
           className: 'mxgraph drawio-viewer-frame diff-drawio-viewer-frame',
+          shouldRender: () => version === this.renderVersion,
           source,
           theme: this.getTheme?.() === 'light' ? 'light' : 'dark',
         });
+        if (version !== this.renderVersion) return;
         preview.classList.add('is-ready');
       } catch (error) {
+        if (version !== this.renderVersion) return;
         console.warn('[git-diff] Failed to render draw.io diagram preview:', error);
         preview.textContent = 'Visual preview unavailable';
         preview.classList.add('is-error');
@@ -1719,7 +1702,16 @@ export class GitDiffViewController {
 
     if (nextPath && nextPath !== this.activeFilePath) {
       this.setActiveFilePath(nextPath);
-      this.render();
+      for (const section of sections) {
+        section.classList.toggle('active', section.getAttribute('data-diff-section-path') === nextPath);
+      }
+      const indexItems = this.content.querySelectorAll?.('[data-diff-index-path]') ?? [];
+      for (const item of indexItems) {
+        const active = item.getAttribute('data-diff-index-path') === nextPath;
+        item.classList.toggle('active', active);
+        item.setAttribute('aria-current', String(active));
+      }
+      this.syncToolbar();
     }
   }
 
@@ -1763,13 +1755,15 @@ export class GitDiffViewController {
       this.render();
     }
 
+    const requestData = this.data;
+    const request = { commitBaseRef: this.commitBaseRef, commitHash: this.commitHash, scope: this.requestScope, source: this.source };
     const requestPromise = (async () => {
       try {
         let detail;
-        if (this.source === 'commit') {
+        if (request.source === 'commit') {
           const data = await this.gitApiClient.readCommit({
             allowLargePatch: forceFullPatch,
-            hash: this.commitHash || '',
+            hash: request.commitHash || '',
             path: filePath,
           });
           detail = {
@@ -1780,7 +1774,7 @@ export class GitDiffViewController {
           const data = await this.gitApiClient.readDiff({
             allowLargePatch: forceFullPatch,
             path: filePath,
-            scope: this.requestScope,
+            scope: request.scope,
           });
           detail = {
             ...file,
@@ -1788,9 +1782,12 @@ export class GitDiffViewController {
           };
         }
 
-        if (getDiffFileKind(detail) === 'drawio') {
-          detail = await this.enrichDrawioDetail(detail);
+        if (this.data !== requestData) return null;
+        const kind = getDiffFileKind(detail);
+        if (kind === 'drawio' || kind === 'excalidraw') {
+          detail = await this.enrichDiagramDetail(detail, kind, request);
         }
+        if (this.data !== requestData) return null;
 
         if (cacheKey) {
           this.fileCache.set(cacheKey, detail);
@@ -1798,15 +1795,18 @@ export class GitDiffViewController {
         this.fileErrors.delete(filePath);
         return detail;
       } catch (error) {
+        if (this.data !== requestData) return null;
         console.error('[git-diff] Failed to load file diff:', error);
         const message = this.source === 'commit' ? 'Failed to load commit file diff' : 'Failed to load file diff';
         this.fileErrors.set(filePath, message);
         this.toastController?.show(message);
         return null;
       } finally {
-        this.loadingFiles.delete(filePath);
-        this.fileLoadPromises.delete(requestKey);
-        this.render();
+        if (this.data === requestData) {
+          this.loadingFiles.delete(filePath);
+          this.fileLoadPromises.delete(requestKey);
+          this.render();
+        }
       }
     })();
 
@@ -1935,6 +1935,7 @@ export class GitDiffViewController {
       return;
     }
 
+    const version = ++this.renderVersion;
     this.excalidrawPreviewPayloads.clear();
     this.drawioPreviewPayloads.clear();
 
@@ -1946,8 +1947,8 @@ export class GitDiffViewController {
       this.content.innerHTML = this.renderFocusedFileBody();
     }
     this.syncToolbar();
-    void this.hydrateExcalidrawPreviews();
-    void this.hydrateDrawioPreviews();
+    void this.hydrateExcalidrawPreviews(version);
+    void this.hydrateDrawioPreviews(version);
   }
 
   getToolbarTitle({ commitHash = null, filePath = null, path = null, scope = 'all', source = 'workspace' } = {}) {

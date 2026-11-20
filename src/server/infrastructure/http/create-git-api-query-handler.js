@@ -107,6 +107,7 @@ export function createGitApiQueryHandler({ gitService }) {
         jsonResponse(req, res, 200, await gitService.getFileSnapshot({
           hash: requestUrl.searchParams.get('hash'),
           path: requestUrl.searchParams.get('path'),
+          ref: requestUrl.searchParams.get('ref'),
         }));
       } catch (error) {
         handleApiError(req, res, error, '[api] Failed to read git file snapshot:', 'Failed to read git file snapshot');

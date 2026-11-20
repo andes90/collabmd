@@ -218,6 +218,22 @@ export function parseNumstatEntries(output) {
     .map((line) => parseNumstatLine(line));
 }
 
+export function parseNulNumstatEntries(output) {
+  const fields = String(output ?? '').split('\0');
+  const entries = [];
+  for (let index = 0; index < fields.length - 1; index += 1) {
+    const entry = parseNumstatLine(fields[index]);
+    if (entry.rawPath) {
+      entries.push({ ...entry, path: entry.rawPath, oldPath: null });
+    } else {
+      const oldPath = fields[++index];
+      const path = fields[++index];
+      if (path && oldPath) entries.push({ ...entry, path, oldPath });
+    }
+  }
+  return entries;
+}
+
 export function parseNameStatusOutput(output) {
   return String(output ?? '')
     .split(/\r?\n/u)
@@ -290,6 +306,54 @@ export function countPatchLines(file = null) {
   return (file?.hunks ?? []).reduce((total, hunk) => total + (hunk.lines?.length ?? 0), 0);
 }
 
+function parseDiffHeaderPaths(paths) {
+  const quotedPaths = paths.match(/^("(?:[^"\\]|\\.)*") (.+)$|^(.+) ("(?:[^"\\]|\\.)*")$/u);
+  if (quotedPaths) {
+    return [stripDiffPrefix(quotedPaths[1] ?? quotedPaths[3]), stripDiffPrefix(quotedPaths[2] ?? quotedPaths[4])];
+  }
+
+  // An unchanged path can itself contain " b/". Prefer the split with equal paths.
+  const midpoint = (paths.length - 1) / 2;
+  const separator = paths.startsWith(' b/', midpoint) && paths.slice(2, midpoint) === paths.slice(midpoint + 3)
+    ? midpoint
+    : paths.indexOf(' b/');
+  if (separator < 0) {
+    return [null, null];
+  }
+  return [stripDiffPrefix(paths.slice(0, separator)), stripDiffPrefix(paths.slice(separator + 1))];
+}
+
+function consumeHunkLine(hunk, file, line, cursor) {
+  if (line.startsWith('\\ ')) {
+    hunk.lines.push({ content: line, newLine: null, oldLine: null, type: 'note' });
+    return true;
+  }
+
+  const prefix = line[0];
+  const isContext = prefix === ' ';
+  const isAddition = prefix === '+';
+  const isDeletion = prefix === '-';
+  const consumesOldLine = isContext || isDeletion;
+  const consumesNewLine = isContext || isAddition;
+  if ((!consumesOldLine && !consumesNewLine)
+    || (consumesOldLine && cursor.remainingOld === 0)
+    || (consumesNewLine && cursor.remainingNew === 0)) {
+    return false;
+  }
+
+  hunk.lines.push({
+    content: line.slice(1),
+    newLine: consumesNewLine ? cursor.newLine++ : null,
+    oldLine: consumesOldLine ? cursor.oldLine++ : null,
+    type: isContext ? 'context' : isAddition ? 'addition' : 'deletion',
+  });
+  cursor.remainingOld -= Number(consumesOldLine);
+  cursor.remainingNew -= Number(consumesNewLine);
+  file.stats.additions += Number(isAddition);
+  file.stats.deletions += Number(isDeletion);
+  return true;
+}
+
 export function parseUnifiedDiff(diffText) {
   if (!diffText) {
     return [];
@@ -299,14 +363,16 @@ export function parseUnifiedDiff(diffText) {
   const lines = String(diffText).split(/\r?\n/u);
   let currentFile = null;
   let currentHunk = null;
-  let oldLineNumber = 0;
-  let newLineNumber = 0;
+  let cursor = null;
 
   for (const line of lines) {
+    if (currentHunk && consumeHunkLine(currentHunk, currentFile, line, cursor)) {
+      continue;
+    }
+    currentHunk = null;
+
     if (line.startsWith('diff --git ')) {
-      const parts = line.split(' ');
-      const oldPath = stripDiffPrefix(parts[2]);
-      const newPath = stripDiffPrefix(parts[3]);
+      const [oldPath, newPath] = parseDiffHeaderPaths(line.slice('diff --git '.length));
       currentFile = {
         code: 'M',
         hunks: [],
@@ -319,7 +385,6 @@ export function parseUnifiedDiff(diffText) {
         },
         status: 'modified',
       };
-      currentHunk = null;
       files.push(currentFile);
       continue;
     }
@@ -343,40 +408,40 @@ export function parseUnifiedDiff(diffText) {
     if (line.startsWith('rename from ')) {
       currentFile.code = 'R';
       currentFile.status = 'renamed';
-      currentFile.oldPath = line.slice('rename from '.length);
+      currentFile.oldPath = decodeQuotedPath(line.slice('rename from '.length));
       continue;
     }
 
     if (line.startsWith('rename to ')) {
-      currentFile.path = line.slice('rename to '.length);
+      currentFile.path = decodeQuotedPath(line.slice('rename to '.length));
       continue;
     }
 
     if (line.startsWith('copy from ')) {
       currentFile.code = 'C';
       currentFile.status = 'copied';
-      currentFile.oldPath = line.slice('copy from '.length);
+      currentFile.oldPath = decodeQuotedPath(line.slice('copy from '.length));
       continue;
     }
 
     if (line.startsWith('copy to ')) {
-      currentFile.path = line.slice('copy to '.length);
+      currentFile.path = decodeQuotedPath(line.slice('copy to '.length));
       continue;
     }
 
-    if (line.startsWith('Binary files ')) {
+    if (line.startsWith('Binary files ') || line === 'GIT binary patch') {
       currentFile.isBinary = true;
       currentFile.binaryMessage = line;
       continue;
     }
 
     if (line.startsWith('--- ')) {
-      currentFile.oldPath = stripDiffPrefix(line.slice(4));
+      currentFile.oldPath = stripDiffPrefix(line.slice(4).split('\t', 1)[0]);
       continue;
     }
 
     if (line.startsWith('+++ ')) {
-      currentFile.path = stripDiffPrefix(line.slice(4)) ?? currentFile.path;
+      currentFile.path = stripDiffPrefix(line.slice(4).split('\t', 1)[0]) ?? currentFile.path;
       continue;
     }
 
@@ -387,61 +452,12 @@ export function parseUnifiedDiff(diffText) {
         lines: [],
       };
       currentFile.hunks.push(currentHunk);
-      oldLineNumber = hunk.oldStart;
-      newLineNumber = hunk.newStart;
-      continue;
-    }
-
-    if (!currentHunk) {
-      continue;
-    }
-
-    const prefix = line[0];
-    const content = line.slice(1);
-
-    if (prefix === ' ') {
-      currentHunk.lines.push({
-        content,
-        newLine: newLineNumber,
-        oldLine: oldLineNumber,
-        type: 'context',
-      });
-      oldLineNumber += 1;
-      newLineNumber += 1;
-      continue;
-    }
-
-    if (prefix === '-') {
-      currentFile.stats.deletions += 1;
-      currentHunk.lines.push({
-        content,
-        newLine: null,
-        oldLine: oldLineNumber,
-        type: 'deletion',
-      });
-      oldLineNumber += 1;
-      continue;
-    }
-
-    if (prefix === '+') {
-      currentFile.stats.additions += 1;
-      currentHunk.lines.push({
-        content,
-        newLine: newLineNumber,
-        oldLine: null,
-        type: 'addition',
-      });
-      newLineNumber += 1;
-      continue;
-    }
-
-    if (prefix === '\\') {
-      currentHunk.lines.push({
-        content: line,
-        newLine: null,
-        oldLine: null,
-        type: 'note',
-      });
+      cursor = {
+        newLine: hunk.newStart,
+        oldLine: hunk.oldStart,
+        remainingNew: hunk.newLines,
+        remainingOld: hunk.oldLines,
+      };
     }
   }
 

@@ -49,8 +49,8 @@ export const gitApiClient = {
     });
   },
 
-  readFileSnapshot({ hash, path } = {}) {
-    return apiRequest('/git/file-snapshot', { fallback: 'Failed to load historical file preview', query: { hash, path } });
+  readFileSnapshot({ hash, path, ref } = {}) {
+    return apiRequest('/git/file-snapshot', { fallback: 'Failed to load historical file preview', query: { hash, path, ref } });
   },
 
   getFileAttachmentUrl({ hash, path } = {}) {

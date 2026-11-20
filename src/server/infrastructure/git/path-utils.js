@@ -1,17 +1,21 @@
 import { createRequestError as createGitRequestError } from '../http/http-errors.js';
 
+const PATH_ESCAPES = { a: '\x07', b: '\b', f: '\f', n: '\n', r: '\r', t: '\t', v: '\v' };
+
 export function decodeQuotedPath(pathValue) {
-  const rawValue = String(pathValue ?? '').trim();
+  const rawValue = String(pathValue ?? '');
   if (!(rawValue.startsWith('"') && rawValue.endsWith('"'))) {
     return rawValue;
   }
 
-  return rawValue
-    .slice(1, -1)
-    .replace(/\\([\\"])/g, '$1')
-    .replace(/\\t/g, '\t')
-    .replace(/\\n/g, '\n')
-    .replace(/\\([0-7]{3})/g, (_match, value) => String.fromCharCode(Number.parseInt(value, 8)));
+  return rawValue.slice(1, -1).replace(/\\(?:([0-7]{3}(?:\\[0-7]{3})*)|(["\\abfnrtv]))/gu, (_match, octal, escape) => {
+    if (octal) {
+      const bytes = octal.split('\\').map((value) => Number.parseInt(value, 8));
+      return Buffer.from(bytes).toString('utf8');
+    }
+
+    return PATH_ESCAPES[escape] ?? escape;
+  });
 }
 
 export function normalizeRelativeGitPath(pathValue) {
@@ -36,7 +40,7 @@ export function normalizeRelativeGitPath(pathValue) {
 
 
 export function stripDiffPrefix(pathValue) {
-  const normalizedPath = String(pathValue ?? '').replace(/\s+$/u, '');
+  const normalizedPath = decodeQuotedPath(pathValue);
   if (!normalizedPath || normalizedPath === '/dev/null') {
     return null;
   }

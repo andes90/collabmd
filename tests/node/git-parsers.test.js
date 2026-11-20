@@ -84,3 +84,60 @@ test('parseUnifiedDiff preserves rename metadata and hunk line numbers', () => {
     ],
   );
 });
+
+test('parseUnifiedDiff preserves paths in binary, empty, and metadata-only patches', () => {
+  const files = parseUnifiedDiff([
+    'diff --git a/archive b/Meeting Notes.png b/archive b/Meeting Notes.png',
+    'Binary files a/archive b/Meeting Notes.png and b/archive b/Meeting Notes.png differ',
+    'diff --git a/Empty Note.md b/Empty Note.md',
+    'new file mode 100644',
+    'diff --git "a/Old \\303\\251.md" b/New Note.md',
+    'similarity index 100%',
+    'rename from "Old \\303\\251.md"',
+    'rename to New Note.md',
+    'diff --git a/Original Note.md "b/New \\303\\251.md"',
+    'similarity index 100%',
+    'copy from Original Note.md',
+    'copy to "New \\303\\251.md"',
+    'diff --git "a/Tab\\tName.md" "b/Tab\\tName.md"',
+    'old mode 100644',
+    'new mode 100755',
+  ].join('\n'));
+
+  assert.deepEqual(files.map(({ isBinary, oldPath, path, status }) => [path, oldPath, status, isBinary]), [
+    ['archive b/Meeting Notes.png', null, 'modified', true],
+    ['Empty Note.md', null, 'added', false],
+    ['New Note.md', 'Old é.md', 'renamed', false],
+    ['New é.md', 'Original Note.md', 'copied', false],
+    ['Tab\tName.md', null, 'modified', false],
+  ]);
+});
+
+test('parseUnifiedDiff consumes header-like content and keeps both no-newline notes', () => {
+  const [file] = parseUnifiedDiff([
+    'diff --git a/Meeting Notes.md b/Meeting Notes.md',
+    '--- a/Meeting Notes.md\t',
+    '+++ b/Meeting Notes.md\t',
+    '@@ -3,2 +3,2 @@',
+    ' rename from an older section',
+    '--- comment',
+    '\\ No newline at end of file',
+    '+++ counter',
+    '\\ No newline at end of file',
+    '@@ -8,0 +9 @@',
+    '+rename from the new section',
+  ].join('\n'));
+
+  assert.equal(file.path, 'Meeting Notes.md');
+  assert.equal(file.oldPath, null);
+  assert.equal(file.status, 'modified');
+  assert.deepEqual(file.stats, { additions: 2, deletions: 1 });
+  assert.deepEqual(file.hunks.flatMap((hunk) => hunk.lines), [
+    { content: 'rename from an older section', newLine: 3, oldLine: 3, type: 'context' },
+    { content: '-- comment', newLine: null, oldLine: 4, type: 'deletion' },
+    { content: '\\ No newline at end of file', newLine: null, oldLine: null, type: 'note' },
+    { content: '++ counter', newLine: 4, oldLine: null, type: 'addition' },
+    { content: '\\ No newline at end of file', newLine: null, oldLine: null, type: 'note' },
+    { content: 'rename from the new section', newLine: 9, oldLine: null, type: 'addition' },
+  ]);
+});
