@@ -6,26 +6,6 @@ import highlightOverrideStyles from '../styles/overrides/highlightjs.css?inline'
 import exportStyles from '../styles/export-document.css?inline';
 import highlightStyles from '../assets/vendor/highlight/github.min.css?inline';
 import katexExportCss from 'katex/dist/katex.min.css?inline';
-import katexFontAmsRegular from 'katex/dist/fonts/KaTeX_AMS-Regular.woff2?url';
-import katexFontCaligraphicBold from 'katex/dist/fonts/KaTeX_Caligraphic-Bold.woff2?url';
-import katexFontCaligraphicRegular from 'katex/dist/fonts/KaTeX_Caligraphic-Regular.woff2?url';
-import katexFontFrakturBold from 'katex/dist/fonts/KaTeX_Fraktur-Bold.woff2?url';
-import katexFontFrakturRegular from 'katex/dist/fonts/KaTeX_Fraktur-Regular.woff2?url';
-import katexFontMainBold from 'katex/dist/fonts/KaTeX_Main-Bold.woff2?url';
-import katexFontMainBoldItalic from 'katex/dist/fonts/KaTeX_Main-BoldItalic.woff2?url';
-import katexFontMainItalic from 'katex/dist/fonts/KaTeX_Main-Italic.woff2?url';
-import katexFontMainRegular from 'katex/dist/fonts/KaTeX_Main-Regular.woff2?url';
-import katexFontMathBoldItalic from 'katex/dist/fonts/KaTeX_Math-BoldItalic.woff2?url';
-import katexFontMathItalic from 'katex/dist/fonts/KaTeX_Math-Italic.woff2?url';
-import katexFontSansSerifBold from 'katex/dist/fonts/KaTeX_SansSerif-Bold.woff2?url';
-import katexFontSansSerifItalic from 'katex/dist/fonts/KaTeX_SansSerif-Italic.woff2?url';
-import katexFontSansSerifRegular from 'katex/dist/fonts/KaTeX_SansSerif-Regular.woff2?url';
-import katexFontScriptRegular from 'katex/dist/fonts/KaTeX_Script-Regular.woff2?url';
-import katexFontSize1Regular from 'katex/dist/fonts/KaTeX_Size1-Regular.woff2?url';
-import katexFontSize2Regular from 'katex/dist/fonts/KaTeX_Size2-Regular.woff2?url';
-import katexFontSize3Regular from 'katex/dist/fonts/KaTeX_Size3-Regular.woff2?url';
-import katexFontSize4Regular from 'katex/dist/fonts/KaTeX_Size4-Regular.woff2?url';
-import katexFontTypewriterRegular from 'katex/dist/fonts/KaTeX_Typewriter-Regular.woff2?url';
 import {
   encodeSvgDataUrl,
   loadImage,
@@ -92,28 +72,15 @@ const HTML_EXPORT_STYLES = [
   }`,
 ].join('\n');
 
-const KATEX_EXPORT_FONT_URLS = {
-  'KaTeX_AMS-Regular.woff2': katexFontAmsRegular,
-  'KaTeX_Caligraphic-Bold.woff2': katexFontCaligraphicBold,
-  'KaTeX_Caligraphic-Regular.woff2': katexFontCaligraphicRegular,
-  'KaTeX_Fraktur-Bold.woff2': katexFontFrakturBold,
-  'KaTeX_Fraktur-Regular.woff2': katexFontFrakturRegular,
-  'KaTeX_Main-Bold.woff2': katexFontMainBold,
-  'KaTeX_Main-BoldItalic.woff2': katexFontMainBoldItalic,
-  'KaTeX_Main-Italic.woff2': katexFontMainItalic,
-  'KaTeX_Main-Regular.woff2': katexFontMainRegular,
-  'KaTeX_Math-BoldItalic.woff2': katexFontMathBoldItalic,
-  'KaTeX_Math-Italic.woff2': katexFontMathItalic,
-  'KaTeX_SansSerif-Bold.woff2': katexFontSansSerifBold,
-  'KaTeX_SansSerif-Italic.woff2': katexFontSansSerifItalic,
-  'KaTeX_SansSerif-Regular.woff2': katexFontSansSerifRegular,
-  'KaTeX_Script-Regular.woff2': katexFontScriptRegular,
-  'KaTeX_Size1-Regular.woff2': katexFontSize1Regular,
-  'KaTeX_Size2-Regular.woff2': katexFontSize2Regular,
-  'KaTeX_Size3-Regular.woff2': katexFontSize3Regular,
-  'KaTeX_Size4-Regular.woff2': katexFontSize4Regular,
-  'KaTeX_Typewriter-Regular.woff2': katexFontTypewriterRegular,
-};
+const KATEX_EXPORT_FONT_URLS = Object.fromEntries(
+  Object.entries(
+    import.meta.glob('../../../node_modules/katex/dist/fonts/*.woff2', {
+      eager: true,
+      import: 'default',
+      query: '?url',
+    }),
+  ).map(([fontPath, fontUrl]) => [fontPath.split('/').pop(), fontUrl]),
+);
 
 // Standalone HTML exports must carry KaTeX fonts as data URLs to render
 // math offline. Fonts load once per session, only for math exports.
@@ -136,11 +103,7 @@ function loadKatexExportStyles() {
 
         const response = await fetch(fontUrl);
         const bytes = new Uint8Array(await response.arrayBuffer());
-        let binary = '';
-        for (let index = 0; index < bytes.length; index += 0x8000) {
-          binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
-        }
-        css = css.replace(pattern, `url(data:font/woff2;base64,${btoa(binary)})`);
+        css = css.replace(pattern, `url(data:font/woff2;base64,${bytes.toBase64()})`);
       }),
     );
     return css.replace(/,url\((?!data:)[^)]+?\)\s*format\("(?:woff|truetype)"\)/gu, '');
@@ -271,13 +234,7 @@ function normalizeDocxWhitespace(root) {
 }
 
 function encodeSvgBase64DataUrl(svgMarkup) {
-  const bytes = new TextEncoder().encode(String(svgMarkup ?? ''));
-  const chunkSize = 0x8000;
-  let binary = '';
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
-  }
-  return `data:image/svg+xml;base64,${btoa(binary)}`;
+  return `data:image/svg+xml;base64,${new TextEncoder().encode(String(svgMarkup ?? '')).toBase64()}`;
 }
 
 function waitForAnimationFrame() {
@@ -491,24 +448,19 @@ async function fetchAsDataUrl(src, {
   timeoutMs = EXPORT_ASSET_FETCH_TIMEOUT_MS,
 } = {}) {
   const assetUrl = new URL(src, window.location.href);
-  const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
-
   let response;
   try {
     response = await fetch(assetUrl.toString(), {
       credentials: assetUrl.origin === window.location.origin ? 'same-origin' : 'omit',
-      signal: controller.signal,
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
+    if (error instanceof DOMException && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
       throw new Error(`Timed out while fetching asset: ${assetUrl.toString()}`, {
         cause: error,
       });
     }
     throw error;
-  } finally {
-    window.clearTimeout(timeoutId);
   }
 
   if (!response.ok) {
