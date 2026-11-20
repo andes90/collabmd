@@ -2,7 +2,7 @@ const USER_NAMES = [
   'Alice', 'Bob', 'Charlie', 'Dana', 'Eve', 'Frank', 'Grace', 'Hank', 'Iris', 'Jack',
   'Kim', 'Leo', 'Maya', 'Nate', 'Olivia', 'Pete', 'Quinn', 'Ruby', 'Sam', 'Tara',
 ];
-const USER_COLORS = [
+export const USER_COLORS = [
   '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4',
   '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6', '#f59e0b',
   '#6366f1', '#10b981', '#f43f5e', '#0ea5e9', '#a855f7',
@@ -47,7 +47,7 @@ export function generatePeerId() {
 }
 
 function generateUserId() {
-  return globalThis.crypto?.randomUUID?.() ?? `${generatePeerId()}-${Date.now().toString(36)}`;
+  return crypto.randomUUID();
 }
 
 // A stable peer ID for this browser tab, shared across lobby and per-file sessions.

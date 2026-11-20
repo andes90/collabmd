@@ -18,9 +18,8 @@ function normalizeChatMessage(value) {
   return normalized || null;
 }
 
-function createLobbyMessageId(peerId) {
-  return globalThis.crypto?.randomUUID?.()
-    ?? `${peerId || 'user'}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+function createLobbyMessageId() {
+  return crypto.randomUUID();
 }
 
 function normalizeWorkspaceEvent(event) {

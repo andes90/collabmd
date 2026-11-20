@@ -8,9 +8,7 @@ const pendingJobs = new Map();
 let exportBridgeErrorHandler = null;
 
 function createJobId() {
-  const id = globalThis.crypto?.randomUUID?.()
-    ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-  return `export-${id}`;
+  return `export-${crypto.randomUUID()}`;
 }
 
 function normalizeFormat(format) {

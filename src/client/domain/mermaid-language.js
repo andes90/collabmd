@@ -73,16 +73,6 @@ const FLOW_DIRECTIONS = new Set([
   'td',
 ]);
 
-function readWord(stream) {
-  const match = stream.match(/[A-Za-z_][\w.]*(?:-[A-Za-z0-9_][\w.]*)*/u, false);
-  if (!match) {
-    return '';
-  }
-
-  stream.match(/[A-Za-z_][\w.]*(?:-[A-Za-z0-9_][\w.]*)*/u);
-  return match[0];
-}
-
 function readDirective(stream) {
   if (!stream.match('%%{')) {
     return false;
@@ -137,7 +127,7 @@ const mermaidStreamLanguage = StreamLanguage.define({
       return 'punctuation';
     }
 
-    const word = readWord(stream);
+    const word = stream.match(/[A-Za-z_][\w.]*(?:-[A-Za-z0-9_][\w.]*)*/u)?.[0] ?? '';
     if (word) {
       const normalized = word.toLowerCase();
 

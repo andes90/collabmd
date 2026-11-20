@@ -263,9 +263,7 @@ function serializeMessages(messages, thread) {
 }
 
 export function createCommentId(prefix = 'comment') {
-  const id = globalThis.crypto?.randomUUID?.()
-    ?? `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-  return `${prefix}-${id}`;
+  return `${prefix}-${crypto.randomUUID()}`;
 }
 
 export function normalizeCommentAnchor(record = {}) {

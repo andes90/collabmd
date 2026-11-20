@@ -1,10 +1,6 @@
-import { generatePeerId, normalizeUserName } from './room.js';
+import { generatePeerId, normalizeUserName, USER_COLORS } from './room.js';
 
-export const USER_COLOR_PALETTE = [
-  '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4',
-  '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6', '#f59e0b',
-  '#6366f1', '#10b981', '#f43f5e', '#0ea5e9', '#a855f7',
-];
+export const USER_COLOR_PALETTE = USER_COLORS;
 
 export function hashString(value) {
   let hash = 0;

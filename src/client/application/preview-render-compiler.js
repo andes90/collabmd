@@ -417,7 +417,7 @@ function createMarkdownRenderer(fileList = [], {
   markdown.renderer.rules.collabmd_task = (tokens, index, options, env, self) => {
     const { children, meta } = tokens[index];
     const checked = meta.checked ? ' checked' : '';
-    const labelId = `_task-${Math.random().toString(36).slice(2)}`;
+    const labelId = `_task-${crypto.randomUUID().replaceAll('-', '')}`;
     return `<input type="checkbox"${checked} data-task-checkbox="true" aria-labelledby="${labelId}"> <span id="${labelId}" class="task-list-label">${self.renderInline(children, options, env)}</span>`;
   };
 

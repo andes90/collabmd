@@ -119,16 +119,6 @@ const BOOLEAN_LITERALS = new Set([
   'yes',
 ]);
 
-function readWord(stream) {
-  const match = stream.match(/[@!A-Za-z_][\w.-]*/u, false);
-  if (!match) {
-    return '';
-  }
-
-  stream.match(/[@!A-Za-z_][\w.-]*/u);
-  return match[0];
-}
-
 const plantUmlStreamLanguage = StreamLanguage.define({
   languageData: {
     commentTokens: {
@@ -188,7 +178,7 @@ const plantUmlStreamLanguage = StreamLanguage.define({
       return 'operator';
     }
 
-    const word = readWord(stream);
+    const word = stream.match(/[@!A-Za-z_][\w.-]*/u)?.[0] ?? '';
     if (word) {
       const normalized = word.toLowerCase();
 

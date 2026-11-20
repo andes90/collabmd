@@ -8,8 +8,7 @@ function now() {
 }
 
 function createTabId() {
-  return globalThis.crypto?.randomUUID?.()
-    ?? `tab-${now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return crypto.randomUUID();
 }
 
 function safeJsonParse(value) {
