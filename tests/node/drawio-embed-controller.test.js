@@ -489,3 +489,17 @@ test('draw.io editor URLs preserve the URL vault over stored selection', () => {
     globalThis.window = originalWindow;
   }
 });
+
+test('draw.io placeholder lookup compares literal keys containing selector characters', () => {
+  const entry = { key: 'diagram"].drawio#0' };
+  const match = createPlaceholder({ key: entry.key });
+  const controller = createController({
+    previewElement: {
+      querySelectorAll(selector) {
+        assert.equal(selector, '.drawio-embed-placeholder[data-drawio-key]');
+        return [createPlaceholder(), match];
+      },
+    },
+  });
+  assert.equal(controller.findPlaceholder(entry), match);
+});

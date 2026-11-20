@@ -1,5 +1,5 @@
 import { createDrawioLeaseRoomName } from '../../domain/drawio-room.js';
-import { setDiagramActionButtonIcon } from '../domain/diagram-action-icons.js';
+import { setDiagramActionButtonIcon } from './diagram-action-button.js';
 import { getActiveVaultId, resolveAppUrl } from '../domain/runtime-paths.js';
 import {
   applyEmbedMaximizedBoxStyles,
@@ -14,6 +14,7 @@ import {
 import { renderDrawioViewer } from './drawio-viewer.js';
 import {
   cancelIdleRender,
+  findElementByDataset,
   isNearViewport,
   requestIdleRender,
 } from '../browser-utils.js';
@@ -453,7 +454,7 @@ export class DrawioEmbedController {
   }
 
   findPlaceholder(entry) {
-    return this.previewElement?.querySelector?.(`.drawio-embed-placeholder[data-drawio-key="${entry.key}"]`) ?? null;
+    return findElementByDataset(this.previewElement, '.drawio-embed-placeholder[data-drawio-key]', 'drawioKey', entry.key);
   }
 
   ensureOverlayRoot() {

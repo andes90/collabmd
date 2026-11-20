@@ -465,3 +465,13 @@ test('legacy revision maps stay live for stale writers without accumulating new 
   legacy.destroy();
   restored.destroy();
 });
+
+test('Excalidraw ignores nested object key order in element and file updates', (t) => {
+  const doc = new Y.Doc();
+  t.after(() => doc.destroy());
+  const element = createElement('shape');
+  const before = { ...createScene([{ ...element, customData: { title: 'Note', value: 7 } }]), files: { asset: { id: 'asset', dataURL: 'data:image/png;base64,AA==' } } };
+  const after = { ...createScene([{ ...element, customData: { value: 7, title: 'Note' } }]), files: { asset: { dataURL: 'data:image/png;base64,AA==', id: 'asset' } } };
+  assert.equal(applySceneDiffToExcalidrawRoom(doc, before), true);
+  assert.equal(applySceneDiffToExcalidrawRoom(doc, after), false);
+});

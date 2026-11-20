@@ -38,16 +38,18 @@ async function initialize() {
   updateTheme(params.get('theme'));
   await ensureClientAuthenticated();
   if (!filePath || !/\.canvas$/i.test(filePath)) throw new Error('Choose a valid Canvas file from the Vault.');
-  const config = getClientRuntimeConfig();
-  const vaultId = params.get('vaultId') || getActiveVaultId(config);
-  if (vaultId) {
-    const vault = config.vaults?.find((entry) => entry.id === vaultId);
-    if (!vault) throw new Error('Vault unavailable');
-    // Keep this iframe's transport pinned to its Vault while the host switches tabs.
-    config.vaults = [vault];
-    config.activeVault = vaultId;
+  const runtimeConfig = getClientRuntimeConfig();
+  const requestedVault = params.get('vault') || params.get('vaultId');
+  const vaultId = requestedVault || getActiveVaultId(runtimeConfig);
+  const vault = runtimeConfig.vaults?.find((entry) => entry.id === vaultId);
+  if (vaultId && !vault) throw new Error('Vault unavailable');
+  const config = vault ? { ...runtimeConfig, activeVault: vaultId, vaults: [vault] } : runtimeConfig;
+  if (vaultId && !requestedVault) {
+    // Nested editors and previews also resolve their vault from this URL.
+    const url = new URL(window.location.href);
+    url.searchParams.set('vault', vaultId);
+    window.history.replaceState(window.history.state, '', url);
   }
-  window.__COLLABMD_CONFIG__ = config;
   const readFile = (path) => vaultApiClient.readFile(path, config);
   let fileList = [];
   const readTree = async () => {

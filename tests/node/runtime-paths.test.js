@@ -126,6 +126,11 @@ test('URL vault wins over storage for HTTP and WebSocket routing, with valid fal
     assert.equal(getActiveVaultId(config), 'beta');
     assert.equal(resolveApiUrl('/files', config), '/docs/api/v/beta/files');
     assert.equal(resolveWsBaseUrl(config), 'wss://example.test/docs/ws/v/beta');
+    globalThis.window.location.search = '?vaultId=beta';
+    assert.equal(resolveApiUrl('/files', config), '/docs/api/v/beta/files');
+    assert.equal(resolveWsBaseUrl(config), 'wss://example.test/docs/ws/v/beta');
+    globalThis.window.location.search = '?vault=alpha&vaultId=beta';
+    assert.equal(getActiveVaultId(config), 'alpha');
     globalThis.window.location.search = '?vault=unknown';
     assert.equal(getActiveVaultId(config), 'alpha');
   } finally {

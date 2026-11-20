@@ -1,55 +1,48 @@
-const DRAWIO_VIEWER_SCRIPT_URL = 'https://viewer.diagrams.net/js/viewer-static.min.js';
+import { getClientRuntimeConfig } from '../domain/runtime-paths.js';
+
+const HOSTED_EDITOR_ORIGIN = 'https://embed.diagrams.net';
+const HOSTED_VIEWER_ORIGIN = 'https://viewer.diagrams.net';
 
 let drawioViewerLoadPromise = null;
 
-export function ensureDrawioViewerLoaded() {
+function resolveViewerScriptUrl() {
+  const editorUrl = new URL(getClientRuntimeConfig().drawioBaseUrl);
+  if (!['http:', 'https:'].includes(editorUrl.protocol)) {
+    throw new Error('Invalid draw.io viewer URL');
+  }
+  if (editorUrl.origin === HOSTED_EDITOR_ORIGIN && editorUrl.pathname === '/') {
+    return new URL('/js/viewer-static.min.js', HOSTED_VIEWER_ORIGIN);
+  }
+  editorUrl.pathname = `${editorUrl.pathname.replace(/\/$/u, '')}/js/viewer-static.min.js`;
+  editorUrl.search = '';
+  editorUrl.hash = '';
+  return editorUrl;
+}
+
+export async function ensureDrawioViewerLoaded() {
   if (window.GraphViewer?.processElements) {
-    return Promise.resolve(window.GraphViewer);
+    return window.GraphViewer;
   }
 
   if (drawioViewerLoadPromise) {
     return drawioViewerLoadPromise;
   }
 
+  const script = document.createElement('script');
+  script.src = resolveViewerScriptUrl().href;
+  script.async = true;
+  script.dataset.collabmdDrawioViewer = 'true';
   drawioViewerLoadPromise = new Promise((resolve, reject) => {
-    const existingScript = document.querySelector('script[data-collabmd-drawio-viewer]');
-    const script = existingScript instanceof HTMLScriptElement
-      ? existingScript
-      : document.createElement('script');
-
-    const cleanup = () => {
-      script.removeEventListener('error', handleError);
-      script.removeEventListener('load', handleLoad);
-    };
-
-    const handleError = () => {
-      cleanup();
-      drawioViewerLoadPromise = null;
-      reject(new Error('Failed to load draw.io viewer'));
-    };
-
-    const handleLoad = () => {
-      cleanup();
-      if (!window.GraphViewer?.processElements) {
-        drawioViewerLoadPromise = null;
-        reject(new Error('draw.io viewer did not initialize'));
-        return;
-      }
-
-      resolve(window.GraphViewer);
-    };
-
-    script.addEventListener('error', handleError, { once: true });
-    script.addEventListener('load', handleLoad, { once: true });
-
-    if (!existingScript) {
-      script.src = DRAWIO_VIEWER_SCRIPT_URL;
-      script.async = true;
-      script.dataset.collabmdDrawioViewer = 'true';
-      document.head.append(script);
-    } else if (window.GraphViewer?.processElements) {
-      handleLoad();
-    }
+    script.addEventListener('error', () => reject(new Error('Failed to load draw.io viewer')), { once: true });
+    script.addEventListener('load', () => {
+      if (window.GraphViewer?.processElements) resolve(window.GraphViewer);
+      else reject(new Error('draw.io viewer did not initialize'));
+    }, { once: true });
+    document.head.append(script);
+  }).catch((error) => {
+    script.remove();
+    drawioViewerLoadPromise = null;
+    throw error;
   });
 
   return drawioViewerLoadPromise;
@@ -103,8 +96,9 @@ export function createDrawioViewerElement({
   return graphElement;
 }
 
-export async function renderDrawioViewer(host, options = {}) {
+export async function renderDrawioViewer(host, { shouldRender = () => true, ...options } = {}) {
   const viewer = await ensureDrawioViewerLoaded();
+  if (!shouldRender()) return null;
   const graphElement = createDrawioViewerElement(options);
   host.replaceChildren(graphElement);
 

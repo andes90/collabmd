@@ -1,7 +1,5 @@
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
-import * as encoding from 'lib0/encoding';
-import * as decoding from 'lib0/decoding';
 
 import {
   CANVAS_EDGES_KEY,
@@ -13,7 +11,7 @@ import {
   isCanvasRoomDocStructured,
   parseCanvasJson,
 } from '../../domain/canvas-room-codec.js';
-import { MSG_AGENT_FLUSH, MSG_AGENT_FLUSH_ACK } from '../../domain/collaboration-protocol.js';
+import { attachRoomFlushTransport } from './room-flush-transport.js';
 import { resolveWsBaseUrl } from './runtime-config.js';
 import { stopReconnectOnControlledClose } from './yjs-provider-reset-guard.js';
 
@@ -28,7 +26,7 @@ export class CanvasRoomClient {
       this.doc.getMap(CANVAS_NODES_KEY), this.doc.getMap(CANVAS_EDGES_KEY),
       this.doc.getMap(CANVAS_NODE_ORDER_KEY), this.doc.getMap(CANVAS_EDGE_ORDER_KEY),
     ], { trackedOrigins: new Set([this.localOrigin]), captureTimeout: 500 });
-    this.pendingFlushes = new Map();
+    this.flushTransport = null;
     this.localVersion = 0;
     this.acknowledgedVersion = 0;
     this.hasEverConnected = false;
@@ -71,10 +69,7 @@ export class CanvasRoomClient {
       disableBc: true, maxBackoffTime: 5000,
     });
     stopReconnectOnControlledClose(this.provider);
-    this.provider.messageHandlers[MSG_AGENT_FLUSH_ACK] = (_encoder, decoder) => {
-      const requestId = decoding.readVarString(decoder);
-      this.pendingFlushes.get(requestId)?.(true);
-    };
+    this.flushTransport = attachRoomFlushTransport(this.provider, { clientId: this.doc.clientID });
     this.awareness = this.provider.awareness;
     this.setUser(this.user);
     this.awareness.on('change', () => this.publishAwareness());
@@ -162,30 +157,14 @@ export class CanvasRoomClient {
     this.onAwareness?.(users);
   }
 
-  flush(timeoutMs = 5000) {
-    if (!this.hasPendingWrites) return Promise.resolve(true);
-    const ws = this.provider?.ws;
-    if (!this.provider?.synced || ws?.readyState !== 1) return Promise.resolve(false);
+  async flush(timeoutMs = 5000) {
+    if (!this.hasPendingWrites) return true;
+    if (!this.provider?.synced || !this.flushTransport) return false;
     const version = this.localVersion;
-    const requestId = `canvas-${this.doc.clientID}-${crypto.randomUUID()}`;
-    return new Promise((resolve) => {
-      const finish = (acknowledged) => {
-        clearTimeout(timeout);
-        this.pendingFlushes.delete(requestId);
-        if (acknowledged) this.acknowledgedVersion = Math.max(this.acknowledgedVersion, version);
-        resolve(acknowledged && !this.hasPendingWrites);
-      };
-      const timeout = setTimeout(() => finish(false), timeoutMs);
-      this.pendingFlushes.set(requestId, finish);
-      try {
-        const encoder = encoding.createEncoder();
-        encoding.writeVarUint(encoder, MSG_AGENT_FLUSH);
-        encoding.writeVarString(encoder, requestId);
-        ws.send(encoding.toUint8Array(encoder));
-      } catch {
-        finish(false);
-      }
-    });
+    const { status } = await this.flushTransport.flush(timeoutMs);
+    if (status !== 'acknowledged') return false;
+    this.acknowledgedVersion = Math.max(this.acknowledgedVersion, version);
+    return !this.hasPendingWrites;
   }
 
   async prepareDisconnect() {
@@ -202,7 +181,8 @@ export class CanvasRoomClient {
     globalThis.window?.removeEventListener('offline', this.handleOffline);
     globalThis.window?.removeEventListener('online', this.handleOnline);
     clearTimeout(this.flushTimer);
-    [...this.pendingFlushes.values()].forEach((finish) => finish(false));
+    this.flushTransport?.dispose();
+    this.flushTransport = null;
     this.provider?.destroy();
     this.undoManager.destroy();
     this.doc.destroy();

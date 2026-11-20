@@ -119,20 +119,34 @@ export function createRenderedCommentBody(body, className = 'comment-markdown') 
   return container;
 }
 
-export function createCommentOverviewThread({
+export function createCommentOverviewThreadModel({
   authorName = 'Anonymous',
+  lineLabel = '',
+  messageCount = 0,
+  previewBody = '',
+  quote = 'Source anchored comment',
+  timestamp = '',
+} = {}) {
+  return {
+    author: String(authorName),
+    countText: `${messageCount} message${messageCount === 1 ? '' : 's'}`,
+    lineLabel: String(lineLabel),
+    previewBody: String(previewBody ?? ''),
+    quote: String(quote),
+    timestamp: String(timestamp),
+  };
+}
+
+export function createCommentOverviewThread({
   buttonClassName = 'comment-overview-thread',
   footerClassName = 'comment-overview-thread-footer',
   headerClassName = 'comment-overview-thread-header',
   lineClassName = 'comment-overview-thread-line',
-  lineLabel = '',
-  messageCount = 0,
-  previewBody = '',
   previewClassName = 'comment-markdown comment-overview-thread-preview',
-  quote = 'Source anchored comment',
   quoteClassName = 'comment-overview-thread-quote',
-  timestamp = '',
+  ...thread
 } = {}) {
+  const { author: authorName, countText, lineLabel, previewBody, quote, timestamp } = createCommentOverviewThreadModel(thread);
   const button = document.createElement('button');
   button.type = 'button';
   button.className = buttonClassName;
@@ -171,7 +185,7 @@ export function createCommentOverviewThread({
   author.textContent = authorName;
   const messages = document.createElement('span');
   messages.className = 'comment-overview-thread-message-count';
-  messages.textContent = `${messageCount} message${messageCount === 1 ? '' : 's'}`;
+  messages.textContent = countText;
   footer.append(author, messages);
 
   button.append(header, body, footer);

@@ -138,6 +138,8 @@ You can also point it at a self-hosted diagrams.net deployment:
 COLLABMD_DRAWIO_BASE_URL=https://drawio.example.com
 ```
 
+Serve `js/viewer-static.min.js` under the self-hosted base URL for inline previews. CollabMD loads this script into the workspace page, so use a draw.io host you trust.
+
 If the draw.io runtime is unavailable, direct `.drawio` file opens fall back to plain XML editing instead of leaving the file inaccessible.
 
 You can also configure the tunnel via environment variables:

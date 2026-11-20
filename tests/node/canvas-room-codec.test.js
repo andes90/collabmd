@@ -176,3 +176,11 @@ test('Canvas three-way reconciliation merges independent fields and preserves co
   external.nodes.shift();
   assert.equal(mergeCanvasDocuments(baseline, local, external).conflict, true);
 });
+
+test('Canvas compares JSON properties independent of key order and retains array order', (t) => {
+  const doc = new Y.Doc();
+  t.after(() => doc.destroy());
+  addCanvasNode(doc, textNode('node', { custom: { tags: ['a', 'b'], title: 'Note' } }));
+  assert.equal(updateCanvasNode(doc, 'node', { custom: { title: 'Note', tags: ['a', 'b'] } }), false);
+  assert.equal(updateCanvasNode(doc, 'node', { custom: { title: 'Note', tags: ['b', 'a'] } }), true);
+});

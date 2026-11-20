@@ -999,7 +999,7 @@ test('shows Excalidraw comments in the workspace overview and opens the selected
   await frame.evaluate(() => window.__COLLABMD_EXCALIDRAW_TEST__.selectElement('table-shell'));
   await frame.getByTestId('diagram-comments-toggle').click();
   await frame.getByTestId('diagram-add-comment').click();
-  await frame.locator('textarea[aria-label="Comment"]').fill('Review this diagram');
+  await frame.locator('textarea[aria-label="Comment"]').fill('**Review this diagram**');
   await frame.getByRole('button', { name: 'Post comment' }).click();
 
   await expect.poll(async () => (
@@ -1019,6 +1019,12 @@ test('shows Excalidraw comments in the workspace overview and opens the selected
   await expect.poll(async () => (
     frame.evaluate(() => window.__COLLABMD_EXCALIDRAW_TEST__.getViewport()?.zoom)
   )).toBe(1);
+
+  await frame.getByRole('button', { name: 'All comments' }).click();
+  const drawerItem = frame.locator('.comments-drawer-item');
+  await expect(drawerItem.locator('strong')).toHaveText('Review this diagram');
+  await drawerItem.click();
+  await expect(frame.getByRole('button', { name: 'All comments' })).toBeVisible();
 
   await page.goto('/?test=1#file=README.md');
   await expect(page.locator('.cm-editor')).toBeVisible();

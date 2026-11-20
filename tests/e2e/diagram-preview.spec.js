@@ -545,7 +545,7 @@ test('opens drawio files with a maximizable direct preview', async ({ page }) =>
   expect(maximizedBounds.right).toBeLessThanOrEqual(maximizedBounds.innerWidth);
 });
 
-test('direct drawio preview ignores duplicate frame init events during resize', async ({ page }) => {
+test('direct drawio preview validates message origin and preserves the frame during resize', async ({ page }) => {
   let frameDocumentRequests = 0;
   await page.route('https://embed.diagrams.net/**', async (route) => {
     frameDocumentRequests += 1;
@@ -610,6 +610,21 @@ test('direct drawio preview ignores duplicate frame init events during resize', 
   }, { timeout: 60000 }).toBe('1');
   expect(frameDocumentRequests).toBe(1);
 
+  const drawioHost = page.frames().find((frame) => new URL(frame.url()).pathname === '/drawio-editor.html');
+  await drawioHost.evaluate(() => {
+    const frame = document.querySelector('.drawio-frame');
+    window.dispatchEvent(new MessageEvent('message', {
+      data: JSON.stringify({ event: 'save', xml: 'test message from wrong origin' }),
+      origin: 'https://unrelated.example',
+      source: frame.contentWindow,
+    }));
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { source: 'collabmd-host', theme: document.body.dataset.theme === 'dark' ? 'light' : 'dark', type: 'set-theme' },
+      origin: window.location.origin,
+      source: window,
+    }));
+  });
+
   await page.evaluate(() => window.dispatchEvent(new Event('resize')));
   await getFakeDrawioFrame()?.evaluate(() => window.__emitDrawioInit());
 
@@ -628,6 +643,8 @@ test('direct drawio preview ignores duplicate frame init events during resize', 
   await page.locator(`${ACTIVE_MAXIMIZED_DRAWIO_SELECTOR} .drawio-embed-btn[aria-label="Restore diagram size"]`).click();
   await expect(page.locator('#previewContent .drawio-embed-btn[aria-label="Maximize diagram"]')).toBeVisible();
   expect(frameDocumentRequests).toBe(1);
+  const fileResponse = await page.request.get('/api/file?path=sample-drawio.drawio');
+  expect((await fileResponse.json()).content).toContain('<mxfile');
   await expect(iframe).toHaveAttribute('src', initialSrc);
   await expect.poll(async () => (
     page.evaluate(() => document.querySelector('#previewContent .drawio-embed-iframe')?.dataset.resizeProbe || '')
@@ -1010,7 +1027,7 @@ test('embedded excalidraw height resize preserves the iframe instance', async ({
   await expect(page.locator('#previewContent .excalidraw-embed.is-loading')).toHaveCount(0);
 });
 
-test('opening an embedded excalidraw file directly promotes the same iframe into editable mode', async ({ page }) => {
+test('opening an embedded excalidraw file directly creates a fresh editable iframe', async ({ page }) => {
   test.slow();
 
   await stubPlantUmlRender(page, 'sample-full-plantuml');
@@ -1044,7 +1061,7 @@ test('opening an embedded excalidraw file directly promotes the same iframe into
 
   await expect.poll(async () => (
     page.locator('#previewContent .excalidraw-embed iframe').first().getAttribute('data-instance-id')
-  ), { timeout: 60000 }).toBe(firstInstanceId);
+  ), { timeout: 60000 }).not.toBe(firstInstanceId);
 
   await expect.poll(async () => (
     page.evaluate(() => {
@@ -1060,7 +1077,7 @@ test('opening an embedded excalidraw file directly promotes the same iframe into
   ), { timeout: 60000 }).toBe(false);
 });
 
-test('switching directly between excalidraw files reuses the warm iframe instance', async ({ page }) => {
+test('switching directly between excalidraw files disposes the previous iframe', async ({ page }) => {
   await openHome(page);
   await expect(page.locator('#fileTree')).toBeVisible();
 
@@ -1118,11 +1135,13 @@ test('switching directly between excalidraw files reuses the warm iframe instanc
   await expect(secondIframe).toBeVisible();
   await expect.poll(async () => (
     page.locator('#previewContent .excalidraw-embed[data-file="new-diagram.excalidraw"] iframe').first().getAttribute('data-instance-id')
-  ), { timeout: 60000 }).toBe(firstInstanceId);
+  ), { timeout: 60000 }).not.toBe(firstInstanceId);
+  await expect(firstIframe).toHaveCount(0);
+  await expect(page.locator('.excalidraw-embed iframe')).toHaveCount(1);
   await expect(page.locator('#previewContent')).not.toContainText('Loading Excalidraw preview…');
 });
 
-test('switching directly between excalidraw files updates the reused iframe scene', async ({ page }) => {
+test('switching directly between excalidraw files loads the next scene', async ({ page }) => {
   await writeVaultFileAndResetCollab(page, {
     path: 'new-diagram.excalidraw',
     content: JSON.stringify({

@@ -34,10 +34,11 @@ import {
   sceneToInitialData,
 } from './domain/excalidraw-scene.js';
 import {
-  createCommentOverviewThread,
+  createCommentOverviewThreadModel,
   formatAnchorLabel,
   getLatestMessage,
 } from './presentation/comment-ui/comment-ui-shared.js';
+import { DiagramCommentOverviewThreadItem } from './presentation/comment-ui/diagram-comment-overview-thread-item.js';
 import {
   buildReconciledExcalidrawSceneUpdate,
   hasActiveExcalidrawInteraction,
@@ -51,7 +52,7 @@ import {
   createExcalidrawElementLink,
   parseExcalidrawElementLink,
 } from './domain/excalidraw-element-link.js';
-import { resolveAppPath, resolveAppUrl } from './domain/runtime-paths.js';
+import { getClientRuntimeConfig, resolveAppPath, resolveAppUrl } from './domain/runtime-paths.js';
 import { ensureClientAuthenticated } from './infrastructure/auth-client.js';
 import {
   EXCALIDRAW_ROOM_CONNECTION_STATE,
@@ -60,14 +61,15 @@ import {
 import { vaultApiClient } from './infrastructure/vault-api-client.js';
 
 const params = new URLSearchParams(window.location.search);
-const isTestMode = params.get('test') === '1';
+const allowTestOptions = ['development', 'test'].includes(getClientRuntimeConfig().environment);
+const isTestMode = allowTestOptions && params.get('test') === '1';
 const diagnostics = createExcalidrawDiagnosticRing({
-  enabled: params.get('excalidrawDebug') === '1',
+  enabled: allowTestOptions && params.get('excalidrawDebug') === '1',
 });
 const parentOrigin = window.location.origin;
 const appPath = resolveAppPath('/');
 const appUrl = resolveAppUrl('/');
-const syncTimeoutMs = Number.parseInt(params.get('syncTimeoutMs') || '', 10);
+const syncTimeoutMs = Number.parseInt((allowTestOptions && params.get('syncTimeoutMs')) || '', 10);
 
 let currentDocument = {
   filePath: params.get('file') || '',
@@ -81,14 +83,22 @@ let localAwarenessUser = resolveLocalAwarenessUser({
 });
 let appliedSceneJson = '';
 let appliedSceneRevisionPromise = createEditableContentRevision(appliedSceneJson);
+const pendingSceneRevisionWaiters = new Set();
 
 function setAppliedSceneJson(value) {
   appliedSceneJson = value;
   appliedSceneRevisionPromise = createEditableContentRevision(value);
+  notifySceneRevisionWaiters();
 }
 
 let collabReady = false;
 let pendingRemoteSceneJson = '';
+
+function setPendingRemoteSceneJson(value) {
+  pendingRemoteSceneJson = value;
+  if (!value) notifySceneRevisionWaiters();
+}
+
 let pendingRemoteSceneAuthoritative = false;
 let pendingCollaborators = null;
 let activeCollaborators = new Map();
@@ -102,9 +112,7 @@ let apiStateCleanupCallbacks = [];
 let collaboratorRenderFrame = 0;
 let queuedCollaborators = null;
 let initialViewportFitPending = true;
-let viewportFitGeneration = 0;
-let previewViewportFitTimerId = 0;
-let previewViewportFitRetryTimerId = 0;
+let previewViewportFitFrame = null;
 let roomClient = null;
 let roomClientGeneration = 0;
 let reactRoot = null;
@@ -114,7 +122,6 @@ let roomConnectionState = EXCALIDRAW_ROOM_CONNECTION_STATE.CONNECTING;
 let diagramCommentThreads = [];
 let pendingDiagramCommentFocus = null;
 let diagramCommentFocusRequestId = 0;
-let parkRequestedWhileBlocked = false;
 const pendingDisconnectRequestIds = new Set();
 const reportedFileConflictSignatures = new Set();
 
@@ -246,28 +253,20 @@ function formatDiagramCommentTimestamp(value) {
 function renderDiagramCommentOverviewThread(thread, activeThreadId, onOpen) {
   const latestMessage = getLatestMessage(thread?.messages ?? []);
   const messageCount = Array.isArray(thread?.messages) ? thread.messages.length : 0;
-  const button = createCommentOverviewThread({
+  const model = createCommentOverviewThreadModel({
     authorName: latestMessage?.userName || thread?.createdByName || 'Anonymous',
-    buttonClassName: 'comment-overview-thread comments-drawer-item',
-    footerClassName: 'comment-overview-thread-footer comments-drawer-item-footer',
-    headerClassName: 'comment-overview-thread-header comments-drawer-item-header',
-    lineClassName: 'comment-overview-thread-line comments-drawer-item-title',
     lineLabel: formatAnchorLabel(thread),
     messageCount,
     previewBody: latestMessage?.body || '',
-    previewClassName: 'comment-markdown comment-overview-thread-preview comments-drawer-item-preview',
     quote: thread?.anchorQuote || thread?.anchorSnapshot?.text || 'Diagram element',
-    quoteClassName: 'comment-overview-thread-quote comments-drawer-item-quote',
     timestamp: formatDiagramCommentTimestamp(latestMessage?.createdAt),
   });
-  button.classList.toggle('is-active', thread.id === activeThreadId);
 
-  return React.createElement('button', {
-    className: button.className,
-    dangerouslySetInnerHTML: { __html: button.innerHTML },
+  return React.createElement(DiagramCommentOverviewThreadItem, {
+    active: thread.id === activeThreadId,
     key: thread.id,
-    onClick: () => onOpen(thread.id),
-    type: 'button',
+    model,
+    onOpen: () => onOpen(thread.id),
   });
 }
 
@@ -476,7 +475,7 @@ function buildExcalidrawProps({ initialData, renderTopRightUI, viewModeEnabled }
     },
     onUnmount: () => {
       clearEditorApiStateBindings();
-      clearPreviewViewportFitTimers();
+      cancelPreviewViewportFit();
       if (skipRoomDisconnectOnUnmount) {
         skipRoomDisconnectOnUnmount = false;
       } else {
@@ -1404,7 +1403,7 @@ function flushPendingRemoteScene() {
 
   const sceneJson = pendingRemoteSceneJson;
   const authoritative = pendingRemoteSceneAuthoritative;
-  pendingRemoteSceneJson = '';
+  setPendingRemoteSceneJson('');
   pendingRemoteSceneAuthoritative = false;
   applySceneFromJson(sceneJson, {
     authoritative,
@@ -1427,7 +1426,7 @@ function applySceneFromJson(rawJson, {
   recordSceneDiagnostic('remote-scene-received', {}, normalizedJson);
 
   if (!getMountedExcalidrawAPI() || !collabReady) {
-    pendingRemoteSceneJson = normalizedJson;
+    setPendingRemoteSceneJson(normalizedJson);
     pendingRemoteSceneAuthoritative ||= authoritative;
     return;
   }
@@ -1436,12 +1435,12 @@ function applySceneFromJson(rawJson, {
   // latest room scene until the interaction ends instead of marking those remote
   // changes applied and silently losing them (notably remote deletes on resize).
   if (hasActiveSceneInteraction()) {
-    pendingRemoteSceneJson = normalizedJson;
+    setPendingRemoteSceneJson(normalizedJson);
     pendingRemoteSceneAuthoritative ||= authoritative;
     return;
   }
 
-  pendingRemoteSceneJson = '';
+  setPendingRemoteSceneJson('');
   pendingRemoteSceneAuthoritative = false;
   updateApiScene(scene, { authoritative });
 }
@@ -1507,11 +1506,11 @@ function requestEditorRemount(scene) {
 
   const normalizedScene = normalizeScene(scene);
   const normalizedJson = JSON.stringify(normalizedScene);
-  pendingRemoteSceneJson = normalizedJson;
+  setPendingRemoteSceneJson(normalizedJson);
   setAppliedSceneJson(normalizedJson);
   pendingCollaborators = activeCollaborators;
   initialViewportFitPending = true;
-  clearPreviewViewportFitTimers();
+  cancelPreviewViewportFit();
   clearEditorApiStateBindings();
   skipRoomDisconnectOnUnmount = true;
   editorRenderKey += 1;
@@ -1591,7 +1590,7 @@ function applyLocalScene(scene, {
   setAppliedSceneJson(normalizedJson);
 
   if (!getMountedExcalidrawAPI() || !collabReady) {
-    pendingRemoteSceneJson = normalizedJson;
+    setPendingRemoteSceneJson(normalizedJson);
     return;
   }
 
@@ -1643,126 +1642,42 @@ function getSceneElementsForPreviewFit() {
   );
 }
 
-function scheduleViewportFit({
-  delayMs = 0,
-  forcePreview = false,
-  consumeInitialFit = false,
-} = {}) {
-  const normalizedMode = normalizeDocumentMode(currentDocument.mode);
+function scheduleInitialViewportFit() {
+  if (!initialViewportFitPending) return;
+  initialViewportFitPending = false;
   const api = getMountedExcalidrawAPI();
-  if (!api || (forcePreview && normalizedMode !== 'preview')) {
-    return;
-  }
+  if (!api || api.getAppState?.().cursorButton === 'down') return;
 
-  if (!forcePreview && !initialViewportFitPending) {
-    return;
-  }
-
-  if (!forcePreview && api.getAppState?.().cursorButton === 'down') {
-    initialViewportFitPending = false;
-    return;
-  }
-
-  // Empty initial documents must consume this one-shot fit too. Otherwise the
-  // first tiny shape received from a peer is mistaken for initial hydration.
-  if (consumeInitialFit) {
-    initialViewportFitPending = false;
-  }
+  // Even an empty initial scene consumes this one-shot fit.
   const elements = getSceneElementsForPreviewFit();
-  if (elements.length === 0) {
-    return;
-  }
-
-  if (!forcePreview && delayMs === 0) {
+  if (elements.length > 0) {
     api.setViewport({
       target: elements,
       animation: false,
-      fit: normalizedMode === 'preview' ? 'contain' : 'scale-down',
+      fit: currentDocument.mode === 'preview' ? 'contain' : 'scale-down',
     });
-    return;
   }
-
-  const generation = ++viewportFitGeneration;
-
-  if (previewViewportFitTimerId) {
-    window.clearTimeout(previewViewportFitTimerId);
-  }
-
-  previewViewportFitTimerId = window.setTimeout(() => {
-    previewViewportFitTimerId = 0;
-    if (generation !== viewportFitGeneration) {
-      return;
-    }
-
-    requestAnimationFrame(() => {
-      if (generation !== viewportFitGeneration) {
-        return;
-      }
-
-      requestAnimationFrame(() => {
-        if (generation !== viewportFitGeneration) {
-          return;
-        }
-
-        const api = getMountedExcalidrawAPI();
-        if (!api) {
-          return;
-        }
-        if (!forcePreview && api.getAppState?.().cursorButton === 'down') {
-          return;
-        }
-
-        const latestElements = getSceneElementsForPreviewFit();
-        if (latestElements.length === 0) {
-          return;
-        }
-
-        if (forcePreview) {
-          suppressViewportBroadcast = true;
-        }
-
-        api.setViewport({
-          target: latestElements,
-          animation: false,
-          fit: forcePreview || normalizedMode === 'preview' ? 'contain' : 'scale-down',
-        });
-
-        if (forcePreview) {
-          releaseViewportBroadcastSuppressionAfterPaint();
-        }
-      });
-    });
-  }, delayMs);
-}
-
-function scheduleInitialViewportFit() {
-  scheduleViewportFit({ consumeInitialFit: true });
 }
 
 function schedulePreviewViewportFit() {
-  if (previewViewportFitRetryTimerId) {
-    window.clearTimeout(previewViewportFitRetryTimerId);
-  }
+  if (currentDocument.mode !== 'preview' || previewViewportFitFrame !== null) return;
 
-  scheduleViewportFit({ forcePreview: true, delayMs: 80 });
-  previewViewportFitRetryTimerId = window.setTimeout(() => {
-    previewViewportFitRetryTimerId = 0;
-    scheduleViewportFit({ forcePreview: true });
-  }, 240);
+  previewViewportFitFrame = requestAnimationFrame(() => {
+    previewViewportFitFrame = null;
+    const api = getMountedExcalidrawAPI();
+    const elements = getSceneElementsForPreviewFit();
+    if (!api || elements.length === 0) return;
+
+    suppressViewportBroadcast = true;
+    api.setViewport({ target: elements, animation: false, fit: 'contain' });
+    releaseViewportBroadcastSuppressionAfterPaint();
+  });
 }
 
-function clearPreviewViewportFitTimers() {
-  viewportFitGeneration += 1;
-
-  if (previewViewportFitTimerId) {
-    window.clearTimeout(previewViewportFitTimerId);
-    previewViewportFitTimerId = 0;
-  }
-
-  if (previewViewportFitRetryTimerId) {
-    window.clearTimeout(previewViewportFitRetryTimerId);
-    previewViewportFitRetryTimerId = 0;
-  }
+function cancelPreviewViewportFit() {
+  if (previewViewportFitFrame === null) return;
+  cancelAnimationFrame(previewViewportFitFrame);
+  previewViewportFitFrame = null;
 }
 
 function syncLocalViewportToRoom() {
@@ -1863,8 +1778,9 @@ function clearEditorApiStateBindings() {
 }
 
 function resetRealtimeRoomState() {
+  pendingSceneRevisionWaiters.forEach(({ finish }) => finish(''));
   collabReady = false;
-  pendingRemoteSceneJson = '';
+  setPendingRemoteSceneJson('');
   pendingCollaborators = null;
   activeCollaborators = new Map();
   diagramCommentThreads = [];
@@ -1889,7 +1805,6 @@ function disconnectRealtimeRoom({ preserveEditorBindings = false } = {}) {
   roomClientGeneration += 1;
   roomConnectionState = EXCALIDRAW_ROOM_CONNECTION_STATE.CLOSED;
   pendingDisconnectRequestIds.clear();
-  parkRequestedWhileBlocked = false;
 
   resetRealtimeRoomState();
   if (!preserveEditorBindings) {
@@ -1920,68 +1835,53 @@ function disconnectRealtimeRoomOnce() {
   disconnectRealtimeRoom();
 }
 
-async function waitForPendingRoomWrites({
-  intervalMs = 10,
-  maxWaitMs = 150,
-} = {}) {
-  const startedAt = performance.now();
-
-  while ((performance.now() - startedAt) < maxWaitMs) {
-    const ws = roomClient?.provider?.ws;
-    if (!ws || ws.readyState !== WebSocket.OPEN || ws.bufferedAmount === 0) {
-      return;
-    }
-
-    await new Promise((resolve) => window.setTimeout(resolve, intervalMs));
-  }
+function notifySceneRevisionWaiters() {
+  if (pendingSceneRevisionWaiters.size === 0) return;
+  const pending = appliedSceneRevisionPromise;
+  void pending.then((revision) => {
+    if (pending !== appliedSceneRevisionPromise || pendingRemoteSceneJson) return;
+    pendingSceneRevisionWaiters.forEach(({ check }) => check(revision, pending));
+  });
 }
 
-function waitForAnimationFrame() {
-  return new Promise((resolve) => requestAnimationFrame(resolve));
-}
-
-async function waitForAppliedSceneRevision(revision, {
-  afterRevision = '',
-  maxWaitMs = 4500,
-} = {}) {
-  const startedAt = performance.now();
-  while ((performance.now() - startedAt) < maxWaitMs) {
-    const appliedRevision = await appliedSceneRevisionPromise;
-    if (
-      !pendingRemoteSceneJson
-      && (appliedRevision === revision || (afterRevision && appliedRevision !== afterRevision))
-    ) {
-      await waitForAnimationFrame();
-      await waitForAnimationFrame();
-      const paintedRevision = await appliedSceneRevisionPromise;
-      if (
-        !pendingRemoteSceneJson
-        && (paintedRevision === revision || (afterRevision && paintedRevision !== afterRevision))
-      ) {
-        return paintedRevision;
-      }
-    }
-    await new Promise((resolve) => window.setTimeout(resolve, 16));
-  }
-  return '';
+function waitForAppliedSceneRevision(revision, { afterRevision = '', maxWaitMs = 4500 } = {}) {
+  return new Promise((resolve) => {
+    let frame = null;
+    const finish = (value) => {
+      clearTimeout(timeout);
+      if (frame !== null) cancelAnimationFrame(frame);
+      pendingSceneRevisionWaiters.delete(waiter);
+      resolve(value);
+    };
+    const waiter = {
+      check(applied, promise) {
+        if (applied !== revision && (!afterRevision || applied === afterRevision)) return;
+        if (frame !== null) cancelAnimationFrame(frame);
+        frame = requestAnimationFrame(() => {
+          // The second frame observes the scene after the browser has painted it.
+          frame = requestAnimationFrame(() => {
+            frame = null;
+            if (!pendingRemoteSceneJson && promise === appliedSceneRevisionPromise) finish(applied);
+          });
+        });
+      },
+      finish,
+    };
+    const timeout = setTimeout(() => finish(''), maxWaitMs);
+    pendingSceneRevisionWaiters.add(waiter);
+    notifySceneRevisionWaiters();
+  });
 }
 
 async function prepareRealtimeRoomDisconnect() {
-  if (!roomClient) {
-    return true;
-  }
-
-  if (roomClient.getConnectionState() !== EXCALIDRAW_ROOM_CONNECTION_STATE.AUTHORITATIVE) {
-    return false;
-  }
-
-  roomClient.flushSceneSync();
-  await waitForPendingRoomWrites();
-  return roomClient?.getConnectionState() === EXCALIDRAW_ROOM_CONNECTION_STATE.AUTHORITATIVE;
+  const client = roomClient;
+  if (!client) return true;
+  const result = await client.waitForPendingWrites();
+  return client === roomClient && result.status === 'acknowledged';
 }
 
 async function resolvePendingDisconnectRequests() {
-  if (pendingDisconnectRequestIds.size === 0 && !parkRequestedWhileBlocked) {
+  if (pendingDisconnectRequestIds.size === 0) {
     return;
   }
 
@@ -1995,11 +1895,6 @@ async function resolvePendingDisconnectRequests() {
   requestIds.forEach((requestId) => {
     postToParent('disconnect-ready', { requestId });
   });
-
-  if (parkRequestedWhileBlocked) {
-    parkRequestedWhileBlocked = false;
-    disconnectRealtimeRoom({ preserveEditorBindings: true });
-  }
 }
 
 async function connectDocumentClient(filePath) {
@@ -2080,9 +1975,7 @@ window.addEventListener('message', (event) => {
 
   if (message.type === 'flush-agent-writes') {
     void (async () => {
-      roomClient?.flushSceneSync();
-      await waitForPendingRoomWrites({ maxWaitMs: 1000 });
-      const serverFlush = await roomClient?.waitForServerFlush?.({ timeoutMs: 1000 });
+      const serverFlush = await roomClient?.waitForPendingWrites({ maxWaitMs: 1000 });
       postToParent('agent-writes-flushed', {
         requestId: message.requestId || '',
         revision: await appliedSceneRevisionPromise,
@@ -2140,19 +2033,6 @@ window.addEventListener('message', (event) => {
       discarded: true,
       requestId,
     });
-    return;
-  }
-
-  if (message.type === 'park-room') {
-    void (async () => {
-      if (await prepareRealtimeRoomDisconnect()) {
-        disconnectRealtimeRoom({ preserveEditorBindings: true });
-        return;
-      }
-
-      parkRequestedWhileBlocked = true;
-      postToParent('park-blocked', { state: roomConnectionState });
-    })();
   }
 });
 
@@ -2180,6 +2060,9 @@ function initializeEditor(api) {
   apiStateCleanupCallbacks.forEach((cleanup) => cleanup());
   apiStateCleanupCallbacks = [];
 
+  if (currentDocument.mode === 'preview') {
+    apiStateCleanupCallbacks.push(api.onStateChange(['width', 'height'], schedulePreviewViewportFit));
+  }
   apiStateCleanupCallbacks.push(api.onStateChange(['scrollX', 'scrollY', 'zoom'], () => {
     syncLocalViewportToRoom();
   }));
@@ -2207,7 +2090,7 @@ function initializeEditor(api) {
   const sceneJson = pendingRemoteSceneJson || roomClient?.getLastSceneJson?.() || '';
   const authoritative = pendingRemoteSceneAuthoritative;
   const initialScene = parseSceneJson(sceneJson);
-  pendingRemoteSceneJson = '';
+  setPendingRemoteSceneJson('');
   pendingRemoteSceneAuthoritative = false;
   setAppliedSceneJson(JSON.stringify(initialScene));
   updateApiScene(initialScene, { authoritative });

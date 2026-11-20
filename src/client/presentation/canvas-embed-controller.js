@@ -26,7 +26,7 @@ export class CanvasEmbedController {
     url.searchParams.set('file', filePath);
     url.searchParams.set('theme', this.getTheme?.() ?? 'dark');
     const vaultId = getActiveVaultId();
-    if (vaultId) url.searchParams.set('vaultId', vaultId);
+    if (vaultId) url.searchParams.set('vault', vaultId);
     const server = resolveWsServerOverride();
     if (server) url.searchParams.set('server', server);
     const user = this.getLocalUser?.();

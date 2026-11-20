@@ -52,7 +52,8 @@ test('canvas host preserves runtime paths and synchronizes only its current same
   assert.equal(url.pathname, '/docs/canvas-editor.html');
   assert.equal(url.searchParams.get('file'), 'notes/ideas.canvas');
   assert.equal(url.searchParams.get('theme'), 'light');
-  assert.equal(url.searchParams.get('vaultId'), 'team');
+  assert.equal(url.searchParams.get('vault'), 'team');
+  assert.equal(url.searchParams.has('vaultId'), false);
   assert.equal(url.searchParams.get('userPeerId'), user.peerId);
   receive({ type: 'canvas-ready' }, { origin: 'https://other.example' });
   receive({ type: 'canvas-ready' }, { source: {} });

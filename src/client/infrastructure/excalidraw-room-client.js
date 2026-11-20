@@ -1,7 +1,5 @@
 import { Doc } from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
-import * as decoding from 'lib0/decoding';
-import * as encoding from 'lib0/encoding';
 import {
   EXCALIDRAW_APP_STATE_KEY,
   EXCALIDRAW_ELEMENTS_KEY,
@@ -15,10 +13,7 @@ import {
   readLegacyExcalidrawRoomScene,
   replaceExcalidrawRoomScene,
 } from '../../domain/excalidraw-room-codec.js';
-import {
-  MSG_AGENT_FLUSH,
-  MSG_AGENT_FLUSH_ACK,
-} from '../../domain/collaboration-protocol.js';
+import { attachRoomFlushTransport } from './room-flush-transport.js';
 
 import {
   buildCollaboratorsMap,
@@ -38,7 +33,6 @@ import {
 import { CommentThreadStore } from './comment-thread-store.js';
 import { stopReconnectOnControlledClose } from './yjs-provider-reset-guard.js';
 
-const DEFAULT_EMPTY_SCENE_GUARD_MS = 250;
 const DEFAULT_SAVE_THROTTLE_MS = 48;
 const DEFAULT_SYNC_TIMEOUT_MS = 4000;
 const DEFAULT_AGENT_FLUSH_TIMEOUT_MS = 1000;
@@ -132,7 +126,6 @@ export class ExcalidrawRoomClient {
   constructor({
     cancelAnimationFrameFn = (frameId) => cancelAnimationFrame(frameId),
     clearTimeoutFn = (timeoutId) => clearTimeout(timeoutId),
-    emptySceneGuardMs = DEFAULT_EMPTY_SCENE_GUARD_MS,
     filePath = '',
     now = () => Date.now(),
     onCollaboratorsChange = () => {},
@@ -150,7 +143,6 @@ export class ExcalidrawRoomClient {
   }) {
     this.cancelAnimationFrameFn = cancelAnimationFrameFn;
     this.clearTimeoutFn = clearTimeoutFn;
-    this.emptySceneGuardMs = emptySceneGuardMs;
     this.filePath = filePath;
     this.now = now;
     this.onCollaboratorsChange = onCollaboratorsChange;
@@ -187,9 +179,8 @@ export class ExcalidrawRoomClient {
     this.pendingViewportPayload = null;
     this.lastViewportSignature = '';
     this.lastSelectedIdsSignature = '';
-    this.pendingEmptySceneCandidate = null;
-    this.agentFlushRequestCounter = 0;
-    this.pendingAgentFlushRequests = new Map();
+    this.flushTransport = null;
+    this.pendingLocalFlushWaiters = new Set();
     this.structuredObserversAttached = false;
     this.canWriteToRoom = false;
     this.waitingForAuthoritativeSync = false;
@@ -230,7 +221,6 @@ export class ExcalidrawRoomClient {
         return;
       }
 
-      this.pendingEmptySceneCandidate = null;
       this.lastSceneJson = JSON.stringify(parseSceneJson(remoteJson));
       this.onRemoteSceneJson(this.lastSceneJson, { authoritative });
     };
@@ -267,72 +257,36 @@ export class ExcalidrawRoomClient {
     return this.connectionState;
   }
 
-  installAgentFlushHandler() {
-    const messageHandlers = this.provider?.messageHandlers;
-    if (!messageHandlers || typeof messageHandlers !== 'object') {
-      return false;
-    }
-
-    messageHandlers[MSG_AGENT_FLUSH_ACK] = (_encoder, decoder) => {
-      let requestId;
-      try {
-        requestId = decoding.readVarString(decoder);
-      } catch {
-        return;
-      }
-
-      const request = this.pendingAgentFlushRequests.get(requestId);
-      if (!request) {
-        return;
-      }
-
-      request.resolve({ status: 'acknowledged' });
-    };
-    return true;
-  }
-
-  settleAgentFlushRequests(status) {
-    const requests = [...this.pendingAgentFlushRequests.values()];
-    requests.forEach((request) => request.resolve({ status }));
-  }
-
   waitForServerFlush({ timeoutMs = DEFAULT_AGENT_FLUSH_TIMEOUT_MS } = {}) {
-    const ws = this.provider?.ws;
-    const openState = ws?.OPEN ?? globalThis.WebSocket?.OPEN ?? 1;
-    if (
-      !this.canWriteToRoom
-      || !ws
-      || ws.readyState !== openState
-      || !this.provider?.messageHandlers?.[MSG_AGENT_FLUSH_ACK]
-    ) {
-      return Promise.resolve({ status: 'unavailable' });
+    if (!this.canWriteToRoom || !this.flushTransport) return Promise.resolve({ status: 'unavailable' });
+    return this.flushTransport.flush(timeoutMs);
+  }
+
+  async waitForPendingWrites({ maxWaitMs = DEFAULT_AGENT_FLUSH_TIMEOUT_MS } = {}) {
+    if (!this.canWriteToRoom) return { status: 'unavailable' };
+
+    const deadline = this.now() + maxWaitMs;
+    this.flushSceneSync();
+    if (this.hasPendingWrites()) {
+      const status = await new Promise((resolve) => {
+        let timer;
+        const finish = (result) => {
+          this.pendingLocalFlushWaiters.delete(finish);
+          this.clearTimeoutFn(timer);
+          resolve(result);
+        };
+        this.pendingLocalFlushWaiters.add(finish);
+        timer = this.setTimeoutFn(() => finish('timeout'), Math.max(0, deadline - this.now()));
+      });
+      if (status !== 'flushed') return { status };
     }
 
-    const requestId = `agent-flush-${this.ydoc?.clientID ?? 'client'}-${++this.agentFlushRequestCounter}`;
-    return new Promise((resolve) => {
-      const finish = (result) => {
-        const request = this.pendingAgentFlushRequests.get(requestId);
-        if (!request) {
-          return;
-        }
-        this.clearTimeoutFn(request.timeoutId);
-        this.pendingAgentFlushRequests.delete(requestId);
-        resolve(result);
-      };
-      this.pendingAgentFlushRequests.set(requestId, {
-        resolve: finish,
-        timeoutId: this.setTimeoutFn(() => finish({ status: 'timeout' }), timeoutMs),
-      });
+    const remaining = deadline - this.now();
+    return remaining > 0 ? this.waitForServerFlush({ timeoutMs: remaining }) : { status: 'timeout' };
+  }
 
-      try {
-        const encoder = encoding.createEncoder();
-        encoding.writeVarUint(encoder, MSG_AGENT_FLUSH);
-        encoding.writeVarString(encoder, requestId);
-        ws.send(encoding.toUint8Array(encoder));
-      } catch {
-        finish({ status: 'unavailable' });
-      }
-    });
+  settleLocalFlushWaiters(status) {
+    this.pendingLocalFlushWaiters.forEach((finish) => finish(status));
   }
 
   hasPendingWrites() {
@@ -353,6 +307,7 @@ export class ExcalidrawRoomClient {
       || nextState === EXCALIDRAW_ROOM_CONNECTION_STATE.RECONNECTING_READONLY
     );
 
+    if (!this.canWriteToRoom) this.settleLocalFlushWaiters('unavailable');
     if (!this.canWriteToRoom && this.sceneSyncTimer !== null) {
       this.clearTimeoutFn(this.sceneSyncTimer);
       this.sceneSyncTimer = null;
@@ -428,7 +383,11 @@ export class ExcalidrawRoomClient {
       disableBc: true,
       maxBackoffTime: 5000,
     });
-    this.installAgentFlushHandler();
+    this.flushTransport = attachRoomFlushTransport(this.provider, {
+      clientId: this.ydoc.clientID,
+      clearTimeoutFn: this.clearTimeoutFn,
+      setTimeoutFn: this.setTimeoutFn,
+    });
     stopReconnectOnControlledClose(this.provider);
 
     this.awareness = this.provider.awareness;
@@ -750,24 +709,6 @@ export class ExcalidrawRoomClient {
     } = this.pendingSceneSyncPayload;
     this.pendingSceneSyncPayload = null;
 
-    if (Array.isArray(elements) && elements.length === 0) {
-      const emptyCandidate = buildLiveCollaborationScene(
-        elements,
-        this.mergeLocallyChangedAppState(appState, baseSceneJson),
-        files,
-      );
-      if (this.shouldDelayEmptySceneCommit(JSON.stringify(emptyCandidate))) {
-        this.pendingSceneSyncPayload = {
-          appState,
-          baseSceneJson,
-          elements,
-          files,
-        };
-        this.scheduleDelayedEmptySceneCommit();
-        return;
-      }
-    }
-
     const {
       hasChanges,
       scene: sceneData,
@@ -779,7 +720,7 @@ export class ExcalidrawRoomClient {
     });
 
     if (!hasChanges) {
-      this.pendingEmptySceneCandidate = null;
+      this.settleLocalFlushWaiters('flushed');
       return false;
     }
 
@@ -788,73 +729,13 @@ export class ExcalidrawRoomClient {
       origin: 'excalidraw-local-change',
     });
 
-    this.pendingEmptySceneCandidate = null;
 
     if (this.pendingSceneSyncPayload) {
       this.scheduleSceneSyncFlush();
+    } else {
+      this.settleLocalFlushWaiters('flushed');
     }
     return true;
-  }
-
-  hasRemoteCollaborators() {
-    if (!this.awareness) {
-      return false;
-    }
-
-    for (const [clientId, state] of this.awareness.getStates()) {
-      if (clientId !== this.awareness.clientID && state?.user) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  shouldDelayEmptySceneCommit(nextJson) {
-    if (!this.emptySceneGuardMs || !this.hasRemoteCollaborators()) {
-      this.pendingEmptySceneCandidate = null;
-      return false;
-    }
-
-    const nextScene = parseSceneJson(nextJson);
-    if (nextScene.elements.length > 0) {
-      this.pendingEmptySceneCandidate = null;
-      return false;
-    }
-
-    const previousScene = parseSceneJson(this.lastSceneJson || this.getStructuredSceneJson());
-    if (previousScene.elements.length === 0) {
-      this.pendingEmptySceneCandidate = null;
-      return false;
-    }
-
-    const now = this.now();
-    if (!this.pendingEmptySceneCandidate || this.pendingEmptySceneCandidate.previousSceneJson !== this.lastSceneJson) {
-      this.pendingEmptySceneCandidate = {
-        firstSeenAt: now,
-        previousSceneJson: this.lastSceneJson,
-      };
-      console.warn(`[excalidraw:${this.filePath}] Delaying suspicious empty scene commit during active collaboration`);
-      return true;
-    }
-
-    return (now - this.pendingEmptySceneCandidate.firstSeenAt) < this.emptySceneGuardMs;
-  }
-
-  scheduleDelayedEmptySceneCommit() {
-    if (this.sceneSyncTimer !== null) {
-      return;
-    }
-
-    const firstSeenAt = this.pendingEmptySceneCandidate?.firstSeenAt ?? this.now();
-    const elapsed = this.now() - firstSeenAt;
-    const delay = Math.max(0, this.emptySceneGuardMs - elapsed);
-    this.sceneSyncDueAt = this.now() + delay;
-    this.sceneSyncTimer = this.setTimeoutFn(() => {
-      this.sceneSyncTimer = null;
-      this.sceneSyncDueAt = 0;
-      this.flushSceneSync();
-    }, delay);
   }
 
   flushPointerAwarenessPayload() {
@@ -987,7 +868,8 @@ export class ExcalidrawRoomClient {
 
   disconnect() {
     this.flushSceneSync();
-    this.settleAgentFlushRequests('disconnected');
+    this.flushTransport?.dispose();
+    this.flushTransport = null;
     this.setConnectionState(EXCALIDRAW_ROOM_CONNECTION_STATE.DISCONNECTING);
     this.clearTimeoutFn(this.sceneSyncTimer);
     this.sceneSyncTimer = null;
@@ -1006,7 +888,6 @@ export class ExcalidrawRoomClient {
     this.pendingViewportPayload = null;
     this.lastViewportSignature = '';
     this.lastSelectedIdsSignature = '';
-    this.pendingEmptySceneCandidate = null;
 
     if (this.structuredObserversAttached) {
       this.roomMeta?.unobserve(this.handleStructuredSceneUpdate);

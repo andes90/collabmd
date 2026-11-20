@@ -8,6 +8,7 @@ import {
 import { ensureClientAuthenticated } from './infrastructure/auth-client.js';
 import { isPlainQuickSwitcherShortcut } from './domain/keyboard-shortcuts.js';
 import { DrawioLeaseClient } from './infrastructure/drawio-lease-client.js';
+import { createDrawioSaveQueue } from './infrastructure/drawio-save-queue.js';
 import { getRuntimeConfig } from './infrastructure/runtime-config.js';
 import { vaultApiClient } from './infrastructure/vault-api-client.js';
 
@@ -29,11 +30,11 @@ let currentXml = '';
 let currentTheme = themeParam;
 let currentLeaseState = null;
 let drawioFrame = null;
+let drawioOrigin = null;
 let drawioFrameReady = false;
 let drawioFrameBootTimer = null;
 let drawioMessageHandler = null;
 let saveTimer = null;
-let pendingSaveXml = null;
 let lastFrameLoadSignature = '';
 let lastSavedVersion = 0;
 let hasPostedReadyToParent = false;
@@ -73,6 +74,12 @@ const drawioLeaseClient = leaseRoom
     roomName: leaseRoom,
   })
   : null;
+
+const saveQueue = createDrawioSaveQueue(async (xml) => {
+  await vaultApiClient.writeFile({ content: xml, path: filePath });
+  currentXml = xml;
+  lastSavedVersion = drawioLeaseClient?.publishSave?.() ?? lastSavedVersion;
+});
 
 function postToParent(type, payload = {}) {
   if (window.parent === window) {
@@ -148,6 +155,7 @@ function teardownDrawioFrame() {
   }
   drawioFrame?.remove();
   drawioFrame = null;
+  drawioOrigin = null;
   drawioFrameReady = false;
   lastFrameLoadSignature = '';
   hasPostedReadyToParent = false;
@@ -167,18 +175,18 @@ function buildDrawioFrameUrl() {
   url.searchParams.set('spin', '1');
   url.searchParams.set('ui', currentTheme === 'light' ? 'simple' : 'dark');
   url.searchParams.set('libraries', '1');
-  return url.toString();
+  return url;
 }
 
 function postAction(action, payload = {}) {
-  if (!drawioFrame?.contentWindow) {
+  if (!drawioOrigin || !drawioFrame?.contentWindow) {
     return false;
   }
 
   drawioFrame.contentWindow.postMessage(JSON.stringify({
     action,
     ...payload,
-  }), '*');
+  }), drawioOrigin);
   return true;
 }
 
@@ -251,26 +259,13 @@ function requestPreviewImageExport() {
 }
 
 async function flushSave() {
-  if (!pendingSaveXml || !filePath || !state.isEditor) {
-    return null;
-  }
-
-  const xmlToSave = pendingSaveXml;
-  pendingSaveXml = null;
-  const savePromise = vaultApiClient.writeFile({
-    content: xmlToSave,
-    path: filePath,
-  }).then(() => {
-    currentXml = xmlToSave;
-    lastSavedVersion = drawioLeaseClient?.publishSave?.() ?? lastSavedVersion;
+  try {
+    await saveQueue.flush();
     return true;
-  }).catch((error) => {
+  } catch (error) {
     console.error('[drawio] Failed to save diagram:', error);
-    pendingSaveXml = xmlToSave;
-    throw error;
-  });
-
-  return savePromise;
+    return false;
+  }
 }
 
 function scheduleSave(xml, { immediate = false } = {}) {
@@ -278,7 +273,7 @@ function scheduleSave(xml, { immediate = false } = {}) {
     return;
   }
 
-  pendingSaveXml = xml;
+  saveQueue.enqueue(xml);
   if (saveTimer) {
     window.clearTimeout(saveTimer);
     saveTimer = null;
@@ -295,12 +290,14 @@ function scheduleSave(xml, { immediate = false } = {}) {
   }, AUTOSAVE_DEBOUNCE_MS);
 }
 
-async function reloadLatestXml() {
-  if (!filePath) {
+async function reloadLatestXml(savedVersion) {
+  if (!filePath || saveQueue.hasPendingWrites()) {
     return;
   }
 
   const response = await vaultApiClient.readFile(filePath);
+  if (state.isEditor || saveQueue.hasPendingWrites() || savedVersion !== lastSavedVersion) return;
+
   const nextXml = String(response?.content ?? '');
   if (nextXml === currentXml) {
     return;
@@ -312,20 +309,32 @@ async function reloadLatestXml() {
   }
 }
 
-function attachDrawioFrame() {
+async function syncDrawioFrame() {
+  if (!await flushSave()) return;
+
+  const url = buildDrawioFrameUrl();
+  if (drawioFrame?.src === url.href) {
+    updateFrameMode();
+    return;
+  }
+  attachDrawioFrame(url);
+}
+
+function attachDrawioFrame(url = buildDrawioFrameUrl()) {
   teardownDrawioFrame();
 
   const iframe = document.createElement('iframe');
   iframe.className = 'drawio-frame';
   iframe.title = 'draw.io';
   iframe.allow = 'clipboard-read; clipboard-write';
-  iframe.src = buildDrawioFrameUrl();
+  iframe.src = url.href;
+  drawioOrigin = url.origin;
   frameShell.replaceChildren(iframe);
   drawioFrame = iframe;
   updateFrameMode();
 
   drawioMessageHandler = (event) => {
-    if (event.source !== drawioFrame?.contentWindow) {
+    if (event.origin !== drawioOrigin || event.source !== drawioFrame?.contentWindow) {
       return;
     }
 
@@ -413,20 +422,25 @@ function handleLeaseState(nextState) {
 
   updateBanner();
 
-  const modeChanged = previousState && previousState.isEditor !== nextState.isEditor;
-  if (!previousState || modeChanged) {
-    attachDrawioFrame();
-    return;
-  }
-
+  const modeChanged = previousState?.isEditor !== nextState.isEditor;
   const savedVersionChanged = nextState.savedVersion !== lastSavedVersion;
   lastSavedVersion = nextState.savedVersion;
+  if (modeChanged) {
+    // Stop edits immediately when the lease moves, and keep the current frame
+    // until the changes queued under the previous lease have been saved.
+    drawioFrame?.classList.toggle('is-read-only', !state.isEditor);
+    void syncDrawioFrame();
+  }
   if (!state.isEditor && savedVersionChanged) {
-    void reloadLatestXml();
+    void reloadLatestXml(nextState.savedVersion).catch((error) => {
+      console.error('[drawio] Failed to refresh diagram:', error);
+    });
   }
 }
 
 function handleParentMessage(event) {
+  if (event.origin !== parentOrigin || event.source !== window.parent) return;
+
   const payload = event.data;
   if (!payload || payload.source !== 'collabmd-host') {
     return;
@@ -435,7 +449,7 @@ function handleParentMessage(event) {
   if (payload.type === 'set-theme') {
     currentTheme = payload.theme === 'light' ? 'light' : 'dark';
     setBodyTheme(currentTheme);
-    attachDrawioFrame();
+    void syncDrawioFrame();
   }
 }
 

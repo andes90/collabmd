@@ -362,16 +362,6 @@ body.drawio-maximized-open .drawio-embed.is-maximized {
   z-index: 171;
 }
 
-.excalidraw-warm-cache-root {
-  position: fixed;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  opacity: 0;
-  pointer-events: none;
-  inset: 0 auto auto 0;
-}
-
 body.excalidraw-maximized-open {
   overflow: hidden;
 }

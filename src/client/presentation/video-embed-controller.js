@@ -1,3 +1,4 @@
+import { findElementByDataset } from '../browser-utils.js';
 import { reconcileEmbedEntries } from './excalidraw-embed-reconciler.js';
 
 const DEFAULT_ASPECT_RATIO = 16 / 9;
@@ -152,7 +153,7 @@ export class VideoEmbedController {
   _attachWrapper(entry) {
     const placeholder = entry.placeholder?.isConnected
       ? entry.placeholder
-      : this.previewElement?.querySelector(`.video-embed-placeholder[data-video-embed-key="${entry.key}"]`);
+      : findElementByDataset(this.previewElement, '.video-embed-placeholder[data-video-embed-key]', 'videoEmbedKey', entry.key);
 
     if (!placeholder) {
       return;
@@ -172,7 +173,7 @@ export class VideoEmbedController {
   _syncEntryLayout(entry) {
     const placeholder = entry.placeholder?.isConnected
       ? entry.placeholder
-      : this.previewElement?.querySelector(`.video-embed-placeholder[data-video-embed-key="${entry.key}"]`);
+      : findElementByDataset(this.previewElement, '.video-embed-placeholder[data-video-embed-key]', 'videoEmbedKey', entry.key);
 
     if (!placeholder || !entry.wrapper) {
       return;

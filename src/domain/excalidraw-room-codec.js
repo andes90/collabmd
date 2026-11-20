@@ -2,6 +2,8 @@ import * as Y from 'yjs';
 
 import { createEmptyScene, normalizeScene, tryParseSceneJson } from './excalidraw-scene.js';
 
+import { equalJsonValues } from './equal-json-values.js';
+
 export { tryParseSceneJson as tryParseExcalidrawSceneJson } from './excalidraw-scene.js';
 
 export const EXCALIDRAW_APP_STATE_KEY = 'excalidraw-app-state';
@@ -118,9 +120,7 @@ function writeElementSlot(slot, element, {
     return false;
   }
   const serialized = cloneJsonValue(element);
-  const previousSerialized = previous ? JSON.stringify(previous) : '';
-  const nextSerialized = JSON.stringify(serialized);
-  if (previousSerialized === nextSerialized) {
+  if (equalJsonValues(previous, serialized)) {
     return false;
   }
 
@@ -319,7 +319,7 @@ export function applySceneDiffToExcalidrawRoom(ydoc, rawScene, {
   Object.entries(nextFiles).forEach(([key, value]) => {
     const nextValue = cloneJsonValue(value);
     const currentValue = filesMap.get(key);
-    if (JSON.stringify(currentValue) === JSON.stringify(nextValue)) {
+    if (equalJsonValues(currentValue, nextValue)) {
       return;
     }
 

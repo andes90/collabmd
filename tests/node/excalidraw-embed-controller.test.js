@@ -372,7 +372,6 @@ test('prepareFileDisconnect requires explicit discard after reconnect timeout', 
 
   globalThis.window = {
     clearTimeout() {},
-    confirm: () => true,
     setTimeout(callback) {
       timers.push(callback);
       return timers.length;
@@ -381,6 +380,7 @@ test('prepareFileDisconnect requires explicit discard after reconnect timeout', 
 
   try {
     const controller = {
+      confirmDiscard: async () => true,
       disconnectRequestCounter: 0,
       pendingDisconnectRequests: new Map(),
       _findEntryByFilePath: () => entry,
@@ -392,7 +392,7 @@ test('prepareFileDisconnect requires explicit discard after reconnect timeout', 
       entry.filePath,
       { timeoutMs: 25 },
     );
-    timers.shift()();
+    await timers.shift()();
     timers.shift()();
 
     assert.equal(await result, true);
@@ -456,13 +456,13 @@ test('replays a pending disconnect when a starting iframe becomes ready', async 
   }
 });
 
-test('iframe URLs forward the selected vault and opt-in Excalidraw diagnostic flag', () => {
+test('iframe URLs only forward test options in development and test', () => {
   const originalWindow = globalThis.window;
   globalThis.window = {
     __COLLABMD_CONFIG__: { basePath: '', vaults: [{ id: 'alpha' }, { id: 'beta' }] },
     location: {
       origin: 'http://localhost:4173',
-      search: '?vault=beta&excalidrawDebug=1',
+      search: '?vault=beta&excalidrawDebug=1&test=1&syncTimeoutMs=50',
     },
   };
 
@@ -472,14 +472,21 @@ test('iframe URLs forward the selected vault and opt-in Excalidraw diagnostic fl
       getTheme: () => 'dark',
       _isFilePreviewEntry: ExcalidrawEmbedController.prototype._isFilePreviewEntry,
     };
-    const iframeUrl = ExcalidrawEmbedController.prototype._buildIframeUrl.call(controller, {
+    const entry = {
       filePath: 'debug.excalidraw',
       instanceId: '1',
       key: 'debug.excalidraw#file-preview',
-    });
+    };
+    for (const environment of ['production', 'development', 'test']) {
+      window.__COLLABMD_CONFIG__.environment = environment;
+      const iframeUrl = ExcalidrawEmbedController.prototype._buildIframeUrl.call(controller, entry);
+      const allowTestOptions = environment !== 'production';
 
-    assert.equal(iframeUrl.searchParams.get('excalidrawDebug'), '1');
-    assert.equal(iframeUrl.searchParams.get('vault'), 'beta');
+      assert.equal(iframeUrl.searchParams.get('excalidrawDebug'), allowTestOptions ? '1' : null);
+      assert.equal(iframeUrl.searchParams.get('test'), allowTestOptions ? '1' : null);
+      assert.equal(iframeUrl.searchParams.get('syncTimeoutMs'), allowTestOptions ? '50' : null);
+      assert.equal(iframeUrl.searchParams.get('vault'), 'beta');
+    }
   } finally {
     globalThis.window = originalWindow;
   }
@@ -509,57 +516,17 @@ test('detachForCommit exits maximized mode before hiding overlay roots', () => {
   assert.equal(controller.embedEntries.get('sample-excalidraw.excalidraw#0').placeholder, null);
 });
 
-test('reuses a warm direct-preview entry for the next direct file preview', () => {
-  const warmEntry = {
-    filePath: 'sample-a.excalidraw',
-    iframe: { contentWindow: {} },
-    key: 'sample-a.excalidraw#file-preview',
-    label: 'sample-a.excalidraw',
-    wrapper: {},
-  };
-  const controller = {
-    warmEntry,
-    _claimEntryFromRemovedEntries: ExcalidrawEmbedController.prototype._claimEntryFromRemovedEntries,
-    _claimReusableEntry: ExcalidrawEmbedController.prototype._claimReusableEntry,
-    _claimWarmEntry: ExcalidrawEmbedController.prototype._claimWarmEntry,
-    _getEntryMode: ExcalidrawEmbedController.prototype._getEntryMode,
-    _isFilePreviewEntry: ExcalidrawEmbedController.prototype._isFilePreviewEntry,
-  };
+test('only reuses a same-file embed that stays in the live overlay', () => {
+  const overlayRoot = { isConnected: true };
+  const filePath = 'sample-excalidraw.excalidraw';
+  const inlineEntry = { filePath, key: `${filePath}#file-preview`, wrapper: {} };
+  const embeddedEntry = { filePath, key: `${filePath}#0`, wrapper: { parentElement: overlayRoot } };
+  const controller = Object.assign(Object.create(ExcalidrawEmbedController.prototype), { overlayRoot });
+  const removedEntries = [inlineEntry, embeddedEntry];
 
-  const reusedEntry = ExcalidrawEmbedController.prototype._claimReusableEntry.call(controller, {
-    filePath: 'sample-b.excalidraw',
-    key: 'sample-b.excalidraw#file-preview',
-  }, []);
-
-  assert.equal(reusedEntry, warmEntry);
-  assert.equal(controller.warmEntry, null);
-});
-
-test('promotes a same-file embedded preview entry into a direct file preview', () => {
-  const embeddedEntry = {
-    filePath: 'sample-excalidraw.excalidraw',
-    iframe: { contentWindow: {} },
-    key: 'sample-excalidraw.excalidraw#0',
-    label: 'sample-excalidraw.excalidraw',
-    wrapper: {},
-  };
-  const controller = {
-    warmEntry: null,
-    _claimEntryFromRemovedEntries: ExcalidrawEmbedController.prototype._claimEntryFromRemovedEntries,
-    _claimReusableEntry: ExcalidrawEmbedController.prototype._claimReusableEntry,
-    _claimWarmEntry: ExcalidrawEmbedController.prototype._claimWarmEntry,
-    _getEntryMode: ExcalidrawEmbedController.prototype._getEntryMode,
-    _isFilePreviewEntry: ExcalidrawEmbedController.prototype._isFilePreviewEntry,
-  };
-  const removedEntries = [embeddedEntry];
-
-  const reusedEntry = ExcalidrawEmbedController.prototype._claimReusableEntry.call(controller, {
-    filePath: 'sample-excalidraw.excalidraw',
-    key: 'sample-excalidraw.excalidraw#file-preview',
-  }, removedEntries);
-
-  assert.equal(reusedEntry, embeddedEntry);
-  assert.deepEqual(removedEntries, []);
+  assert.equal(controller._claimReusableEntry(inlineEntry, removedEntries), null);
+  assert.equal(controller._claimReusableEntry({ filePath, key: `${filePath}#1` }, removedEntries), embeddedEntry);
+  assert.deepEqual(removedEntries, [inlineEntry]);
 });
 
 test('treats a reused direct-preview entry with a new file path as needing reload', () => {
@@ -668,7 +635,6 @@ test('Excalidraw layout sync preserves iframe src while updating placeholder geo
     embedEntries: new Map([[entry.key, entry]]),
     previewElement: { querySelectorAll: () => [placeholder] },
     _isFilePreviewEntry: ExcalidrawEmbedController.prototype._isFilePreviewEntry,
-    _shouldInlineFilePreview: ExcalidrawEmbedController.prototype._shouldInlineFilePreview,
     _syncEntryLayout: ExcalidrawEmbedController.prototype._syncEntryLayout,
   };
 
@@ -830,7 +796,6 @@ test('Excalidraw maximize keeps the iframe wrapper mounted in place', () => {
   };
   const controller = {
     overlayRoot: { classList: overlayClassList },
-    _shouldInlineFilePreview: ExcalidrawEmbedController.prototype._shouldInlineFilePreview,
     _isFilePreviewEntry: ExcalidrawEmbedController.prototype._isFilePreviewEntry,
   };
 
@@ -938,152 +903,41 @@ test('Excalidraw direct file preview skips preview viewport fit requests', () =>
   }
 });
 
-test('hydrate reloads a reused direct-preview iframe when switching files', async () => {
-  const calls = [];
+test('starts the iframe after mounting the inline file preview', async () => {
+  const filePath = 'sample-next.excalidraw';
+  const wrapper = { style: {} };
   const entry = {
-    filePath: 'sample-next.excalidraw',
-    iframe: { contentWindow: {} },
-    key: 'sample-next.excalidraw#file-preview',
-    label: 'sample-next.excalidraw',
-    loadedFilePath: 'sample-prev.excalidraw',
-    loadedMode: 'edit',
+    filePath,
+    key: `${filePath}#file-preview`,
     placeholder: {
       isConnected: true,
-      replaceWith() {},
-    },
-    wrapper: {
-      style: {},
+      replaceWith(node) {
+        assert.equal(node, wrapper);
+        node.isConnected = true;
+        this.isConnected = false;
+      },
     },
   };
-
-  const controller = {
+  const navigations = [];
+  const iframe = {
+    set src(value) {
+      assert.equal(wrapper.isConnected, true);
+      navigations.push(value);
+    },
+  };
+  const controller = Object.assign(Object.create(ExcalidrawEmbedController.prototype), {
     followedPeerIdsByFilePath: new Map(),
-    _attachWrapper: () => {
-      calls.push('attach');
-    },
-    _entryNeedsHardReload: ExcalidrawEmbedController.prototype._entryNeedsHardReload,
-    _getEntryMode: ExcalidrawEmbedController.prototype._getEntryMode,
-    _isFilePreviewEntry: ExcalidrawEmbedController.prototype._isFilePreviewEntry,
-    _reloadEntry: (targetEntry) => {
-      calls.push(['reload', targetEntry.filePath]);
-    },
-    _updateEmbedLabel: () => {
-      calls.push('label');
-    },
-  };
+    _createEmbedContainer: () => ({ iframe, wrapper }),
+    _syncMountedEntryMetadata() {},
+    _buildIframeUrl: () => new URL('https://example.test/excalidraw-editor.html'),
+    _setEntryLoadingState() {},
+    _armEntryBootTimeout() {},
+  });
 
-  await ExcalidrawEmbedController.prototype._hydrateEntry.call(controller, entry);
+  await controller._hydrateEntry(entry);
+  await controller._hydrateEntry(entry);
 
-  assert.deepEqual(calls, [
-    'label',
-    ['reload', 'sample-next.excalidraw'],
-    'attach',
-  ]);
-});
-
-test('parking a warm entry clears readiness and disconnects the parked room', () => {
-  const originalWindow = globalThis.window;
-  const entry = {
-    bootFilePath: 'sample-next.excalidraw',
-    bootMode: 'edit',
-    filePath: 'sample-next.excalidraw',
-    iframe: { contentWindow: {} },
-    isReady: true,
-    loadedFilePath: 'sample-next.excalidraw',
-    loadedMode: 'edit',
-    placeholder: { isConnected: true },
-    wrapper: {
-      parentElement: null,
-      classList: { toggle() {} },
-      dataset: {},
-      remove() {},
-      setAttribute() {},
-    },
-  };
-  const messages = [];
-  const warmCacheRoot = {
-    appendChild(node) {
-      node.parentElement = warmCacheRoot;
-    },
-  };
-
-  globalThis.window = {
-    location: { origin: 'http://localhost:4173' },
-  };
-
-  try {
-    const controller = {
-      _ensureWarmCacheRoot: () => warmCacheRoot,
-      _exitMaximizedEmbed: () => {},
-      _postMessageToEntry: (_entry, payload) => {
-        messages.push(payload);
-      },
-      _setEntryLoadingState: () => {},
-    };
-
-    ExcalidrawEmbedController.prototype._parkWarmEntry.call(controller, entry);
-
-    assert.equal(entry.isParked, true);
-    assert.equal(entry.isReady, false);
-    assert.equal(entry.bootFilePath, null);
-    assert.equal(entry.bootMode, null);
-    assert.equal(entry.loadedFilePath, null);
-    assert.equal(entry.loadedMode, null);
-    assert.deepEqual(messages, [{
-      source: 'collabmd-host',
-      type: 'park-room',
-    }]);
-  } finally {
-    globalThis.window = originalWindow;
-  }
-});
-
-test('ignores ready messages from parked iframes', () => {
-  const originalWindow = globalThis.window;
-  const iframeWindow = {};
-  const entry = {
-    bootFilePath: null,
-    bootMode: null,
-    filePath: 'sample-next.excalidraw',
-    iframe: { contentWindow: iframeWindow },
-    isParked: true,
-    isReady: false,
-    key: 'sample-next.excalidraw#file-preview',
-    wrapper: {},
-  };
-
-  globalThis.window = {
-    location: { origin: 'http://localhost:4173' },
-  };
-
-  try {
-    const posts = [];
-    const controller = {
-      embedEntries: new Map([[entry.key, entry]]),
-      getTheme: () => 'dark',
-      _clearEntryBootTimeout: () => {},
-      _entryNeedsHardReload: () => false,
-      _findEntryByContentWindow: ExcalidrawEmbedController.prototype._findEntryByContentWindow,
-      _postMessageToEntry: (_entry, payload) => {
-        posts.push(payload);
-      },
-      _setEntryLoadingState: () => {},
-      _syncEntryFollowState: () => {},
-      _syncEntryUser: () => {},
-    };
-
-    ExcalidrawEmbedController.prototype._onMessage.call(controller, {
-      data: {
-        source: 'excalidraw-editor',
-        type: 'ready',
-      },
-      origin: 'http://localhost:4173',
-      source: iframeWindow,
-    });
-
-    assert.equal(entry.isReady, false);
-    assert.deepEqual(posts, []);
-  } finally {
-    globalThis.window = originalWindow;
-  }
+  assert.deepEqual(navigations, ['https://example.test/excalidraw-editor.html']);
+  assert.equal(entry.bootFilePath, filePath);
+  assert.equal(entry.bootMode, 'edit');
 });

@@ -573,7 +573,7 @@ test('ExcalidrawRoomClient follows lower versionNonce tie-breaks in live deltas'
   assert.equal(higherNonceDelta.hasChanges, false);
 });
 
-test('ExcalidrawRoomClient reschedules delayed empty-scene commits when newer local changes arrive', async () => {
+test('ExcalidrawRoomClient processes the next local edit after an empty payload', async () => {
   let currentTime = 1000;
   const timers = [];
   const clearedTimers = [];
@@ -625,7 +625,7 @@ test('ExcalidrawRoomClient reschedules delayed empty-scene commits when newer lo
 
   currentTime = 1048;
   timers[0].callback();
-  assert.equal(timers[1].delay, 250);
+  assert.equal(timers.length, 1);
 
   currentTime = 1050;
   client.scheduleSceneSync(
@@ -637,9 +637,9 @@ test('ExcalidrawRoomClient reschedules delayed empty-scene commits when newer lo
     {},
   );
 
-  assert.deepEqual(clearedTimers, [2]);
-  assert.equal(timers[2].delay, 0);
-  timers[2].callback();
+  assert.deepEqual(clearedTimers, []);
+  assert.equal(timers[1].delay, 0);
+  timers[1].callback();
   assert.equal(buildExcalidrawRoomScene(ydoc).elements.find((element) => element.id === 'shape-1').x, 10);
 });
 
@@ -788,7 +788,7 @@ test('ExcalidrawRoomClient does not recreate a missing file during connect', asy
   assert.equal(client.ydoc, null);
 });
 
-test('ExcalidrawRoomClient delays transient empty scene commits during active collaboration', async () => {
+test('ExcalidrawRoomClient ignores a transient empty scene without retrying during collaboration', async () => {
   let currentTime = 1000;
   const timers = [];
   const provider = createFakeProvider();
@@ -824,7 +824,7 @@ test('ExcalidrawRoomClient delays transient empty scene commits during active co
   timers.shift().callback();
 
   assert.deepEqual(parseElements(client.getLastSceneJson()), ['shape-1']);
-  assert.equal(timers.length, 1);
+  assert.equal(timers.length, 0);
 
   client.scheduleSceneSync([{ id: 'shape-2', isDeleted: false }], { gridSize: null, viewBackgroundColor: '#ffffff' }, {});
   currentTime += 25;
@@ -833,16 +833,13 @@ test('ExcalidrawRoomClient delays transient empty scene commits during active co
   assert.deepEqual(parseElements(client.getLastSceneJson()), ['shape-1', 'shape-2']);
 });
 
-test('ExcalidrawRoomClient keeps existing elements when delayed empty payload has no tombstones', async () => {
-  let currentTime = 1000;
+test('ExcalidrawRoomClient keeps existing elements when an empty payload has no tombstones', async () => {
   const timers = [];
   const provider = createFakeProvider();
   const ydoc = new Y.Doc();
 
   const client = new ExcalidrawRoomClient({
     filePath: 'diagram.excalidraw',
-    emptySceneGuardMs: 200,
-    now: () => currentTime,
     resolveWsBaseUrlFn: () => 'ws://localhost:3000',
     setTimeoutFn: (callback, delay) => {
       timers.push({ callback, delay });
@@ -870,12 +867,7 @@ test('ExcalidrawRoomClient keeps existing elements when delayed empty payload ha
   timers.shift().callback();
 
   assert.deepEqual(parseElements(client.getLastSceneJson()), ['shape-1']);
-  assert.equal(timers.length, 1);
-
-  currentTime += 250;
-  timers.shift().callback();
-
-  assert.deepEqual(parseElements(client.getLastSceneJson()), ['shape-1']);
+  assert.equal(timers.length, 0);
   assert.deepEqual(buildExcalidrawRoomScene(ydoc).elements.map((element) => element.id), ['shape-1']);
 });
 
@@ -907,4 +899,20 @@ test('ExcalidrawRoomClient ignores malformed legacy room text when structured st
 
   assert.equal(client.getLastSceneJson(), before);
   assert.equal(remoteScenes.length, 0);
+});
+
+test('ExcalidrawRoomClient waits for queued local changes before asking for a server acknowledgement', async () => {
+  const { client } = await createConnectedClient({ setTimeoutFn: setTimeout });
+  const order = [];
+  client.pendingSceneSyncPayload = {};
+  client.flushSceneSync = () => { order.push('flush local'); };
+  client.waitForServerFlush = async () => { order.push('server acknowledgement'); return { status: 'acknowledged' }; };
+  const result = client.waitForPendingWrites();
+  assert.deepEqual(order, ['flush local']);
+
+  client.pendingSceneSyncPayload = null;
+  client.settleLocalFlushWaiters('flushed');
+  assert.deepEqual(await result, { status: 'acknowledged' });
+  assert.deepEqual(order, ['flush local', 'server acknowledgement']);
+  client.disconnect();
 });

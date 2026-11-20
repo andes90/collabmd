@@ -2,6 +2,8 @@ import * as Y from 'yjs';
 import { generateNKeysBetween } from '@excalidraw/fractional-indexing';
 import { simpleDiffString } from 'lib0/diff';
 
+import { equalJsonValues } from './equal-json-values.js';
+
 export const CANVAS_NODES_KEY = 'canvas-nodes';
 export const CANVAS_EDGES_KEY = 'canvas-edges';
 export const CANVAS_META_KEY = 'canvas-meta';
@@ -92,10 +94,6 @@ export function parseCanvasJson(text) {
   }
 }
 
-function equal(left, right) {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
 function readItem(item) {
   if (!(item instanceof Y.Map)) throw invalid();
   return Object.fromEntries(Array.from(item, ([key, value]) => [
@@ -120,7 +118,7 @@ function writeProperties(map, value, { textNode = false, replace = false } = {})
     } else if (textNode && key === 'text') {
       if (previous instanceof Y.Text) updateText(previous, next);
       else map.set(key, new Y.Text(next));
-    } else if (!equal(previous, next)) {
+    } else if (!equalJsonValues(previous, next)) {
       map.set(key, structuredClone(next));
     }
   }
@@ -245,7 +243,7 @@ function updateItem(doc, id, patch, key, validate) {
   const next = Object.fromEntries(Object.entries({ ...previous, ...patch }).filter(([, value]) => value !== undefined));
   if (next.id !== id) throw invalid();
   validate(next);
-  if (equal(previous, next)) return false;
+  if (equalJsonValues(previous, next)) return false;
   writeProperties(entry, patch, { textNode: key === CANVAS_NODES_KEY && next.type === 'text' });
   return true;
 }
@@ -317,8 +315,8 @@ export function resolveCanvasExternalConflict(doc, choice) {
 export function mergeCanvasDocuments(baseline, local, external) {
   let conflict = false;
   function mergeValue(before, current, next) {
-    if (equal(current, before)) return next;
-    if (equal(next, before) || equal(current, next)) return current;
+    if (equalJsonValues(current, before)) return next;
+    if (equalJsonValues(next, before) || equalJsonValues(current, next)) return current;
     if (before && current && next && ![before, current, next].some((value) => typeof value !== 'object' || Array.isArray(value))) {
       return Object.fromEntries(Array.from(new Set([...Object.keys(before), ...Object.keys(current), ...Object.keys(next)]), (key) => [
         key, mergeValue(before[key], current[key], next[key]),
@@ -342,9 +340,9 @@ export function mergeCanvasDocuments(baseline, local, external) {
     const beforeIds = before.map((item) => item.id);
     const currentIds = current.map((item) => item.id);
     const nextIds = next.map((item) => item.id);
-    const localReordered = !equal(currentIds.filter((id) => beforeById.has(id)), beforeIds.filter((id) => currentById.has(id)));
-    const externalReordered = !equal(nextIds.filter((id) => beforeById.has(id)), beforeIds.filter((id) => nextById.has(id)));
-    if (localReordered && externalReordered && !equal(currentIds, nextIds)) conflict = true;
+    const localReordered = !equalJsonValues(currentIds.filter((id) => beforeById.has(id)), beforeIds.filter((id) => currentById.has(id)));
+    const externalReordered = !equalJsonValues(nextIds.filter((id) => beforeById.has(id)), beforeIds.filter((id) => nextById.has(id)));
+    if (localReordered && externalReordered && !equalJsonValues(currentIds, nextIds)) conflict = true;
     const ids = Array.from(new Set(localReordered ? [...currentIds, ...nextIds] : [...nextIds, ...currentIds]));
     const merged = ids.map((id) => mergeValue(beforeById.get(id), currentById.get(id), nextById.get(id))).filter((item) => item !== undefined);
     const present = mergeValue(Object.hasOwn(baseline, key), Object.hasOwn(local, key), Object.hasOwn(external, key));

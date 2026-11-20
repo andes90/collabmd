@@ -43,24 +43,6 @@ const DIAGRAM_ACTION_ICONS = {
   `,
 };
 
-export function setDiagramActionButtonIcon(button, iconName) {
-  if (!(button instanceof HTMLElement)) {
-    return;
-  }
-
-  const markup = DIAGRAM_ACTION_ICONS[iconName];
-  if (!markup) {
-    button.classList.remove('is-icon-only');
-    button.classList.remove('ui-preview-action--icon-only');
-    return;
-  }
-
-  button.classList.add('is-icon-only');
-  button.classList.add('ui-preview-action--icon-only');
-  button.dataset.icon = iconName;
-  button.innerHTML = markup.trim();
-}
-
 export function getDiagramActionIconMarkup(iconName) {
   return Object.hasOwn(DIAGRAM_ACTION_ICONS, iconName) ? DIAGRAM_ACTION_ICONS[iconName] : '';
 }
