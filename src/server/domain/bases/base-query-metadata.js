@@ -150,7 +150,6 @@ export function createPropertyCatalogSnapshot(snapshot) {
   return {
     fileProperties: FILE_PROPERTY_DEFINITIONS.map((entry) => ({ ...entry })),
     noteProperties: Array.from(noteProperties.values()).sort((left, right) => left.label.localeCompare(right.label)),
-    scannedAt: snapshot?.scannedAt ?? '',
   };
 }
 

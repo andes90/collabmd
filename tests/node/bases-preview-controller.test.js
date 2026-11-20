@@ -2994,3 +2994,38 @@ test('BasesPreviewController refreshes property suggestions after switching filt
   assert.match(entry.placeholder.innerHTML, /data-base-filter-suggestion-value="1"/);
   assert.match(entry.placeholder.innerHTML, /data-base-filter-suggestion-value="2"/);
 });
+
+test('BasesPreviewController keeps compound expressions in Advanced and decodes simple literal escapes', async () => {
+  const result = createBaseResult();
+  const controller = new BasesPreviewController({ vaultApiClient: { queryBase: async () => ({ result }) } });
+  const entry = {
+    key: 'expression-filter',
+    payload: {},
+    placeholder: createPlaceholder(),
+    ui: { openPanel: 'filter' },
+  };
+  result.meta.activeViewConfig.filters = 'note.value == "open" && note.priority == "high"';
+  await controller.renderEntry(entry);
+  assert.equal(entry.ui.builderFilter, null);
+  assert.match(entry.placeholder.innerHTML, /data-base-filter-advanced/u);
+
+  const value = 'line\nnext \\ folder "quoted"';
+  result.meta.activeViewConfig.filters = `note.value == ${JSON.stringify(value)}`;
+  await controller.renderEntry(entry);
+  assert.deepEqual(entry.ui.builderFilter.children[0], { operator: 'is', propertyId: 'note.value', type: 'rule', value });
+});
+
+test('BasesPreviewController removes missing embeds, invalidates their renders, and cancels their searches', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const controller = new BasesPreviewController({ vaultApiClient: {} });
+  const entry = { key: 'removed', placeholder: createPlaceholder() };
+  controller.entries.set(entry.key, entry);
+  controller.searchTimers.set(entry.key, setTimeout(() => assert.fail('Removed embed search ran'), 180));
+
+  controller.reconcileEmbeds({ querySelectorAll: () => [] });
+  t.mock.timers.tick(180);
+
+  assert.equal(controller.entries.size, 0);
+  assert.equal(controller.searchTimers.size, 0);
+  assert.equal(entry.placeholder, null);
+});

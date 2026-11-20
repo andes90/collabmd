@@ -1,3 +1,4 @@
+import { getBaseFilterPredicate, tryParseBaseExpression } from '../../domain/base-expression.js';
 import { isImageAttachmentFilePath } from '../../domain/file-kind.js';
 import { resolveApiUrl } from '../domain/runtime-paths.js';
 import { escapeHtml } from '../domain/vault-utils.js';
@@ -7,7 +8,7 @@ import {
   segmentedButtonClassNames,
   segmentedControlClassNames,
 } from './components/ui/button.js';
-import { downloadBlob, parseDownloadFileName, replaceChildrenFromHtml } from '../browser-utils.js';
+import { downloadBlob, findElementByDataset, parseDownloadFileName, replaceChildrenFromHtml } from '../browser-utils.js';
 
 function createShellKey() {
   return `base-${crypto.randomUUID()}`;
@@ -397,8 +398,9 @@ function escapeExpressionString(value = '') {
 }
 
 function formatExpressionLiteral(value = '', valueType = 'text', operator = 'is') {
-  const normalized = String(value ?? '').trim();
-  if (!normalized && operator !== 'is' && operator !== 'is not') {
+  const text = String(value ?? '');
+  const normalized = text.trim();
+  if (!text && operator !== 'is' && operator !== 'is not') {
     return '""';
   }
 
@@ -416,7 +418,7 @@ function formatExpressionLiteral(value = '', valueType = 'text', operator = 'is'
     return escapeExpressionString(normalized);
   }
 
-  return escapeExpressionString(normalized);
+  return escapeExpressionString(text);
 }
 
 function compileFilterRule(rule, propertyMeta = null) {
@@ -485,63 +487,26 @@ function compileFilterGroup(group, result) {
   };
 }
 
-function deserializeExpressionValue(value = '') {
-  const normalized = String(value ?? '').trim();
-  if (!normalized) {
-    return '';
-  }
+const BUILDER_OPERATORS = {
+  '!=': 'is not',
+  '==': 'is',
+  '<': '<',
+  '<=': '<=',
+  '>': '>',
+  '>=': '>=',
+  contains: 'contains',
+  endsWith: 'ends with',
+  isEmpty: 'is empty',
+  startsWith: 'starts with',
+};
+const NEGATED_BUILDER_OPERATORS = { contains: 'does not contain', isEmpty: 'is not empty' };
 
-  if (normalized === 'true' || normalized === 'false') {
-    return normalized;
-  }
+function parseFilterRule(expression) {
+  const predicate = getBaseFilterPredicate(tryParseBaseExpression(expression));
+  if (!predicate || predicate.value === null) return null;
 
-  if (normalized === 'null') {
-    return '';
-  }
-
-  if (/^-?\d+(?:\.\d+)?$/u.test(normalized)) {
-    return normalized;
-  }
-
-  if ((normalized.startsWith('"') && normalized.endsWith('"')) || (normalized.startsWith('\'') && normalized.endsWith('\''))) {
-    return normalized.slice(1, -1).replace(/\\(["'])/gu, '$1');
-  }
-
-  return normalized;
-}
-
-function parseFilterRule(expression = '') {
-  const text = String(expression ?? '').trim();
-  const patterns = [
-    [/^!([A-Za-z0-9_.]+)\.isEmpty\(\)$/u, (_, propertyId) => ({ operator: 'is not empty', propertyId, type: 'rule', value: '' })],
-    [/^([A-Za-z0-9_.]+)\.isEmpty\(\)$/u, (_, propertyId) => ({ operator: 'is empty', propertyId, type: 'rule', value: '' })],
-    [/^!([A-Za-z0-9_.]+)\.contains\((.+)\)$/u, (_, propertyId, value) => ({ operator: 'does not contain', propertyId, type: 'rule', value: deserializeExpressionValue(value) })],
-    [/^([A-Za-z0-9_.]+)\.contains\((.+)\)$/u, (_, propertyId, value) => ({ operator: 'contains', propertyId, type: 'rule', value: deserializeExpressionValue(value) })],
-    [/^([A-Za-z0-9_.]+)\.startsWith\((.+)\)$/u, (_, propertyId, value) => ({ operator: 'starts with', propertyId, type: 'rule', value: deserializeExpressionValue(value) })],
-    [/^([A-Za-z0-9_.]+)\.endsWith\((.+)\)$/u, (_, propertyId, value) => ({ operator: 'ends with', propertyId, type: 'rule', value: deserializeExpressionValue(value) })],
-    [/^([A-Za-z0-9_.]+)\s*(==|!=|>=|<=|>|<)\s*(.+)$/u, (_, propertyId, operator, value) => ({
-      operator: {
-        '!=': 'is not',
-        '==': 'is',
-        '<': '<',
-        '<=': '<=',
-        '>': '>',
-        '>=': '>=',
-      }[operator] ?? operator,
-      propertyId,
-      type: 'rule',
-      value: deserializeExpressionValue(value),
-    })],
-  ];
-
-  for (const [pattern, build] of patterns) {
-    const match = text.match(pattern);
-    if (match) {
-      return build(...match);
-    }
-  }
-
-  return null;
+  const operator = (predicate.negated ? NEGATED_BUILDER_OPERATORS : BUILDER_OPERATORS)[predicate.operator];
+  return operator ? { operator, propertyId: predicate.propertyId, type: 'rule', value: String(predicate.value) } : null;
 }
 
 function parseFilterNode(filterNode) {
@@ -1092,7 +1057,7 @@ function findShellElement(entry) {
     return null;
   }
 
-  return entry.placeholder.querySelector(`[data-base-shell-key="${entry.key}"]`)
+  return findElementByDataset(entry.placeholder, '[data-base-shell-key]', 'baseShellKey', entry.key)
     ?? entry.placeholder.querySelector('.bases-shell');
 }
 
@@ -1370,6 +1335,7 @@ export class BasesPreviewController {
         entry.search = input.value || '';
         clearTimeout(this.searchTimers.get(entry.key));
         this.searchTimers.set(entry.key, setTimeout(() => {
+          this.searchTimers.delete(entry.key);
           entry.payload.search = entry.search;
           void this.renderEntry(entry);
         }, 180));
@@ -1612,8 +1578,10 @@ export class BasesPreviewController {
       return;
     }
 
+    const retainedKeys = new Set();
     Array.from(previewElement.querySelectorAll('.bases-embed-placeholder[data-base-key]')).forEach((placeholder) => {
       const key = placeholder.dataset.baseKey || createShellKey();
+      retainedKeys.add(key);
       const existing = this.entries.get(key);
       const payload = {
         path: placeholder.dataset.basePath || '',
@@ -1643,10 +1611,22 @@ export class BasesPreviewController {
       this.entries.set(key, entry);
       void this.renderEntry(entry);
     });
+    this.pruneEntries(retainedKeys);
+  }
+
+  pruneEntries(retainedKeys) {
+    this.entries.forEach((entry, key) => {
+      if (retainedKeys.has(key)) return;
+      clearTimeout(this.searchTimers.get(key));
+      this.searchTimers.delete(key);
+      entry.placeholder = null;
+      this.entries.delete(key);
+    });
   }
 
   async renderStandalone({ filePath, renderHost, source = null }) {
     const key = `standalone:${filePath}`;
+    this.pruneEntries(new Set([key]));
     const entry = this.entries.get(key) ?? {
       key,
       payload: {

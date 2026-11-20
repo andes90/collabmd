@@ -170,3 +170,7 @@ export const browserNotifications = {
     }
   },
 };
+
+export function findElementByDataset(root, selector, key, value) {
+  return Array.from(root?.querySelectorAll?.(selector) ?? []).find((element) => element.dataset[key] === value) ?? null;
+}

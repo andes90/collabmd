@@ -1,4 +1,6 @@
 import { scheduler } from 'node:timers/promises';
+import { pruneBaseFilterExpression } from '../../../domain/base-expression.js';
+import { getWorkspaceSnapshotKey } from '../workspace-state.js';
 import {
   buildColumns,
   collectEvaluatedPropertyIds,
@@ -62,12 +64,7 @@ function pruneFilterNodeForProperty(filterNode, propertyId = '') {
   }
 
   if (typeof filterNode === 'string') {
-    const escapedPropertyId = RegExp.escape(String(propertyId));
-    const propertyFilterPattern = new RegExp(
-      `^!?${escapedPropertyId}(?:\\.(?:contains|startsWith|endsWith|isEmpty)\\(.*\\)|\\s*(?:==|!=|>=|<=|>|<)\\s*.+)$`,
-      'u',
-    );
-    return propertyFilterPattern.test(String(filterNode ?? '').trim()) ? null : filterNode;
+    return pruneBaseFilterExpression(filterNode, propertyId);
   }
 
   if (Array.isArray(filterNode?.and)) {
@@ -119,12 +116,7 @@ export class BaseQueryService {
 
   async applyWorkspaceChange(...args) {
     const result = await this.snapshotStore.applyWorkspaceChange(...args);
-    const scannedAt = this.snapshotStore.indexSnapshot?.scannedAt;
-    if (scannedAt) {
-      this.invalidatePropertyCatalogsExcept(scannedAt);
-    } else {
-      this.propertyCatalogCache.clear();
-    }
+    this.invalidatePropertyCatalogsExcept(getWorkspaceSnapshotKey(this.snapshotStore.indexSnapshot?.workspaceState));
     return result;
   }
 
@@ -147,9 +139,9 @@ export class BaseQueryService {
     return definition;
   }
 
-  invalidatePropertyCatalogsExcept(scannedAt = '') {
+  invalidatePropertyCatalogsExcept(activeKey) {
     Array.from(this.propertyCatalogCache.keys()).forEach((cacheKey) => {
-      if (cacheKey !== scannedAt) {
+      if (cacheKey !== activeKey) {
         this.propertyCatalogCache.delete(cacheKey);
       }
     });
@@ -172,7 +164,7 @@ export class BaseQueryService {
       basePath,
       sourcePath,
     });
-    this.invalidatePropertyCatalogsExcept(snapshot?.scannedAt ?? '');
+    this.invalidatePropertyCatalogsExcept(getWorkspaceSnapshotKey(snapshot.workspaceState));
 
     const thisFilePath = sourcePath || activeFilePath || basePath || '';
     const thisFile = snapshot.rowsByPath.get(thisFilePath)?.file ?? null;
@@ -227,7 +219,7 @@ export class BaseQueryService {
           continue;
         }
 
-        const rawCells = {};
+        const rawCells = Object.create(null);
         evaluatedPropertyIds.forEach((propertyId) => {
           rawCells[propertyId] = getPropertyValue(propertyId, row, definition, snapshot, thisFile, rowContext);
         });
@@ -268,7 +260,8 @@ export class BaseQueryService {
   }
 
   getPropertyCatalog(snapshot) {
-    const cacheKey = snapshot?.scannedAt ?? 'unknown';
+    const cacheKey = getWorkspaceSnapshotKey(snapshot?.workspaceState);
+    if (cacheKey === null) return createPropertyCatalogSnapshot(snapshot);
     if (!this.propertyCatalogCache.has(cacheKey)) {
       this.propertyCatalogCache.set(cacheKey, createPropertyCatalogSnapshot(snapshot));
     }

@@ -5,6 +5,7 @@ import { createWorkspaceChange, createEmptyWorkspaceChange } from '../../domain/
 import { mapWithConcurrency } from '../shared/async-utils.js';
 
 const WORKSPACE_SCAN_CONCURRENCY = 8;
+let workspaceSnapshotRevision = 0;
 
 export function compareWorkspacePaths(left = '', right = '') {
   return String(left).localeCompare(String(right), undefined, { sensitivity: 'base' });
@@ -101,9 +102,15 @@ export function createWorkspaceStateSnapshot(entries = new Map(), metadata = new
     filePaths: stats.filePaths,
     markdownPaths: stats.markdownPaths,
     metadata: normalizedMetadata,
+    revision: ++workspaceSnapshotRevision,
     scannedAt,
     vaultFileCount: stats.vaultFileCount,
   };
+}
+
+export function getWorkspaceSnapshotKey(snapshot) {
+  if (snapshot?.revision != null) return `revision:${snapshot.revision}`;
+  return snapshot?.scannedAt != null ? `scanned-at:${snapshot.scannedAt}` : null;
 }
 
 function getDirectoryEntryKind(entry = {}) {

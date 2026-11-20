@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 import { serializeBaseDefinition, BaseQueryService } from '../../src/server/domain/bases/base-query-service.js';
+import { createEvaluationRootContext, evaluateExpression } from '../../src/server/domain/bases/base-expression-runtime.js';
 import { normalizeBaseDefinition } from '../../src/server/domain/bases/base-definition.js';
 import { createWorkspaceEntry, createWorkspaceStateSnapshot } from '../../src/server/domain/workspace-state.js';
 import { VaultFileStore } from '../../src/server/infrastructure/persistence/vault-file-store.js';
@@ -1269,4 +1270,52 @@ test('BaseQueryService transform serializes not filters as arrays', async (t) =>
 
   assert.match(transformed.source, /filters:\n\s+not:\n\s+- note\.status == "done"/);
   assert.doesNotMatch(transformed.source, /not:\n\s+or:/);
+});
+
+test('Base value suggestions remove the requested predicate from a compound expression', async (t) => {
+  const { cleanup, service, writeVaultFile } = await createBaseWorkspace();
+  t.after(cleanup);
+  await writeVaultFile('a.md', '---\nstatus: open\npriority: high\n---\n');
+  await writeVaultFile('b.md', '---\nstatus: closed\npriority: high\n---\n');
+  await writeVaultFile('c.md', '---\nstatus: pending\npriority: low\n---\n');
+
+  const result = await service.propertyValues({
+    propertyId: 'note.status',
+    source: 'filters: (status == "open" && (note.priority == "high" || note.priority == "urgent")) && file.ext == "md"',
+  });
+
+  assert.deepEqual(result.values.map(({ text }) => text).sort(), ['closed', 'open']);
+});
+
+test('Base expressions only read own properties and skip reserved object keys', () => {
+  const noteProperties = Object.create({ inherited: 'hidden' });
+  noteProperties.name = 'Ada';
+  const context = createEvaluationRootContext({ currentRow: { noteProperties } });
+
+  for (const source of ['note.inherited', 'note.constructor', 'note["__proto__"]', 'note.prototype', 'note["constructor"]()']) {
+    assert.equal(evaluateExpression(source, context), null, source);
+  }
+  assert.equal(evaluateExpression('note.name.length', context), 3);
+  assert.equal(evaluateExpression('note.name[0]', context), 'A');
+  assert.deepEqual(evaluateExpression('{ "__proto__": {}, constructor: 1, prototype: 2, name: note.name }', context), { name: 'Ada' });
+});
+
+test('Base index and property catalog refresh across workspace snapshots with matching timestamps', async () => {
+  let workspaceState = createBaseSnapshot(['before.md'], 10);
+  const service = new BaseQueryService({
+    vaultFileStore: {
+      readMarkdownFile: async (path) => path === 'before.md' ? '---\nold: 1\n---\n' : '---\nnew: 2\n---\n',
+    },
+    workspaceStateProvider: () => workspaceState,
+  });
+  const before = await service.query({ source: 'filters: file.ext == "md"' });
+  const previousRevision = workspaceState.revision;
+  workspaceState = createBaseSnapshot(['after.md'], 10);
+  const after = await service.query({ source: 'filters: file.ext == "md"' });
+
+  assert.ok(workspaceState.revision > previousRevision);
+  assert.deepEqual(before.rows.map(({ path }) => path), ['before.md']);
+  assert.deepEqual(after.rows.map(({ path }) => path), ['after.md']);
+  assert.ok(after.meta.availableProperties.some(({ id }) => id === 'note.new'));
+  assert.ok(after.meta.availableProperties.every(({ id }) => id !== 'note.old'));
 });

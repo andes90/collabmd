@@ -11,6 +11,7 @@ import {
   collectReferenceTargetKeysForFilePath,
   createReferenceTargetAliasMap,
 } from '../markdown-reference-extractor.js';
+import { getWorkspaceSnapshotKey } from '../workspace-state.js';
 import { mapWithConcurrency } from '../../shared/async-utils.js';
 import { isPlainObject } from './base-definition.js';
 import { createLinkValue, dedupeLinkValues } from './base-expression-runtime.js';
@@ -349,7 +350,6 @@ export class BaseIndexSnapshotStore {
       rawTargetKeysBySourcePath,
       rawTargetSourcesByKey,
       rowsByPath,
-      scannedAt: resolvedWorkspaceState.scannedAt,
       wikiTargetIndex,
       workspaceState: resolvedWorkspaceState,
     };
@@ -465,12 +465,12 @@ export class BaseIndexSnapshotStore {
     if (requiresFreshScan) {
       workspaceState = await this.vaultFileStore.scanWorkspaceState();
       this.lastWorkspaceState = workspaceState;
-      if (this.indexSnapshot?.scannedAt !== workspaceState?.scannedAt) {
+      if (getWorkspaceSnapshotKey(this.indexSnapshot?.workspaceState) !== getWorkspaceSnapshotKey(workspaceState)) {
         this.indexSnapshot = null;
       }
     }
 
-    if (this.indexSnapshot?.scannedAt === workspaceState?.scannedAt) {
+    if (this.indexSnapshot && getWorkspaceSnapshotKey(this.indexSnapshot.workspaceState) === getWorkspaceSnapshotKey(workspaceState)) {
       return this.indexSnapshot;
     }
 
@@ -479,7 +479,7 @@ export class BaseIndexSnapshotStore {
 
   async initializeFromWorkspaceState(workspaceState = null) {
     this.lastWorkspaceState = workspaceState ?? null;
-    if (this.indexSnapshot && workspaceState && this.indexSnapshot.scannedAt !== workspaceState.scannedAt) {
+    if (this.indexSnapshot && workspaceState && getWorkspaceSnapshotKey(this.indexSnapshot.workspaceState) !== getWorkspaceSnapshotKey(workspaceState)) {
       this.indexSnapshot = null;
     }
     return this.indexSnapshot;
@@ -494,7 +494,7 @@ export class BaseIndexSnapshotStore {
       return null;
     }
 
-    if (!previousState || this.indexSnapshot.scannedAt !== previousState.scannedAt) {
+    if (!previousState || getWorkspaceSnapshotKey(this.indexSnapshot.workspaceState) !== getWorkspaceSnapshotKey(previousState)) {
       this.indexSnapshot = null;
       return null;
     }
@@ -527,7 +527,6 @@ export class BaseIndexSnapshotStore {
 
     if (!membershipChanged && markdownPathsToRefresh.length === 0) {
       this.indexSnapshot.workspaceState = nextState ?? this.indexSnapshot.workspaceState;
-      this.indexSnapshot.scannedAt = nextState?.scannedAt ?? this.indexSnapshot.scannedAt;
       return this.indexSnapshot;
     }
 
@@ -604,7 +603,6 @@ export class BaseIndexSnapshotStore {
       this.addSourceBacklinkContributions(snapshot, pathValue, affectedTargetPaths);
     });
     snapshot.workspaceState = nextState;
-    snapshot.scannedAt = nextState?.scannedAt ?? snapshot.scannedAt;
     this.refreshSerializedBacklinks(snapshot, [
       ...snapshot.filePaths.filter((filePath) => !snapshot.backlinksByPath.has(filePath)),
       ...affectedTargetPaths,

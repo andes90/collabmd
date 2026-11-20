@@ -1,3 +1,4 @@
+import { parseBaseExpression } from '../../../domain/base-expression.js';
 import { isImageAttachmentFilePath } from '../../../domain/file-kind.js';
 import { resolveVaultRelativePath } from '../../../domain/vault-paths.js';
 import { isPlainObject } from './base-definition.js';
@@ -63,8 +64,17 @@ function normalizeDuration(duration) {
   return Number.isFinite(amount) && multiplier ? amount * multiplier : null;
 }
 
+const UNSAFE_PROPERTY_NAMES = new Set(['__proto__', 'constructor', 'prototype']);
+
+function getOwnBaseProperty(target, property) {
+  const name = String(property ?? '');
+  return target != null && !UNSAFE_PROPERTY_NAMES.has(name) && Object.hasOwn(target, name)
+    ? target[name]
+    : null;
+}
+
 function hasFormulaDefinition(definition, propertyId = '') {
-  return Boolean(definition?.formulas?.[propertyId]);
+  return Boolean(getOwnBaseProperty(definition?.formulas, propertyId));
 }
 
 export function parseDateValue(value) {
@@ -664,279 +674,6 @@ function invokeMethod(target, name, argNodes, scope, evaluate, rootContext) {
   throw new Error(`Unsupported method "${name}"`);
 }
 
-function tokenizeExpression(source = '') {
-  const tokens = [];
-  const text = String(source ?? '');
-  let index = 0;
-
-  while (index < text.length) {
-    const character = text[index];
-    if (/\s/u.test(character)) {
-      index += 1;
-      continue;
-    }
-
-    const twoChar = text.slice(index, index + 2);
-    const threeChar = text.slice(index, index + 3);
-    if (['&&', '||', '==', '!=', '<=', '>='].includes(twoChar)) {
-      tokens.push({ type: 'operator', value: twoChar });
-      index += 2;
-      continue;
-    }
-    if (threeChar === '...') {
-      tokens.push({ type: 'operator', value: threeChar });
-      index += 3;
-      continue;
-    }
-    if ('+-*/%!<>()[]{}.,:'.includes(character)) {
-      tokens.push({
-        type: '()[]{}.,:'.includes(character) ? 'punctuation' : 'operator',
-        value: character,
-      });
-      index += 1;
-      continue;
-    }
-    if (character === '"' || character === '\'') {
-      let value = '';
-      let cursor = index + 1;
-      while (cursor < text.length) {
-        const nextCharacter = text[cursor];
-        if (nextCharacter === '\\') {
-          const escaped = text[cursor + 1] ?? '';
-          value += escaped;
-          cursor += 2;
-          continue;
-        }
-        if (nextCharacter === character) {
-          break;
-        }
-        value += nextCharacter;
-        cursor += 1;
-      }
-      if (text[cursor] !== character) {
-        throw new Error(`Unterminated string in expression: ${source}`);
-      }
-      tokens.push({ type: 'string', value });
-      index = cursor + 1;
-      continue;
-    }
-    if (/\d/u.test(character)) {
-      let cursor = index + 1;
-      while (cursor < text.length && /[\d.]/u.test(text[cursor])) {
-        cursor += 1;
-      }
-      tokens.push({ type: 'number', value: text.slice(index, cursor) });
-      index = cursor;
-      continue;
-    }
-    if (/[A-Za-z_$]/u.test(character)) {
-      let cursor = index + 1;
-      while (cursor < text.length && /[A-Za-z0-9_$]/u.test(text[cursor])) {
-        cursor += 1;
-      }
-      tokens.push({ type: 'identifier', value: text.slice(index, cursor) });
-      index = cursor;
-      continue;
-    }
-
-    throw new Error(`Unexpected token "${character}" in expression: ${source}`);
-  }
-
-  return tokens;
-}
-
-const BINARY_PRECEDENCE = {
-  '||': 1,
-  '&&': 2,
-  '==': 3,
-  '!=': 3,
-  '<': 4,
-  '<=': 4,
-  '>': 4,
-  '>=': 4,
-  '+': 5,
-  '-': 5,
-  '*': 6,
-  '/': 6,
-  '%': 6,
-};
-
-function parseExpression(source = '') {
-  const tokens = tokenizeExpression(source);
-  let index = 0;
-
-  const peek = () => tokens[index] ?? null;
-  const consume = (expectedValue = null) => {
-    const token = tokens[index] ?? null;
-    if (!token) {
-      throw new Error(`Unexpected end of expression: ${source}`);
-    }
-    if (expectedValue !== null && token.value !== expectedValue) {
-      throw new Error(`Expected "${expectedValue}" in expression: ${source}`);
-    }
-    index += 1;
-    return token;
-  };
-
-  const parsePrimary = () => {
-    const token = peek();
-    if (!token) {
-      throw new Error(`Unexpected end of expression: ${source}`);
-    }
-
-    if (token.type === 'number') {
-      consume();
-      return { type: 'Literal', value: Number(token.value) };
-    }
-
-    if (token.type === 'string') {
-      consume();
-      return { type: 'Literal', value: token.value };
-    }
-
-    if (token.type === 'identifier') {
-      consume();
-      if (token.value === 'true') return { type: 'Literal', value: true };
-      if (token.value === 'false') return { type: 'Literal', value: false };
-      if (token.value === 'null') return { type: 'Literal', value: null };
-      return { name: token.value, type: 'Identifier' };
-    }
-
-    if (token.value === '(') {
-      consume('(');
-      const expression = parseBinaryExpression(0);
-      consume(')');
-      return expression;
-    }
-
-    if (token.value === '[') {
-      consume('[');
-      const elements = [];
-      while (peek() && peek().value !== ']') {
-        elements.push(parseBinaryExpression(0));
-        if (peek()?.value === ',') {
-          consume(',');
-        }
-      }
-      consume(']');
-      return { elements, type: 'ArrayExpression' };
-    }
-
-    if (token.value === '{') {
-      consume('{');
-      const properties = [];
-      while (peek() && peek().value !== '}') {
-        const keyToken = consume();
-        const key = keyToken.type === 'identifier' ? keyToken.value : String(keyToken.value ?? '');
-        consume(':');
-        properties.push({ key, value: parseBinaryExpression(0) });
-        if (peek()?.value === ',') {
-          consume(',');
-        }
-      }
-      consume('}');
-      return { properties, type: 'ObjectExpression' };
-    }
-
-    throw new Error(`Unexpected token "${token.value}" in expression: ${source}`);
-  };
-
-  const parsePostfix = (baseNode) => {
-    let node = baseNode;
-    while (peek()) {
-      if (peek().value === '.') {
-        consume('.');
-        const property = consume();
-        if (property.type !== 'identifier') {
-          throw new Error(`Expected property name in expression: ${source}`);
-        }
-        node = {
-          computed: false,
-          object: node,
-          property: { name: property.value, type: 'Identifier' },
-          type: 'MemberExpression',
-        };
-        continue;
-      }
-
-      if (peek().value === '[') {
-        consume('[');
-        const property = parseBinaryExpression(0);
-        consume(']');
-        node = {
-          computed: true,
-          object: node,
-          property,
-          type: 'MemberExpression',
-        };
-        continue;
-      }
-
-      if (peek().value === '(') {
-        consume('(');
-        const args = [];
-        while (peek() && peek().value !== ')') {
-          args.push(parseBinaryExpression(0));
-          if (peek()?.value === ',') {
-            consume(',');
-          }
-        }
-        consume(')');
-        node = {
-          arguments: args,
-          callee: node,
-          type: 'CallExpression',
-        };
-        continue;
-      }
-
-      break;
-    }
-    return node;
-  };
-
-  const parseUnary = () => {
-    const token = peek();
-    if (token?.type === 'operator' && ['!', '-'].includes(token.value)) {
-      consume();
-      return {
-        argument: parseUnary(),
-        operator: token.value,
-        type: 'UnaryExpression',
-      };
-    }
-
-    return parsePostfix(parsePrimary());
-  };
-
-  const parseBinaryExpression = (minimumPrecedence) => {
-    let left = parseUnary();
-    while (true) {
-      const operator = peek();
-      const precedence = operator ? BINARY_PRECEDENCE[operator.value] : null;
-      if (!precedence || precedence < minimumPrecedence) {
-        break;
-      }
-
-      consume();
-      const right = parseBinaryExpression(precedence + 1);
-      left = {
-        left,
-        operator: operator.value,
-        right,
-        type: 'BinaryExpression',
-      };
-    }
-    return left;
-  };
-
-  const ast = parseBinaryExpression(0);
-  if (index < tokens.length) {
-    throw new Error(`Unexpected token "${tokens[index].value}" in expression: ${source}`);
-  }
-  return ast;
-}
-
 class ExpressionScope {
   constructor({ locals = {}, parent = null, rootContext }) {
     this.locals = locals;
@@ -981,7 +718,8 @@ function evaluateAst(ast, scope) {
         const property = ast.callee.computed
           ? evaluate(ast.callee.property, scope)
           : ast.callee.property.name;
-        return invokeMethod(target, String(property ?? ''), ast.arguments, scope, evaluate, rootContext);
+        const name = String(property ?? '');
+        return UNSAFE_PROPERTY_NAMES.has(name) ? null : invokeMethod(target, name, ast.arguments, scope, evaluate, rootContext);
       }
       throw new Error('Unsupported call target');
     }
@@ -991,20 +729,17 @@ function evaluateAst(ast, scope) {
       return ast.value;
     case 'MemberExpression': {
       const target = evaluate(ast.object, scope);
-      const property = ast.computed ? evaluate(ast.property, scope) : ast.property.name;
+      const property = String((ast.computed ? evaluate(ast.property, scope) : ast.property.name) ?? '');
+      if (UNSAFE_PROPERTY_NAMES.has(property)) return null;
       if (target?.__baseType === 'formula-namespace') {
-        return rootContext.resolveFormulaValue(String(property ?? ''), target.row, target.evaluationState);
+        return rootContext.resolveFormulaValue(property, target.row, target.evaluationState);
       }
-      if (target == null) {
-        return null;
-      }
-      return target[property];
+      return getOwnBaseProperty(target, property);
     }
     case 'ObjectExpression':
-      return ast.properties.reduce((acc, property) => {
-        acc[property.key] = evaluate(property.value, scope);
-        return acc;
-      }, {});
+      return Object.fromEntries(ast.properties
+        .filter(({ key }) => !UNSAFE_PROPERTY_NAMES.has(key))
+        .map(({ key, value }) => [key, evaluate(value, scope)]));
     case 'UnaryExpression': {
       const value = evaluate(ast.argument, scope);
       return ast.operator === '!' ? !value : -Number(value ?? 0);
@@ -1018,7 +753,7 @@ export function evaluateExpression(expressionSource, rootContext, locals = {}) {
   const cache = rootContext.astCache;
   let ast = cache.get(expressionSource);
   if (!ast) {
-    ast = parseExpression(expressionSource);
+    ast = parseBaseExpression(expressionSource);
     cache.set(expressionSource, ast);
   }
   const scope = new ExpressionScope({ locals, rootContext });
@@ -1153,7 +888,7 @@ export function createEvaluationRootContext({
 
 export function getPropertyValue(propertyId, row, definition, snapshot, thisFile, rootContext = null) {
   if (propertyId.startsWith('file.')) {
-    return propertyId.split('.').slice(1).reduce((acc, segment) => acc?.[segment], row.file);
+    return propertyId.split('.').slice(1).reduce(getOwnBaseProperty, row.file);
   }
 
   if (hasFormulaDefinition(definition, propertyId)) {
@@ -1167,7 +902,7 @@ export function getPropertyValue(propertyId, row, definition, snapshot, thisFile
   }
 
   if (propertyId.startsWith('note.')) {
-    return row.noteProperties[propertyId.slice(5)] ?? null;
+    return getOwnBaseProperty(row.noteProperties, propertyId.slice(5)) ?? null;
   }
 
   if (hasFormulaDefinition(definition, `formula.${propertyId}`)) {
@@ -1180,5 +915,5 @@ export function getPropertyValue(propertyId, row, definition, snapshot, thisFile
     return context.resolveFormulaValue(propertyId, row, context.evaluationState);
   }
 
-  return row.noteProperties[propertyId] ?? null;
+  return getOwnBaseProperty(row.noteProperties, propertyId) ?? null;
 }
