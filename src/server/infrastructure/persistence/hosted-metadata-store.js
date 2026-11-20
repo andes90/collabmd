@@ -1,87 +1,7 @@
 import { mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
-import { createHostedError, HOSTED_ROLE_ADMIN } from '../../domain/hosted-workspace-contract.js';
-
-function rowToTeam(row) {
-  if (!row) {
-    return null;
-  }
-  return {
-    claimedAt: row.claimed_at,
-    id: row.id,
-    name: row.name,
-    setupCompletedAt: row.setup_completed_at,
-  };
-}
-
-function rowToMembership(row) {
-  if (!row) {
-    return null;
-  }
-  return {
-    email: row.email,
-    id: row.id,
-    joinedAt: row.joined_at,
-    name: row.name,
-    picture: row.picture,
-    role: row.role,
-    updatedAt: row.updated_at,
-  };
-}
-
-function rowToInvitation(row) {
-  if (!row) {
-    return null;
-  }
-  return {
-    acceptedAt: row.accepted_at,
-    createdAt: row.created_at,
-    email: row.email,
-    expiresAt: row.expires_at,
-    id: row.id,
-    invitedByEmail: row.invited_by_email,
-    invitedByName: row.invited_by_name,
-    revokedAt: row.revoked_at,
-    role: row.role,
-    updatedAt: row.updated_at,
-  };
-}
-
-function rowToWorkspaceClaim(row) {
-  if (!row) {
-    return null;
-  }
-  return {
-    claimedAt: row.claimed_at,
-    createdAt: row.created_at,
-    email: row.email,
-    expiresAt: row.expires_at,
-    id: row.id,
-    tokenHash: row.token_hash,
-  };
-}
-
-function rowToVaultSource(row) {
-  if (!row) {
-    return null;
-  }
-  return {
-    configuredAt: row.configured_at,
-    configuredByEmail: row.configured_by_email,
-    configuredByName: row.configured_by_name,
-    defaultBranch: row.default_branch,
-    id: row.id,
-    installationAccountLogin: row.installation_account_login,
-    installationId: row.installation_id,
-    provider: row.provider,
-    repositoryFullName: row.repository_full_name,
-    repositoryId: row.repository_id,
-    repositoryName: row.repository_name,
-    repositoryOwner: row.repository_owner,
-    visibility: row.visibility,
-  };
-}
+import { createHostedError, HOSTED_ROLE_ADMIN } from '../../domain/hosted-workspace.js';
 
 function parseMetadata(value) {
   try {
@@ -91,20 +11,17 @@ function parseMetadata(value) {
   }
 }
 
-function rowToAuditEvent(row) {
-  if (!row) {
-    return null;
+function mapRow(row) {
+  if (!row) return null;
+  const mapped = {};
+  for (const [key, value] of Object.entries(row)) {
+    if (key === 'metadata_json') {
+      mapped.metadata = parseMetadata(value);
+    } else {
+      mapped[key.replace(/_([a-z])/g, (_, ch) => ch.toUpperCase())] = value;
+    }
   }
-  return {
-    actorEmail: row.actor_email,
-    actorName: row.actor_name,
-    createdAt: row.created_at,
-    id: row.id,
-    metadata: parseMetadata(row.metadata_json),
-    targetEmail: row.target_email,
-    targetRole: row.target_role,
-    type: row.type,
-  };
+  return mapped;
 }
 
 export class HostedMetadataStore {
@@ -229,7 +146,7 @@ export class HostedMetadataStore {
   }
 
   async getTeam() {
-    return rowToTeam(this.prepare('getTeam', 'SELECT * FROM team LIMIT 1').get());
+    return mapRow(this.prepare('getTeam', 'SELECT * FROM team LIMIT 1').get());
   }
 
   async updateTeam(team) {
@@ -240,7 +157,7 @@ export class HostedMetadataStore {
   }
 
   async getVaultSource() {
-    return rowToVaultSource(this.prepare('getVaultSource', 'SELECT * FROM vault_source LIMIT 1').get());
+    return mapRow(this.prepare('getVaultSource', 'SELECT * FROM vault_source LIMIT 1').get());
   }
 
   insertVaultSource(vaultSource) {
@@ -298,7 +215,7 @@ export class HostedMetadataStore {
   }
 
   async getActiveWorkspaceClaim(now) {
-    return rowToWorkspaceClaim(this.prepare(
+    return mapRow(this.prepare(
       'getActiveWorkspaceClaim',
       `SELECT * FROM workspace_claims
        WHERE claimed_at IS NULL AND expires_at > ?
@@ -339,14 +256,14 @@ export class HostedMetadataStore {
   }
 
   async getMembershipByEmail(email) {
-    return rowToMembership(this.prepare(
+    return mapRow(this.prepare(
       'getMembershipByEmail',
       'SELECT * FROM memberships WHERE email = ?',
     ).get(email));
   }
 
   getMembershipById(id) {
-    return rowToMembership(this.prepare(
+    return mapRow(this.prepare(
       'getMembershipById',
       'SELECT * FROM memberships WHERE id = ?',
     ).get(id));
@@ -356,7 +273,7 @@ export class HostedMetadataStore {
     return this.prepare(
       'listMemberships',
       'SELECT * FROM memberships ORDER BY role = ? DESC, email ASC',
-    ).all(HOSTED_ROLE_ADMIN).map(rowToMembership);
+    ).all(HOSTED_ROLE_ADMIN).map(mapRow);
   }
 
   updateMembership(membership) {
@@ -444,14 +361,14 @@ export class HostedMetadataStore {
   }
 
   async getInvitationById(id) {
-    return rowToInvitation(this.prepare(
+    return mapRow(this.prepare(
       'getInvitationById',
       'SELECT * FROM invitations WHERE id = ?',
     ).get(id));
   }
 
   async getPendingInvitationByEmail(email, now) {
-    return rowToInvitation(this.prepare(
+    return mapRow(this.prepare(
       'getPendingInvitationByEmail',
       `SELECT * FROM invitations
        WHERE email = ? AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > ?
@@ -465,7 +382,7 @@ export class HostedMetadataStore {
       `SELECT * FROM invitations
        WHERE accepted_at IS NULL AND revoked_at IS NULL AND expires_at > ?
        ORDER BY created_at DESC`,
-    ).all(now).map(rowToInvitation);
+    ).all(now).map(mapRow);
   }
 
   async updateInvitation(invitation) {
@@ -522,12 +439,12 @@ export class HostedMetadataStore {
         'listAuditEventsBefore',
         `SELECT * FROM audit_events WHERE (created_at, id) < (?, ?)
          ORDER BY created_at DESC, id DESC LIMIT ?`,
-      ).all(before.createdAt, before.id, limit).map(rowToAuditEvent);
+      ).all(before.createdAt, before.id, limit).map(mapRow);
     }
     return this.prepare(
       'listAuditEvents',
       'SELECT * FROM audit_events ORDER BY created_at DESC, id DESC LIMIT ?',
-    ).all(limit).map(rowToAuditEvent);
+    ).all(limit).map(mapRow);
   }
 
   async createOperationalSecurityEvent(event) {

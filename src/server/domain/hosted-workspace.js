@@ -1,18 +1,23 @@
 import { randomUUID, timingSafeEqual, createHash } from 'node:crypto';
 
 import { normalizeEmailAddress } from '../auth/auth-common.js';
-import {
-  HOSTED_ROLE_ADMIN,
-  HOSTED_ROLE_COLLABORATOR,
-  createHostedError,
-  normalizeHostedRole,
-} from './hosted-workspace-contract.js';
 
-export {
-  HOSTED_ROLE_ADMIN,
-  HOSTED_ROLE_COLLABORATOR,
-  normalizeHostedRole,
-} from './hosted-workspace-contract.js';
+export const HOSTED_ROLE_ADMIN = 'admin';
+export const HOSTED_ROLE_COLLABORATOR = 'collaborator';
+const SUPPORTED_ROLES = new Set([HOSTED_ROLE_ADMIN, HOSTED_ROLE_COLLABORATOR]);
+
+export function createHostedError(statusCode, message, code) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  error.code = code;
+  return error;
+}
+
+export function normalizeHostedRole(value) {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  return SUPPORTED_ROLES.has(normalized) ? normalized : '';
+}
+
 export { normalizeEmailAddress as normalizeHostedEmail } from '../auth/auth-common.js';
 
 export const HOSTED_INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
