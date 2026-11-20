@@ -6,6 +6,15 @@ import { CommentThreadStore } from './comment-thread-store.js';
 import { EditorCollaborationClient } from './editor-collaboration-client.js';
 import { EditorViewAdapter } from './editor-view-adapter.js';
 
+function delegateMethods(proto, targetProp, methods) {
+  for (const entry of methods) {
+    const [methodName, targetMethod] = Array.isArray(entry) ? entry : [entry, entry];
+    proto[methodName] = function (...args) {
+      return this[targetProp][targetMethod](...args);
+    };
+  }
+}
+
 export class EditorSession {
   constructor({
     editorContainer,
@@ -48,16 +57,10 @@ export class EditorSession {
       lineInfoElement,
       lineWrappingEnabled,
       vimModeEnabled,
-      onDocChanged: () => {
-        this.emitContentChange();
-      },
+      onDocChanged: () => this.emitContentChange(),
       onImagePaste,
-      onViewportChanged: (viewport) => {
-        this.collaborationClient.setLocalViewport(viewport);
-      },
-      onSelectionChanged: () => {
-        this.onSelectionChange?.(this.getCurrentSelectionCommentAnchor());
-      },
+      onViewportChanged: (viewport) => this.collaborationClient.setLocalViewport(viewport),
+      onSelectionChanged: () => this.onSelectionChange?.(this.getCurrentSelectionCommentAnchor()),
     });
     this.commentThreadStore = new CommentThreadStore({
       getDoc: () => this.collaborationClient.ydoc,
@@ -138,41 +141,14 @@ export class EditorSession {
     return this.emitContentChange();
   }
 
-  applyTheme(theme) {
-    this.viewAdapter.applyTheme(theme);
-  }
-
   getText() {
     return this.collaborationClient.getText() || this.viewAdapter.getText();
   }
 
-  getScrollContainer() {
-    return this.viewAdapter.getScrollContainer();
-  }
-
-  getTopVisibleLineNumber(viewportRatio = 0) {
-    return this.viewAdapter.getTopVisibleLineNumber(viewportRatio);
-  }
-
-  getLocalUser() {
-    return this.collaborationClient.getLocalUser();
-  }
-
-  get awareness() {
-    return this.collaborationClient.awareness;
-  }
-
-  get provider() {
-    return this.collaborationClient.provider;
-  }
-
-  get ydoc() {
-    return this.collaborationClient.ydoc;
-  }
-
-  get ytext() {
-    return this.collaborationClient.ytext;
-  }
+  get awareness() { return this.collaborationClient.awareness; }
+  get provider() { return this.collaborationClient.provider; }
+  get ydoc() { return this.collaborationClient.ydoc; }
+  get ytext() { return this.collaborationClient.ytext; }
 
   async getAgentContext() {
     const state = this.viewAdapter.getState();
@@ -192,122 +168,20 @@ export class EditorSession {
     };
   }
 
-  getCurrentSelectionLineRange() {
-    return this.viewAdapter.getCurrentSelectionLineRange();
-  }
-
-  getCurrentSelectionCommentAnchor() {
-    return this.viewAdapter.getCurrentSelectionCommentAnchor();
-  }
-
-  getCommentAnchorClientRect(anchor) {
-    return this.viewAdapter.getAnchorClientRect(anchor);
-  }
-
-  getSelectionChipClientRect(anchor) {
-    return this.viewAdapter.getSelectionChipClientRect(anchor);
-  }
-
-  getCommentThreads() {
-    return this.commentThreadStore.getCommentThreads();
-  }
-
-  createCommentThread(payload) {
-    return this.commentThreadStore.createCommentThread(payload);
-  }
-
-  replyToCommentThread(threadId, body) {
-    return this.commentThreadStore.replyToCommentThread(threadId, body);
-  }
-
-  toggleCommentReaction(threadId, messageId, emoji) {
-    return this.commentThreadStore.toggleCommentReaction(threadId, messageId, emoji);
-  }
-
-  deleteCommentThread(threadId) {
-    return this.commentThreadStore.deleteCommentThread(threadId);
-  }
-
-  isLineWrappingEnabled() {
-    return this.viewAdapter.isLineWrappingEnabled();
-  }
-
-  isVimModeEnabled() {
-    return this.viewAdapter.isVimModeEnabled();
-  }
-
-  setVimMode(enabled) {
-    return this.viewAdapter.setVimMode(enabled);
-  }
-
-  setLineWrapping(enabled) {
-    return this.viewAdapter.setLineWrapping(enabled);
-  }
-
-  scrollToLine(lineNumber, viewportRatio = 0) {
-    return this.viewAdapter.scrollToLine(lineNumber, viewportRatio);
-  }
-
-  revealSearchMatch(match) {
-    return this.viewAdapter.revealSearchMatch(match);
-  }
-
   getUserCursor(clientId) {
-    return this.collaborationClient.getUserCursor(
-      clientId,
-      (cursor) => this.resolveAwarenessCursor(cursor),
-    );
-  }
-
-  getUserViewport(clientId) {
-    return this.collaborationClient.getUserViewport(clientId);
-  }
-
-  scrollToPosition(position, alignment = 'center') {
-    return this.viewAdapter.scrollToPosition(position, alignment);
+    return this.collaborationClient.getUserCursor(clientId, (cursor) => this.resolveAwarenessCursor(cursor));
   }
 
   scrollToUserViewport(clientId) {
     const viewport = this.getUserViewport(clientId);
-    if (!viewport) {
-      return false;
-    }
-
-    return this.scrollToLine(viewport.topLine, viewport.viewportRatio);
+    return viewport ? this.scrollToLine(viewport.topLine, viewport.viewportRatio) : false;
   }
 
   scrollToUserCursor(clientId, alignment = 'center') {
     const cursor = this.getUserCursor(clientId);
-    if (!cursor) {
-      return false;
-    }
-
-    return this.scrollToPosition(cursor.cursorHead, alignment)
-      || this.scrollToLine(cursor.cursorLine);
-  }
-
-  setUserName(name) {
-    return this.collaborationClient.setUserName(name);
-  }
-
-  requestMeasure() {
-    this.viewAdapter.requestMeasure();
-  }
-
-  formatDocument(filePath) {
-    return this.viewAdapter.formatDocument(filePath);
-  }
-
-  runEditorCommand(commandId) {
-    return this.viewAdapter.runEditorCommand(commandId);
-  }
-
-  applyMarkdownToolbarAction(action) {
-    return this.viewAdapter.applyMarkdownToolbarAction(action);
-  }
-
-  insertText(text) {
-    return this.viewAdapter.insertText(text);
+    return cursor
+      ? (this.scrollToPosition(cursor.cursorHead, alignment) || this.scrollToLine(cursor.cursorLine))
+      : false;
   }
 
   applyTextReplacements(replacements) {
@@ -317,28 +191,14 @@ export class EditorSession {
     return this.viewAdapter.applyTextReplacements(replacements);
   }
 
-  replaceText(text) {
-    return this.viewAdapter.replaceText(text);
-  }
-
   toggleTaskListItem(lineNumber) {
-    if (!this.collaborationClient.initialSyncComplete) {
-      return false;
-    }
-
-    return this.viewAdapter.toggleTaskListItem(lineNumber);
-  }
-
-  flashExternalUpdate(range) {
-    return this.viewAdapter.flashRemoteRange(range);
+    return this.collaborationClient.initialSyncComplete
+      ? this.viewAdapter.toggleTaskListItem(lineNumber)
+      : false;
   }
 
   isInitialSyncComplete() {
     return this.collaborationClient.initialSyncComplete;
-  }
-
-  waitForInitialSync(timeoutMs = 1500) {
-    return this.collaborationClient.waitForInitialSync(timeoutMs);
   }
 
   destroy() {
@@ -353,8 +213,7 @@ export class EditorSession {
   }
 
   resolveAwarenessCursor(cursor) {
-    const ydoc = this.collaborationClient.ydoc;
-    const ytext = this.collaborationClient.ytext;
+    const { ydoc, ytext } = this.collaborationClient;
     const state = this.viewAdapter.getState();
     if (!cursor?.anchor || !cursor?.head || !ydoc || !state || !ytext) {
       return null;
@@ -366,11 +225,49 @@ export class EditorSession {
       return null;
     }
 
-    const line = state.doc.lineAt(head.index);
     return {
       cursorAnchor: anchor.index,
       cursorHead: head.index,
-      cursorLine: line.number,
+      cursorLine: state.doc.lineAt(head.index).number,
     };
   }
 }
+
+delegateMethods(EditorSession.prototype, 'viewAdapter', [
+  'applyMarkdownToolbarAction',
+  'applyTheme',
+  ['flashExternalUpdate', 'flashRemoteRange'],
+  'formatDocument',
+  ['getCommentAnchorClientRect', 'getAnchorClientRect'],
+  'getCurrentSelectionCommentAnchor',
+  'getCurrentSelectionLineRange',
+  'getScrollContainer',
+  'getSelectionChipClientRect',
+  'getTopVisibleLineNumber',
+  'insertText',
+  'isLineWrappingEnabled',
+  'isVimModeEnabled',
+  'replaceText',
+  'requestMeasure',
+  'revealSearchMatch',
+  'runEditorCommand',
+  'scrollToLine',
+  'scrollToPosition',
+  'setLineWrapping',
+  'setVimMode',
+]);
+
+delegateMethods(EditorSession.prototype, 'commentThreadStore', [
+  'createCommentThread',
+  'deleteCommentThread',
+  'getCommentThreads',
+  'replyToCommentThread',
+  'toggleCommentReaction',
+]);
+
+delegateMethods(EditorSession.prototype, 'collaborationClient', [
+  'getLocalUser',
+  'getUserViewport',
+  'setUserName',
+  'waitForInitialSync',
+]);
