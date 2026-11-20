@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 
+import { compilePreviewDocument } from '../../src/client/application/preview-render-compiler.js';
 import { ScrollSyncController } from '../../src/client/presentation/scroll-sync-controller.js';
 
 function nextFrame() {
@@ -170,6 +171,52 @@ it('maps Markdown blocks without treating SVG source lines as document lines', (
     expect(controller.findBlockForLine(blocks, 25).block.start).toBe(20);
     const diagram = blocks.at(-1);
     expect(controller.findBlockForScrollTop(blocks, diagram.top + 1).block).toBe(diagram);
+  } finally {
+    controller.destroy();
+    preview.remove();
+  }
+});
+
+
+it('refreshes scroll targets when a Markdown disclosure opens and closes', async () => {
+  const preview = document.createElement('div');
+  preview.style.cssText = 'height: 100px; overflow: auto;';
+  preview.innerHTML = compilePreviewDocument({
+    markdownText: '<details>\n<summary>Template</summary>\n\n## Hidden agenda\n\nTemplate body.\n\n</details>\n\n## Meeting',
+  }).html;
+  document.body.append(preview);
+  const details = preview.querySelector('details');
+  const controller = new ScrollSyncController({
+    previewContainer: preview,
+    previewElement: preview,
+  });
+  controller.initialize();
+
+  function snapshot() {
+    const blocks = controller.getPreviewBlocks();
+    return {
+      labels: blocks.map(({ element }) => element.textContent),
+      meetingTop: blocks.find(({ element }) => element.textContent === 'Meeting').top,
+    };
+  }
+
+  async function toggle(open) {
+    const toggled = new Promise((resolve) => details.addEventListener('toggle', resolve, { once: true }));
+    details.open = open;
+    await toggled;
+  }
+
+  try {
+    const collapsed = snapshot();
+    expect(collapsed.labels).toEqual(['Template', 'Meeting']);
+
+    await toggle(true);
+    const expanded = snapshot();
+    expect(expanded.labels).toEqual(['Template', 'Hidden agenda', 'Template body.', 'Meeting']);
+    expect(expanded.meetingTop).toBeGreaterThan(collapsed.meetingTop);
+
+    await toggle(false);
+    expect(snapshot()).toEqual(collapsed);
   } finally {
     controller.destroy();
     preview.remove();

@@ -1,4 +1,5 @@
 import { getVaultFileKind, supportsBacklinksForFilePath } from '../../../domain/file-kind.js';
+import { revealDisclosureAncestors } from '../../browser-utils.js';
 import { isPlainQuickSwitcherShortcut } from '../../domain/keyboard-shortcuts.js';
 import { createFileRouteHash, isCollabMdHashRoute, isGitHashRouteType } from '../../domain/hash-routes.js';
 
@@ -491,6 +492,7 @@ function scrollPreviewToTarget(previewContainer, target, { behavior = 'smooth' }
     return;
   }
 
+  revealDisclosureAncestors(target);
   const previewRect = previewContainer.getBoundingClientRect();
   const targetRect = target.getBoundingClientRect();
   const nextScrollTop = previewContainer.scrollTop + (targetRect.top - previewRect.top);

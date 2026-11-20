@@ -1,5 +1,6 @@
 import markdownIt from 'markdown-it';
 import { extractYamlFrontmatter } from '../../domain/yaml-frontmatter.js';
+import { enableMarkdownDetails } from './markdown-details.js';
 
 function createHeadingSlug(content = '') {
   return String(content ?? '')
@@ -76,6 +77,7 @@ export function assignHeadingIds(state) {
 }
 
 const markdown = markdownIt({ html: false, linkify: true, typographer: true });
+enableMarkdownDetails(markdown);
 
 export function getMarkdownHeadings(content = '') {
   const source = String(content ?? '');

@@ -6,7 +6,7 @@ const LARGE_DOCUMENT_EDITOR_IDLE_MS = 120;
 const MIN_VIEWPORT_FOCUS_OFFSET = 12;
 const TOP_SCROLL_EPSILON = 2;
 // SVG renderers may expose source lines relative to the diagram, not the document.
-const SOURCE_BLOCK_SELECTOR = '[data-source-line]:not(svg, svg *)';
+const SOURCE_BLOCK_SELECTOR = '[data-source-line]:not(svg, svg *, details:not([open]) > :not(summary:first-of-type), details:not([open]) > :not(summary:first-of-type) *)';
 const SCROLL_INPUT_EVENTS = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
 
 function getScrollableRange(element) {
@@ -118,6 +118,11 @@ export class ScrollSyncController {
     this.listenerController = new AbortController();
     const { signal } = this.listenerController;
     this.previewContainer?.addEventListener('scroll', this.handlePreviewScroll, { passive: true, signal });
+    this.previewElement?.addEventListener('toggle', (event) => {
+      if (event.target instanceof HTMLDetailsElement) {
+        this.invalidatePreviewBlocks();
+      }
+    }, { capture: true, signal });
     SCROLL_INPUT_EVENTS.forEach((type) => this.previewContainer?.addEventListener(type, this.handleScrollInput, { passive: true, signal }));
   }
 

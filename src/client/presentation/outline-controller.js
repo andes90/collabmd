@@ -1,3 +1,5 @@
+import { revealDisclosureAncestors } from '../browser-utils.js';
+
 export class OutlineController {
   constructor({
     mobileBreakpointQuery = window.matchMedia('(max-width: 768px)'),
@@ -277,6 +279,7 @@ export class OutlineController {
       return;
     }
 
+    revealDisclosureAncestors(target);
     const previewRect = this.previewContainer.getBoundingClientRect();
     const targetRect = target.getBoundingClientRect();
     const nextScrollTop = this.previewContainer.scrollTop + (targetRect.top - previewRect.top);

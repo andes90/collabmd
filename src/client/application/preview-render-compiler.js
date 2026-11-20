@@ -1,6 +1,7 @@
 import markdownIt from 'markdown-it';
 import { enableMarkdownEmoji } from '../domain/markdown-emoji.js';
 import { enableMarkdownMath } from '../domain/markdown-math.js';
+import { enableMarkdownDetails } from '../domain/markdown-details.js';
 
 import { isImageAttachmentFilePath } from '../../domain/file-kind.js';
 import { resolveVaultRelativePath } from '../../domain/vault-paths.js';
@@ -301,6 +302,7 @@ function createMarkdownRenderer(fileList = [], {
     linkify: true,
     typographer: true,
   });
+  enableMarkdownDetails(markdown);
   enableMarkdownMath(markdown);
   enableMarkdownEmoji(markdown, WIKI_TEXT_PATTERN);
 
@@ -512,6 +514,9 @@ export function compilePreviewDocument({
       const included = token.map
         ? token.map[1] > section.startLine && (section.endLine === undefined || token.map[0] < section.endLine)
         : includedBlocks.at(-1);
+      if (included && token.type === 'details_open' && token.map[0] < section.startLine) {
+        token.attrSet('open', '');
+      }
       if (token.nesting === 1) includedBlocks.push(included);
       return included;
     });

@@ -5,6 +5,7 @@ import { PreviewRenderExecutor } from './preview-render-executor.js';
 import { isLargeDocumentStats } from './preview-render-profile.js';
 import { PreviewRenderScheduler } from './preview-render-scheduler.js';
 import { resolveApiUrl } from '../domain/runtime-paths.js';
+
 export class PreviewRenderer {
   constructor({
     getContent,
@@ -43,6 +44,7 @@ export class PreviewRenderer {
     this.previewElement = previewElement;
     this.toastController = toastController;
     this.renderHost = null;
+    this.disclosureDefaults = new WeakMap();
 
     this.pendingRenderVersion = 0;
     this.activeRenderVersion = 0;
@@ -334,7 +336,16 @@ export class PreviewRenderer {
     const renderHost = this.ensureRenderHost();
     this.normalizePreviewChildren(renderHost);
     if (renderHost) {
+      const previousDisclosures = Array.from(renderHost.querySelectorAll('details[data-source-line]'));
       renderHost.innerHTML = html;
+      renderHost.querySelectorAll('details[data-source-line]').forEach((details, index) => {
+        const defaultOpen = details.open;
+        this.disclosureDefaults.set(details, defaultOpen);
+        const previous = previousDisclosures[index];
+        if (previous && this.disclosureDefaults.get(previous) === defaultOpen) {
+          details.open = previous.open;
+        }
+      });
     }
     this.applyFrontmatterState();
     this.mermaidHydrator.reconcileHydratedShells();
