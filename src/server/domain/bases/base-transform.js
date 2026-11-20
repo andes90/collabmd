@@ -8,35 +8,6 @@ import {
   parseBaseSource,
 } from './base-definition.js';
 
-function cloneRawSource(source = '') {
-  const parsed = parseBaseSource(source);
-  return isPlainObject(parsed) ? parsed : {};
-}
-
-function ensureViews(rawDefinition) {
-  if (!Array.isArray(rawDefinition.views) || rawDefinition.views.length === 0) {
-    rawDefinition.views = [{ name: 'Table', type: 'table' }];
-  }
-
-  return rawDefinition.views;
-}
-
-function findViewIndex(definition, requestedView = '') {
-  const activeView = findView(definition, requestedView);
-  return definition.views.findIndex((view) => view.id === activeView.id);
-}
-
-function serializeGroupBy(groupBy) {
-  if (!groupBy?.property) {
-    return null;
-  }
-
-  return {
-    direction: String(groupBy.direction ?? 'asc').toUpperCase(),
-    property: groupBy.property,
-  };
-}
-
 function serializeSort(sort = []) {
   return sort
     .filter((entry) => entry?.property)
@@ -46,16 +17,29 @@ function serializeSort(sort = []) {
     }));
 }
 
-function applySetViewConfig(rawDefinition, definition, mutation = {}) {
-  const viewIndex = findViewIndex(definition, mutation.view ?? '');
+export function transformBaseSource(source = '', mutation = {}) {
+  const mutationType = String(mutation?.type ?? '');
+  if (mutationType !== 'set-view-config') {
+    throw new Error(`Unsupported base mutation: ${mutationType || 'unknown'}`);
+  }
+
+  const definition = normalizeBaseDefinition(source);
+  const parsedSource = parseBaseSource(source);
+  const rawDefinition = normalizeRawDefinitionForWrite({
+    raw: isPlainObject(parsedSource) ? parsedSource : {},
+  });
+
+  const activeView = findView(definition, mutation.view ?? '');
+  const viewIndex = definition.views.findIndex((view) => view.id === activeView.id);
   if (viewIndex < 0) {
     throw new Error('Base view not found');
   }
 
-  const rawViews = ensureViews(rawDefinition);
-  const nextView = isPlainObject(rawViews[viewIndex])
-    ? { ...rawViews[viewIndex] }
-    : {};
+  if (!Array.isArray(rawDefinition.views) || rawDefinition.views.length === 0) {
+    rawDefinition.views = [{ name: 'Table', type: 'table' }];
+  }
+
+  const nextView = isPlainObject(rawDefinition.views[viewIndex]) ? { ...rawDefinition.views[viewIndex] } : {};
   const nextConfig = isPlainObject(mutation.config) ? mutation.config : {};
 
   if (Object.hasOwn(nextConfig, 'order')) {
@@ -75,9 +59,11 @@ function applySetViewConfig(rawDefinition, definition, mutation = {}) {
   }
 
   if (Object.hasOwn(nextConfig, 'groupBy')) {
-    const groupBy = serializeGroupBy(nextConfig.groupBy);
-    if (groupBy) {
-      nextView.groupBy = groupBy;
+    if (nextConfig.groupBy?.property) {
+      nextView.groupBy = {
+        direction: String(nextConfig.groupBy.direction ?? 'asc').toUpperCase(),
+        property: nextConfig.groupBy.property,
+      };
     } else {
       delete nextView.groupBy;
       delete nextView.group_by;
@@ -92,23 +78,6 @@ function applySetViewConfig(rawDefinition, definition, mutation = {}) {
     }
   }
 
-  rawViews[viewIndex] = nextView;
-}
-
-export function transformBaseSource(source = '', mutation = {}) {
-  const definition = normalizeBaseDefinition(source);
-  const rawDefinition = normalizeRawDefinitionForWrite({
-    raw: cloneRawSource(source),
-  });
-  const mutationType = String(mutation?.type ?? '');
-
-  switch (mutationType) {
-    case 'set-view-config':
-      applySetViewConfig(rawDefinition, definition, mutation);
-      break;
-    default:
-      throw new Error(`Unsupported base mutation: ${mutationType || 'unknown'}`);
-  }
-
+  rawDefinition.views[viewIndex] = nextView;
   return `${dumpYaml(normalizeRawDefinitionForWrite(rawDefinition), { lineWidth: -1, noRefs: true }).trim()}\n`;
 }
