@@ -1,39 +1,24 @@
-import { classNames } from './class-names.js';
+function classNames(...parts) {
+  return parts.flat().flatMap((part) => (
+    part && typeof part === 'object'
+      ? Object.keys(part).filter((className) => part[className])
+      : part || []
+  )).join(' ');
+}
 
-/**
- * @typedef {object} ButtonClassOptions
- * @property {'primary'|'secondary'|'danger'|'ghost'} [variant]
- * @property {'md'|'lg'|'compact'} [size]
- * @property {boolean} [toggle]
- * @property {boolean} [toolbar]
- * @property {boolean} [action]
- * @property {boolean} [wide]
- * @property {boolean} [surface]
- * @property {boolean} [pill]
- * @property {boolean} [hidden]
- * @property {boolean} [active]
- * @property {string|string[]} [extra]
- */
-
-/**
- * @param {ButtonClassOptions} [options]
- * @returns {string}
- */
-export function buttonClassNames(options = {}) {
-  const {
-    variant = 'secondary',
-    size = 'md',
-    toggle = false,
-    toolbar = false,
-    action = false,
-    wide = false,
-    surface = false,
-    pill = false,
-    hidden = false,
-    active = false,
-    extra = [],
-  } = options;
-
+export function buttonClassNames({
+  variant = 'secondary',
+  size = 'md',
+  toggle = false,
+  toolbar = false,
+  action = false,
+  wide = false,
+  surface = false,
+  pill = false,
+  hidden = false,
+  active = false,
+  extra = [],
+} = {}) {
   return classNames(
     'ui-button',
     variant && `ui-button--${variant}`,
@@ -50,4 +35,16 @@ export function buttonClassNames(options = {}) {
     },
     extra,
   );
+}
+
+export function inputClassNames(options = {}) {
+  return classNames('ui-input', options.extra ?? []);
+}
+
+export function segmentedControlClassNames(options = {}) {
+  return classNames('ui-segmented-control', { 'ui-segmented-control--pill': options.pill, hidden: options.hidden }, options.extra ?? []);
+}
+
+export function segmentedButtonClassNames(options = {}) {
+  return classNames('ui-segmented-btn', { active: options.active, hidden: options.hidden }, options.extra ?? []);
 }

@@ -1,8 +1,15 @@
 import { escapeHtml } from '../domain/vault-utils.js';
-import { commitButtonLabel } from '../domain/git-labels.js';
+import {
+  commitButtonLabel,
+  gitSectionChevronSvg,
+  gitStatusBadgeClass,
+} from '../domain/git-labels.js';
 import { getVaultPathLeaf, getVaultPathParent } from '../domain/vault-paths.js';
-import { buttonClassNames } from './components/ui/button.js';
-import { segmentedButtonClassNames, segmentedControlClassNames } from './components/ui/segmented-control.js';
+import {
+  buttonClassNames,
+  segmentedButtonClassNames,
+  segmentedControlClassNames,
+} from './components/ui/button.js';
 
 const HISTORY_PAGE_SIZE = 30;
 const REFRESH_INTERVAL_MS = 10_000;
@@ -15,9 +22,8 @@ function branchIconSvg() {
   return '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M6 9v12"/></svg>';
 }
 
-function chevronSvg(collapsed) {
-  return `<svg class="git-section-chevron${collapsed ? ' collapsed' : ''}" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>`;
-}
+const chevronSvg = (collapsed) => gitSectionChevronSvg('git-section-chevron', 10, collapsed);
+const badgeClass = (status) => gitStatusBadgeClass(status);
 
 function actionIconSvg(action) {
   switch (action) {
@@ -33,21 +39,6 @@ function actionIconSvg(action) {
       return '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>';
     default:
       return '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>';
-  }
-}
-
-function badgeClass(status) {
-  switch (status) {
-    case 'added':
-      return 'ui-status-badge--success';
-    case 'deleted':
-      return 'ui-status-badge--danger';
-    case 'renamed':
-      return 'ui-status-badge--accent';
-    case 'untracked':
-      return 'ui-status-badge--muted';
-    default:
-      return 'ui-status-badge--warning';
   }
 }
 

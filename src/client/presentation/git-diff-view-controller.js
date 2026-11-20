@@ -1,6 +1,10 @@
 import { createExcalidrawExportOptions } from '../domain/excalidraw-scene.js';
 import { escapeHtml } from '../domain/vault-utils.js';
-import { commitButtonLabel } from '../domain/git-labels.js';
+import {
+  commitButtonLabel,
+  gitSectionChevronSvg,
+  gitStatusBadgeClass,
+} from '../domain/git-labels.js';
 import { getVaultPathLeaf, getVaultPathParent } from '../domain/vault-paths.js';
 import { resolveApiUrl } from '../domain/runtime-paths.js';
 import { renderDrawioViewer } from './drawio-viewer.js';
@@ -282,23 +286,8 @@ function createSectionId(pathValue) {
   return `diff-section-${encodeURIComponent(String(pathValue ?? '')).replace(/%/g, '_')}`;
 }
 
-function badgeClass(status) {
-  switch (status) {
-    case 'added':
-    case 'untracked':
-      return 'ui-status-badge--success';
-    case 'deleted':
-      return 'ui-status-badge--danger';
-    case 'renamed':
-      return 'ui-status-badge--accent';
-    default:
-      return 'ui-status-badge--warning';
-  }
-}
-
-function chevronSvg(collapsed = false) {
-  return `<svg class="diff-section-chevron${collapsed ? ' collapsed' : ''}" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>`;
-}
+const badgeClass = (status) => gitStatusBadgeClass(status, { untrackedClass: 'ui-status-badge--success' });
+const chevronSvg = (collapsed = false) => gitSectionChevronSvg('diff-section-chevron', 12, collapsed);
 
 function commonPrefixLength(left, right) {
   let index = 0;

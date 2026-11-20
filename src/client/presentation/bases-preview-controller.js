@@ -1,9 +1,12 @@
 import { isImageAttachmentFilePath } from '../../domain/file-kind.js';
 import { resolveApiUrl } from '../domain/runtime-paths.js';
 import { escapeHtml } from '../domain/vault-utils.js';
-import { buttonClassNames } from './components/ui/button.js';
-import { inputClassNames } from './components/ui/class-names.js';
-import { segmentedButtonClassNames, segmentedControlClassNames } from './components/ui/segmented-control.js';
+import {
+  buttonClassNames,
+  inputClassNames,
+  segmentedButtonClassNames,
+  segmentedControlClassNames,
+} from './components/ui/button.js';
 import { downloadBlob, parseDownloadFileName } from '../browser-utils.js';
 
 function createShellKey() {
