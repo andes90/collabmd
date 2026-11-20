@@ -73,19 +73,12 @@ function byteOffsetToStringIndex(value = '', byteOffset = 0) {
     return 0;
   }
 
-  const text = String(value ?? '');
-  let byteCount = 0;
-  let stringIndex = 0;
-  for (const char of text) {
-    const charBytes = Buffer.byteLength(char, 'utf8');
-    if (byteCount + charBytes > normalizedOffset) {
-      return stringIndex;
-    }
-    byteCount += charBytes;
-    stringIndex += char.length;
+  const buffer = Buffer.from(String(value ?? ''), 'utf8');
+  let end = Math.min(normalizedOffset, buffer.length);
+  while (end > 0 && end < buffer.length && (buffer[end] & 0xc0) === 0x80) {
+    end -= 1;
   }
-
-  return text.length;
+  return buffer.subarray(0, end).toString('utf8').length;
 }
 
 function createSnippet(lineText = '', matchStart = 0, matchEnd = matchStart) {
