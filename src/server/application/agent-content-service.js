@@ -28,7 +28,7 @@ import {
   collectMarkdownImageSources,
   collectMarkdownReferences,
 } from '../domain/markdown-reference-extractor.js';
-import { searchExcalidrawSceneText } from '../domain/ripgrep-search-service.js';
+import { searchExcalidrawSceneText } from '../domain/search-text.js';
 import { compareWorkspacePaths, normalizeWorkspacePath } from '../domain/workspace-state.js';
 
 const MAX_DOCUMENT_CHARACTERS = 200_000;

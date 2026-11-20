@@ -1,10 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import {
   RipgrepSearchService,
   parseRipgrepJson,
-} from '../../src/server/domain/ripgrep-search-service.js';
+} from '../../src/server/infrastructure/search/ripgrep-search-service.js';
 
 function rgMatch({ file, line = 1, text, start, end }) {
   return JSON.stringify({
@@ -225,6 +228,28 @@ test('RipgrepSearchService marks results truncated when Excalidraw search is ski
     limit: 1,
     query: 'needle',
   })).truncated, false);
+});
+
+test('Excalidraw text search skips symlinked files and directories', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'collabmd-search-'));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const vaultDir = join(root, 'vault');
+  const outside = join(root, 'outside');
+  await mkdir(vaultDir);
+  await mkdir(outside);
+  const scene = JSON.stringify({ elements: [{ type: 'text', text: 'search needle' }] });
+  await writeFile(join(vaultDir, 'visible.excalidraw'), scene);
+  await writeFile(join(outside, 'external.excalidraw'), scene);
+  await symlink(join(outside, 'external.excalidraw'), join(vaultDir, 'external.excalidraw'));
+  await symlink(outside, join(vaultDir, 'linked'));
+
+  const service = new RipgrepSearchService({
+    execFileImpl: async () => ({ stdout: '' }),
+    vaultDir,
+  });
+  await service.initialize();
+  const result = await service.search({ query: 'needle' });
+  assert.deepEqual(result.files.map(({ file }) => file), ['visible.excalidraw']);
 });
 
 test('RipgrepSearchService passes search limits and cancellation to rg', async () => {

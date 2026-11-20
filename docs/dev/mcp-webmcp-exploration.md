@@ -94,7 +94,7 @@ agents can avoid predictable failures.
 
 Sources: [schemas](../../src/domain/agent-tool-definitions.js),
 [service bounds](../../src/server/application/agent-content-service.js),
-[search backend](../../src/server/domain/ripgrep-search-service.js),
+[search backend](../../src/server/infrastructure/search/ripgrep-search-service.js),
 [existing heading parsing](../../src/client/application/preview-render-compiler.js),
 [browser composition](../../src/client/bootstrap/collabmd-app-shell.js).
 

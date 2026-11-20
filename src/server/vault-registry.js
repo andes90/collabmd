@@ -10,7 +10,7 @@ import { WORKSPACE_ROOM_NAME } from '../domain/workspace-room.js';
 import { workspaceStateMetadataEqual } from './domain/workspace-state.js';
 import { GitService } from './infrastructure/git/git-service.js';
 import { ensureCollabMetadataGitExclude } from './infrastructure/git/local-exclude.js';
-import { RipgrepSearchService } from './domain/ripgrep-search-service.js';
+import { RipgrepSearchService } from './infrastructure/search/ripgrep-search-service.js';
 import { VaultFileStore } from './infrastructure/persistence/vault-file-store.js';
 import { FileSystemSyncService } from './infrastructure/workspace/file-system-sync-service.js';
 import { WorkspaceReconciliation } from './application/workspace-reconciliation.js';
