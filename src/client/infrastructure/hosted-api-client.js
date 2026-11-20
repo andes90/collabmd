@@ -1,13 +1,4 @@
-import { resolveApiUrl } from '../domain/runtime-paths.js';
-import { parseApiResponse } from './api-client-utils.js';
-
-function request(path, { body = null, fallback = 'Request failed', method = 'GET' } = {}) {
-  return fetch(resolveApiUrl(path), {
-    ...(body === null ? {} : { body: JSON.stringify(body) }),
-    headers: { 'Content-Type': 'application/json' },
-    method,
-  }).then((response) => parseApiResponse(response, fallback));
-}
+import { apiRequest as request } from './api-client-utils.js';
 
 export const hostedApiClient = {
   acceptInvitation() {

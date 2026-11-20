@@ -1,30 +1,14 @@
-function readStorage(storage, key, fallback) {
-  try {
-    const value = storage.getItem(key);
-    return value == null ? fallback : value;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeStorage(storage, key, value) {
-  try {
-    storage.setItem(key, value);
-  } catch {
-    // Ignore storage errors.
-  }
-}
-
 const MAX_RECENT_FILES = 20;
-const STORAGE_KEYS = {
+const VIEW_MODES = new Set(['editor', 'preview', 'split']);
+const KEYS = {
+  cursorNames: 'collabmd-editor-cursor-names',
   fileTreeShowExtensions: 'collabmd-file-tree-show-extensions',
   lineWrapping: 'collabmd-editor-line-wrap',
   recentFiles: 'collabmd-recent-files',
-  vimMode: 'collabmd-editor-vim-mode',
-  viewMode: 'collabmd-editor-view-mode',
   sidebarVisible: 'collabmd-sidebar-visible',
   userName: 'collabmd-user-name',
-  cursorNames: 'collabmd-editor-cursor-names',
+  viewMode: 'collabmd-editor-view-mode',
+  vimMode: 'collabmd-editor-vim-mode',
 };
 
 export class BrowserPreferencesPort {
@@ -32,67 +16,45 @@ export class BrowserPreferencesPort {
     this.storage = storage;
   }
 
-  getUserName() {
-    return readStorage(this.storage, STORAGE_KEYS.userName, '') || '';
+  _read(key, fallback = null) {
+    try { return this.storage.getItem(key) ?? fallback; } catch { return fallback; }
   }
 
-  setUserName(name) {
-    writeStorage(this.storage, STORAGE_KEYS.userName, name);
+  _write(key, value) {
+    try { this.storage.setItem(key, value); } catch { /* Ignore storage errors. */ }
   }
 
-  getFileTreeShowExtensions() {
-    return readStorage(this.storage, STORAGE_KEYS.fileTreeShowExtensions, null) === 'true';
-  }
+  getUserName() { return this._read(KEYS.userName, '') || ''; }
+  setUserName(name) { this._write(KEYS.userName, name); }
 
-  setFileTreeShowExtensions(showFileExtensions) {
-    writeStorage(this.storage, STORAGE_KEYS.fileTreeShowExtensions, showFileExtensions ? 'true' : 'false');
-  }
+  getFileTreeShowExtensions() { return this._read(KEYS.fileTreeShowExtensions) === 'true'; }
+  setFileTreeShowExtensions(show) { this._write(KEYS.fileTreeShowExtensions, String(Boolean(show))); }
 
-  getLineWrappingEnabled() {
-    return readStorage(this.storage, STORAGE_KEYS.lineWrapping, null) !== 'false';
-  }
+  getLineWrappingEnabled() { return this._read(KEYS.lineWrapping) !== 'false'; }
+  setLineWrappingEnabled(enabled) { this._write(KEYS.lineWrapping, String(enabled)); }
 
-  setLineWrappingEnabled(enabled) {
-    writeStorage(this.storage, STORAGE_KEYS.lineWrapping, String(enabled));
-  }
+  getCursorNamesVisible() { return this._read(KEYS.cursorNames) !== 'false'; }
+  setCursorNamesVisible(visible) { this._write(KEYS.cursorNames, String(visible)); }
 
-  getCursorNamesVisible() {
-    return readStorage(this.storage, STORAGE_KEYS.cursorNames, null) !== 'false';
-  }
+  getVimModeEnabled() { return this._read(KEYS.vimMode) === 'true'; }
+  setVimModeEnabled(enabled) { this._write(KEYS.vimMode, String(enabled)); }
 
-  setCursorNamesVisible(visible) {
-    writeStorage(this.storage, STORAGE_KEYS.cursorNames, String(visible));
-  }
-
-  getVimModeEnabled() {
-    return readStorage(this.storage, STORAGE_KEYS.vimMode, null) === 'true';
-  }
-
-  setVimModeEnabled(enabled) {
-    writeStorage(this.storage, STORAGE_KEYS.vimMode, String(enabled));
-  }
+  getSidebarVisible() { return this._read(KEYS.sidebarVisible); }
+  setSidebarVisible(show) { this._write(KEYS.sidebarVisible, String(Boolean(show))); }
 
   getViewMode() {
-    const value = readStorage(this.storage, STORAGE_KEYS.viewMode, null);
-    if (value === 'editor' || value === 'preview' || value === 'split') {
-      return value;
-    }
-    return null;
+    const value = this._read(KEYS.viewMode);
+    return VIEW_MODES.has(value) ? value : null;
   }
 
   setViewMode(view) {
-    if (view === 'editor' || view === 'preview' || view === 'split') {
-      writeStorage(this.storage, STORAGE_KEYS.viewMode, view);
-    }
+    if (VIEW_MODES.has(view)) this._write(KEYS.viewMode, view);
   }
 
   getRecentFiles() {
-    const stored = readStorage(this.storage, STORAGE_KEYS.recentFiles, '[]');
     try {
-      const recentFiles = JSON.parse(stored);
-      return Array.isArray(recentFiles)
-        ? [...new Set(recentFiles.filter((filePath) => typeof filePath === 'string' && filePath))]
-        : [];
+      const files = JSON.parse(this._read(KEYS.recentFiles, '[]'));
+      return Array.isArray(files) ? [...new Set(files.filter((p) => typeof p === 'string' && p))] : [];
     } catch {
       return [];
     }
@@ -100,20 +62,7 @@ export class BrowserPreferencesPort {
 
   recordRecentFile(filePath) {
     if (!filePath) return;
-
-    const recentFiles = [
-      filePath,
-      ...this.getRecentFiles().filter((recentFilePath) => recentFilePath !== filePath),
-    ];
-    writeStorage(this.storage, STORAGE_KEYS.recentFiles, JSON.stringify(recentFiles.slice(0, MAX_RECENT_FILES)));
+    const recent = [filePath, ...this.getRecentFiles().filter((p) => p !== filePath)];
+    this._write(KEYS.recentFiles, JSON.stringify(recent.slice(0, MAX_RECENT_FILES)));
   }
-
-  getSidebarVisible() {
-    return readStorage(this.storage, STORAGE_KEYS.sidebarVisible, null);
-  }
-
-  setSidebarVisible(showSidebar) {
-    writeStorage(this.storage, STORAGE_KEYS.sidebarVisible, showSidebar ? 'true' : 'false');
-  }
-
 }
