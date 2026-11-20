@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { compilePreviewDocument } from '../../src/client/application/preview-render-compiler.js';
 import { exportDirectory, initializeExportBridge, exportDocument } from '../../src/client/export/export-host.js';
 import { groupHeadingWithFollowingBlock } from '../../src/client/export/export-print-layout.js';
 import {
@@ -542,17 +543,15 @@ describe('export pipeline browser helpers', () => {
 
   it('flattens task list labels to ballot-box text in DOCX markup', () => {
     const html = buildDocxHtmlDocument({
-      html: [
-        '<ul><li class="task-list-item"><label class="task-list-label"><input type="checkbox" checked data-task-checkbox="true"> Done task</label></li>',
-        '<li class="task-list-item"><label class="task-list-label"><input type="checkbox" data-task-checkbox="true"> Open task</label></li></ul>',
-      ].join('\n'),
+      ...compilePreviewDocument({ markdownText: '- [x] **:rocket: Done task**\n- [ ] Open task' }),
       title: 'Tasks',
     });
 
-    expect(html).toContain('\u2611 Done task');
-    expect(html).toContain('\u2610 Open task');
-    expect(html).not.toContain('<label');
-    expect(html).not.toContain('<input');
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const tasks = Array.from(doc.querySelectorAll('.task-list-item'));
+    expect(tasks.map(({ textContent }) => textContent.trim())).toEqual(['☑ 🚀 Done task', '☐ Open task']);
+    expect(tasks[0].querySelector('strong').textContent).toBe('🚀 Done task');
+    expect(doc.querySelector('input')).toBeNull();
   });
 
   it('drops insignificant whitespace but preserves pre blocks in DOCX markup', () => {

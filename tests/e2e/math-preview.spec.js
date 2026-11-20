@@ -86,7 +86,10 @@ test('posts OMML markers for DOCX export', async ({ page, context }) => {
   expect(exportRequestBody.html).toContain('COLLABMD-MATH-');
   expect(exportRequestBody.html).toContain('data-mml="%3Cmath');
   expect(exportRequestBody.html).not.toContain('katex-html');
-  expect(exportRequestBody.html).toContain('\u2611 Done task');
+  const taskText = await popup.evaluate((html) => (
+    new DOMParser().parseFromString(html, 'text/html').querySelector('main li')?.textContent.trim()
+  ), exportRequestBody.html);
+  expect(taskText).toBe('\u2611 Done task');
   await expect(popup.locator('#exportStatus')).toContainText('DOCX download started.');
 });
 

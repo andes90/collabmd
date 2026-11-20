@@ -442,7 +442,6 @@ test('canvas floating controls and external labels keep properties optional and 
   await frame.locator('html').evaluate((html) => { html.style.colorScheme = 'light'; });
   await page.screenshot({ path: testInfo.outputPath('canvas-floating-light.png') });
   await page.setViewportSize({ width: 390, height: 844 });
-  if (await page.locator('#sidebar').isVisible()) await page.getByRole('button', { name: 'Close sidebar', exact: true }).click();
   await expect(page.locator('#sidebar')).toBeHidden();
   await frame.getByRole('button', { name: 'Fit canvas', exact: true }).click();
   const mobileStage = await stage.boundingBox();
