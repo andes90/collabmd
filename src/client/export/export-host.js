@@ -1,3 +1,4 @@
+import { createRandomUuid } from '../../domain/random-uuid.js';
 import { resolveAppUrl } from '../infrastructure/runtime-config.js';
 
 const EXPORT_PAGE_SOURCE = 'collabmd-export-page';
@@ -8,7 +9,7 @@ let exportBridgeErrorHandler = null;
 let exportBridgeInitialized = false;
 
 function createJobId() {
-  return `export-${crypto.randomUUID()}`;
+  return `export-${createRandomUuid()}`;
 }
 
 function normalizeFormat(format) {

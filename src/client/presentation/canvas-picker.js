@@ -1,3 +1,4 @@
+import { createRandomUuid } from '../../domain/random-uuid.js';
 import { createFileSearchEntry, findFileSearchMatch } from '../domain/file-search.js';
 
 export function openCanvasPicker({ root, title, loadChoices, onChoose, canChoose }) {
@@ -5,7 +6,7 @@ export function openCanvasPicker({ root, title, loadChoices, onChoose, canChoose
   const dialog = document.createElement('dialog');
   dialog.className = 'canvas-picker';
   const heading = document.createElement('h2');
-  heading.id = `canvas-picker-${crypto.randomUUID()}`;
+  heading.id = `canvas-picker-${createRandomUuid()}`;
   heading.textContent = title;
   dialog.setAttribute('aria-labelledby', heading.id);
   const closeButton = document.createElement('button');

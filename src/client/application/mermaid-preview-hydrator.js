@@ -1,3 +1,4 @@
+import { createRandomUuid } from '../../domain/random-uuid.js';
 import {
   createDiagramExportFileNames,
   renderMermaidExportSvgMarkup,
@@ -232,7 +233,7 @@ export class MermaidPreviewHydrator extends DiagramPreviewHydrator {
       const renderHost = this.createRenderHost();
       try {
         renderHost.appendChild(diagram);
-        const { svg, bindFunctions } = await mermaid.render(`mermaid-${crypto.randomUUID()}`, source, diagram);
+        const { svg, bindFunctions } = await mermaid.render(`mermaid-${createRandomUuid()}`, source, diagram);
         if (
           !this.isHydrationCurrent(renderVersion, shell, hydrationToken)
           || !diagram.isConnected

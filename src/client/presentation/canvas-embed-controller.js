@@ -1,3 +1,4 @@
+import { createRandomUuid } from '../../domain/random-uuid.js';
 import {
   getActiveVaultId,
   resolveAppUrl,
@@ -73,7 +74,7 @@ export class CanvasEmbedController {
 
   prepareFileDisconnect(filePath, { timeoutMs = 10000 } = {}) {
     if (filePath !== this.filePath || !this.iframe || !this.ready) return Promise.resolve(true);
-    const requestId = crypto.randomUUID();
+    const requestId = createRandomUuid();
     return new Promise((resolve) => {
       const timeout = setTimeout(() => finish(false), timeoutMs);
       const finish = (canLeave) => {

@@ -1,3 +1,4 @@
+import { createRandomUuid } from '../../domain/random-uuid.js';
 import { replacePathPrefix } from '../../domain/vault-paths.js';
 import {
   getVaultFileExtension,
@@ -335,7 +336,7 @@ export class FileActionController {
       return null;
     }
 
-    const requestId = crypto.randomUUID();
+    const requestId = createRandomUuid();
     this.pendingWorkspaceRequestIds.add(requestId);
     return requestId;
   }

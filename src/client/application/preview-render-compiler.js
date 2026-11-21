@@ -4,6 +4,7 @@ import { enableMarkdownMath } from '../domain/markdown-math.js';
 import { enableMarkdownDetails } from '../domain/markdown-details.js';
 
 import { isImageAttachmentFilePath } from '../../domain/file-kind.js';
+import { createRandomUuid } from '../../domain/random-uuid.js';
 import { resolveVaultRelativePath } from '../../domain/vault-paths.js';
 import {
   createWikiTargetIndex,
@@ -417,7 +418,7 @@ function createMarkdownRenderer(fileList = [], {
   markdown.renderer.rules.collabmd_task = (tokens, index, options, env, self) => {
     const { children, meta } = tokens[index];
     const checked = meta.checked ? ' checked' : '';
-    const labelId = `_task-${crypto.randomUUID().replaceAll('-', '')}`;
+    const labelId = `_task-${createRandomUuid().replaceAll('-', '')}`;
     return `<input type="checkbox"${checked} data-task-checkbox="true" aria-labelledby="${labelId}"> <span id="${labelId}" class="task-list-label">${self.renderInline(children, options, env)}</span>`;
   };
 

@@ -1,3 +1,5 @@
+import { createRandomUuid } from '../../domain/random-uuid.js';
+
 const USER_NAMES = [
   'Alice', 'Bob', 'Charlie', 'Dana', 'Eve', 'Frank', 'Grace', 'Hank', 'Iris', 'Jack',
   'Kim', 'Leo', 'Maya', 'Nate', 'Olivia', 'Pete', 'Quinn', 'Ruby', 'Sam', 'Tara',
@@ -46,10 +48,6 @@ export function generatePeerId() {
   return Array.from(array, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-function generateUserId() {
-  return crypto.randomUUID();
-}
-
 // A stable peer ID for this browser tab, shared across lobby and per-file sessions.
 let _localPeerId = null;
 let _localUserId = null;
@@ -76,7 +74,7 @@ export function getLocalUserId(storage = globalThis.localStorage) {
     // Ignore storage access errors.
   }
 
-  _localUserId = generateUserId();
+  _localUserId = createRandomUuid();
 
   try {
     storage?.setItem?.(LOCAL_USER_ID_STORAGE_KEY, _localUserId);

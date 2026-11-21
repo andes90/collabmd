@@ -1,5 +1,6 @@
 import { getBaseFilterPredicate, tryParseBaseExpression } from '../../domain/base-expression.js';
 import { isImageAttachmentFilePath } from '../../domain/file-kind.js';
+import { createRandomUuid } from '../../domain/random-uuid.js';
 import { resolveApiUrl } from '../domain/runtime-paths.js';
 import { escapeHtml } from '../domain/vault-utils.js';
 import {
@@ -11,7 +12,7 @@ import {
 import { downloadBlob, findElementByDataset, parseDownloadFileName, replaceChildrenFromHtml } from '../browser-utils.js';
 
 function createShellKey() {
-  return `base-${crypto.randomUUID()}`;
+  return `base-${createRandomUuid()}`;
 }
 
 function insertAfterFromHtml(target, html) {

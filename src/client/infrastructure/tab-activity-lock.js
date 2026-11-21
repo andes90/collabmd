@@ -1,3 +1,5 @@
+import { createRandomUuid } from '../../domain/random-uuid.js';
+
 const LOCK_KEY = 'collabmd-active-tab-lock';
 const TAB_ID_KEY = 'collabmd-tab-id';
 const CHANNEL_NAME = 'collabmd-tab-lock';
@@ -5,10 +7,6 @@ const HEARTBEAT_INTERVAL_MS = 4000;
 
 function now() {
   return Date.now();
-}
-
-function createTabId() {
-  return crypto.randomUUID();
 }
 
 function safeJsonParse(value) {
@@ -100,11 +98,11 @@ export class TabActivityLock {
         return existing;
       }
 
-      const tabId = createTabId();
+      const tabId = createRandomUuid();
       window.sessionStorage.setItem(TAB_ID_KEY, tabId);
       return tabId;
     } catch {
-      return createTabId();
+      return createRandomUuid();
     }
   }
 

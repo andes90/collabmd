@@ -1,4 +1,5 @@
 import { commitButtonLabel } from '../../domain/git-labels.js';
+import { createRandomUuid } from '../../../domain/random-uuid.js';
 import { createWorkspaceChange } from '../../../domain/workspace-change.js';
 
 export const gitFeature = {
@@ -319,7 +320,7 @@ export const gitFeature = {
   },
 
   async postGitAction(actionName, payload) {
-    const requestId = crypto.randomUUID();
+    const requestId = createRandomUuid();
     this.pendingWorkspaceRequestIds?.add(requestId);
     try {
       switch (actionName) {

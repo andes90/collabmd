@@ -3,6 +3,7 @@ import {
   addCanvasNode, addCanvasEdge, updateCanvasNode, updateCanvasEdge,
   deleteCanvasNodes, deleteCanvasEdges, reorderCanvasNode, resolveCanvasExternalConflict,
 } from '../domain/canvas-room-codec.js';
+import { createRandomUuid } from '../domain/random-uuid.js';
 import { createRandomUser } from './domain/room.js';
 import { createCanvasMarkdownPreview } from './bootstrap/canvas-markdown-preview.js';
 import { canvasFilePath } from './domain/canvas-view.js';
@@ -72,13 +73,13 @@ async function initialize() {
   const action = (operation) => client.mutate(operation);
   const actions = {
     addNode: (node) => {
-      const id = crypto.randomUUID();
+      const id = createRandomUuid();
       return action((doc) => {
         addCanvasNode(doc, { ...node, id });
         if (node.type === 'group') reorderCanvasNode(doc, id, 'back');
       }) ? id : null;
     },
-    addEdge: (edge) => action((doc) => addCanvasEdge(doc, { ...edge, id: crypto.randomUUID() })),
+    addEdge: (edge) => action((doc) => addCanvasEdge(doc, { ...edge, id: createRandomUuid() })),
     updateNode: (id, patch) => action((doc) => updateCanvasNode(doc, id, patch)),
     updateEdge: (id, patch) => action((doc) => updateCanvasEdge(doc, id, patch)),
     updateNodes: (patches, separateUndo = true) => client.mutate((doc) => {

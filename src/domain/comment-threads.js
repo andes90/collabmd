@@ -1,4 +1,5 @@
 import * as Y from 'yjs';
+import { createRandomUuid } from './random-uuid.js';
 
 export const COMMENT_BODY_MAX_LENGTH = 2000;
 export const COMMENT_EXCERPT_MAX_LENGTH = 160;
@@ -304,7 +305,7 @@ export function migrateCommentReactions(comments) {
 }
 
 export function createCommentId(prefix = 'comment') {
-  return `${prefix}-${crypto.randomUUID()}`;
+  return `${prefix}-${createRandomUuid()}`;
 }
 
 export function normalizeCommentAnchor(record = {}) {

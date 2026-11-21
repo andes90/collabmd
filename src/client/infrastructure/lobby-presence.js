@@ -1,6 +1,7 @@
 import { WebsocketProvider } from 'y-websocket';
 import * as Y from 'yjs';
 
+import { createRandomUuid } from '../../domain/random-uuid.js';
 import { createRandomUser } from '../domain/room.js';
 import { LOBBY_CHAT_MAX_MESSAGES, LOBBY_CHAT_MESSAGE_MAX_LENGTH } from '../domain/lobby-chat.js';
 import { resolveWsBaseUrl } from './runtime-config.js';
@@ -16,10 +17,6 @@ function normalizeChatMessage(value) {
     .slice(0, LOBBY_CHAT_MESSAGE_MAX_LENGTH);
 
   return normalized || null;
-}
-
-function createLobbyMessageId() {
-  return crypto.randomUUID();
 }
 
 function normalizeWorkspaceEvent(event) {
@@ -153,7 +150,7 @@ export class LobbyPresence {
     const message = {
       createdAt: Date.now(),
       filePath: this.currentFile ?? null,
-      id: createLobbyMessageId(this.localUser.peerId),
+      id: createRandomUuid(),
       peerId: this.localUser.peerId,
       text: normalizedText,
       userColor: this.localUser.color,
@@ -176,7 +173,7 @@ export class LobbyPresence {
     const event = normalizeWorkspaceEvent({
       action,
       createdAt: Date.now(),
-      id: createLobbyMessageId(this.localUser.peerId),
+      id: createRandomUuid(),
       peerId: this.localUser.peerId,
       sourceRef,
       workspaceChange,

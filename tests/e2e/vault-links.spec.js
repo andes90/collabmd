@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { chromium, test, expect } from '@playwright/test';
 import { startTestServer } from '../node/helpers/test-server.js';
 
 test('startup applies the saved theme and loading surface before the app module runs', async ({ page }) => {
@@ -20,6 +20,32 @@ test('startup applies the saved theme and loading surface before the app module 
     await expect(page.getByRole('status')).toBeVisible();
   } finally {
     await page.goto('about:blank');
+    await server.close();
+  }
+});
+
+test('opens the workspace and renders distinct task labels over plain HTTP on a network hostname', async () => {
+  const server = await startTestServer({
+    vaults: [{ id: 'primary', seed: '# Test\n\n- [ ] A task\n- [ ] Another task\n' }],
+  });
+  const url = new URL(`${server.appBaseUrl}/#file=test.md`);
+  url.hostname = 'collabmd.test';
+  let browser;
+  try {
+    browser = await chromium.launch({
+      args: ['--host-resolver-rules=MAP collabmd.test 127.0.0.1', '--no-proxy-server'],
+    });
+    const page = await browser.newPage();
+    await page.addInitScript(() => localStorage.setItem('collabmd-user-name', 'HTTP tester'));
+    await page.goto(url.href);
+    expect(await page.evaluate(() => isSecureContext)).toBe(false);
+    expect(await page.evaluate(() => typeof crypto.randomUUID)).toBe('undefined');
+    await expect(page.locator('#workspaceLoading')).toHaveCount(0);
+    const preview = page.locator('#previewContent');
+    await expect(preview.getByRole('checkbox', { name: 'A task', exact: true })).toBeVisible();
+    await expect(preview.getByRole('checkbox', { name: 'Another task', exact: true })).toBeVisible();
+  } finally {
+    await browser?.close();
     await server.close();
   }
 });
