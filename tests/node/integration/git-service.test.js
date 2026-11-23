@@ -257,6 +257,55 @@ test('GitService keeps untracked images binary and serves historical image blobs
   assert.deepEqual(headAttachment.content, imageBytes);
 });
 
+test('single-file Git operations treat bracketed filenames literally', async (t) => {
+  const vaultDir = await mkdtemp(join(tmpdir(), 'collabmd-git-literal-'));
+  t.after(() => rm(vaultDir, { force: true, recursive: true }));
+  await runGit(vaultDir, ['init']);
+  const target = 'draft[1].md';
+  const sibling = 'draft1.md';
+  for (const name of [target, sibling]) await writeFile(join(vaultDir, name), 'original');
+  await runGit(vaultDir, ['add', '-A']);
+  await runGit(vaultDir, ['commit', '-m', 'Initial']);
+  for (const name of [target, sibling]) await writeFile(join(vaultDir, name), 'edited');
+
+  const service = new GitService({ vaultDir });
+  await service.stageFile(target);
+  assert.equal(await runGitOutput(vaultDir, ['diff', '--cached', '--name-only']), target);
+  await service.resetFileToHead(target);
+  assert.equal(await readFile(join(vaultDir, target), 'utf8'), 'original');
+  assert.equal(await readFile(join(vaultDir, sibling), 'utf8'), 'edited');
+});
+
+test('untracked PDFs get binary diffs with no added lines', async (t) => {
+  const vaultDir = await mkdtemp(join(tmpdir(), 'collabmd-git-pdf-'));
+  t.after(() => rm(vaultDir, { force: true, recursive: true }));
+  await runGit(vaultDir, ['init']);
+  await writeFile(join(vaultDir, 'guide.pdf'), '%PDF-1.7\nPDF stream data\n');
+  const service = new GitService({ vaultDir, maxInitialPatchBytes: 4 });
+  assert.equal((await service.getStatus()).summary.additions, 0);
+  const { files: [pdf] } = await service.getDiff({ path: 'guide.pdf' });
+  assert.equal(pdf.fileKind, 'pdf');
+  assert.equal(pdf.isBinary, true);
+  assert.equal(pdf.tooLarge, false);
+  assert.deepEqual(pdf.hunks, []);
+});
+
+test('historical images support the upload limit and distinguish oversized and missing blobs', async (t) => {
+  const vaultDir = await mkdtemp(join(tmpdir(), 'collabmd-git-history-image-'));
+  t.after(() => rm(vaultDir, { force: true, recursive: true }));
+  await runGit(vaultDir, ['init']);
+  const limit = 8 * 1024 * 1024;
+  await writeFile(join(vaultDir, 'supported.png'), Buffer.alloc(limit));
+  await writeFile(join(vaultDir, 'larger.png'), Buffer.alloc(limit + 1));
+  await runGit(vaultDir, ['add', '-A']);
+  await runGit(vaultDir, ['commit', '-m', 'Images']);
+  const service = new GitService({ vaultDir });
+  const getImage = (path) => service.getFileAttachment({ hash: 'HEAD', path });
+  assert.equal((await getImage('supported.png')).content.byteLength, limit);
+  await assert.rejects(getImage('larger.png'), { statusCode: 413 });
+  await assert.rejects(getImage('missing.png'), { statusCode: 404 });
+});
+
 test('GitService normalizes git paths that include spaces', async (t) => {
   const repoDir = await mkdtemp(join(tmpdir(), 'collabmd-git-service-paths-'));
   t.after(async () => {

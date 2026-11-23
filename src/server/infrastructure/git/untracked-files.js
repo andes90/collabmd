@@ -3,7 +3,7 @@ import { open, realpath } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
 import { createInterface } from 'node:readline';
 
-import { getVaultFileKind, isImageAttachmentFilePath } from '../../../domain/file-kind.js';
+import { getVaultFileKind, isBinaryAttachmentFilePath } from '../../../domain/file-kind.js';
 import { mapWithConcurrency } from '../../shared/async-utils.js';
 import { createEmptyStats } from './responses.js';
 import { splitContentLines } from './parsers.js';
@@ -76,7 +76,7 @@ export class GitUntrackedFileService {
     const counts = await mapWithConcurrency(files, 4, async (file) => {
       let handle;
       try {
-        if (isImageAttachmentFilePath(file.path)) return 0;
+        if (isBinaryAttachmentFilePath(file.path)) return 0;
         handle = await this.openFile(file.path);
         return handle ? await countFileLines(handle) : 0;
       } catch {
@@ -147,16 +147,17 @@ export class GitUntrackedFileService {
       try {
         handle = await this.openFile(file.path);
         if (!handle) return null;
-        if (isImageAttachmentFilePath(file.path)) {
+        if (isBinaryAttachmentFilePath(file.path)) {
+          const fileKind = getVaultFileKind(file.path);
           return {
             ...file,
-            binaryMessage: 'Binary image file',
+            binaryMessage: fileKind === 'pdf' ? 'Binary PDF file' : 'Binary image file',
             byteLength: (await handle.stat()).size,
             code: file.code || 'U',
-            fileKind: 'image',
+            fileKind,
             hunks: [],
             isBinary: true,
-            mimeType: getImageMimeType(file.path),
+            mimeType: fileKind === 'pdf' ? 'application/pdf' : getImageMimeType(file.path),
             oldPath: file.oldPath ?? null,
             path: file.path,
             stats: createEmptyStats(),

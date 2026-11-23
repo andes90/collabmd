@@ -511,7 +511,11 @@ export class GitHistoryService {
       let content;
       try {
         content = await this.commandRunner.execGitBuffer(['cat-file', 'blob', `${normalizedHash}:${normalizedPath}`]);
-      } catch {
+      } catch (error) {
+        if (error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
+          throw createGitRequestError(413, 'Commit image exceeds the preview size limit');
+        }
+        if (error.code !== 128) throw error;
         throw createGitRequestError(404, 'Commit image not found');
       }
 

@@ -3,6 +3,7 @@ import { access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
+import { REQUEST_BODY_LIMIT_BYTES } from '../http/request-body.js';
 import { createRequestError as createGitRequestError } from '../http/http-errors.js';
 import { normalizeRelativeGitPath } from './path-utils.js';
 import { GitDiffService } from './diff-service.js';
@@ -63,6 +64,7 @@ export class GitService {
             ...process.env,
             ...(commandEnv ?? {}),
             ...(env ?? {}),
+            GIT_LITERAL_PATHSPECS: '1',
           },
           maxBuffer: 5 * 1024 * 1024,
           timeout: 10_000,
@@ -78,8 +80,9 @@ export class GitService {
             ...process.env,
             ...(commandEnv ?? {}),
             ...(env ?? {}),
+            GIT_LITERAL_PATHSPECS: '1',
           },
-          maxBuffer: 5 * 1024 * 1024,
+          maxBuffer: REQUEST_BODY_LIMIT_BYTES,
           timeout: 10_000,
         });
 

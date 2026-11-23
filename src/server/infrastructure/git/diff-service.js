@@ -1,6 +1,6 @@
 import { countPatchLines, parseNumstatOutput, parseUnifiedDiff } from './parsers.js';
 import { createEmptyStats } from './responses.js';
-import { getVaultFileKind } from '../../../domain/file-kind.js';
+import { getVaultFileKind, isBinaryAttachmentFilePath } from '../../../domain/file-kind.js';
 
 function createSectionMap(sections = []) {
   return new Map(sections.map((section) => [section.key, section]));
@@ -246,7 +246,7 @@ export class GitDiffService {
       };
 
       if (!allowLargePatch && (fileLineCount > this.maxInitialPatchLines
-        || (getVaultFileKind(currentFile.path) !== 'image' && byteLength > this.maxInitialPatchBytes))) {
+        || (!isBinaryAttachmentFilePath(currentFile.path) && byteLength > this.maxInitialPatchBytes))) {
         return {
           files: [{
             ...currentFile,

@@ -168,6 +168,11 @@ export function isImageAttachmentFilePath(filePath) {
   return getVaultFileKind(filePath) === 'image';
 }
 
+export function isBinaryAttachmentFilePath(filePath) {
+  const kind = getVaultFileKind(filePath);
+  return kind === 'image' || kind === 'pdf';
+}
+
 export function isDiagramFilePath(filePath) {
   const kind = getVaultFileKind(filePath);
   return kind === 'excalidraw'
