@@ -1,6 +1,5 @@
 import { readFile } from 'node:fs/promises';
 
-import { getRequestErrorStatusCode } from './http-errors.js';
 import { jsonResponse, sendResponse, textResponse } from './http-response.js';
 import { parseJsonBody, readBinaryRequestBody } from './request-body.js';
 
@@ -59,7 +58,7 @@ export function createStructurizrApiHandler({ basePath = '', service = null } = 
           rootPath: body.path,
         }));
       } catch (error) {
-        const statusCode = getRequestErrorStatusCode(error) || Number(error?.statusCode) || 502;
+        const statusCode = Number(error?.statusCode) || 502;
         if (statusCode >= 500) {
           console.error('[api] Failed to sync Structurizr workspace:', error.message);
         }
@@ -130,7 +129,7 @@ export function createStructurizrApiHandler({ basePath = '', service = null } = 
         statusCode: response.statusCode,
       });
     } catch (error) {
-      const statusCode = getRequestErrorStatusCode(error) || Number(error?.statusCode) || 502;
+      const statusCode = Number(error?.statusCode) || 502;
       console.error('[http] Failed to proxy Structurizr request:', error.message);
       textResponse(req, res, statusCode, error.message || 'Structurizr renderer unavailable');
     }

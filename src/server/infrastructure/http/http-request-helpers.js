@@ -1,4 +1,3 @@
-import { getRequestErrorStatusCode } from './http-errors.js';
 import { jsonResponse } from './http-response.js';
 
 export function stripBasePath(pathname, basePath) {
@@ -28,18 +27,17 @@ export function readRequestId(req) {
   return value ? value.slice(0, 120) : null;
 }
 
-export function handleApiError(req, res, error, logMessage, fallbackMessage) {
-  const statusCode = getRequestErrorStatusCode(error);
-  if (statusCode) {
+export function handleApiError(req, res, error, logMessage, fallbackMessage, defaultStatusCode = 500) {
+  if (Number.isInteger(error?.statusCode)) {
     const payload = { error: error.message };
     if (typeof error?.requestCode === 'string') {
       payload.code = error.requestCode;
     }
-    jsonResponse(req, res, statusCode, payload);
+    jsonResponse(req, res, error.statusCode, payload);
     return true;
   }
 
   console.error(logMessage, error.message);
-  jsonResponse(req, res, 500, { error: fallbackMessage });
+  jsonResponse(req, res, defaultStatusCode, { error: fallbackMessage });
   return true;
 }

@@ -10,10 +10,10 @@ import { createTestApiHandler } from './create-test-api-handler.js';
 import { createStructurizrApiHandler } from './create-structurizr-api-handler.js';
 import { createVaultApiCommandHandler } from './create-vault-api-command-handler.js';
 import { createVaultApiQueryHandler } from './create-vault-api-query-handler.js';
-import { getRequestErrorStatusCode } from './http-errors.js';
 import { parseJsonBody } from './request-body.js';
 import {
   createRequestUrlWithPathname,
+  handleApiError,
   stripBasePath,
 } from './http-request-helpers.js';
 import {
@@ -41,15 +41,14 @@ async function handlePlantUmlApi(req, res, requestUrl, plantUmlRenderer) {
     }
     jsonResponse(req, res, 200, { ok: true, svg: await plantUmlRenderer.renderSvg(body.source) });
   } catch (error) {
-    const statusCode = getRequestErrorStatusCode(error);
-    if (statusCode) {
-      jsonResponse(req, res, statusCode, { error: error.message });
-      return true;
-    }
-    console.error('[api] Failed to render PlantUML:', error.message);
-    jsonResponse(req, res, Number.isInteger(error?.statusCode) ? error.statusCode : 502, {
-      error: error instanceof Error ? error.message : 'Failed to render PlantUML',
-    });
+    return handleApiError(
+      req,
+      res,
+      error,
+      '[api] Failed to render PlantUML:',
+      error instanceof Error ? error.message : 'Failed to render PlantUML',
+      502,
+    );
   }
   return true;
 }

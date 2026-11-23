@@ -1,4 +1,4 @@
-import { dirname, join } from 'path';
+import { dirname, relative, resolve } from 'path';
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'fs/promises';
 import { randomUUID } from 'node:crypto';
 
@@ -81,44 +81,28 @@ export class SidecarStore {
     if (!rootPath) {
       return [];
     }
-    const commentFilePaths = [];
-
-    const visitDirectory = async (absoluteDirectoryPath, relativeDirectoryPath = '') => {
-      let dirEntries;
-      try {
-        dirEntries = await readdir(absoluteDirectoryPath, { withFileTypes: true });
-      } catch (error) {
-        if (error.code === 'ENOENT') {
-          return;
-        }
-        throw error;
+    let dirEntries;
+    try {
+      dirEntries = await readdir(rootPath, { recursive: true, withFileTypes: true });
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        return [];
       }
+      throw error;
+    }
 
-      for (const entry of dirEntries.sort((left, right) => left.name.localeCompare(right.name))) {
-        const relativePath = relativeDirectoryPath
-          ? `${relativeDirectoryPath}/${entry.name}`
-          : entry.name;
-        const absolutePath = join(absoluteDirectoryPath, entry.name);
-
-        if (entry.isDirectory()) {
-          await visitDirectory(absolutePath, relativePath);
-          continue;
-        }
-
-        if (!entry.isFile() || !relativePath.endsWith('.json')) {
-          continue;
-        }
-
-        const filePath = relativePath.slice(0, -'.json'.length);
-        if (allowedPaths && !allowedPaths.has(filePath)) {
-          continue;
-        }
-
+    const commentFilePaths = [];
+    for (const entry of dirEntries) {
+      if (!entry.isFile() || !entry.name.endsWith('.json')) {
+        continue;
+      }
+      const relativePath = relative(rootPath, resolve(entry.parentPath, entry.name)).replace(/\\/g, '/');
+      const filePath = relativePath.slice(0, -'.json'.length);
+      if (!allowedPaths || allowedPaths.has(filePath)) {
         commentFilePaths.push(filePath);
       }
-    };
-
-    await visitDirectory(rootPath);
+    }
+    commentFilePaths.sort((left, right) => left.localeCompare(right));
     const entries = (await mapWithConcurrency(
       commentFilePaths,
       COMMENT_READ_CONCURRENCY,

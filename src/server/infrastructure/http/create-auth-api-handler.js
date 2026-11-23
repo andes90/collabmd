@@ -1,4 +1,4 @@
-import { getRequestErrorStatusCode } from './http-errors.js';
+import { handleApiError } from './http-request-helpers.js';
 import { jsonResponse } from './http-response.js';
 import { parseJsonBody } from './request-body.js';
 
@@ -54,15 +54,7 @@ export function createAuthApiHandler({ authService }) {
         const body = await parseJsonBody(req);
         return applyAuthResponse(req, res, await authService.createSession(req, body));
       } catch (error) {
-        const statusCode = getRequestErrorStatusCode(error);
-        if (statusCode) {
-          jsonResponse(req, res, statusCode, { error: error.message });
-          return true;
-        }
-
-        console.error('[api] Failed to create auth session:', error.message);
-        jsonResponse(req, res, 500, { error: 'Failed to create auth session' });
-        return true;
+        return handleApiError(req, res, error, '[api] Failed to create auth session:', 'Failed to create auth session');
       }
     }
 

@@ -9,11 +9,3 @@ export function createRequestError(statusCode, message, { code = null, requestCo
   }
   return error;
 }
-
-export function getRequestErrorStatusCode(error) {
-  if (!Number.isInteger(error?.statusCode)) {
-    return false;
-  }
-
-  return error.statusCode;
-}
