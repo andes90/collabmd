@@ -50,14 +50,6 @@ export const gitFeature = {
     this.navigation.navigateToGitCommit({ hash, historyFilePath, path });
   },
 
-  handleGitHistorySelection({ closeSidebarOnMobile = false } = {}) {
-    if (closeSidebarOnMobile) {
-      this.closeSidebarOnMobile();
-    }
-
-    this.navigation.navigateToGitHistory();
-  },
-
   handleGitFileHistorySelection(filePath = this.currentFilePath, { closeSidebarOnMobile = false } = {}) {
     if (closeSidebarOnMobile) {
       this.closeSidebarOnMobile();

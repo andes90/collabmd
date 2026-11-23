@@ -2,25 +2,13 @@ import { createMarkdownStarter, normalizeVaultPathInput } from '../domain/vault-
 import { resolveWikiTargetPath } from '../../domain/wiki-link-resolver.js';
 
 export class WikiLinkFileController {
-  constructor({
-    getFileList,
-    navigation,
-    refreshExplorer,
-    toastController,
-    vaultApiClient,
-    wikiLinkAutoCreate = true,
-  }) {
-    this.getFileList = getFileList;
-    this.navigation = navigation;
-    this.refreshExplorer = refreshExplorer;
-    this.toastController = toastController;
-    this.vaultApiClient = vaultApiClient;
-    this.wikiLinkAutoCreate = wikiLinkAutoCreate;
+  constructor(options = {}) {
+    Object.assign(this, options);
+    this.wikiLinkAutoCreate = options.wikiLinkAutoCreate ?? true;
   }
 
   handleWikiLinkClick(target) {
     const match = resolveWikiTargetPath(target, this.getFileList());
-
     if (match) {
       this.navigation.navigateToFile(match);
       return;
@@ -42,12 +30,7 @@ export class WikiLinkFileController {
 
   normalizeNewWikiFilePath(target) {
     const normalized = normalizeVaultPathInput(target);
-
-    if (!normalized) {
-      return null;
-    }
-
-    return normalized.endsWith('.md') ? normalized : `${normalized}.md`;
+    return !normalized ? null : (normalized.endsWith('.md') ? normalized : `${normalized}.md`);
   }
 
   async createAndOpenFile(filePath, displayName) {

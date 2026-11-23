@@ -22,9 +22,7 @@ export const hostedApiClient = {
   },
 
   listAuditEvents({ cursor = '', limit = 50 } = {}) {
-    const query = new URLSearchParams({ limit: String(limit) });
-    if (cursor) query.set('cursor', cursor);
-    return request(`/hosted/audit?${query}`, { fallback: 'Failed to load access history' });
+    return request('/hosted/audit', { fallback: 'Failed to load access history', query: { cursor, limit } });
   },
 
   listInvitations() {

@@ -5,94 +5,23 @@ import {
 } from '../../domain/file-kind.js';
 
 export class WorkspaceRouteController {
-  constructor({
-    backlinksPanel,
-    canvasEmbed = null,
-    clearInitialFileBootstrap,
-    clearStaticPreviewDocument = null,
-    closeSidebarOnMobile,
-    drawioEmbed,
-    elements,
-    excalidrawEmbed,
-    fileHistoryView = null,
-    fileExplorer,
-    getCurrentFilePath = null,
-    getIsTabActive,
-    getSessionLoadToken,
-    gitDiffView,
-    gitPanel,
-    imageLightbox = null,
-    lobby,
-    navigation,
-    onRouteChange = null,
-    onFileRouteOpened = null,
-    onPendingTextWrites = null,
-    previewRenderer,
-    renderAvatars,
-    renderPresence,
-    requestPreviewRouteAnchor = null,
-    resetPreviewMode,
-    scrollSyncController,
-    setSession,
-    setSessionLoadToken,
-    setSidebarTab,
-    setSidebarVisibility,
-    setCurrentFilePath,
-    showGitCommit,
-    showGitDiff,
-    showGitFileHistory,
-    showGitFilePreview,
-    showGitHistory,
-    syncMainChrome,
-    videoEmbed,
-    workspaceCoordinator,
-    layoutController,
-  }) {
-    this.backlinksPanel = backlinksPanel;
-    this.canvasEmbed = canvasEmbed;
-    this.clearInitialFileBootstrap = clearInitialFileBootstrap;
-    this.clearStaticPreviewDocument = clearStaticPreviewDocument;
-    this.closeSidebarOnMobile = closeSidebarOnMobile;
-    this.drawioEmbed = drawioEmbed ?? { setHydrationPaused() {} };
-    this.elements = elements;
-    this.excalidrawEmbed = excalidrawEmbed;
-    this.fileHistoryView = fileHistoryView;
-    this.fileExplorer = fileExplorer;
-    this.getCurrentFilePath = getCurrentFilePath ?? (() => (
+  constructor(options = {}) {
+    Object.assign(this, options);
+    this.canvasEmbed = options.canvasEmbed ?? null;
+    this.clearStaticPreviewDocument = options.clearStaticPreviewDocument ?? null;
+    this.drawioEmbed = options.drawioEmbed ?? { setHydrationPaused() {} };
+    this.fileHistoryView = options.fileHistoryView ?? null;
+    this.imageLightbox = options.imageLightbox ?? null;
+    this.onFileRouteOpened = options.onFileRouteOpened ?? null;
+    this.onPendingTextWrites = options.onPendingTextWrites ?? null;
+    this.onRouteChange = options.onRouteChange ?? null;
+    this.requestPreviewRouteAnchor = options.requestPreviewRouteAnchor ?? null;
+    this.getCurrentFilePath = options.getCurrentFilePath ?? (() => (
       this.workspaceCoordinator?.stateStore?.currentFilePath
       ?? this.workspaceCoordinator?.stateStore?.get?.('currentFilePath')
       ?? null
     ));
-    this.getIsTabActive = getIsTabActive;
-    this.getSessionLoadToken = getSessionLoadToken;
-    this.gitDiffView = gitDiffView;
-    this.gitPanel = gitPanel;
-    this.imageLightbox = imageLightbox;
-    this.lobby = lobby;
-    this.navigation = navigation;
-    this.onRouteChange = onRouteChange;
-    this.onFileRouteOpened = onFileRouteOpened;
-    this.onPendingTextWrites = onPendingTextWrites;
-    this.previewRenderer = previewRenderer;
-    this.renderAvatars = renderAvatars;
-    this.renderPresence = renderPresence;
-    this.requestPreviewRouteAnchor = requestPreviewRouteAnchor;
-    this.resetPreviewMode = resetPreviewMode;
-    this.scrollSyncController = scrollSyncController;
-    this.setSession = setSession;
-    this.setSessionLoadToken = setSessionLoadToken;
-    this.setSidebarTab = setSidebarTab;
-    this.setSidebarVisibility = setSidebarVisibility ?? (() => {});
-    this.setCurrentFilePath = setCurrentFilePath;
-    this.showGitCommit = showGitCommit;
-    this.showGitDiff = showGitDiff;
-    this.showGitFileHistory = showGitFileHistory;
-    this.showGitFilePreview = showGitFilePreview;
-    this.showGitHistory = showGitHistory;
-    this.syncMainChrome = syncMainChrome;
-    this.videoEmbed = videoEmbed;
-    this.workspaceCoordinator = workspaceCoordinator;
-    this.layoutController = layoutController;
+    this.setSidebarVisibility = options.setSidebarVisibility ?? (() => {});
     this.pendingTreeRevealPath = null;
     this.preserveSidebarTabRoutePath = null;
   }

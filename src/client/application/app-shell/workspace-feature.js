@@ -137,10 +137,6 @@ export const workspaceFeature = {
     this.workspacePreviewController.schedulePreviewLayoutSync(options);
   },
 
-  handleEditorScrollActivityChange(isActive) {
-    this.workspacePreviewController.handleEditorScrollActivityChange(isActive);
-  },
-
   showEmptyState() {
     this.workspacePreviewController.resetPreviewLayoutSync();
     this.workspaceRouteController.showEmptyState();

@@ -22,100 +22,15 @@ function delay(ms) {
 }
 
 export class WorkspaceCoordinator {
-  constructor({
-    attachEditorScroller,
-    beginDocumentLoad,
-    cleanupAfterSessionDestroy,
-    createEditorSession,
-    getDisplayName,
-    getFileList,
-    getVaultFileList = getFileList,
-    getLineWrappingEnabled,
-    getVimModeEnabled,
-    getLocalUser,
-    getStoredUserName,
-    getTheme,
-    isTabActive,
-    loadBootstrapContent = null,
-    loadEditorSessionClass,
-    loadBacklinks,
-    onBeforeFileOpen,
-    onConnectionChange,
-    onContentChange,
-    onCommentsChange,
-    onFileAwarenessChange,
-    onFileOpenError,
-    onFileOpenReady,
-    onImagePaste,
-    onSelectionChange,
-    onSessionAssigned = null,
-    onFileOpenMetric = null,
-    onRenderBasePreview,
-    onRenderCanvasPreview,
-    onRenderExcalidrawPreview,
-    onRenderDrawioPreview,
-    onRenderHtmlPreview,
-    onRenderImagePreview,
-    onRenderPdfPreview,
-    onRenderStructurizrPreview,
-    onSyncWrapToggle,
-    onUpdateActiveFile,
-    onUpdateCurrentFile,
-    onUpdateLobbyCurrentFile,
-    onUpdateVisibleChrome,
-    onViewModeReset,
-    renderPresence,
-    scrollContainerForSession,
-    shouldUseDrawioPreview = null,
-    showEditorLoading,
-    stateStore,
-  }) {
-    this.attachEditorScroller = attachEditorScroller;
-    this.beginDocumentLoad = beginDocumentLoad;
-    this.cleanupAfterSessionDestroy = cleanupAfterSessionDestroy;
-    this.createEditorSession = createEditorSession;
-    this.getDisplayName = getDisplayName;
-    this.getFileList = getFileList;
-    this.getVaultFileList = getVaultFileList;
-    this.getLineWrappingEnabled = getLineWrappingEnabled;
-    this.getVimModeEnabled = getVimModeEnabled ?? (() => false);
-    this.getLocalUser = getLocalUser;
-    this.getStoredUserName = getStoredUserName;
-    this.getTheme = getTheme;
-    this.isTabActive = isTabActive;
-    this.loadBootstrapContent = loadBootstrapContent;
-    this.loadEditorSessionClassPort = loadEditorSessionClass;
-    this.loadBacklinks = loadBacklinks;
-    this.onBeforeFileOpen = onBeforeFileOpen;
-    this.onConnectionChange = onConnectionChange;
-    this.onContentChange = onContentChange;
-    this.onCommentsChange = onCommentsChange;
-    this.onFileAwarenessChange = onFileAwarenessChange;
-    this.onFileOpenError = onFileOpenError;
-    this.onFileOpenReady = onFileOpenReady;
-    this.onImagePaste = onImagePaste;
-    this.onSelectionChange = onSelectionChange;
-    this.onSessionAssigned = onSessionAssigned;
-    this.onFileOpenMetric = onFileOpenMetric;
-    this.onRenderBasePreview = onRenderBasePreview;
-    this.onRenderCanvasPreview = onRenderCanvasPreview;
-    this.onRenderDrawioPreview = onRenderDrawioPreview;
-    this.onRenderExcalidrawPreview = onRenderExcalidrawPreview;
-    this.onRenderHtmlPreview = onRenderHtmlPreview;
-    this.onRenderImagePreview = onRenderImagePreview;
-    this.onRenderPdfPreview = onRenderPdfPreview;
-    this.onRenderStructurizrPreview = onRenderStructurizrPreview;
-    this.onSyncWrapToggle = onSyncWrapToggle;
-    this.onUpdateActiveFile = onUpdateActiveFile;
-    this.onUpdateCurrentFile = onUpdateCurrentFile;
-    this.onUpdateLobbyCurrentFile = onUpdateLobbyCurrentFile;
-    this.onUpdateVisibleChrome = onUpdateVisibleChrome;
-    this.onViewModeReset = onViewModeReset;
-    this.renderPresence = renderPresence;
-    this.scrollContainerForSession = scrollContainerForSession;
-    this.shouldUseDrawioPreview = shouldUseDrawioPreview ?? (() => true);
-    this.showEditorLoading = showEditorLoading;
-    this.stateStore = stateStore;
+  constructor(options = {}) {
+    Object.assign(this, options);
+    this.getVaultFileList = options.getVaultFileList ?? options.getFileList;
+    this.getVimModeEnabled = options.getVimModeEnabled ?? (() => false);
+    this.loadBootstrapContent = options.loadBootstrapContent ?? null;
+    this.loadEditorSessionClassPort = options.loadEditorSessionClass;
+    this.onFileOpenMetric = options.onFileOpenMetric ?? null;
+    this.onSessionAssigned = options.onSessionAssigned ?? null;
+    this.shouldUseDrawioPreview = options.shouldUseDrawioPreview ?? (() => true);
     this.session = null;
   }
 

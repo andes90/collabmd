@@ -3,7 +3,7 @@ import { PdfPreviewController } from '../application/pdf-preview-controller.js';
 import { analyzeMarkdownComplexity, isLargeDocumentStats } from '../application/preview-render-profile.js';
 import { PreviewRenderer } from '../application/preview-renderer.js';
 import { renderWebMcpDiagram } from '../application/webmcp-diagram-renderer.js';
-import { ensureQuickSwitcherInstance, toggleQuickSwitcherInstance } from '../application/quick-switcher-loader.js';
+import { toggleQuickSwitcherInstance } from '../application/quick-switcher-loader.js';
 import { WorkspaceRouteController } from '../application/workspace-route-controller.js';
 import { WikiLinkFileController } from '../application/wiki-link-file-controller.js';
 import { WorkspacePreviewController } from '../application/workspace-preview-controller.js';
@@ -423,7 +423,7 @@ export class CollabMdAppShell {
     });
     this.scrollSyncController = new ScrollSyncController({
       getEditorLineNumber: () => this.session?.getTopVisibleLineNumber(0.35) ?? 1,
-      onEditorScrollActivityChange: (isActive) => this.handleEditorScrollActivityChange(isActive),
+      onEditorScrollActivityChange: (isActive) => this.workspacePreviewController.handleEditorScrollActivityChange(isActive),
       previewContainer: this.elements.previewContainer,
       previewElement: this.elements.previewContent,
       scrollEditorToLine: (lineNumber, viewportRatio) => this.session?.scrollToLine(lineNumber, viewportRatio),
@@ -873,11 +873,6 @@ export class CollabMdAppShell {
       import('../presentation/quick-switcher-controller.js'),
       import('../styles/features/quick-switcher.css'),
     ]).then(([module]) => module.QuickSwitcherController);
-  }
-
-
-  async ensureQuickSwitcher() {
-    return ensureQuickSwitcherInstance(this);
   }
 
   async toggleQuickSwitcher() {
