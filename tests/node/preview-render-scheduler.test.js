@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { PreviewRenderScheduler } from '../../src/client/application/preview-render-scheduler.js';
+import { PreviewRenderScheduler } from '../../src/client/application/preview-renderer.js';
 
 function installSchedulingHarness(t) {
   const originalGlobals = {
