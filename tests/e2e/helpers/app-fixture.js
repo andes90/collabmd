@@ -499,6 +499,7 @@ export async function sendChatMessage(page, message) {
 }
 
 export async function setEditorSelection(page, targetText, { collapse = false } = {}) {
+  await waitForCollaborativeEditor(page);
   await page.evaluate(({ collapseAtStart, target }) => {
     const findView = (root) => {
       const seen = new Set();
@@ -559,6 +560,7 @@ export async function setEditorSelection(page, targetText, { collapse = false } 
 }
 
 export async function dragEditorSelection(page, targetText) {
+  await waitForCollaborativeEditor(page);
   const coords = await page.evaluate((target) => {
     const findView = (root) => {
       const seen = new Set();
