@@ -80,7 +80,7 @@ function createRipgrepArgs(query, {
   if (wholeWord) args.push('--word-regexp');
 
   TEXT_SEARCH_GLOBS.forEach((glob) => {
-    args.push('--glob', glob);
+    args.push('--iglob', glob);
   });
 
   args.push('--', String(query ?? ''), '.');
@@ -108,7 +108,7 @@ async function searchExcalidrawText({
   let matchCount = 0;
   let truncated = false;
   const maxBytes = parseByteLimit(maxFileSize);
-  const paths = glob('**/*.excalidraw', {
+  const paths = glob('**/*.[eE][xX][cC][aA][lL][iI][dD][rR][aA][wW]', {
     cwd: vaultDir,
     exclude: ['**/.*', '**/node_modules/**'],
   });

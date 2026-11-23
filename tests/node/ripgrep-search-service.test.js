@@ -252,6 +252,19 @@ test('Excalidraw text search skips symlinked files and directories', async (t) =
   assert.deepEqual(result.files.map(({ file }) => file), ['visible.excalidraw']);
 });
 
+test('global text search finds supported files with mixed-case extensions', async (t) => {
+  const vaultDir = await mkdtemp(join(tmpdir(), 'collabmd-search-'));
+  t.after(() => rm(vaultDir, { force: true, recursive: true }));
+  await writeFile(join(vaultDir, 'GUIDE.MD'), 'search needle');
+  await writeFile(join(vaultDir, 'Map.Excalidraw'), JSON.stringify({
+    elements: [{ type: 'text', text: 'search needle' }],
+  }));
+  const service = new RipgrepSearchService({ vaultDir });
+  await service.initialize();
+  const result = await service.search({ query: 'needle' });
+  assert.deepEqual(result.files.map(({ file }) => file).sort(), ['GUIDE.MD', 'Map.Excalidraw']);
+});
+
 test('RipgrepSearchService passes search limits and cancellation to rg', async () => {
   const calls = [];
   const service = new RipgrepSearchService({
