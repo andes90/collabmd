@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { GitStatusService } from '../../src/server/infrastructure/git/status-service.js';
+import { GitStatusService } from '../../src/server/infrastructure/git/git-service.js';
 import { GitDiffService } from '../../src/server/infrastructure/git/diff-service.js';
 
 function createDeferredDiff() {

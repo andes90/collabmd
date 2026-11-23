@@ -20,7 +20,7 @@ export function createEmptyStats() {
   };
 }
 
-export function createEmptySummary() {
+function createEmptySummary() {
   return {
     additions: 0,
     changedFiles: 0,

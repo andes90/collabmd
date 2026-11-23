@@ -1,8 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { PlantUmlRenderer } from '../../src/server/infrastructure/plantuml/plantuml-renderer.js';
-import { encodePlantUmlText } from '../../src/server/domain/plantuml-encoder.js';
+import { encodePlantUmlText, PlantUmlRenderer } from '../../src/server/infrastructure/plantuml/plantuml-renderer.js';
 
 test('PlantUML source keeps the expected server URL encoding', () => {
   assert.equal(
