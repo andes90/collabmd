@@ -649,6 +649,26 @@ test('direct drawio preview validates message origin and preserves the frame dur
   await expect.poll(async () => (
     page.evaluate(() => document.querySelector('#previewContent .drawio-embed-iframe')?.dataset.resizeProbe || '')
   ), { timeout: 60000 }).toBe('alive');
+  let rejectSave = true;
+  await page.route('**/api/**/file', (route) => {
+    if (rejectSave && route.request().method() === 'PUT') return route.fulfill({ status: 503 });
+    return route.continue();
+  });
+  await getFakeDrawioFrame().evaluate(() => {
+    parent.postMessage(JSON.stringify({ event: 'autosave', xml: '<mxfile>final-change</mxfile>' }), '*');
+  });
+  await page.evaluate(() => { location.hash = 'file=README.md'; });
+  await expect.poll(() => new URL(page.url()).hash).toBe('#file=sample-drawio.drawio');
+  expect(await drawioHost.evaluate(() => {
+    const event = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  })).toBe(true);
+  rejectSave = false;
+  await page.evaluate(() => { location.hash = 'file=README.md'; });
+  await expect(page.locator('#activeFileName')).toContainText('README');
+  const savedFile = await page.request.get('/api/file?path=sample-drawio.drawio');
+  expect((await savedFile.json()).content).toBe('<mxfile>final-change</mxfile>');
 });
 
 test('embedded drawio uses the shared diagram preview header chrome', async ({ page }) => {

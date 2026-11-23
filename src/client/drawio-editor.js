@@ -76,6 +76,7 @@ const drawioLeaseClient = leaseRoom
   : null;
 
 const saveQueue = createDrawioSaveQueue(async (xml) => {
+  if (!drawioLeaseClient?.currentState.isEditor) throw new Error('Waiting for the editing lease to save');
   await vaultApiClient.writeFile({ content: xml, path: filePath });
   currentXml = xml;
   lastSavedVersion = drawioLeaseClient?.publishSave?.() ?? lastSavedVersion;
@@ -263,6 +264,8 @@ async function flushSave() {
     await saveQueue.flush();
     return true;
   } catch (error) {
+    state.bannerText = 'Changes are waiting to be saved. Keep this diagram open.';
+    updateBanner();
     console.error('[drawio] Failed to save diagram:', error);
     return false;
   }
@@ -409,7 +412,9 @@ function handleLeaseState(nextState) {
   state.isEditor = Boolean(nextState?.isEditor);
   state.canClaim = Boolean(nextState?.canClaim);
 
-  if (state.isEditor) {
+  if (!nextState.synced) {
+    state.bannerText = 'Waiting for the editing connection…';
+  } else if (state.isEditor) {
     state.bannerText = 'Changes save automatically.';
   } else if (nextState?.hasHealthyHolder) {
     const holderName = nextState.holderName || 'Another user';
@@ -426,8 +431,6 @@ function handleLeaseState(nextState) {
   const savedVersionChanged = nextState.savedVersion !== lastSavedVersion;
   lastSavedVersion = nextState.savedVersion;
   if (modeChanged) {
-    // Stop edits immediately when the lease moves, and keep the current frame
-    // until the changes queued under the previous lease have been saved.
     drawioFrame?.classList.toggle('is-read-only', !state.isEditor);
     void syncDrawioFrame();
   }
@@ -443,6 +446,15 @@ function handleParentMessage(event) {
 
   const payload = event.data;
   if (!payload || payload.source !== 'collabmd-host') {
+    return;
+  }
+
+  if (payload.type === 'prepare-disconnect' && event.ports[0]) {
+    const port = event.ports[0];
+    void flushSave().then((saved) => {
+      port.postMessage(saved);
+      port.close();
+    });
     return;
   }
 
@@ -486,17 +498,13 @@ async function init() {
     });
 
     window.addEventListener('message', handleParentMessage);
-    window.addEventListener('beforeunload', () => {
-      if (saveTimer) {
-        window.clearTimeout(saveTimer);
-      }
-      drawioLeaseClient?.releaseLease?.();
+    window.addEventListener('beforeunload', (event) => {
+      if (!saveQueue.hasPendingWrites()) return;
+      event.preventDefault();
+      event.returnValue = '';
     });
     window.addEventListener('pagehide', () => {
-      if (saveTimer) {
-        window.clearTimeout(saveTimer);
-      }
-      drawioLeaseClient?.releaseLease?.();
+      if (!saveQueue.hasPendingWrites()) drawioLeaseClient?.releaseLease();
     });
 
     if (requestedMode === 'view' || !drawioLeaseClient) {

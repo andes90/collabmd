@@ -5,10 +5,8 @@ import {
   DRAWIO_LEASE_HEARTBEAT_MS,
   DRAWIO_LEASE_STALE_MS,
 } from '../../domain/drawio-room.js';
-import { resolveWsBaseUrl } from '../domain/runtime-paths.js';
+import { encodeRoomPath, resolveWsBaseUrl } from '../domain/runtime-paths.js';
 import { stopReconnectOnControlledClose } from './yjs-provider-reset-guard.js';
-
-const DEFAULT_SYNC_TIMEOUT_MS = 4000;
 
 function toFiniteNumber(value, fallbackValue = 0) {
   const normalized = Number(value);
@@ -25,9 +23,7 @@ export class DrawioLeaseClient {
     resolveWsBaseUrlFn = resolveWsBaseUrl,
     roomName = '',
     setIntervalFn = (callback, delay) => window.setInterval(callback, delay),
-    setTimeoutFn = (callback, delay) => window.setTimeout(callback, delay),
     staleLeaseMs = DRAWIO_LEASE_STALE_MS,
-    syncTimeoutMs = DEFAULT_SYNC_TIMEOUT_MS,
     websocketProviderFactory = (wsUrl, path, ydoc, options) => new WebsocketProvider(wsUrl, path, ydoc, options),
     ydocFactory = () => new Doc(),
   }) {
@@ -39,9 +35,7 @@ export class DrawioLeaseClient {
     this.resolveWsBaseUrlFn = resolveWsBaseUrlFn;
     this.roomName = roomName;
     this.setIntervalFn = setIntervalFn;
-    this.setTimeoutFn = setTimeoutFn;
     this.staleLeaseMs = staleLeaseMs;
-    this.syncTimeoutMs = syncTimeoutMs;
     this.websocketProviderFactory = websocketProviderFactory;
     this.ydocFactory = ydocFactory;
 
@@ -79,7 +73,7 @@ export class DrawioLeaseClient {
 
   async connect({ initialUser = null, requestedMode = 'edit' } = {}) {
     this.localUser = initialUser ?? null;
-    this.localMode = requestedMode === 'edit' ? 'viewer' : 'viewer';
+    this.localMode = 'viewer';
 
     if (!this.roomName) {
       this.currentState = this.createState();
@@ -88,7 +82,7 @@ export class DrawioLeaseClient {
     }
 
     this.ydoc = this.ydocFactory();
-    this.provider = this.websocketProviderFactory(this.resolveWsBaseUrlFn(), this.roomName, this.ydoc, {
+    this.provider = this.websocketProviderFactory(this.resolveWsBaseUrlFn(), encodeRoomPath(this.roomName), this.ydoc, {
       disableBc: true,
       maxBackoffTime: 5000,
     });
@@ -104,47 +98,18 @@ export class DrawioLeaseClient {
     this.statusMap.observe(this.handleStatusChange);
     this.awareness.on('change', this.handleAwarenessChange);
 
-    await this.waitForSync();
-
-    if (requestedMode === 'edit') {
-      this.tryAcquireLease();
-    } else {
-      this.emitState();
-    }
-
+    let claimedAfterInitialSync = false;
+    const handleSync = (synced) => {
+      if (synced && !claimedAfterInitialSync && requestedMode === 'edit') {
+        claimedAfterInitialSync = true;
+        this.tryAcquireLease();
+      } else {
+        this.emitState();
+      }
+    };
+    this.provider.on('sync', handleSync);
+    handleSync(this.provider.synced);
     return this.currentState;
-  }
-
-  waitForSync() {
-    if (!this.provider) {
-      return Promise.resolve(false);
-    }
-
-    return new Promise((resolve) => {
-      let finished = false;
-      const timeoutId = this.setTimeoutFn(() => {
-        if (finished) {
-          return;
-        }
-
-        finished = true;
-        this.provider.off?.('sync', handleSync);
-        resolve(false);
-      }, this.syncTimeoutMs);
-
-      const handleSync = (isSynced) => {
-        if (!isSynced || finished) {
-          return;
-        }
-
-        finished = true;
-        clearTimeout(timeoutId);
-        this.provider.off?.('sync', handleSync);
-        resolve(true);
-      };
-
-      this.provider.on?.('sync', handleSync);
-    });
   }
 
   setLocalUser(nextUser = null) {
@@ -181,29 +146,12 @@ export class DrawioLeaseClient {
     };
   }
 
-  findHolderAwarenessState(holderClientId) {
-    if (!holderClientId || !this.awareness) {
-      return null;
-    }
-
-    for (const [clientId, state] of this.awareness.getStates()) {
-      if (String(clientId) === String(holderClientId) && state?.drawio?.filePath === this.filePath) {
-        return state.drawio;
-      }
-    }
-
-    return null;
-  }
-
   isLeaseStale(snapshot = this.getLeaseSnapshot()) {
     if (!snapshot.holderClientId) {
       return true;
     }
 
-    if (!this.findHolderAwarenessState(snapshot.holderClientId)) {
-      return true;
-    }
-
+    // Awareness can arrive after the room sync. A recent heartbeat protects the holder.
     return (this.now() - snapshot.heartbeatAt) > this.staleLeaseMs;
   }
 
@@ -212,7 +160,7 @@ export class DrawioLeaseClient {
   }
 
   tryAcquireLease() {
-    if (!this.leaseMap) {
+    if (!this.leaseMap || !this.provider?.synced) {
       return false;
     }
 
@@ -236,7 +184,7 @@ export class DrawioLeaseClient {
   }
 
   renewLeaseHeartbeat() {
-    if (!this.leaseMap || !this.isLeaseHeldByLocal()) {
+    if (!this.provider?.synced || !this.leaseMap || !this.isLeaseHeldByLocal()) {
       return false;
     }
 
@@ -264,7 +212,7 @@ export class DrawioLeaseClient {
   }
 
   releaseLease() {
-    if (!this.leaseMap || !this.isLeaseHeldByLocal()) {
+    if (!this.provider?.synced || !this.leaseMap || !this.isLeaseHeldByLocal()) {
       return false;
     }
 
@@ -299,17 +247,19 @@ export class DrawioLeaseClient {
   emitState() {
     const snapshot = this.getLeaseSnapshot();
     const isStale = this.isLeaseStale(snapshot);
-    const isEditor = this.isLeaseHeldByLocal(snapshot);
+    const synced = Boolean(this.provider?.synced);
+    const isEditor = synced && this.isLeaseHeldByLocal(snapshot);
     const nextState = this.createState({
       acquiredAt: snapshot.acquiredAt,
-      canClaim: !isEditor && isStale,
-      hasHealthyHolder: Boolean(snapshot.holderClientId) && !isStale,
+      canClaim: synced && !isEditor && isStale,
+      hasHealthyHolder: synced && Boolean(snapshot.holderClientId) && !isStale,
       heartbeatAt: snapshot.heartbeatAt,
       holderClientId: snapshot.holderClientId,
       holderName: snapshot.holderName,
       holderPeerId: snapshot.holderPeerId,
       isEditor,
       isStale,
+      synced,
       mode: isEditor ? 'editor' : 'viewer',
       savedAt: toFiniteNumber(this.statusMap?.get('savedAt')),
       savedVersion: toFiniteNumber(this.statusMap?.get('savedVersion')),
@@ -323,6 +273,11 @@ export class DrawioLeaseClient {
       this.setLocalAwareness({ mode: 'viewer' });
     }
 
+    clearTimeout(this.expiryTimer);
+    if (nextState.hasHealthyHolder && !isEditor) {
+      const expiresIn = Math.max(1, this.staleLeaseMs - (this.now() - snapshot.heartbeatAt) + 1);
+      this.expiryTimer = setTimeout(() => this.emitState(), Math.min(expiresIn, this.staleLeaseMs + 1));
+    }
     this.currentState = nextState;
     this.onStateChange(nextState);
     return nextState;
@@ -330,6 +285,7 @@ export class DrawioLeaseClient {
 
   destroy() {
     this.releaseLease();
+    clearTimeout(this.expiryTimer);
     this.stopHeartbeat();
     this.leaseMap?.unobserve?.(this.handleLeaseChange);
     this.statusMap?.unobserve?.(this.handleStatusChange);

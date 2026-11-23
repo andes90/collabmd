@@ -193,6 +193,10 @@ export class EditorSession {
     return this.collaborationClient.initialSyncComplete;
   }
 
+  prepareDisconnect() {
+    return this.collaborationClient.prepareDisconnect();
+  }
+
   destroy() {
     this.commentThreadStore.unbind();
     this.activeFilePath = '';

@@ -13,3 +13,9 @@
 - Private git bootstrap fails on startup: verify `COLLABMD_GIT_REPO_URL` plus either `COLLABMD_GIT_SSH_PRIVATE_KEY_FILE` or `COLLABMD_GIT_SSH_PRIVATE_KEY_B64`
 - WSL2 path issues: run CollabMD against a directory inside your Linux filesystem when possible rather than a mounted Windows path
 
+## Recovering pending edits
+
+If you edit a note while disconnected, keep its browser tab open. CollabMD holds the edits in that tab until the server acknowledges them. Once the connection returns, you can switch files.
+
+If a browser edit and a filesystem edit change the same passage, the editor shows both versions between `<<<<<<< CollabMD editor` and `>>>>>>> File on disk`. Keep the text you want and remove the marker lines, including the `=======` separator. Until you resolve the conflict, the vault file retains the external version.
+

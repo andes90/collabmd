@@ -573,6 +573,36 @@ test('export pdf uses the export page and prints the rendered snapshot html', as
   });
 });
 
+test('keeps disconnected text edits in the literal filename until the server receives them', async ({ page }) => {
+  const path = 'Audit%20notes.md';
+  const neighboringPath = 'Audit notes.md';
+  for (const [filePath, content] of [[path, 'original'], [neighboringPath, 'neighbor']]) {
+    expect((await page.request.put('/api/file', { data: { path: filePath, content } })).ok()).toBe(true);
+  }
+  let offline = false;
+  let socket;
+  await page.routeWebSocket((url) => url.pathname.endsWith('/Audit%2520notes.md'), (route) => {
+    socket = route;
+    if (offline) route.close();
+    else route.connectToServer();
+  });
+  await openFile(page, path);
+  await waitForCollaborativeEditor(page);
+  await expect(page.locator('.cm-content').first()).toHaveText('original');
+  offline = true;
+  await socket.close();
+  await replaceEditorContent(page, 'kept edit');
+  await page.evaluate(() => { location.hash = 'file=README.md'; });
+  await expect.poll(() => new URL(page.url()).hash).toBe('#file=Audit%2520notes.md');
+  await expect(page.locator('.cm-content').first()).toHaveText('kept edit');
+  offline = false;
+  const read = async (filePath) => (await (await page.request.get('/api/file', { params: { path: filePath } })).json()).content;
+  await expect.poll(() => read(path)).toBe('kept edit');
+  await page.evaluate(() => { location.hash = 'file=README.md'; });
+  await expect(page.locator('#activeFileName')).toContainText('README');
+  expect(await read(neighboringPath)).toBe('neighbor');
+});
+
 test('shows provisional content before delayed websocket sync and upgrades to collaborative editing', async ({ page }) => {
   await setHydrateDelay(page, 2000);
 

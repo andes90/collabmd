@@ -34,10 +34,6 @@ function connectWorkspaceSync() {
 async function handleTabBlocked({ reason } = {}) {
   const wasActive = this.isTabActive;
   const blockedFilePath = this.currentFilePath;
-  const shouldPrepareExcalidrawDisconnect = Boolean(
-    blockedFilePath
-    && this.isExcalidrawFile?.(blockedFilePath),
-  );
 
   this.isTabActive = false;
   void this.webMcpTools?.refresh();
@@ -54,13 +50,8 @@ async function handleTabBlocked({ reason } = {}) {
   this.connectionState = { status: 'disconnected', unreachable: false };
   this.showTabLockOverlay({ reason });
 
-  if (shouldPrepareExcalidrawDisconnect) {
-    await this.excalidrawEmbed.prepareFileDisconnect(blockedFilePath);
-  }
-  if (blockedFilePath && this.isCanvasFile?.(blockedFilePath)) {
-    const canLeave = await this.canvasEmbed.prepareFileDisconnect(blockedFilePath);
-    if (!canLeave) return;
-  }
+  if (blockedFilePath && !await this.workspaceRouteController.prepareActiveEmbedDisconnect()) return;
+  if (this.isTabActive) return;
 
   this.showEmptyState();
   this.renderChat();

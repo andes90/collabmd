@@ -2,7 +2,8 @@ import { WebsocketProvider } from 'y-websocket';
 import * as Y from 'yjs';
 
 import { createRandomUser, normalizeUserName } from '../domain/room.js';
-import { resolveWsBaseUrl } from './runtime-config.js';
+import { encodeRoomPath, resolveWsBaseUrl } from '../domain/runtime-paths.js';
+import { attachRoomFlushTransport } from './room-flush-transport.js';
 import { stopReconnectOnControlledClose } from './yjs-provider-reset-guard.js';
 
 export class EditorCollaborationClient {
@@ -28,6 +29,13 @@ export class EditorCollaborationClient {
     this.commentThreads = null;
     this.wsBaseUrl = '';
     this.initialSyncComplete = false;
+    this.localVersion = 0;
+    this.receivedVersion = 0;
+    this.warnBeforeUnload = (event) => {
+      if (this.receivedVersion === this.localVersion) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
     this.initialSyncPromise = Promise.resolve();
     this.resolveInitialSync = null;
   }
@@ -56,7 +64,7 @@ export class EditorCollaborationClient {
     this.commentThreads = this.ydoc.getArray('comments');
 
     const undoManager = new Y.UndoManager(this.ytext);
-    const provider = new WebsocketProvider(this.wsBaseUrl, filePath, this.ydoc, {
+    const provider = new WebsocketProvider(this.wsBaseUrl, encodeRoomPath(filePath), this.ydoc, {
       disableBc: true,
       maxBackoffTime: 5000,
     });
@@ -78,6 +86,20 @@ export class EditorCollaborationClient {
     });
 
     this.trackConnectionStatus();
+    this.flushTransport = attachRoomFlushTransport(provider, { clientId: this.ydoc.clientID });
+    const scheduleReceipt = () => {
+      clearTimeout(this.receiptTimer);
+      this.receiptTimer = setTimeout(() => { void this.prepareDisconnect(); }, 400);
+    };
+    this.ydoc.on('update', (_update, _origin, _doc, transaction) => {
+      if (!transaction.local) return;
+      this.localVersion++;
+      scheduleReceipt();
+    });
+    provider.on('sync', (synced) => {
+      if (synced && this.localVersion !== this.receivedVersion) scheduleReceipt();
+    });
+    window.addEventListener('beforeunload', this.warnBeforeUnload);
 
     let initialSyncDone = false;
     provider.on('sync', (isSynced) => {
@@ -102,7 +124,19 @@ export class EditorCollaborationClient {
     };
   }
 
+  async prepareDisconnect() {
+    if (this.localVersion === this.receivedVersion) return true;
+    if (!this.provider?.synced) return false;
+    const version = this.localVersion;
+    const { status } = await this.flushTransport.flush(5000);
+    if (status === 'acknowledged') this.receivedVersion = Math.max(this.receivedVersion, version);
+    return this.receivedVersion === this.localVersion;
+  }
+
   destroy() {
+    clearTimeout(this.receiptTimer);
+    globalThis.window?.removeEventListener('beforeunload', this.warnBeforeUnload);
+    this.flushTransport?.dispose();
     this.resolveInitialSync?.();
     this.resolveInitialSync = null;
     this.initialSyncComplete = false;

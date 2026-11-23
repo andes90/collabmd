@@ -218,6 +218,10 @@ export function resolveWsServerOverride(config = getClientRuntimeConfig()) {
   }
 }
 
+export function encodeRoomPath(name) {
+  return name.split('/').map(encodeURIComponent).join('/');
+}
+
 export function resolveWsBaseUrl(config = getClientRuntimeConfig()) {
   const vaultId = getActiveVaultId(config);
   const vaultSuffix = vaultId ? `/v/${vaultId}` : '';

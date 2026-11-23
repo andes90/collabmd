@@ -629,6 +629,24 @@ export class DrawioEmbedController {
     });
   }
 
+  prepareFileDisconnect(filePath, { timeoutMs = 10000 } = {}) {
+    const entry = Array.from(this.embedEntries.values()).find((item) => item.mode === 'edit' && item.filePath === filePath);
+    if (!entry?.ready || !entry.iframe?.contentWindow) return Promise.resolve(true);
+    const channel = new MessageChannel();
+    return new Promise((resolve) => {
+      const finish = (saved) => {
+        clearTimeout(timer);
+        channel.port1.close();
+        if (!saved) this.toastController?.show('Waiting for the diagram to save before leaving');
+        resolve(saved);
+      };
+      const timer = setTimeout(() => finish(false), timeoutMs);
+      channel.port1.onmessage = (event) => finish(event.data === true);
+      entry.iframe.contentWindow.postMessage({ source: 'collabmd-host', type: 'prepare-disconnect' },
+        window.location.origin, [channel.port2]);
+    });
+  }
+
   _findEntryByInstanceId(instanceId) {
     for (const entry of this.embedEntries.values()) {
       if (entry.instanceId === instanceId) {
@@ -658,6 +676,11 @@ export class DrawioEmbedController {
       return;
     }
     if (!this._isMessageFromEntry(event, entry)) {
+      return;
+    }
+
+    if (payload.type === 'ready') {
+      entry.ready = true;
       return;
     }
 

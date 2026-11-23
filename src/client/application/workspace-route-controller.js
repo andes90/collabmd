@@ -1,5 +1,6 @@
 import {
   isCanvasFilePath,
+  isDrawioFilePath,
   isExcalidrawFilePath,
 } from '../../domain/file-kind.js';
 
@@ -25,6 +26,7 @@ export class WorkspaceRouteController {
     navigation,
     onRouteChange = null,
     onFileRouteOpened = null,
+    onPendingTextWrites = null,
     previewRenderer,
     renderAvatars,
     renderPresence,
@@ -70,6 +72,7 @@ export class WorkspaceRouteController {
     this.navigation = navigation;
     this.onRouteChange = onRouteChange;
     this.onFileRouteOpened = onFileRouteOpened;
+    this.onPendingTextWrites = onPendingTextWrites;
     this.previewRenderer = previewRenderer;
     this.renderAvatars = renderAvatars;
     this.renderPresence = renderPresence;
@@ -265,7 +268,7 @@ export class WorkspaceRouteController {
   }
 
   async openFile(filePath, options = {}) {
-    if (!await this.prepareActiveEmbedDisconnect(filePath)) return false;
+    if (!await this.prepareActiveEmbedDisconnect(filePath, options.drawioMode)) return false;
     const shouldRevealInTree = this.pendingTreeRevealPath === filePath;
     if (shouldRevealInTree) {
       this.pendingTreeRevealPath = null;
@@ -290,13 +293,21 @@ export class WorkspaceRouteController {
     return true;
   }
 
-  async prepareActiveEmbedDisconnect(nextFilePath = null) {
+  async prepareActiveEmbedDisconnect(nextFilePath = null, nextDrawioMode = null) {
     const activeFilePath = this.getCurrentFilePath();
-    if (!activeFilePath || activeFilePath === nextFilePath) return true;
+    const drawioMode = this.workspaceCoordinator.stateStore?.currentDrawioMode ?? null;
+    if (!activeFilePath || (activeFilePath === nextFilePath && drawioMode === nextDrawioMode)) return true;
+    const session = this.workspaceCoordinator.getSession?.();
+    if (session?.prepareDisconnect && !await session.prepareDisconnect()) {
+      this.navigation.navigateToFile(activeFilePath, { drawioMode });
+      this.onPendingTextWrites?.();
+      return false;
+    }
     const embed = isCanvasFilePath(activeFilePath)
       ? this.canvasEmbed
-      : (isExcalidrawFilePath(activeFilePath) ? this.excalidrawEmbed : null);
-    if (embed) {
+      : (isDrawioFilePath(activeFilePath) ? this.drawioEmbed
+        : (isExcalidrawFilePath(activeFilePath) ? this.excalidrawEmbed : null));
+    if (embed?.prepareFileDisconnect) {
       const canLeave = await embed.prepareFileDisconnect(activeFilePath, {
         timeoutMs: 10000,
       });

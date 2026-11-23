@@ -755,6 +755,7 @@ export class CollabMdAppShell {
       lobby: this.lobby,
       navigation: this.navigation,
       onRouteChange: (filePath) => this.handleCommentOverviewRouteChange(filePath),
+      onPendingTextWrites: () => this.toastController.show('Waiting for the server to receive your edits before leaving'),
       onFileRouteOpened: () => this.focusPendingCommentOverviewThread(),
       previewRenderer: this.previewRenderer,
       requestPreviewRouteAnchor: (anchorId, filePath) => this.requestPreviewRouteAnchor(anchorId, filePath),

@@ -110,24 +110,25 @@ test('canvas navigation waits for the matching flush acknowledgement and retains
   assert.equal(listeners.size, 0);
 });
 
-test('tab takeover keeps the canvas mounted if pending edits cannot be flushed', async () => {
-  let emptied = false;
-  const app = {
-    canvasEmbed: { prepareFileDisconnect: async () => false },
-    chatMessageIds: new Set(),
-    currentFilePath: 'ideas.canvas',
-    isCanvasFile: () => true,
-    isTabActive: true,
-    lobby: { disconnect() {} },
-    renderChat() {},
-    showEmptyState: () => { emptied = true; },
-    showTabLockOverlay() {},
-    workspaceSync: { disconnect() {} },
-  };
-  await uiFeatureTabActivityMethods.handleTabBlocked.call(app);
-  assert.equal(app.isTabActive, false);
-  assert.equal(emptied, false);
-  app.canvasEmbed.prepareFileDisconnect = async () => true;
-  await uiFeatureTabActivityMethods.handleTabBlocked.call(app);
-  assert.equal(emptied, true);
-});
+for (const filePath of ['ideas.canvas', 'ideas.excalidraw']) {
+  test(`tab takeover keeps ${filePath} mounted if pending edits cannot be flushed`, async () => {
+    let emptied = false;
+    const app = {
+      workspaceRouteController: { prepareActiveEmbedDisconnect: async () => false },
+      chatMessageIds: new Set(),
+      currentFilePath: filePath,
+      isTabActive: true,
+      lobby: { disconnect() {} },
+      renderChat() {},
+      showEmptyState: () => { emptied = true; },
+      showTabLockOverlay() {},
+      workspaceSync: { disconnect() {} },
+    };
+    await uiFeatureTabActivityMethods.handleTabBlocked.call(app);
+    assert.equal(app.isTabActive, false);
+    assert.equal(emptied, false);
+    app.workspaceRouteController.prepareActiveEmbedDisconnect = async () => true;
+    await uiFeatureTabActivityMethods.handleTabBlocked.call(app);
+    assert.equal(emptied, true);
+  });
+}

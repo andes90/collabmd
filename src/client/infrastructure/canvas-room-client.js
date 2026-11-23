@@ -12,7 +12,7 @@ import {
   parseCanvasJson,
 } from '../../domain/canvas-room-codec.js';
 import { attachRoomFlushTransport } from './room-flush-transport.js';
-import { resolveWsBaseUrl } from './runtime-config.js';
+import { encodeRoomPath, resolveWsBaseUrl } from '../domain/runtime-paths.js';
 import { stopReconnectOnControlledClose } from './yjs-provider-reset-guard.js';
 
 export class CanvasRoomClient {
@@ -65,7 +65,7 @@ export class CanvasRoomClient {
       }
       this.publish();
     });
-    this.provider = this.providerFactory(this.wsBaseUrl, this.filePath, this.doc, {
+    this.provider = this.providerFactory(this.wsBaseUrl, encodeRoomPath(this.filePath), this.doc, {
       disableBc: true, maxBackoffTime: 5000,
     });
     stopReconnectOnControlledClose(this.provider);

@@ -13,6 +13,7 @@ import {
   readLegacyExcalidrawRoomScene,
   replaceExcalidrawRoomScene,
 } from '../../domain/excalidraw-room-codec.js';
+import { encodeRoomPath } from '../domain/runtime-paths.js';
 import { attachRoomFlushTransport } from './room-flush-transport.js';
 
 import {
@@ -379,7 +380,7 @@ export class ExcalidrawRoomClient {
     this.roomElements = this.ydoc.getMap(EXCALIDRAW_ELEMENTS_KEY);
     this.roomFiles = this.ydoc.getMap(EXCALIDRAW_FILES_KEY);
     this.roomAppState = this.ydoc.getMap(EXCALIDRAW_APP_STATE_KEY);
-    this.provider = this.websocketProviderFactory(this.resolveWsBaseUrlFn(), this.filePath, this.ydoc, {
+    this.provider = this.websocketProviderFactory(this.resolveWsBaseUrlFn(), encodeRoomPath(this.filePath), this.ydoc, {
       disableBc: true,
       maxBackoffTime: 5000,
     });
