@@ -34,7 +34,9 @@ function createState(paths = []) {
 
 async function createCoordinatorWithVault(t, initialFiles = {}) {
   const vaultDir = await mkdtemp(join(tmpdir(), 'collabmd-workspace-mutation-'));
+  let coordinator;
   t.after(async () => {
+    await coordinator?.roomRegistry?.reset();
     await rm(vaultDir, { force: true, recursive: true });
   });
 
@@ -47,7 +49,7 @@ async function createCoordinatorWithVault(t, initialFiles = {}) {
   );
 
   const vaultFileStore = new VaultFileStore({ vaultDir });
-  const coordinator = createWorkspaceReconciliation({
+  coordinator = createWorkspaceReconciliation({
     backlinkIndex: null,
     roomRegistry: null,
     vaultFileStore,
@@ -81,7 +83,6 @@ for (const mutation of ['delete-file', 'delete-directory', 'rename-file', 'renam
       }),
     });
     coordinator.roomRegistry = registry;
-    t.after(() => registry.reset());
     const room = registry.getOrCreate('docs/note.md');
     await room.hydrate();
     room.doc.getText('codemirror').insert(0, 'edited ');
@@ -126,7 +127,6 @@ test('failed deletion resumes live room saves', async (t) => {
   const { coordinator, vaultFileStore } = await createCoordinatorWithVault(t, { 'docs/note.md': 'original' });
   const registry = new RoomRegistry({ createRoom: ({ name, onEmpty }) => new CollaborationRoom({ name, onEmpty, vaultFileStore }) });
   coordinator.roomRegistry = registry;
-  t.after(() => registry.reset());
   const room = registry.getOrCreate('docs/note.md');
   await room.hydrate();
   assert.equal((await coordinator.deleteDirectory({ path: 'docs' })).ok, false);

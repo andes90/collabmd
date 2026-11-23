@@ -12,6 +12,7 @@ import {
   MSG_AWARENESS,
   MSG_SYNC,
 } from '../../../domain/collaboration-protocol.js';
+import { getTextConflictBaseline, hasUnresolvedTextConflict, reconcileRoomText } from './text-reconciliation.js';
 import { logPerfEvent } from '../../config/perf-logging.js';
 import { migrateCommentReactions, populateCommentThreads, serializeCommentThreads } from '../../../domain/comment-threads.js';
 import { getVaultFileKind, isCanvasFilePath, isMarkdownFilePath } from '../../../domain/file-kind.js';
@@ -164,65 +165,6 @@ function isContentCleanOrigin(origin) {
     || origin === 'excalidraw-history-reset';
 }
 
-function computeTextReplacement(currentContent, nextContent) {
-  const currentText = String(currentContent ?? '');
-  const nextText = String(nextContent ?? '');
-  if (currentText === nextText) {
-    return null;
-  }
-
-  let prefixLength = 0;
-  const maxPrefix = Math.min(currentText.length, nextText.length);
-  while (prefixLength < maxPrefix && currentText[prefixLength] === nextText[prefixLength]) {
-    prefixLength += 1;
-  }
-
-  let currentSuffixLength = currentText.length;
-  let nextSuffixLength = nextText.length;
-  while (
-    currentSuffixLength > prefixLength
-    && nextSuffixLength > prefixLength
-    && currentText[currentSuffixLength - 1] === nextText[nextSuffixLength - 1]
-  ) {
-    currentSuffixLength -= 1;
-    nextSuffixLength -= 1;
-  }
-
-  return {
-    deleteCount: currentSuffixLength - prefixLength,
-    insertText: nextText.slice(prefixLength, nextSuffixLength),
-    start: prefixLength,
-  };
-}
-
-function reconcileTextContent(baselineContent, currentContent, externalContent) {
-  const localReplacement = computeTextReplacement(baselineContent, currentContent);
-  const externalReplacement = computeTextReplacement(baselineContent, externalContent);
-  if (!externalReplacement) {
-    return { content: currentContent, preservesPendingChanges: true };
-  }
-
-  const localEnd = localReplacement.start + localReplacement.deleteCount;
-  const externalEnd = externalReplacement.start + externalReplacement.deleteCount;
-  let externalStart;
-  if (localEnd <= externalReplacement.start) {
-    externalStart = externalReplacement.start
-      + localReplacement.insertText.length
-      - localReplacement.deleteCount;
-  } else if (externalEnd <= localReplacement.start) {
-    externalStart = externalReplacement.start;
-  } else {
-    return { content: externalContent, preservesPendingChanges: false };
-  }
-
-  return {
-    content: currentContent.slice(0, externalStart)
-      + externalReplacement.insertText
-      + currentContent.slice(externalStart + externalReplacement.deleteCount),
-    preservesPendingChanges: true,
-  };
-}
-
 function assertWriteSucceeded(result, operation, filePath) {
   if (!result || result.ok !== false) {
     return;
@@ -290,6 +232,7 @@ export class CollaborationRoom {
   async persistState({
     commentThreads = [],
     content = '',
+    expectedText,
     includeContent = true,
     snapshot = null,
   } = {}) {
@@ -300,9 +243,11 @@ export class CollaborationRoom {
     const result = await this.vaultFileStore.persistCollaborationState(this.name, {
       commentThreads,
       content,
+      ...(expectedText !== undefined && { expectedText }),
       includeContent,
       snapshot,
     });
+    if (result?.diskChanged) return result;
     assertWriteSucceeded(result, 'persist collaboration state', this.name);
 
     if (includeContent && this.backlinkIndex && isMarkdownFilePath(this.name)) {
@@ -384,16 +329,7 @@ export class CollaborationRoom {
                     replaceExcalidrawRoomScene(validationDoc, externalScene);
                   }
                 } else {
-                  const ytext = validationDoc.getText('codemirror');
-                  const replacement = computeTextReplacement(ytext.toString(), normalizeEditableText(content));
-                  validationDoc.transact(() => {
-                    if (replacement?.deleteCount) {
-                      ytext.delete(replacement.start, replacement.deleteCount);
-                    }
-                    if (replacement?.insertText) {
-                      ytext.insert(replacement.start, replacement.insertText);
-                    }
-                  }, 'hydrate');
+                  reconcileRoomText(validationDoc, normalizeEditableText(content), getTextConflictBaseline(validationDoc), 'hydrate');
                 }
 
                 validationDoc.transact(() => migrateCommentReactions(validationDoc.getArray('comments')), 'hydrate');
@@ -607,6 +543,8 @@ export class CollaborationRoom {
       if (conflict) {
         this.persistedContentBaseline = conflict.invalid ? null : serializeCanvasDocument(parseCanvasJson(conflict.content));
       }
+    } else {
+      this.persistedContentBaseline = getTextConflictBaseline(this.doc) ?? this.persistedContentBaseline;
     }
     this.contentDirty = false;
   }
@@ -682,49 +620,13 @@ export class CollaborationRoom {
         return;
       }
 
-      let content = this.getPersistedContent();
-      if (content === null) {
-        console.warn(`[room:${this.name}] Skipping persist because the document is invalid`);
-        return;
+      // Rebuild the snapshot after a concurrent disk edit. A continuously
+      // changing file gets another chance on the next scheduled save.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const diskChanged = await this.persistCurrentState();
+        if (!diskChanged || this.deleted || this.persistencePauseCount > 0 || this.destroyed) return;
       }
-      if (isCanvasFilePath(this.name) && content !== this.persistedContentBaseline && !this.doc.getMap(CANVAS_META_KEY).has('externalConflict')) {
-        const externalContent = await (this.vaultFileStore?.readEditableVaultContent(this.name) ?? null);
-        if (this.deleted || this.destroyed) return;
-        if (externalContent === null) {
-          this.markDeleted();
-          return;
-        }
-        let externalBaseline = null;
-        let invalid = false;
-        try { externalBaseline = serializeCanvasDocument(parseCanvasJson(externalContent)); } catch { invalid = true; }
-        content = this.getPersistedContent();
-        if (content === null) return;
-        // A filesystem observation may still be queued when the save timer fires.
-        if (externalBaseline !== this.persistedContentBaseline) {
-          this.persistedContentBaseline = externalBaseline;
-          if (externalBaseline !== content) {
-            this.doc.transact(() => {
-              this.doc.getMap(CANVAS_META_KEY).set('externalConflict', { content: externalContent, invalid });
-            }, 'workspace-reconcile');
-          }
-        }
-      }
-      // Compare inline: refreshContentDirty() would serialize the document
-      // a second time for the same check.
-      const conflict = isCanvasFilePath(this.name) && this.doc.getMap(CANVAS_META_KEY).has('externalConflict');
-      this.contentDirty = content !== this.persistedContentBaseline;
-      const includeContent = this.contentDirty && !conflict;
-      const commentThreads = serializeCommentThreads(this.doc.getArray('comments'));
-      await this.persistState({
-        commentThreads,
-        content,
-        includeContent,
-        snapshot: Y.encodeStateAsUpdate(this.doc),
-      });
-      if (includeContent) {
-        this.persistedContentBaseline = content;
-        this.contentDirty = false;
-      }
+      throw new Error('Vault file kept changing during save');
     })();
 
     const trackedPromise = persistPromise.finally(() => {
@@ -734,6 +636,64 @@ export class CollaborationRoom {
     });
     this.activePersistPromise = trackedPromise;
     await trackedPromise;
+  }
+
+  async persistCurrentState() {
+    let content = this.getPersistedContent();
+    if (content === null) {
+      console.warn(`[room:${this.name}] Skipping persist because the document is invalid`);
+      return;
+    }
+    if (isCanvasFilePath(this.name) && content !== this.persistedContentBaseline && !this.doc.getMap(CANVAS_META_KEY).has('externalConflict')) {
+      const externalContent = await (this.vaultFileStore?.readEditableVaultContent(this.name) ?? null);
+      if (this.deleted || this.destroyed) return;
+      if (externalContent === null) {
+        this.markDeleted();
+        return;
+      }
+      let externalBaseline = null;
+      let invalid = false;
+      try { externalBaseline = serializeCanvasDocument(parseCanvasJson(externalContent)); } catch { invalid = true; }
+      content = this.getPersistedContent();
+      if (content === null) return;
+      // A filesystem observation may still be queued when the save timer fires.
+      if (externalBaseline !== this.persistedContentBaseline) {
+        this.persistedContentBaseline = externalBaseline;
+        if (externalBaseline !== content) {
+          this.doc.transact(() => {
+            this.doc.getMap(CANVAS_META_KEY).set('externalConflict', { content: externalContent, invalid });
+          }, 'workspace-reconcile');
+        }
+      }
+    }
+    // Compare inline: refreshContentDirty() would serialize the document
+    // a second time for the same check.
+    const isTextRoom = !isCanvasFilePath(this.name) && !isExcalidrawRoom(this.name);
+    const conflict = isTextRoom
+      ? hasUnresolvedTextConflict(this.doc, content)
+      : isCanvasFilePath(this.name) && this.doc.getMap(CANVAS_META_KEY).has('externalConflict');
+    this.contentDirty = content !== this.persistedContentBaseline;
+    const includeContent = this.contentDirty && !conflict;
+    const commentThreads = serializeCommentThreads(this.doc.getArray('comments'));
+    const result = await this.persistState({
+      commentThreads,
+      content,
+      expectedText: includeContent && isTextRoom ? this.persistedContentBaseline : undefined,
+      includeContent,
+      snapshot: Y.encodeStateAsUpdate(this.doc),
+    });
+    if (result?.diskChanged) {
+      if (result.currentContent === null) {
+        this.markDeleted();
+        return;
+      }
+      await this.applyExternalContent(result.currentContent);
+      return true;
+    }
+    if (includeContent) {
+      this.persistedContentBaseline = content;
+      this.contentDirty = false;
+    }
   }
 
   async pausePersistence() {
@@ -759,31 +719,21 @@ export class CollaborationRoom {
       return false;
     }
 
-    const [content, commentThreads] = await Promise.all([
-      this.vaultFileStore?.readEditableVaultContent(this.name) ?? null,
-      this.vaultFileStore?.readCommentThreads?.(this.name) ?? [],
-    ]);
+    const content = await this.vaultFileStore.readEditableVaultContent(this.name);
     if (content === null) {
       this.markDeleted();
       await this.destroy();
       return false;
     }
 
-    return this.applyExternalContent(content, {
-      commentThreads,
-      replaceCommentThreads: true,
-    });
+    return this.applyExternalContent(content);
   }
 
-  async applyExternalContent(content, {
-    commentThreads = [],
-    replaceCommentThreads = false,
-  } = {}) {
+  async applyExternalContent(content) {
     if (this.deleted || this.destroyed) {
       return { ok: false, reason: 'room-unavailable' };
     }
 
-    const comments = this.doc.getArray('comments');
     if (isCanvasFilePath(this.name)) {
       let external;
       try {
@@ -812,10 +762,6 @@ export class CollaborationRoom {
           replaceCanvasRoomDocument(this.doc, reconciliation.document);
           meta.delete('invalidContent');
         }
-        if (replaceCommentThreads) {
-          if (comments.length > 0) comments.delete(0, comments.length);
-          populateCommentThreads(comments, commentThreads);
-        }
       }, 'workspace-reconcile');
       this.persistedContentBaseline = serializeCanvasDocument(external);
       this.refreshContentDirty();
@@ -832,44 +778,17 @@ export class CollaborationRoom {
 
       this.doc.transact(() => {
         replaceExcalidrawRoomScene(this.doc, parsedExcalidrawScene);
-        if (replaceCommentThreads) {
-          if (comments.length > 0) {
-            comments.delete(0, comments.length);
-          }
-          populateCommentThreads(comments, commentThreads);
-        }
       }, 'workspace-reconcile');
 
       this.resetContentBaseline();
       return { ok: true, highlightRange: null };
     }
 
-    const ytext = this.doc.getText('codemirror');
-    const currentContent = ytext.toString();
     const normalizedContent = normalizeEditableText(content);
-    const reconciliation = this.refreshContentDirty() && this.persistedContentBaseline !== null
-      ? reconcileTextContent(this.persistedContentBaseline, currentContent, normalizedContent)
-      : { content: normalizedContent, preservesPendingChanges: false };
-    const replacement = computeTextReplacement(currentContent, reconciliation.content);
-    const skipped = !replacement && !replaceCommentThreads;
-    if (!skipped) {
-      this.doc.transact(() => {
-        if (replacement?.deleteCount) {
-          ytext.delete(replacement.start, replacement.deleteCount);
-        }
-        if (replacement?.insertText) {
-          ytext.insert(replacement.start, replacement.insertText);
-        }
-        if (replaceCommentThreads) {
-          if (comments.length > 0) {
-            comments.delete(0, comments.length);
-          }
-          populateCommentThreads(comments, commentThreads);
-        }
-      }, 'workspace-reconcile');
-    }
-
-    if (reconciliation.preservesPendingChanges) {
+    const { replacement, preservesPendingChanges } = reconcileRoomText(
+      this.doc, normalizedContent, this.persistedContentBaseline, 'workspace-reconcile',
+    );
+    if (preservesPendingChanges) {
       this.persistedContentBaseline = normalizedContent;
       this.refreshContentDirty();
       this.schedulePersist();
@@ -884,7 +803,7 @@ export class CollaborationRoom {
         }
         : null,
       ok: true,
-      ...(skipped && { skipped: true }),
+      ...(!replacement && { skipped: true }),
     };
   }
 
@@ -1052,7 +971,7 @@ export class CollaborationRoom {
     this.doc.destroy();
   }
 
-  finalizeIfIdle() {
+  finalizeIfIdle(retryDelayMs = 500) {
     if (this.clients.size > 0 || this.finalizePromise || this.persistencePauseCount > 0) {
       return;
     }
@@ -1066,6 +985,11 @@ export class CollaborationRoom {
         await this.persist();
       } catch (error) {
         console.error(`[room:${this.name}] Failed to persist final room state:`, error.message);
+        if (this.clients.size === 0 && generation === this.shutdownGeneration) {
+          this.destroyTimer = setTimeout(() => this.finalizeIfIdle(Math.min(retryDelayMs * 2, 60_000)), retryDelayMs);
+          this.destroyTimer.unref?.();
+        }
+        return;
       }
 
       if (this.clients.size > 0 || generation !== this.shutdownGeneration) {
@@ -1084,6 +1008,11 @@ export class CollaborationRoom {
       this.destroyTimer.unref?.();
     })().finally(() => {
       this.finalizePromise = null;
+      // A reconnect and disconnect can both finish while the final save is
+      // still running. The new idle period needs its own save/eviction.
+      if (!this.destroyed && generation !== this.shutdownGeneration && this.clients.size === 0) {
+        this.finalizeIfIdle();
+      }
     });
 
     return this.finalizePromise;

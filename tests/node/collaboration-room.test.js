@@ -1394,3 +1394,143 @@ test('CollaborationRoom hydrates and persists .plantuml rooms via PlantUML file 
   assert.equal(writes[0].path, 'diagram.plantuml');
   assert.equal(writes[0].content, `${initialDiagram}' comment\n`);
 });
+
+function createTextStore(initial) {
+  return {
+    content: initial,
+    snapshot: null,
+    async readEditableVaultContent() { return this.content; },
+    async readCollaborationSnapshot() { return this.snapshot; },
+    async writeCollaborationSnapshot(_path, snapshot) { this.snapshot = snapshot; },
+    async persistCollaborationState(_path, state) {
+      if (state.includeContent && state.expectedText !== this.content) {
+        return { ok: false, diskChanged: true, currentContent: this.content };
+      }
+      if (state.includeContent) this.content = state.content;
+      this.snapshot = state.snapshot;
+      return { ok: true };
+    },
+  };
+}
+
+test('a text save rebases independent edits when disk changes before the watcher runs', async (t) => {
+  const store = createTextStore('original');
+  const room = new CollaborationRoom({ name: 'notes.md', vaultFileStore: store });
+  t.after(() => room.destroy());
+  await room.hydrate();
+  room.doc.getText('codemirror').insert(0, 'local ');
+  store.content = 'original external';
+  await room.persist();
+  assert.equal(store.content, 'local original external');
+  assert.equal(room.readEditableContent(), store.content);
+});
+
+for (const source of ['save', 'watcher']) {
+  test(`overlapping text edits observed by the ${source} are recoverable after a restart`, async (t) => {
+    const store = createTextStore('old');
+    const makeRoom = () => new CollaborationRoom({ name: 'notes.md', vaultFileStore: store });
+    const room = makeRoom();
+    t.after(() => room.destroy());
+    await room.hydrate();
+    const text = room.doc.getText('codemirror');
+    text.delete(0, text.length);
+    text.insert(0, 'browser revision');
+    store.content = 'disk revision';
+    if (source === 'watcher') await room.reloadFromDisk();
+    await room.persist();
+    assert.equal(store.content, 'disk revision');
+    const pending = room.readEditableContent();
+    assert.match(pending, /<<<<<<< CollabMD editor\nbrowser revision\n=======\ndisk revision\n>>>>>>> File on disk/);
+    await room.destroy();
+
+    const restored = makeRoom();
+    t.after(() => restored.destroy());
+    await restored.hydrate();
+    assert.equal(restored.readEditableContent(), pending);
+    const editor = restored.doc.getText('codemirror');
+    editor.delete(0, editor.length);
+    editor.insert(0, 'resolved with both changes');
+    await restored.persist();
+    assert.equal(store.content, 'resolved with both changes');
+  });
+}
+
+test('an external text edit preserves an unsaved comment', async (t) => {
+  const store = createTextStore('original');
+  const room = new CollaborationRoom({ name: 'notes.md', vaultFileStore: store });
+  t.after(() => room.destroy());
+  await room.hydrate();
+  room.doc.getArray('comments').push([createCommentThreadSharedType({
+    anchorStart: { type: null }, anchorEnd: { type: null },
+    anchorStartLine: 1, anchorEndLine: 1, anchorKind: 'line',
+    id: 'just-posted', messages: [{ id: 'message', body: 'Keep my comment', userName: 'Reviewer' }],
+  })]);
+  store.content = 'external edit';
+  await room.reloadFromDisk();
+  await room.persist();
+  await room.destroy();
+  const restored = new CollaborationRoom({ name: 'notes.md', vaultFileStore: store });
+  t.after(() => restored.destroy());
+  await restored.hydrate();
+  assert.equal(restored.doc.getArray('comments').get(0).get('id'), 'just-posted');
+  assert.equal(store.content, 'external edit');
+});
+
+test('a failed last-client save keeps the room until retry succeeds', async (t) => {
+  const store = createTextStore('old');
+  const write = store.persistCollaborationState.bind(store);
+  let attempts = 0;
+  store.persistCollaborationState = (...args) => {
+    attempts += 1;
+    return attempts === 1 ? { ok: false, error: 'temporary IO failure' } : write(...args);
+  };
+  t.mock.method(console, 'error', () => {});
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const registry = new RoomRegistry({ createRoom: (options) => new CollaborationRoom({ ...options, vaultFileStore: store }) });
+  const room = registry.getOrCreate('notes.md');
+  t.after(() => room.destroy());
+  const ws = createSocket();
+  await room.addClient(ws);
+  room.doc.getText('codemirror').insert(0, 'local ');
+  room.removeClient(ws);
+  await room.finalizePromise;
+  assert.equal(registry.get('notes.md'), room);
+  assert.equal(store.content, 'old');
+  t.mock.timers.tick(500);
+  await room.finalizePromise;
+  t.mock.timers.tick(1);
+  assert.equal(store.content, 'local old');
+  assert.equal(attempts, 2);
+  assert.equal(registry.get('notes.md'), undefined);
+});
+
+test('disconnecting again during a failed final save still retries the latest edit', async (t) => {
+  const store = createTextStore('old');
+  const write = store.persistCollaborationState.bind(store);
+  const entered = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  let attempts = 0;
+  store.persistCollaborationState = async (...args) => {
+    if (++attempts > 1) return write(...args);
+    entered.resolve();
+    await release.promise;
+    return { ok: false, error: 'temporary IO failure' };
+  };
+  t.mock.method(console, 'error', () => {});
+  const room = new CollaborationRoom({ name: 'notes.md', vaultFileStore: store });
+  t.after(() => room.destroy());
+  const first = createSocket();
+  await room.addClient(first);
+  room.doc.getText('codemirror').insert(0, 'first ');
+  room.removeClient(first);
+  const firstSave = room.finalizePromise;
+  await entered.promise;
+  const second = createSocket();
+  await room.addClient(second);
+  room.doc.getText('codemirror').insert(0, 'second ');
+  room.removeClient(second);
+  release.resolve();
+  await firstSave;
+  await room.finalizePromise;
+  assert.equal(store.content, 'second first old');
+});

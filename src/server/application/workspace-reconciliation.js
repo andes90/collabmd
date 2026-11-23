@@ -259,7 +259,11 @@ export class WorkspaceReconciliation {
     const resolvedState = nextState ?? derivedState ?? await this.vaultFileStore.scanWorkspaceState();
 
     await this.vaultFileStore.reconcileSidecars?.(normalizedChange);
-    await this.vaultFileStore.reconcileCollaborationSnapshots?.(normalizedChange);
+    // Hydration reconciles snapshots with disk. Keep pending conflict drafts
+    // and editor operation IDs when a filesystem observation arrives.
+    if (origin !== 'filesystem') {
+      await this.vaultFileStore.reconcileCollaborationSnapshots?.(normalizedChange);
+    }
     await this.reconcileBacklinks(normalizedChange, resolvedState, {
       forceRebuild: forceBacklinkRebuild,
     });

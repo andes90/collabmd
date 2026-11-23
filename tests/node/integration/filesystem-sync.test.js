@@ -295,3 +295,37 @@ test('external deletes remove active rooms and drop workspace entries', async (t
     return events.some((event) => event.workspaceChange?.deletedPaths?.includes?.('test.md')) ? true : null;
   });
 });
+
+test('a closed text room retains its conflict when the file changes again on disk', async (t) => {
+  const app = await startTestServer({ fileWatcherEnabled: false, wsRoomIdleGraceMs: 0 });
+  t.after(() => app.close());
+  const path = 'test.md';
+  const doc = new Y.Doc();
+  const provider = createProvider(app, path, doc);
+  t.after(() => { provider.destroy(); doc.destroy(); });
+  await waitForProviderSync(provider);
+  doc.transact(() => {
+    const text = doc.getText('codemirror');
+    text.delete(0, text.length);
+    text.insert(0, 'draft from the browser');
+  });
+  const room = app.server.roomRegistry.get(path);
+  await waitForCondition(() => room.readEditableContent() === 'draft from the browser');
+  await writeFile(join(app.vaultDir, path), 'first change from disk');
+  await room.persist();
+  await waitForCondition(() => doc.getText('codemirror').toString().includes('<<<<<<< CollabMD editor'));
+  provider.destroy();
+  await waitForCondition(() => !app.server.roomRegistry.get(path));
+  await writeFile(join(app.vaultDir, path), 'second change from disk');
+  emitWatchEvents(app, path);
+  await app.server.fileSystemSyncService.flushPendingChanges();
+
+  const reopened = new Y.Doc();
+  const reopenedProvider = createProvider(app, path, reopened);
+  t.after(() => { reopenedProvider.destroy(); reopened.destroy(); });
+  await waitForProviderSync(reopenedProvider);
+  const flagged = reopened.getText('codemirror').toString();
+  assert.match(flagged, /draft from the browser/);
+  assert.match(flagged, /second change from disk/);
+  assert.equal(await app.server.vaultFileStore.readEditableVaultContent(path), 'second change from disk');
+});
