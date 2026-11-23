@@ -4,7 +4,7 @@
 
 CollabMD can optionally expose the session using a [Cloudflare Quick Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/). Since the editor uses same-origin WebSocket routing (`/ws/:file`), the tunnel works for both HTTP and collaboration traffic.
 
-If you are exposing the session publicly, `collabmd --auth password` is the intended first-line protection. When you do not pass `--auth-password`, CollabMD generates a password for that host run and prints it in the terminal. Restarting the app rotates that password and the signed session secret.
+If you are exposing the session publicly, `collabmd --auth password` is the intended first-line protection. When both `--auth-password` and `AUTH_PASSWORD` are unset, CollabMD generates a password for that host run and prints it in the terminal. If you supply a password, share it separately from the tunnel URL. Restarting the app rotates generated passwords and generated session secrets.
 
 To share safely:
 

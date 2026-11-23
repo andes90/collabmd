@@ -6,6 +6,8 @@ import { stat } from 'node:fs/promises';
 import { fork } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
+import { getLocalComposeServerUrl, startLocalComposeService } from '../scripts/local-compose.mjs';
+
 const packagePath = resolve(fileURLToPath(import.meta.url), '../../package.json');
 const { default: packageJson } = await import(packagePath, { with: { type: 'json' } });
 
@@ -67,14 +69,11 @@ const enableTunnel = !values['no-tunnel'];
 const useLocalPlantUml = values['local-plantuml'];
 const useLocalStructurizr = values['local-structurizr'];
 
-const { resolveCliVaultDir, resolveConfiguredVaults, loadConfig } = await import('../src/server/config/env.js');
+const { resolveCliVaultDir, loadConfig } = await import('../src/server/config/env.js');
 // An explicit directory wins over both the list and discovery.
 const useVaultList = positionals.length === 0
   && [process.env.COLLABMD_VAULTS, process.env.COLLABMD_VAULT_DISCOVERY].some((value) => String(value ?? '').trim() !== '');
 const vaultPath = useVaultList ? '' : resolveCliVaultDir(positionals);
-// ponytail: primary vault known before loadConfig so local services mirror the right dir
-const primaryVaultDir = useVaultList ? resolveConfiguredVaults({}, process.env)[0].dir : vaultPath;
-
 const overrides = {
   auth: { password: values['auth-password'], strategy: values.auth || undefined },
   host: values.host || process.env.HOST || '127.0.0.1',
@@ -82,29 +81,8 @@ const overrides = {
   vaultDir: vaultPath || undefined,
 };
 
-if (useLocalPlantUml || useLocalStructurizr) {
-  const { getLocalComposeServerUrl, startLocalComposeService } = await import('../scripts/local-compose.mjs');
-  for (const [enabled, service, label] of [
-    [useLocalPlantUml, 'plantuml', 'PlantUML'],
-    [useLocalStructurizr, 'structurizr', 'Structurizr'],
-  ]) {
-    if (!enabled) continue;
-    try {
-      const url = getLocalComposeServerUrl(service);
-      console.log(`  ${label}: starting local docker-compose service at ${url}...`);
-      await startLocalComposeService(service, { vaultDir: primaryVaultDir });
-      if (service === 'plantuml') overrides.plantumlServerUrl = url;
-      else overrides.structurizr = { serverUrl: url };
-    } catch (error) {
-      if (error.code === 'ENOENT') {
-        console.error('Error: Docker is not available. Install Docker Desktop or Docker Engine first.');
-      } else {
-        console.error(`Error: Failed to start local ${label} service: ${error.message}`);
-      }
-      process.exit(1);
-    }
-  }
-}
+if (useLocalPlantUml) overrides.plantumlServerUrl = getLocalComposeServerUrl('plantuml');
+if (useLocalStructurizr) overrides.structurizr = { serverUrl: getLocalComposeServerUrl('structurizr') };
 
 const { createAppServer } = await import('../src/server/create-app-server.js');
 const { prepareConfigForStartup } = await import('../src/server/startup/git-remote-bootstrap.js');
@@ -136,6 +114,26 @@ try {
 } catch (error) {
   console.error(`Error: Failed to prepare git-backed vault: ${error.message}`);
   process.exit(1);
+}
+
+for (const [enabled, service, label] of [
+  [useLocalPlantUml, 'plantuml', 'PlantUML'],
+  [useLocalStructurizr, 'structurizr', 'Structurizr'],
+]) {
+  if (!enabled) continue;
+  try {
+    const url = getLocalComposeServerUrl(service);
+    console.log(`  ${label}: starting local docker-compose service at ${url}...`);
+    await startLocalComposeService(service, { vaultDir: config.vaultDir });
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      console.error('Error: Docker is not available. Install Docker Desktop or Docker Engine first.');
+    } else {
+      console.error(`Error: Failed to start local ${label} service: ${error.message}`);
+    }
+    await config.git.cleanup();
+    process.exit(1);
+  }
 }
 
 const server = createAppServer(config);
@@ -201,8 +199,8 @@ try {
   console.log(`  Structurizr: ${config.structurizr?.enabled ? config.structurizr.serverUrl : 'disabled'}`);
   if (config.auth.strategy === 'password') {
     console.log(`  Auth:   password`);
-    console.log(`  Secret: ${config.auth.password}`);
     if (config.auth.passwordWasGenerated) {
+      console.log(`  Secret: ${config.auth.generatedPassword}`);
       console.log('          Generated for this host run only');
     }
   } else if (config.auth.strategy === 'oidc') {
@@ -226,7 +224,7 @@ try {
     delete tunnelEnv.AUTH_PASSWORD;
     tunnelProcess = fork(tunnelScript, { env: tunnelEnv, execArgv: [] });
     // Only the Node wrapper needs the password to print the share URL.
-    tunnelProcess.send({ authPassword: config.auth.password }, (error) => {
+    tunnelProcess.send({ authPassword: config.auth.generatedPassword }, (error) => {
       if (error && !shutdownPromise) {
         console.error(`  Tunnel: failed to send configuration — ${error.message}`);
       }

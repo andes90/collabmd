@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { promisify } from 'node:util';
 
 import { waitForCondition } from '../helpers/test-server.js';
 
@@ -49,8 +50,8 @@ printf '%s\\n' 'https://example.trycloudflare.com'
       assert.equal(exited, false);
       assert.match(output, new RegExp(`Local:  http://localhost:${port}\\b`, 'u'));
       if (usePortFlag) {
-        await waitForCondition(() => output.includes('Share URL:'));
-        assert.match(output, /#auth_password=test-cli-password\b/u);
+        await waitForCondition(() => output.includes('https://example.trycloudflare.com'));
+        assert.doesNotMatch(output, /test-cli-password|test-env-password|#auth_password=/u);
       }
     } finally {
       if (!exited) child.kill('SIGTERM');
@@ -58,3 +59,35 @@ printf '%s\\n' 'https://example.trycloudflare.com'
     }
   });
 }
+
+
+test('local Structurizr starts after cloning a missing Git-backed vault', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'collabmd-cli-bootstrap-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const source = join(root, 'source');
+  const vault = join(root, 'vault');
+  const run = promisify(execFile);
+  await mkdir(source);
+  await run('git', ['init', '-q', source]);
+  await writeFile(join(source, 'guide.md'), 'Source document');
+  await run('git', ['-C', source, 'add', 'guide.md']);
+  await run('git', ['-C', source, '-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'Initial']);
+  // Finish at the Compose boundary so this test needs no renderer or network.
+  await writeFile(join(root, 'docker'), `#!/bin/sh
+test -f "$HOST_VAULT_DIR/guide.md" && echo "renderer saw the checkout"
+exit 2
+`, { mode: 0o700 });
+
+  await assert.rejects(run(process.execPath, ['bin/collabmd.js', vault, '--local-structurizr', '--no-tunnel'], {
+    env: {
+      ...process.env,
+      PATH: `${root}:${process.env.PATH}`,
+      COLLABMD_GIT_REPO_URL: source,
+      COLLABMD_GIT_SSH_PRIVATE_KEY_B64: Buffer.from('local fixture').toString('base64'),
+    },
+  }), (error) => {
+    assert.match(error.stdout, /renderer saw the checkout/u);
+    assert.match(error.stderr, /Failed to start local Structurizr/u);
+    return true;
+  });
+});

@@ -33,7 +33,7 @@ const authPassword = process.connected
     });
     process.once('disconnect', () => resolve(''));
   })
-  : (process.env.AUTH_STRATEGY === 'password' ? process.env.AUTH_PASSWORD : '');
+  : '';
 const targetUrl = getTunnelTargetUrl();
 const cloudflaredCommand = getCloudflaredCommand();
 const cloudflaredArgs = getTunnelArgs(targetUrl);
