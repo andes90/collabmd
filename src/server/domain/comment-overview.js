@@ -1,36 +1,20 @@
 const COMMENT_OVERVIEW_PREVIEW_MAX_LENGTH = 140;
+const asFiniteNumber = (value) => (Number.isFinite(value) ? value : null);
+const asString = (value) => (typeof value === 'string' ? value : '');
 
 function summarizeCommentMarkdown(value, maxLength = COMMENT_OVERVIEW_PREVIEW_MAX_LENGTH) {
   const normalized = String(value ?? '').replace(/\r\n?/gu, '\n').trim();
-  if (normalized.length <= maxLength) {
-    return normalized;
-  }
-
-  return `${normalized.slice(0, Math.max(maxLength - 1, 1)).trimEnd()}…`;
-}
-
-function asFiniteNumber(value) {
-  return Number.isFinite(value) ? value : null;
-}
-
-function asString(value) {
-  return typeof value === 'string' ? value : '';
-}
-
-function asArray(value) {
-  return Array.isArray(value) ? value : [];
+  return normalized.length <= maxLength
+    ? normalized
+    : `${normalized.slice(0, Math.max(maxLength - 1, 1)).trimEnd()}…`;
 }
 
 function getLatestMessage(messages = []) {
-  return messages.reduce((latest, message) => {
-    if (!latest) {
-      return message;
-    }
-
-    return (asFiniteNumber(message?.createdAt) ?? 0) >= (asFiniteNumber(latest?.createdAt) ?? 0)
+  return messages.reduce((latest, message) => (
+    !latest || (asFiniteNumber(message?.createdAt) ?? 0) >= (asFiniteNumber(latest?.createdAt) ?? 0)
       ? message
-      : latest;
-  }, null);
+      : latest
+  ), null);
 }
 
 function createThreadSummary(thread) {
@@ -43,7 +27,7 @@ function createThreadSummary(thread) {
   const isDiagramElementAnchor = anchorKind === 'diagram-element';
   const anchorStartLine = asFiniteNumber(thread.anchorStartLine);
   const anchorEndLine = asFiniteNumber(thread.anchorEndLine);
-  const messages = asArray(thread.messages);
+  const messages = Array.isArray(thread.messages) ? thread.messages : [];
   if (
     !id
     || messages.length === 0
@@ -88,10 +72,10 @@ function createThreadSummary(thread) {
 export function createCommentOverview(entries = [], {
   generatedAt = Date.now(),
 } = {}) {
-  const files = asArray(entries)
+  const files = (Array.isArray(entries) ? entries : [])
     .map((entry) => {
       const filePath = asString(entry?.filePath);
-      const threads = asArray(entry?.threads)
+      const threads = (Array.isArray(entry?.threads) ? entry.threads : [])
         .map((thread) => createThreadSummary(thread))
         .filter(Boolean)
         .sort((left, right) => (

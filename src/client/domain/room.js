@@ -45,7 +45,7 @@ function pickRandom(items) {
 export function generatePeerId() {
   const array = new Uint8Array(8);
   globalThis.crypto?.getRandomValues?.(array);
-  return Array.from(array, (b) => b.toString(16).padStart(2, '0')).join('');
+  return array.toHex();
 }
 
 // A stable peer ID for this browser tab, shared across lobby and per-file sessions.

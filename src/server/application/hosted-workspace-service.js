@@ -9,8 +9,6 @@ import {
   normalizeHostedRole,
 } from '../domain/hosted-workspace.js';
 
-export { normalizeEmailAddress as normalizeHostedEmail } from '../shared/email-address.js';
-
 export const HOSTED_INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const HOSTED_CLAIM_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 

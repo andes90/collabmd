@@ -890,11 +890,6 @@ export function getAgentToolDefinition(name) {
   return DEFINITIONS_BY_NAME.get(name) ?? null;
 }
 
-export function listAgentToolDefinitions(scopes = []) {
-  const allowed = new Set(scopes);
-  return AGENT_TOOL_DEFINITIONS.filter(({ scope }) => allowed.has(scope));
-}
-
 export function listWebMcpToolDefinitions() {
   return AGENT_TOOL_DEFINITIONS.filter(({ webMcp }) => webMcp);
 }
