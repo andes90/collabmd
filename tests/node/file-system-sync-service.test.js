@@ -644,3 +644,26 @@ test('FileSystemSyncService skips the rebase rescan when the first pass already 
   assert.equal(mutationCoordinator.workspaceState.entries.has('docs/new.md'), true);
   assert.equal(service.lastState.entries.has('docs/new.md'), true);
 });
+
+test('the watcher reconciles ordinary filenames containing .collabmd-', async (t) => {
+  const { cleanup, store, vaultDir } = await createVault();
+  t.after(cleanup);
+  const filename = 'notes.collabmd-guide.md';
+  await writeFile(join(vaultDir, filename), 'before');
+  const baseline = await store.scanWorkspaceState();
+  let change;
+  const service = new FileSystemSyncService({
+    mutationCoordinator: {
+      workspaceState: baseline,
+      filterManagedWorkspaceChange: (workspaceChange) => workspaceChange,
+      async apply(payload) { change = payload.workspaceChange; },
+    },
+    vaultFileStore: store,
+  });
+  t.after(() => service.close());
+  service.lastState = baseline;
+  await writeFile(join(vaultDir, filename), 'after editing');
+  service.handleWatchEvent('change', filename);
+  await service.flushPendingChanges();
+  assert.deepEqual(change?.changedPaths, [filename]);
+});

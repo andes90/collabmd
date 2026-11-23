@@ -1,5 +1,4 @@
 import { watch } from 'node:fs';
-import { basename } from 'node:path';
 
 import { logPerfEvent } from '../../config/perf-logging.js';
 import { hasWorkspaceMutation } from '../../../domain/workspace-change.js';
@@ -39,11 +38,7 @@ function isIgnoredWatchedPath(pathValue) {
     return true;
   }
 
-  if (segments.some((segment) => isIgnoredVaultEntry(segment))) {
-    return true;
-  }
-
-  return basename(pathValue).includes('.collabmd-');
+  return segments.some(isIgnoredVaultEntry);
 }
 
 export class FileSystemSyncService {
