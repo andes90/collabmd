@@ -146,7 +146,7 @@ export class SidecarStore {
       await writeFile(absolute, `${JSON.stringify({
         threads,
         version: 1,
-      }, null, 2)}\n`, 'utf-8');
+      }, null, 2)}\n`, { encoding: 'utf-8', mode: 0o600 });
       return { ok: true };
     } catch (error) {
       return { ok: false, error: error.message };
@@ -180,7 +180,7 @@ export class SidecarStore {
     const tempPath = `${absolute}.collabmd-tmp-${randomUUID()}`;
     try {
       await mkdir(dirname(absolute), { recursive: true });
-      await writeFile(tempPath, Buffer.from(snapshot), { flag: 'wx' });
+      await writeFile(tempPath, Buffer.from(snapshot), { flag: 'wx', mode: 0o600 });
       await rename(tempPath, absolute);
       return { ok: true };
     } catch (error) {

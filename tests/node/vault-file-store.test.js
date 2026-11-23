@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { access, mkdtemp, mkdir, readdir, readFile, rm, stat, symlink, writeFile } from 'fs/promises';
+import { access, chmod, mkdtemp, mkdir, readdir, readFile, rm, stat, symlink, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import sharp from 'sharp';
@@ -59,6 +59,62 @@ test('VaultFileStore protects reserved paths across public file and directory op
   await mkdir(join(vaultDir, 'folder.md'));
   assert.equal((await store.renameFile('folder.md', 'renamed.md')).ok, false);
   assert.equal(await store.readMarkdownFile('README.md'), '# Readme\n');
+});
+
+test('competing renames preserve the losing note and both sets of comments', async (t) => {
+  const { store, cleanup } = await createVaultStore();
+  t.after(cleanup);
+  const paths = ['README.md', 'notes/daily.md'];
+  const contents = await Promise.all(paths.map((path) => store.readMarkdownFile(path)));
+  for (const path of paths) await store.writeCommentThreads(path, [{ id: path }]);
+  const results = await Promise.all(paths.map((path) => store.renameFile(path, 'result.md')));
+  const winner = results.findIndex((result) => result.ok);
+  assert.notEqual(winner, -1);
+  const loser = 1 - winner;
+  assert.equal(results[loser].statusCode, 409);
+  assert.equal(await store.readMarkdownFile(paths[winner]), null);
+  assert.equal(await store.readMarkdownFile('result.md'), contents[winner]);
+  assert.equal(await store.readMarkdownFile(paths[loser]), contents[loser]);
+  assert.deepEqual(await store.readCommentThreads('result.md'), [{ id: paths[winner] }]);
+  assert.deepEqual(await store.readCommentThreads(paths[loser]), [{ id: paths[loser] }]);
+});
+
+test('collaborative save preserves the existing permission bits', async (t) => {
+  const { store, vaultDir, cleanup } = await createVaultStore();
+  t.after(cleanup);
+  const path = join(vaultDir, 'README.md');
+  for (const mode of [0o600, 0o770]) {
+    await chmod(path, mode);
+    assert.equal((await store.persistCollaborationState('README.md', {
+      commentThreads: [{ id: 'first' }], content: 'updated', snapshot: Uint8Array.of(1),
+    })).ok, true);
+    assert.equal((await stat(path)).mode & 0o777, mode);
+    for (const sidecar of ['comments/README.md.json', 'yjs/README.md.bin']) {
+      assert.equal((await stat(join(vaultDir, '.collabmd', sidecar))).mode & 0o077, 0);
+    }
+  }
+});
+
+test('saving against a stale text baseline preserves disk content and rolls back sidecars', async (t) => {
+  const { store, vaultDir, cleanup } = await createVaultStore();
+  t.after(cleanup);
+  const path = join(vaultDir, 'README.md');
+  await writeFile(path, 'original\r\n');
+  const saved = await store.persistCollaborationState('README.md', {
+    commentThreads: [{ id: 'first' }], content: 'updated', expectedText: 'original\n', snapshot: Uint8Array.of(1),
+  });
+  assert.equal(saved.ok, true);
+  for (const external of ['external\r\n', null]) {
+    if (external === null) await rm(path);
+    else await writeFile(path, external);
+    const result = await store.persistCollaborationState('README.md', {
+      commentThreads: [], content: 'pending edit', expectedText: 'updated', snapshot: Uint8Array.of(2),
+    });
+    assert.deepEqual(result, { ok: false, diskChanged: true, currentContent: external });
+    assert.equal(await store.readMarkdownFile('README.md'), external);
+    assert.deepEqual(await store.readCommentThreads('README.md'), [{ id: 'first' }]);
+    assert.deepEqual(await store.readCollaborationSnapshot('README.md'), Uint8Array.of(1));
+  }
 });
 
 test('VaultFileStore rejects leaf, parent and dangling symlinks for reads and mutations', async (t) => {

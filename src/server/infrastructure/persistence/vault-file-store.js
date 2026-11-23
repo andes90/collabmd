@@ -1,5 +1,5 @@
 import { createReadStream } from 'fs';
-import { copyFile, mkdir, mkdtemp, readFile, readdir, rename, rm, rmdir, stat, writeFile } from 'fs/promises';
+import { chmod, copyFile, link, mkdir, mkdtemp, readFile, readdir, rename, rm, rmdir, stat, unlink, writeFile } from 'fs/promises';
 import { basename, dirname, extname, join, relative, resolve } from 'path';
 import sharp from 'sharp';
 
@@ -11,6 +11,7 @@ import {
   supportsCommentsForFilePath,
 } from '../../../domain/file-kind.js';
 import { parseCanvasJson } from '../../../domain/canvas-room-codec.js';
+import { normalizeEditableText } from '../../../domain/editable-text.js';
 import { replacePathPrefix } from '../../../domain/vault-paths.js';
 import { createCommentOverview } from '../../domain/comment-overview.js';
 import { scanWorkspaceState as scanWorkspaceStateFromAdapter } from '../../domain/workspace-state.js';
@@ -90,15 +91,33 @@ function createCommentThreadsPayload(threads = []) {
   }, null, 2)}\n`;
 }
 
-async function pathExists(pathValue) {
-  try {
-    await stat(pathValue);
-    return true;
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      return false;
-    }
+class VaultContentChanged extends Error {
+  constructor(currentContent) {
+    super('Vault content changed before save');
+    this.currentContent = currentContent;
+  }
+}
 
+async function moveFileWithoutReplacing(source, destination) {
+  try {
+    await link(source, destination);
+  } catch (error) {
+    if (!['EPERM', 'ENOTSUP', 'EOPNOTSUPP'].includes(error.code)) throw error;
+    // Some mounted vaults do not support hard links. Reserve the destination
+    // exclusively before using the filesystem's ordinary rename operation.
+    await writeFile(destination, '', { flag: 'wx', mode: 0o600 });
+    try {
+      await rename(source, destination);
+    } catch (renameError) {
+      await unlink(destination);
+      throw renameError;
+    }
+    return;
+  }
+  try {
+    await unlink(source);
+  } catch (error) {
+    await unlink(destination);
     throw error;
   }
 }
@@ -552,6 +571,7 @@ export class VaultFileStore {
   async persistCollaborationState(filePath, {
     commentThreads = [],
     content = '',
+    expectedText,
     includeContent = true,
     snapshot = null,
   } = {}) {
@@ -578,12 +598,13 @@ export class VaultFileStore {
         kind: Array.isArray(commentThreads) && commentThreads.length > 0 ? 'write' : 'delete',
         targetPath: commentPath,
         value: createCommentThreadsPayload(commentThreads),
-        writeOptions: 'utf-8',
+        writeOptions: { encoding: 'utf-8', mode: 0o600 },
       },
       {
         kind: snapshot ? 'write' : 'delete',
         targetPath: snapshotPath,
         value: snapshot ? Buffer.from(snapshot) : null,
+        writeOptions: { mode: 0o600 },
       },
       includeContent ? {
         kind: 'write',
@@ -609,9 +630,21 @@ export class VaultFileStore {
             await writeFile(operation.tempPath, operation.value, operation.writeOptions);
           }
           for (const [index, operation] of operations.entries()) {
-            const backupPath = await pathExists(operation.targetPath) ? join(stagingDir, `backup-${index}`) : null;
+            const previous = await stat(operation.targetPath, { throwIfNoEntry: false });
+            const backupPath = previous ? join(stagingDir, `backup-${index}`) : null;
             if (operation.kind === 'write') {
-              if (backupPath) await copyFile(operation.targetPath, backupPath);
+              if (backupPath) {
+                await copyFile(operation.targetPath, backupPath);
+                if (operation.targetPath === resolved.absolute) {
+                  await chmod(operation.tempPath, previous.mode & 0o777);
+                }
+              }
+              if (operation.targetPath === resolved.absolute && expectedText !== undefined) {
+                const currentContent = await this.readEditableVaultContent(filePath);
+                if (currentContent === null || normalizeEditableText(currentContent) !== expectedText) {
+                  throw new VaultContentChanged(currentContent);
+                }
+              }
               await rename(operation.tempPath, operation.targetPath);
             } else if (backupPath) {
               await rename(operation.targetPath, backupPath);
@@ -631,6 +664,7 @@ export class VaultFileStore {
       await (includeContent ? this.runManagedWrite([filePath], persist, content) : persist());
       return { ok: true };
     } catch (error) {
+      if (error instanceof VaultContentChanged) return { ok: false, diskChanged: true, currentContent: error.currentContent };
       return { ok: false, error: error.message };
     }
   }
@@ -856,18 +890,15 @@ export class VaultFileStore {
       return { ok: true };
     }
 
-    if (await pathExists(absoluteNew)) {
-      return { ok: false, error: 'Target path already exists', statusCode: 409 };
-    }
-
     try {
       await this.runManagedWrite(expandManagedPaths([oldPath, newPath]), async () => {
         await mkdir(dirname(absoluteNew), { recursive: true });
-        await rename(absoluteOld, absoluteNew);
+        await moveFileWithoutReplacing(absoluteOld, absoluteNew);
         await this.sidecarStore.renameAllForFile(oldPath, newPath);
       });
       return { ok: true };
-    } catch {
+    } catch (error) {
+      if (error.code === 'EEXIST') return { ok: false, error: 'Target path already exists', statusCode: 409 };
       return { ok: false, error: 'Could not update vault content', statusCode: 500 };
     }
   }
@@ -907,7 +938,7 @@ export class VaultFileStore {
       return { ok: true };
     }
 
-    if (await pathExists(absoluteNew)) {
+    if (await stat(absoluteNew, { throwIfNoEntry: false })) {
       return { ok: false, error: 'Target path already exists', statusCode: 409 };
     }
 
