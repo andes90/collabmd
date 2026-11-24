@@ -1,5 +1,4 @@
-import { mkdir } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { SqliteStore } from './sqlite-store.js';
 
 function parseScopes(value) {
   try {
@@ -27,47 +26,27 @@ function rowToConnection(row) {
   };
 }
 
-export class AgentConnectionStore {
-  constructor({ dbPath }) {
-    this.dbPath = dbPath;
-    this.db = null;
-    this.statements = new Map();
-  }
-
+export class AgentConnectionStore extends SqliteStore {
   async initialize() {
-    if (this.db) return;
-    await mkdir(dirname(this.dbPath), { recursive: true });
-    const { DatabaseSync } = await import('node:sqlite');
-    this.db = new DatabaseSync(this.dbPath);
-    this.db.exec('PRAGMA journal_mode = WAL');
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS agent_connections (
-        id TEXT PRIMARY KEY,
-        subject_type TEXT NOT NULL,
-        subject_id TEXT NOT NULL,
-        subject_email TEXT NOT NULL DEFAULT '',
-        label TEXT NOT NULL,
-        client_kind TEXT NOT NULL,
-        scopes_json TEXT NOT NULL,
-        token_hash TEXT NOT NULL UNIQUE,
-        created_at INTEGER NOT NULL,
-        expires_at INTEGER NOT NULL,
-        revoked_at INTEGER
-      );
-      CREATE INDEX IF NOT EXISTS agent_connections_subject_idx
-        ON agent_connections(subject_type, subject_id, created_at DESC);
-    `);
-  }
-
-  prepare(key, sql) {
-    if (!this.statements.has(key)) this.statements.set(key, this.db.prepare(sql));
-    return this.statements.get(key);
-  }
-
-  async close() {
-    this.statements.clear();
-    this.db?.close();
-    this.db = null;
+    await this.open({
+      schema: `
+        CREATE TABLE IF NOT EXISTS agent_connections (
+          id TEXT PRIMARY KEY,
+          subject_type TEXT NOT NULL,
+          subject_id TEXT NOT NULL,
+          subject_email TEXT NOT NULL DEFAULT '',
+          label TEXT NOT NULL,
+          client_kind TEXT NOT NULL,
+          scopes_json TEXT NOT NULL,
+          token_hash TEXT NOT NULL UNIQUE,
+          created_at INTEGER NOT NULL,
+          expires_at INTEGER NOT NULL,
+          revoked_at INTEGER
+        );
+        CREATE INDEX IF NOT EXISTS agent_connections_subject_idx
+          ON agent_connections(subject_type, subject_id, created_at DESC);
+      `,
+    });
   }
 
   async create(connection) {

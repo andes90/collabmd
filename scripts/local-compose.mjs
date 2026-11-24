@@ -1,10 +1,8 @@
 import { spawn } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 
-const scriptPath = fileURLToPath(import.meta.url);
-const projectRoot = resolve(dirname(scriptPath), '..');
+const projectRoot = resolve(import.meta.dirname, '..');
 const composeFile = resolve(projectRoot, 'docker-compose.yml');
 const services = {
   plantuml: { label: 'PlantUML', portName: 'PLANTUML_HOST_PORT', defaultPort: '18080' },
@@ -70,15 +68,11 @@ export async function stopLocalComposeService(service) {
 async function main() {
   const service = process.argv[2];
   const command = process.argv[3] || 'up';
-  if (!services[service] || !['up', 'down', 'url'].includes(command)) {
-    console.error('Usage: node scripts/local-compose.mjs [plantuml|structurizr] [up|down|url]');
+  if (!services[service] || !['up', 'down'].includes(command)) {
+    console.error('Usage: node scripts/local-compose.mjs [plantuml|structurizr] [up|down]');
     process.exit(1);
   }
 
-  if (command === 'url') {
-    console.log(getLocalComposeServerUrl(service));
-    return;
-  }
   if (command === 'up') {
     const url = await startLocalComposeService(service);
     console.log(`[${service}] Local ${services[service].label} ${service === 'plantuml' ? 'server' : 'renderer'} is available at ${url}`);
@@ -88,7 +82,7 @@ async function main() {
   console.log(`[${service}] Local ${services[service].label} server stopped`);
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === scriptPath) {
+if (process.argv[1] && resolve(process.argv[1]) === import.meta.filename) {
   main().catch((error) => {
     const service = process.argv[2];
     if (error.code === 'ENOENT') {

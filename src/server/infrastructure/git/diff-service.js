@@ -1,5 +1,5 @@
 import { countPatchLines, parseNumstatOutput, parseUnifiedDiff } from './parsers.js';
-import { createEmptyStats } from './responses.js';
+import { createEmptyStats, dedupeInFlight, summarizeFileStats } from './responses.js';
 import { getVaultFileKind, isBinaryAttachmentFilePath } from '../../../domain/file-kind.js';
 
 function createSectionMap(sections = []) {
@@ -190,25 +190,12 @@ export class GitDiffService {
       scope: resolvedScope,
     });
 
-    if (this.pendingDiffRequests.has(requestKey)) {
-      return this.pendingDiffRequests.get(requestKey);
-    }
-
-    const requestPromise = this.getDiffUncached({
+    return dedupeInFlight(this.pendingDiffRequests, requestKey, () => this.getDiffUncached({
       allowLargePatch,
       metaOnly,
       path,
       scope: resolvedScope,
-    });
-    this.pendingDiffRequests.set(requestKey, requestPromise);
-
-    try {
-      return await requestPromise;
-    } finally {
-      if (this.pendingDiffRequests.get(requestKey) === requestPromise) {
-        this.pendingDiffRequests.delete(requestKey);
-      }
-    }
+    }));
   }
 
   async getDiffUncached({ allowLargePatch = false, metaOnly = false, path = null, scope = 'working-tree' } = {}) {
@@ -386,15 +373,7 @@ export class GitDiffService {
       };
     });
 
-    const summary = parsedFiles.reduce((accumulator, file) => ({
-      additions: accumulator.additions + (file.stats?.additions ?? 0),
-      deletions: accumulator.deletions + (file.stats?.deletions ?? 0),
-      filesChanged: accumulator.filesChanged + 1,
-    }), {
-      additions: 0,
-      deletions: 0,
-      filesChanged: 0,
-    });
+    const summary = summarizeFileStats(parsedFiles);
 
     return {
       files: mergedFiles,

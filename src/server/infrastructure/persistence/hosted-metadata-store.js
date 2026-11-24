@@ -1,5 +1,4 @@
-import { mkdir } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { SqliteStore } from './sqlite-store.js';
 
 import {
   createHostedError,
@@ -29,24 +28,11 @@ function mapRow(row) {
   return mapped;
 }
 
-export class HostedMetadataStore {
-  constructor({ dbPath }) {
-    this.dbPath = dbPath;
-    this.db = null;
-    this.statements = new Map();
-  }
-
+export class HostedMetadataStore extends SqliteStore {
   async initialize() {
-    if (this.db) {
-      return;
-    }
-
-    await mkdir(dirname(this.dbPath), { recursive: true });
-    const { DatabaseSync } = await import('node:sqlite');
-    this.db = new DatabaseSync(this.dbPath);
-    this.db.exec('PRAGMA foreign_keys = ON');
-    this.db.exec('PRAGMA journal_mode = WAL');
-    this.db.exec(`
+    await this.open({
+      pragmas: ['foreign_keys = ON', 'journal_mode = WAL'],
+      schema: `
       CREATE TABLE IF NOT EXISTS team (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -122,20 +108,8 @@ export class HostedMetadataStore {
         configured_by_name TEXT NOT NULL,
         configured_at INTEGER NOT NULL
       );
-    `);
-  }
-
-  async close() {
-    this.statements.clear();
-    this.db?.close();
-    this.db = null;
-  }
-
-  prepare(key, sql) {
-    if (!this.statements.has(key)) {
-      this.statements.set(key, this.db.prepare(sql));
-    }
-    return this.statements.get(key);
+    `,
+    });
   }
 
   transaction(fn) {
@@ -367,13 +341,6 @@ export class HostedMetadataStore {
       );
       this.insertAuditEvent(auditEvent);
     });
-  }
-
-  async getInvitationById(id) {
-    return mapRow(this.prepare(
-      'getInvitationById',
-      'SELECT * FROM invitations WHERE id = ?',
-    ).get(id));
   }
 
   async getPendingInvitationByEmail(email, now) {

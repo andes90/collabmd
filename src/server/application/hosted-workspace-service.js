@@ -1,4 +1,4 @@
-import { randomUUID, timingSafeEqual, createHash } from 'node:crypto';
+import { hash, randomUUID, timingSafeEqual } from 'node:crypto';
 
 import { normalizeEmailAddress } from '../shared/email-address.js';
 
@@ -17,7 +17,7 @@ function nowMs() {
 }
 
 export function hashHostedSecret(value) {
-  return createHash('sha256').update(String(value ?? ''), 'utf8').digest('hex');
+  return hash('sha256', String(value ?? ''));
 }
 
 function safeEqualHash(left, right) {
@@ -47,53 +47,23 @@ function createAuditEvent({
 }
 
 function publicMembership(record = null) {
-  if (!record) {
-    return null;
-  }
-
-  return {
-    email: record.email,
-    id: record.id,
-    joinedAt: record.joinedAt,
-    name: record.name,
-    picture: record.picture,
-    role: record.role,
-    updatedAt: record.updatedAt,
-  };
+  return record ?? null;
 }
 
-function publicInvitation(record = null) {
-  if (!record) {
-    return null;
-  }
+function omitRecordKeys(record, excludedKeys) {
+  if (!record) return null;
+  return Object.fromEntries(Object.entries(record).filter(([key]) => !excludedKeys.has(key)));
+}
 
-  return {
-    createdAt: record.createdAt,
-    email: record.email,
-    expiresAt: record.expiresAt,
-    id: record.id,
-    invitedByEmail: record.invitedByEmail,
-    invitedByName: record.invitedByName,
-    role: record.role,
-    updatedAt: record.updatedAt,
-  };
+const INVITATION_OMITTED_KEYS = new Set(['acceptedAt', 'revokedAt']);
+const VAULT_SOURCE_OMITTED_KEYS = new Set(['id', 'installationId']);
+
+function publicInvitation(record = null) {
+  return omitRecordKeys(record, INVITATION_OMITTED_KEYS);
 }
 
 function publicAuditEvent(record = null) {
-  if (!record) {
-    return null;
-  }
-
-  return {
-    actorEmail: record.actorEmail,
-    actorName: record.actorName,
-    createdAt: record.createdAt,
-    id: record.id,
-    metadata: record.metadata,
-    targetEmail: record.targetEmail,
-    targetRole: record.targetRole,
-    type: record.type,
-  };
+  return record ?? null;
 }
 
 function parseAuditCursor(cursor) {
@@ -115,23 +85,7 @@ function parseAuditCursor(cursor) {
 }
 
 function publicVaultSource(record = null) {
-  if (!record) {
-    return null;
-  }
-
-  return {
-    configuredAt: record.configuredAt,
-    configuredByEmail: record.configuredByEmail,
-    configuredByName: record.configuredByName,
-    defaultBranch: record.defaultBranch,
-    installationAccountLogin: record.installationAccountLogin,
-    provider: record.provider,
-    repositoryFullName: record.repositoryFullName,
-    repositoryId: record.repositoryId,
-    repositoryName: record.repositoryName,
-    repositoryOwner: record.repositoryOwner,
-    visibility: record.visibility,
-  };
+  return omitRecordKeys(record, VAULT_SOURCE_OMITTED_KEYS);
 }
 
 function resolveUser(user = null) {

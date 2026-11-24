@@ -309,157 +309,135 @@ export class WorkspaceReconciliation {
     });
   }
 
-  async writeEditableContent({ content, origin = 'api', path, requestId = null, sourceRef = null } = {}) {
-    const result = await this.vaultFileStore.writeEditableVaultContent(path, content);
-    if (!result.ok) {
-      return result;
-    }
+  async runMutation({
+    action,
+    buildChange,
+    origin = 'api',
+    pausePaths = null,
+    perform,
+    requestId = null,
+    sourceRef = null,
+  }) {
+    const execute = async () => {
+      const result = await perform();
+      if (!result.ok) {
+        return result;
+      }
 
-    await this.reconcileVaultChangeObservation({
+      await this.reconcileVaultChangeObservation({
+        action,
+        origin,
+        requestId,
+        sourceRef,
+        workspaceChange: typeof buildChange === 'function' ? buildChange(result) : buildChange,
+      });
+      return result;
+    };
+
+    return pausePaths ? this.runWithPersistencePaused(pausePaths, execute) : execute();
+  }
+
+  writeEditableContent({ content, origin = 'api', path, requestId = null, sourceRef = null } = {}) {
+    return this.runMutation({
       action: 'write-file',
+      buildChange: createWorkspaceChange({ changedPaths: [path] }),
       origin,
+      perform: () => this.vaultFileStore.writeEditableVaultContent(path, content),
       requestId,
       sourceRef,
-      workspaceChange: createWorkspaceChange({
-        changedPaths: [path],
-      }),
     });
-    return result;
   }
 
-  async uploadAttachment({ content, mimeType, origin = 'api', originalFileName = '', requestId = null, sourceDocumentPath } = {}) {
-    const result = await this.vaultFileStore.writeImageAttachmentForDocument(sourceDocumentPath, {
-      content,
-      mimeType,
-      originalFileName,
-    });
-    if (!result.ok) {
-      return result;
-    }
-
-    await this.reconcileVaultChangeObservation({
+  uploadAttachment({ content, mimeType, origin = 'api', originalFileName = '', requestId = null, sourceDocumentPath } = {}) {
+    return this.runMutation({
       action: 'upload-attachment',
+      buildChange: (result) => createWorkspaceChange({ changedPaths: [result.path] }),
       origin,
-      requestId,
-      workspaceChange: createWorkspaceChange({
-        changedPaths: [result.path],
+      perform: () => this.vaultFileStore.writeImageAttachmentForDocument(sourceDocumentPath, {
+        content,
+        mimeType,
+        originalFileName,
       }),
+      requestId,
     });
-    return result;
   }
 
-  async createFile({ content = '', origin = 'api', path, requestId = null, sourceRef = null } = {}) {
-    const result = await this.vaultFileStore.createFile(path, content);
-    if (!result.ok) {
-      return result;
-    }
-
-    await this.reconcileVaultChangeObservation({
+  createFile({ content = '', origin = 'api', path, requestId = null, sourceRef = null } = {}) {
+    return this.runMutation({
       action: 'create-file',
+      buildChange: createWorkspaceChange({ changedPaths: [path] }),
       origin,
+      perform: () => this.vaultFileStore.createFile(path, content),
       requestId,
       sourceRef,
-      workspaceChange: createWorkspaceChange({
-        changedPaths: [path],
-      }),
-    });
-    return result;
-  }
-
-  async deleteFile({ origin = 'api', path, requestId = null } = {}) {
-    path = normalizeMutationPath(path);
-    return this.runWithPersistencePaused([path], async () => {
-      const result = await this.vaultFileStore.deleteFile(path);
-      if (!result.ok) {
-        return result;
-      }
-
-      await this.reconcileVaultChangeObservation({
-        action: 'delete-file',
-        origin,
-        requestId,
-        workspaceChange: createWorkspaceChange({
-          deletedPaths: [path],
-        }),
-      });
-      return result;
     });
   }
 
-  async renameFile({ newPath, oldPath, origin = 'api', requestId = null } = {}) {
-    oldPath = normalizeMutationPath(oldPath);
-    newPath = normalizeMutationPath(newPath);
-    return this.runWithPersistencePaused([oldPath, newPath], async () => {
-      const result = await this.vaultFileStore.renameFile(oldPath, newPath);
-      if (!result.ok) {
-        return result;
-      }
-
-      await this.reconcileVaultChangeObservation({
-        action: 'rename-file',
-        origin,
-        requestId,
-        workspaceChange: createWorkspaceChange({
-          renamedPaths: [{ oldPath, newPath }],
-        }),
-      });
-      return result;
-    });
-  }
-
-  async createDirectory({ origin = 'api', path, requestId = null } = {}) {
-    const result = await this.vaultFileStore.createDirectory(path);
-    if (!result.ok) {
-      return result;
-    }
-
-    await this.reconcileVaultChangeObservation({
-      action: 'create-directory',
+  deleteFile({ origin = 'api', path, requestId = null } = {}) {
+    const normalizedPath = normalizeMutationPath(path);
+    return this.runMutation({
+      action: 'delete-file',
+      buildChange: createWorkspaceChange({ deletedPaths: [normalizedPath] }),
       origin,
+      pausePaths: [normalizedPath],
+      perform: () => this.vaultFileStore.deleteFile(normalizedPath),
       requestId,
-      workspaceChange: createWorkspaceChange({
-        changedPaths: [path],
-      }),
-    });
-    return result;
-  }
-
-  async renameDirectory({ newPath, oldPath, origin = 'api', requestId = null } = {}) {
-    oldPath = normalizeMutationPath(oldPath);
-    newPath = normalizeMutationPath(newPath);
-    return this.runWithPersistencePaused([oldPath, newPath], async () => {
-      const workspaceChange = await this.createDirectoryRenameWorkspaceChange(oldPath, newPath);
-      const result = await this.vaultFileStore.renameDirectory(oldPath, newPath);
-      if (!result.ok) {
-        return result;
-      }
-
-      await this.reconcileVaultChangeObservation({
-        action: 'rename-directory',
-        origin,
-        requestId,
-        workspaceChange,
-      });
-      return result;
     });
   }
 
-  async deleteDirectory({ origin = 'api', path, recursive = false, requestId = null } = {}) {
-    path = normalizeMutationPath(path);
-    return this.runWithPersistencePaused([path], async () => {
-      const workspaceChange = await this.createDirectoryDeleteWorkspaceChange(path);
-      const result = await this.vaultFileStore.deleteDirectory(path, { recursive });
-      if (!result.ok) {
-        return result;
-      }
+  renameFile({ newPath, oldPath, origin = 'api', requestId = null } = {}) {
+    const from = normalizeMutationPath(oldPath);
+    const to = normalizeMutationPath(newPath);
+    return this.runMutation({
+      action: 'rename-file',
+      buildChange: createWorkspaceChange({ renamedPaths: [{ oldPath: from, newPath: to }] }),
+      origin,
+      pausePaths: [from, to],
+      perform: () => this.vaultFileStore.renameFile(from, to),
+      requestId,
+    });
+  }
 
-      await this.reconcileVaultChangeObservation({
-        action: 'delete-directory',
-        origin,
-        requestId,
-        workspaceChange,
-      });
-      return result;
+  createDirectory({ origin = 'api', path, requestId = null } = {}) {
+    return this.runMutation({
+      action: 'create-directory',
+      buildChange: createWorkspaceChange({ changedPaths: [path] }),
+      origin,
+      perform: () => this.vaultFileStore.createDirectory(path),
+      requestId,
+    });
+  }
+
+  renameDirectory({ newPath, oldPath, origin = 'api', requestId = null } = {}) {
+    const from = normalizeMutationPath(oldPath);
+    const to = normalizeMutationPath(newPath);
+    let workspaceChange;
+    return this.runMutation({
+      action: 'rename-directory',
+      buildChange: () => workspaceChange,
+      origin,
+      pausePaths: [from, to],
+      perform: async () => {
+        workspaceChange = await this.createDirectoryRenameWorkspaceChange(from, to);
+        return this.vaultFileStore.renameDirectory(from, to);
+      },
+      requestId,
+    });
+  }
+
+  deleteDirectory({ origin = 'api', path, recursive = false, requestId = null } = {}) {
+    const normalizedPath = normalizeMutationPath(path);
+    let workspaceChange;
+    return this.runMutation({
+      action: 'delete-directory',
+      buildChange: () => workspaceChange,
+      origin,
+      pausePaths: [normalizedPath],
+      perform: async () => {
+        workspaceChange = await this.createDirectoryDeleteWorkspaceChange(normalizedPath);
+        return this.vaultFileStore.deleteDirectory(normalizedPath, { recursive });
+      },
+      requestId,
     });
   }
 

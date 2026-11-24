@@ -1,13 +1,11 @@
 import { spawn } from 'node:child_process';
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from '@playwright/test';
 import { resetE2EVaultSnapshot, runtimeVaultDir } from '../tests/e2e/helpers/vault-snapshot.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const projectRoot = resolve(__dirname, '..');
+const projectRoot = resolve(import.meta.dirname, '..');
 const docsAssetsDir = resolve(projectRoot, 'docs/assets');
 const tempCaptureDir = resolve(projectRoot, '.tmp/readme-capture');
 const tempVideoDir = resolve(tempCaptureDir, 'video');

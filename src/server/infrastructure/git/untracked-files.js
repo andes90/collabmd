@@ -1,7 +1,6 @@
 import { constants } from 'node:fs';
 import { open, realpath } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
-import { createInterface } from 'node:readline';
 
 import { getVaultFileKind, isBinaryAttachmentFilePath } from '../../../domain/file-kind.js';
 import { mapWithConcurrency } from '../../shared/async-utils.js';
@@ -14,18 +13,11 @@ import { sanitizeVaultPath } from '../persistence/path-utils.js';
 const DARWIN_O_NOFOLLOW_ANY = 0x20000000;
 
 async function countFileLines(file) {
-  const lines = createInterface({
-    crlfDelay: Infinity,
-    input: file.createReadStream({ autoClose: false, encoding: 'utf8' }),
-  });
   let lineCount = 0;
-
-  for await (const line of lines) {
-    if (typeof line === 'string') {
-      lineCount += 1;
-    }
+  for await (const line of file.readLines({ autoClose: false })) {
+    void line;
+    lineCount += 1;
   }
-
   return lineCount;
 }
 

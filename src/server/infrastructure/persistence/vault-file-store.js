@@ -157,15 +157,12 @@ function expandManagedPaths(paths = []) {
   return sortWorkspacePaths(Array.from(expandedPaths));
 }
 
-function sortWorkspacePaths(paths = [], direction = 'asc') {
-  const factor = direction === 'desc' ? -1 : 1;
+function sortWorkspacePaths(paths = []) {
   return [...paths].sort((left, right) => {
     const depthDelta = left.split('/').length - right.split('/').length;
-    if (depthDelta !== 0) {
-      return depthDelta * factor;
-    }
-
-    return left.localeCompare(right, undefined, { sensitivity: 'base' }) * factor;
+    return depthDelta !== 0
+      ? depthDelta
+      : left.localeCompare(right, undefined, { sensitivity: 'base' });
   });
 }
 
@@ -435,34 +432,36 @@ export class VaultFileStore {
     }
   }
 
-  async openImageAttachmentReadStream(filePath, { maxBytes = Infinity } = {}) {
+  async openFileReadStream(filePath, { maxBytes = Infinity, mimeType, tooLargeError } = {}) {
     const absolute = this.resolveContentPath(filePath, { requireVaultFile: false });
-    if (!absolute || !isImageAttachmentFilePath(filePath)) {
-      return null;
-    }
+    if (!absolute) return null;
 
     try {
       const info = await stat(absolute);
-      if (!info.isFile()) {
-        return null;
-      }
+      if (!info.isFile()) return null;
       if (Number(info.size || 0) > maxBytes) {
-        return { error: 'Attachment is too large', statusCode: 413 };
+        return { error: tooLargeError, statusCode: 413 };
       }
 
       return {
-        mimeType: IMAGE_EXTENSION_TO_MIME_TYPE[extname(filePath).toLowerCase()] || 'application/octet-stream',
+        mimeType,
         path: filePath,
         size: Number(info.size || 0),
         stream: createReadStream(absolute),
       };
     } catch (error) {
-      if (error.code === 'ENOENT') {
-        return null;
-      }
-
+      if (error.code === 'ENOENT') return null;
       throw error;
     }
+  }
+
+  async openImageAttachmentReadStream(filePath, { maxBytes = Infinity } = {}) {
+    if (!isImageAttachmentFilePath(filePath)) return null;
+    return this.openFileReadStream(filePath, {
+      maxBytes,
+      mimeType: IMAGE_EXTENSION_TO_MIME_TYPE[extname(filePath).toLowerCase()] || 'application/octet-stream',
+      tooLargeError: 'Attachment is too large',
+    });
   }
 
   async writeImageAttachmentForDocument(sourceDocumentPath, {
@@ -490,7 +489,7 @@ export class VaultFileStore {
 
     const stemSource = basename(String(originalFileName ?? ''), extname(String(originalFileName ?? '')));
     const attachmentStem = sanitizeAttachmentStem(stemSource, 'image');
-    const attachmentDirPath = createDocumentAttachmentDirectoryPath(sourceDocumentPath);
+    const attachmentDirPath = createDocumentAttachmentDirectoryPath();
     const timestamp = createAttachmentTimestamp(now);
     const baseFileName = `${attachmentStem}-${timestamp}`;
     let storedPath;
@@ -539,33 +538,11 @@ export class VaultFileStore {
       return this.openImageAttachmentReadStream(normalizedPath, { maxBytes });
     }
 
-    const absolute = this.resolveContentPath(normalizedPath, { requireVaultFile: false });
-    if (!absolute) {
-      return null;
-    }
-
-    try {
-      const info = await stat(absolute);
-      if (!info.isFile()) {
-        return null;
-      }
-      if (Number(info.size || 0) > maxBytes) {
-        return { error: 'File is too large to download', statusCode: 413 };
-      }
-
-      return {
-        mimeType: getDownloadMimeType(normalizedPath),
-        path: normalizedPath,
-        size: Number(info.size || 0),
-        stream: createReadStream(absolute),
-      };
-    } catch (error) {
-      if (error.code === 'ENOENT') {
-        return null;
-      }
-
-      throw error;
-    }
+    return this.openFileReadStream(normalizedPath, {
+      maxBytes,
+      mimeType: getDownloadMimeType(normalizedPath),
+      tooLargeError: 'File is too large to download',
+    });
   }
 
   async persistCollaborationState(filePath, {

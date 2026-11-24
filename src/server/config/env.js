@@ -1,6 +1,5 @@
 import { basename, isAbsolute, relative, resolve, sep } from 'path';
 import { lstatSync, readdirSync, readFileSync } from 'node:fs';
-import { fileURLToPath } from 'url';
 
 import {
   AUTH_STRATEGY_NONE,
@@ -187,7 +186,7 @@ function normalizeDomainAllowlist(value) {
     .filter(Boolean);
 }
 
-const projectRoot = resolve(fileURLToPath(new URL('../../../', import.meta.url)));
+const projectRoot = resolve(import.meta.dirname, '../../..');
 
 export function resolveConfiguredVaultDir(overrides = {}, env = process.env) {
   return overrides.vaultDir
@@ -308,14 +307,7 @@ export function resolveVaultNames(vaults, env = process.env) {
 // ponytail: explicit repoUrl wins, then COLLABMD_GIT_REPO_URL_<ID>, then the shared URL for the primary
 export function resolveVaultRepoUrls(vaultDefs = [], overrides = {}, env = process.env) {
   const globalRepoUrl = normalizeOptionalString(overrides.remote?.repoUrl ?? overrides.git?.remote?.repoUrl ?? env.COLLABMD_GIT_REPO_URL);
-  const bySuffix = new Map();
-  for (const def of vaultDefs) {
-    const suffix = mangleVaultIdForEnv(def.id);
-    if (!bySuffix.has(suffix)) {
-      bySuffix.set(suffix, []);
-    }
-    bySuffix.get(suffix).push(def.id);
-  }
+  const bySuffix = Map.groupBy(vaultDefs, (def) => mangleVaultIdForEnv(def.id));
   return vaultDefs.map((def, index) => {
     if (def.repoUrl) {
       return def;
@@ -324,7 +316,7 @@ export function resolveVaultRepoUrls(vaultDefs = [], overrides = {}, env = proce
     const varName = `COLLABMD_GIT_REPO_URL_${suffix}`;
     const perVaultUrl = normalizeOptionalString(env[varName]);
     if (perVaultUrl && bySuffix.get(suffix).length > 1) {
-      throw new Error(`Ambiguous git remote: vaults ${bySuffix.get(suffix).map((id) => `"${id}"`).join(' and ')} share ${varName}.`);
+      throw new Error(`Ambiguous git remote: vaults ${bySuffix.get(suffix).map((entry) => `"${entry.id}"`).join(' and ')} share ${varName}.`);
     }
     return { ...def, repoUrl: perVaultUrl || (index === 0 ? globalRepoUrl : '') };
   });

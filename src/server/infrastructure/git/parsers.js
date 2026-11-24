@@ -235,41 +235,17 @@ export function parseNulNumstatEntries(output) {
 }
 
 export function parseNameStatusOutput(output) {
-  return String(output ?? '')
-    .split(/\r?\n/u)
-    .filter(Boolean)
-    .reduce((summary, line) => {
-      const [rawStatus = '', ...parts] = line.split('\t');
-      const status = rawStatus.trim().toUpperCase();
-      if (!status) {
-        return summary;
-      }
-
-      if (status.startsWith('R') || status.startsWith('C')) {
-        const [oldPath = '', newPath = ''] = parts.map((value) => decodeQuotedPath(value));
-        if (oldPath && newPath && oldPath !== newPath) {
-          summary.renamedPaths.push({ newPath, oldPath });
-        }
-        return summary;
-      }
-
-      const [path = ''] = parts.map((value) => decodeQuotedPath(value));
-      if (!path) {
-        return summary;
-      }
-
-      if (status.startsWith('D')) {
-        summary.deletedPaths.push(path);
-        return summary;
-      }
-
-      summary.changedPaths.push(path);
-      return summary;
-    }, {
-      changedPaths: [],
-      deletedPaths: [],
-      renamedPaths: [],
-    });
+  const summary = { changedPaths: [], deletedPaths: [], renamedPaths: [] };
+  for (const entry of parseNameStatusEntries(output)) {
+    if ((entry.code === 'R' || entry.code === 'C') && entry.oldPath && entry.oldPath !== entry.path) {
+      summary.renamedPaths.push({ newPath: entry.path, oldPath: entry.oldPath });
+    } else if (entry.code === 'D') {
+      summary.deletedPaths.push(entry.path);
+    } else {
+      summary.changedPaths.push(entry.path);
+    }
+  }
+  return summary;
 }
 
 export function parseNameStatusEntries(output) {

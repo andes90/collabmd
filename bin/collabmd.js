@@ -4,11 +4,10 @@ import { parseArgs } from 'node:util';
 import { resolve } from 'node:path';
 import { stat } from 'node:fs/promises';
 import { fork } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 
 import { getLocalComposeServerUrl, startLocalComposeService } from '../scripts/local-compose.mjs';
 
-const packagePath = resolve(fileURLToPath(import.meta.url), '../../package.json');
+const packagePath = resolve(import.meta.dirname, '../package.json');
 const { default: packageJson } = await import(packagePath, { with: { type: 'json' } });
 
 const { values, positionals } = parseArgs({
@@ -215,7 +214,7 @@ try {
   if (enableTunnel) {
     console.log('  Tunnel: starting...');
 
-    const tunnelScript = resolve(fileURLToPath(import.meta.url), '../../scripts/cloudflare-tunnel.mjs');
+    const tunnelScript = resolve(import.meta.dirname, '../scripts/cloudflare-tunnel.mjs');
     const tunnelEnv = {
       ...process.env,
       TUNNEL_TARGET_HOST: config.host === '0.0.0.0' ? '127.0.0.1' : config.host,
