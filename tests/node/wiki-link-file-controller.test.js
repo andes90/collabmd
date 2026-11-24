@@ -8,8 +8,8 @@ function createController(overrides = {}) {
   const controller = new WikiLinkFileController({
     getFileList: () => overrides.fileList ?? ['README.md', 'notes/roadmap.md'],
     navigation: {
-      navigateToFile(filePath) {
-        events.push(['navigate', filePath]);
+      navigateToFile(filePath, ...options) {
+        events.push(['navigate', filePath, ...options]);
       },
     },
     refreshExplorer: async () => {
@@ -94,4 +94,14 @@ test('WikiLinkFileController rejects empty or traversal wiki-link targets', () =
   assert.equal(controller.normalizeNewWikiFilePath(''), null);
   assert.equal(controller.normalizeNewWikiFilePath('../escape'), null);
   assert.equal(controller.normalizeNewWikiFilePath('notes/today'), 'notes/today.md');
+});
+
+test('wiki-links to headings navigate without creating another file', () => {
+  const { controller, events } = createController({ getCurrentFilePath: () => 'README.md' });
+  controller.handleWikiLinkClick('roadmap#Project Setup');
+  controller.handleWikiLinkClick('#Project Setup');
+  assert.deepEqual(events, [
+    ['navigate', 'notes/roadmap.md', { anchor: 'project-setup' }],
+    ['navigate', 'README.md', { anchor: 'project-setup' }],
+  ]);
 });

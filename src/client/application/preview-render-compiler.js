@@ -262,7 +262,8 @@ function renderInlineWikiText(content, {
     } else {
       const target = match[4].trim();
       const display = (match[5] || match[4]).trim();
-      const resolved = resolveWikiTargetWithIndex(target, getWikiTargetIndex());
+      const [targetPath] = target.split('#', 1);
+      const resolved = targetPath ? resolveWikiTargetWithIndex(targetPath, getWikiTargetIndex()) : sourceFilePath;
       const classes = resolved ? 'wiki-link' : 'wiki-link wiki-link-new';
       const title = resolved
         ? normalizePreviewTypography(display)

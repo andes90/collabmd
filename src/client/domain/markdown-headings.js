@@ -2,7 +2,7 @@ import markdownIt from 'markdown-it';
 import { extractYamlFrontmatter } from '../../domain/yaml-frontmatter.js';
 import { enableMarkdownDetails } from './markdown-details.js';
 
-function createHeadingSlug(content = '') {
+export function createHeadingSlug(content = '') {
   return String(content ?? '')
     .trim()
     .toLowerCase()

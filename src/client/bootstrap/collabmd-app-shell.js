@@ -533,6 +533,7 @@ export class CollabMdAppShell {
       videoEmbed: this.videoEmbed,
     });
     this.wikiLinkFileController = new WikiLinkFileController({
+      getCurrentFilePath: () => this.currentFilePath,
       getFileList: () => this.fileExplorer.flatDocumentFiles,
       navigation: this.navigation,
       refreshExplorer: () => this.fileExplorer.refresh(),
