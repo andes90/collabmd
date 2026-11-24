@@ -291,6 +291,19 @@ export function replaceExcalidrawRoomScene(ydoc, rawScene, {
   return scene;
 }
 
+export function resolveExcalidrawExternalConflict(doc, choice) {
+  const meta = doc.getMap(EXCALIDRAW_META_KEY);
+  const conflict = meta.get('externalConflict');
+  if (!conflict || !['local', 'external'].includes(choice)) return false;
+  const external = choice === 'external' ? tryParseSceneJson(conflict.content) : null;
+  if (choice === 'external' && !external) return false;
+  doc.transact(() => {
+    if (external) replaceExcalidrawRoomScene(doc, external);
+    meta.delete('externalConflict');
+  }, 'external-conflict-resolution');
+  return true;
+}
+
 export function applySceneDiffToExcalidrawRoom(ydoc, rawScene, {
   maxRevisionsPerElement = 2,
 } = {}) {

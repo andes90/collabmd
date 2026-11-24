@@ -1,3 +1,6 @@
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
 import {
   expect,
   test,
@@ -759,4 +762,25 @@ test('@excalidraw-stress seeded concurrent edits converge', async ({ browser }, 
     await attachDiagnostics(testInfo, STRESS_SEED, { pageA, pageB });
     await context.close();
   }
+});
+
+test('@excalidraw-smoke keeps the browser draft when autosave finds an external edit', async ({ page, e2eServer }) => {
+  const filePath = 'external-conflict.e2e.excalidraw';
+  const baseline = createElement('baseline');
+  await prepareFile(page, filePath, createScene([baseline]));
+  await openDirectEditor(page, filePath);
+  await waitForAuthority(page);
+
+  const diskScene = createScene([baseline, createElement('disk', { index: 'a1', x: 150 })]);
+  await writeFile(join(e2eServer.vaultDir, filePath), JSON.stringify(diskScene));
+  await setScene(page, createScene([baseline, createElement('draft', { index: 'a1', x: 300 })]));
+  const keepDraft = page.getByRole('button', { name: 'Keep browser edits' });
+  await expect(keepDraft).toBeVisible();
+  expect((await readDurableScene(page, filePath)).elements.map(({ id }) => id)).toEqual(['baseline', 'disk']);
+  await waitForIds(page, ['baseline', 'draft']);
+
+  await keepDraft.click();
+  await expect(keepDraft).toBeHidden();
+  await expect.poll(async () => (await readDurableScene(page, filePath)).elements.map(({ id }) => id))
+    .toEqual(['baseline', 'draft']);
 });

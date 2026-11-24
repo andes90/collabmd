@@ -10,6 +10,7 @@ import {
   ensureExcalidrawRoomSchema,
   isExcalidrawRoomDocStructured,
   readExcalidrawReplaceGeneration,
+  resolveExcalidrawExternalConflict,
   readLegacyExcalidrawRoomScene,
   replaceExcalidrawRoomScene,
 } from '../../domain/excalidraw-room-codec.js';
@@ -132,6 +133,7 @@ export class ExcalidrawRoomClient {
     onCollaboratorsChange = () => {},
     onCommentThreadsChange = () => {},
     onConnectionStateChange = () => {},
+    onExternalConflictChange = () => {},
     onRemoteSceneJson = () => {},
     requestAnimationFrameFn = (callback) => requestAnimationFrame(callback),
     resolveWsBaseUrlFn = resolveWsBaseUrl,
@@ -149,6 +151,7 @@ export class ExcalidrawRoomClient {
     this.onCollaboratorsChange = onCollaboratorsChange;
     this.onCommentThreadsChange = onCommentThreadsChange;
     this.onConnectionStateChange = onConnectionStateChange;
+    this.onExternalConflictChange = onExternalConflictChange;
     this.onRemoteSceneJson = onRemoteSceneJson;
     this.requestAnimationFrameFn = requestAnimationFrameFn;
     this.resolveWsBaseUrlFn = resolveWsBaseUrlFn;
@@ -225,6 +228,12 @@ export class ExcalidrawRoomClient {
       this.lastSceneJson = JSON.stringify(parseSceneJson(remoteJson));
       this.onRemoteSceneJson(this.lastSceneJson, { authoritative });
     };
+  }
+
+  resolveExternalConflict(choice) {
+    if (!this.canWriteToRoom) return false;
+    this.flushSceneSync();
+    return resolveExcalidrawExternalConflict(this.ydoc, choice);
   }
 
   getLastSceneJson() {
@@ -463,7 +472,12 @@ export class ExcalidrawRoomClient {
         this.replaceStructuredSceneWithinTransaction(this.lastSceneJson);
       }, 'excalidraw-legacy-migrate');
     }
-    this.roomMeta.observe(this.handleStructuredSceneUpdate);
+    this.roomMeta.observe((event) => {
+      if (event.keysChanged.has('externalConflict')) {
+        this.onExternalConflictChange(this.roomMeta.get('externalConflict'));
+      }
+      this.handleStructuredSceneUpdate();
+    });
     this.roomElements.observeDeep(this.handleStructuredSceneUpdate);
     this.roomFiles.observeDeep(this.handleStructuredSceneUpdate);
     this.roomAppState.observe(this.handleStructuredSceneUpdate);

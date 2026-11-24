@@ -548,6 +548,7 @@ export class VaultFileStore {
   async persistCollaborationState(filePath, {
     commentThreads = [],
     content = '',
+    expectedContent,
     expectedText,
     includeContent = true,
     snapshot = null,
@@ -616,9 +617,12 @@ export class VaultFileStore {
                   await chmod(operation.tempPath, previous.mode & 0o777);
                 }
               }
-              if (operation.targetPath === resolved.absolute && expectedText !== undefined) {
+              if (operation.targetPath === resolved.absolute && (expectedText !== undefined || expectedContent !== undefined)) {
                 const currentContent = await this.readEditableVaultContent(filePath);
-                if (currentContent === null || normalizeEditableText(currentContent) !== expectedText) {
+                const matches = expectedContent !== undefined
+                  ? currentContent === expectedContent
+                  : currentContent !== null && normalizeEditableText(currentContent) === expectedText;
+                if (!matches) {
                   throw new VaultContentChanged(currentContent);
                 }
               }

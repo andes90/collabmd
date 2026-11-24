@@ -114,6 +114,7 @@ let queuedCollaborators = null;
 let initialViewportFitPending = true;
 let previewViewportFitFrame = null;
 let roomClient = null;
+let externalConflict = null;
 let roomClientGeneration = 0;
 let reactRoot = null;
 let editorRenderKey = 0;
@@ -432,6 +433,11 @@ function createRoomClient(filePath) {
       }
 
       handleRoomConnectionStateChange(event);
+    },
+    onExternalConflictChange: (conflict) => {
+      if (generation !== roomClientGeneration) return;
+      externalConflict = conflict;
+      renderExcalidrawApp();
     },
     onRemoteSceneJson: (sceneJson, { authoritative = false } = {}) => {
       if (generation !== roomClientGeneration) {
@@ -1093,6 +1099,26 @@ function DiagramCommentsEditor({ apiId = '', canWrite = false, focusRequest = nu
   ]));
 }
 
+function renderExternalConflict() {
+  if (!externalConflict || normalizeDocumentMode(currentDocument.mode) === 'preview') return null;
+  const canResolve = roomConnectionState === EXCALIDRAW_ROOM_CONNECTION_STATE.AUTHORITATIVE;
+  return React.createElement('div', { className: 'excalidraw-authority-banner' },
+    React.createElement('div', { role: 'status' }, externalConflict.invalid
+      ? 'The file changed on disk and could not be read. Your browser draft is preserved.'
+      : 'The file changed on disk while you were editing. Choose which version to keep.'),
+    React.createElement('button', {
+      disabled: !canResolve,
+      onClick: () => roomClient?.resolveExternalConflict('local'),
+      type: 'button',
+    }, 'Keep browser edits'),
+    !externalConflict.invalid && React.createElement('button', {
+      disabled: !canResolve,
+      onClick: () => roomClient?.resolveExternalConflict('external'),
+      type: 'button',
+    }, 'Use disk version'),
+  );
+}
+
 function renderExcalidrawApp({ initialData } = {}) {
   if (!reactRoot) {
     return;
@@ -1111,12 +1137,12 @@ function renderExcalidrawApp({ initialData } = {}) {
         threads: diagramCommentThreads,
         visible: normalizeDocumentMode(currentDocument.mode) !== 'preview',
       }),
-      getAuthorityBannerText()
+      renderExternalConflict() ?? (getAuthorityBannerText()
         ? React.createElement('div', {
           className: 'excalidraw-authority-banner',
           role: 'status',
         }, getAuthorityBannerText())
-        : null,
+        : null),
     ),
   );
 }
@@ -1802,6 +1828,7 @@ function disconnectRealtimeRoom({ preserveEditorBindings = false } = {}) {
   const activeRoomClient = roomClient;
   const previousState = roomConnectionState;
   roomClient = null;
+  externalConflict = null;
   roomClientGeneration += 1;
   roomConnectionState = EXCALIDRAW_ROOM_CONNECTION_STATE.CLOSED;
   pendingDisconnectRequestIds.clear();

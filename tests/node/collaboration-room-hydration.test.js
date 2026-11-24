@@ -8,7 +8,9 @@ import { createCommentThreadSharedType } from '../../src/domain/comment-threads.
 import {
   applySceneDiffToExcalidrawRoom,
   buildExcalidrawRoomScene,
+  EXCALIDRAW_META_KEY,
   readExcalidrawReplaceGeneration,
+  resolveExcalidrawExternalConflict,
   replaceExcalidrawRoomScene,
 } from '../../src/domain/excalidraw-room-codec.js';
 
@@ -393,3 +395,68 @@ test('CollaborationRoom propagates exhausted initial snapshot retries and can re
   assert.equal(restored.getText('codemirror').toString(), content);
   assert.equal(restored.getArray('comments').get(0).get('id'), 'persisted-thread');
 });
+
+test('a filesystem reload waits for the first room hydration', async (t) => {
+  const entered = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const room = new CollaborationRoom({
+    name: 'note.md',
+    vaultFileStore: {
+      async readCollaborationSnapshot() {
+        entered.resolve();
+        await release.promise;
+        return null;
+      },
+      async readEditableVaultContent() { return 'Updated text'; },
+      async persistCollaborationState() { return { ok: true }; },
+    },
+  });
+  t.after(() => room.destroy());
+  const hydration = room.hydrate();
+  await entered.promise;
+  const reload = room.reloadFromDisk();
+  release.resolve();
+  await Promise.all([hydration, reload]);
+  assert.equal(room.readEditableContent(), 'Updated text');
+});
+
+for (const reloadFirst of [false, true]) {
+  test(`Excalidraw preserves both versions when ${reloadFirst ? 'the watcher' : 'autosave'} sees the external edit first`, async (t) => {
+    const scene = (id) => JSON.stringify({ elements: [{ id, type: 'rectangle', version: 1 }] });
+    let disk = scene('initial');
+    let snapshot = null;
+    const vaultFileStore = {
+      async readCollaborationSnapshot() { return snapshot; },
+      async readEditableVaultContent() { return disk; },
+      async writeCollaborationSnapshot(_path, value) { snapshot = value; return { ok: true }; },
+      async persistCollaborationState(_path, state) {
+        if (state.includeContent && state.expectedContent !== disk) {
+          return { ok: false, diskChanged: true, currentContent: disk };
+        }
+        if (state.includeContent) disk = state.content;
+        snapshot = state.snapshot;
+        return { ok: true };
+      },
+    };
+    const room = new CollaborationRoom({ name: 'drawing.excalidraw', vaultFileStore });
+    t.after(() => room.destroy());
+    await room.hydrate();
+    room.applyExcalidrawScene(JSON.parse(scene('local')));
+    const external = scene('external');
+    disk = external;
+    if (reloadFirst) await room.reloadFromDisk();
+    await room.persist();
+    assert.equal(disk, external);
+    assert.equal(room.doc.getMap(EXCALIDRAW_META_KEY).get('externalConflict').content, external);
+    await room.destroy();
+
+    const reopened = new CollaborationRoom({ name: 'drawing.excalidraw', vaultFileStore });
+    t.after(() => reopened.destroy());
+    await reopened.hydrate();
+    assert.ok(buildExcalidrawRoomScene(reopened.doc).elements.some(({ id }) => id === 'local'));
+    assert.ok(resolveExcalidrawExternalConflict(reopened.doc, reloadFirst ? 'external' : 'local'));
+    await reopened.persist();
+    assert.equal(reopened.doc.getMap(EXCALIDRAW_META_KEY).has('externalConflict'), false);
+    assert.ok(JSON.parse(disk).elements.some(({ id }) => id === (reloadFirst ? 'external' : 'local')));
+  });
+}

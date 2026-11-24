@@ -35,6 +35,7 @@ import {
   EXCALIDRAW_APP_STATE_KEY,
   EXCALIDRAW_ELEMENTS_KEY,
   EXCALIDRAW_FILES_KEY,
+  EXCALIDRAW_META_KEY,
   isExcalidrawRoomDocStructured,
   migrateLegacyExcalidrawRoomData,
   normalizeExcalidrawRoomScene,
@@ -232,6 +233,7 @@ export class CollaborationRoom {
   async persistState({
     commentThreads = [],
     content = '',
+    expectedContent,
     expectedText,
     includeContent = true,
     snapshot = null,
@@ -243,6 +245,7 @@ export class CollaborationRoom {
     const result = await this.vaultFileStore.persistCollaborationState(this.name, {
       commentThreads,
       content,
+      ...(expectedContent !== undefined && { expectedContent }),
       ...(expectedText !== undefined && { expectedText }),
       includeContent,
       snapshot,
@@ -300,11 +303,10 @@ export class CollaborationRoom {
               const externalScene = isExcalidrawRoom(this.name)
                 ? tryParseExcalidrawSceneJson(content)
                 : null;
-              if (isExcalidrawRoom(this.name) && !externalScene) {
-                throw new Error('Invalid Excalidraw file content');
-              }
+              if (isExcalidrawRoom(this.name)) this.excalidrawDiskContent = content;
               const validationDoc = new Y.Doc({ gc: true });
               let validatedSnapshot = null;
+              let invalidExcalidrawDiskContent = isExcalidrawRoom(this.name) && !externalScene;
               try {
                 Y.applyUpdate(validationDoc, snapshot, 'hydrate');
                 if (isCanvasFilePath(this.name)) {
@@ -325,8 +327,14 @@ export class CollaborationRoom {
                     throw new Error('snapshot did not contain a valid structured Excalidraw scene');
                   }
                   const storedScene = tryParseExcalidrawSceneJson(serializeExcalidrawRoomScene(validationDoc));
-                  if (!isDeepStrictEqual(storedScene, normalizeExcalidrawRoomScene(externalScene, { includeDeleted: false }))) {
-                    replaceExcalidrawRoomScene(validationDoc, externalScene);
+                  const meta = validationDoc.getMap(EXCALIDRAW_META_KEY);
+                  if (meta.has('externalConflict')) {
+                    invalidExcalidrawDiskContent = false;
+                    meta.set('externalConflict', { content, invalid: !externalScene });
+                  } else {
+                    if (externalScene && !isDeepStrictEqual(storedScene, normalizeExcalidrawRoomScene(externalScene, { includeDeleted: false }))) {
+                      replaceExcalidrawRoomScene(validationDoc, externalScene);
+                    }
                   }
                 } else {
                   reconcileRoomText(validationDoc, normalizeEditableText(content), getTextConflictBaseline(validationDoc), 'hydrate');
@@ -341,6 +349,7 @@ export class CollaborationRoom {
               } finally {
                 validationDoc.destroy();
               }
+              if (invalidExcalidrawDiskContent) throw new Error('Invalid Excalidraw file content');
               if (validatedSnapshot) {
                 // Persist new Yjs operation IDs before clients can retain them across restarts.
                 if (!isDeepStrictEqual(snapshot, validatedSnapshot)) {
@@ -359,6 +368,7 @@ export class CollaborationRoom {
               this.vaultFileStore?.readEditableVaultContent(this.name) ?? null,
               this.vaultFileStore?.readCommentThreads?.(this.name) ?? [],
             ]);
+            if (isExcalidrawRoom(this.name)) this.excalidrawDiskContent = content;
             contentFallbackDurationMs = Date.now() - fallbackStartedAt;
             commentThreadCount = commentThreads.length;
             if (content !== null || commentThreads.length > 0) {
@@ -519,6 +529,9 @@ export class CollaborationRoom {
     }
 
     if (isExcalidrawRoom(this.name)) {
+      this.doc.getMap(EXCALIDRAW_META_KEY).observe((event, transaction) => {
+        if (event.keysChanged.has('externalConflict')) markFromTransaction(transaction);
+      });
       this.doc.getMap(EXCALIDRAW_ELEMENTS_KEY).observeDeep((_events, transaction) => {
         markFromTransaction(transaction);
       });
@@ -543,10 +556,18 @@ export class CollaborationRoom {
       if (conflict) {
         this.persistedContentBaseline = conflict.invalid ? null : serializeCanvasDocument(parseCanvasJson(conflict.content));
       }
+    } else if (isExcalidrawRoom(this.name)) {
+      const conflict = this.doc.getMap(EXCALIDRAW_META_KEY).get('externalConflict');
+      if (conflict) this.persistedContentBaseline = this.getExcalidrawDiskBaseline();
     } else {
       this.persistedContentBaseline = getTextConflictBaseline(this.doc) ?? this.persistedContentBaseline;
     }
     this.contentDirty = false;
+  }
+
+  getExcalidrawDiskBaseline() {
+    const scene = tryParseExcalidrawSceneJson(this.excalidrawDiskContent);
+    return scene ? JSON.stringify(normalizeExcalidrawRoomScene(scene, { includeDeleted: false })) : null;
   }
 
   refreshContentDirty() {
@@ -668,16 +689,18 @@ export class CollaborationRoom {
     }
     // Compare inline: refreshContentDirty() would serialize the document
     // a second time for the same check.
-    const isTextRoom = !isCanvasFilePath(this.name) && !isExcalidrawRoom(this.name);
+    const isExcalidraw = isExcalidrawRoom(this.name);
+    const isTextRoom = !isCanvasFilePath(this.name) && !isExcalidraw;
     const conflict = isTextRoom
       ? hasUnresolvedTextConflict(this.doc, content)
-      : isCanvasFilePath(this.name) && this.doc.getMap(CANVAS_META_KEY).has('externalConflict');
+      : this.doc.getMap(isExcalidraw ? EXCALIDRAW_META_KEY : CANVAS_META_KEY).has('externalConflict');
     this.contentDirty = content !== this.persistedContentBaseline;
     const includeContent = this.contentDirty && !conflict;
     const commentThreads = serializeCommentThreads(this.doc.getArray('comments'));
     const result = await this.persistState({
       commentThreads,
       content,
+      expectedContent: includeContent && isExcalidraw ? this.excalidrawDiskContent : undefined,
       expectedText: includeContent && isTextRoom ? this.persistedContentBaseline : undefined,
       includeContent,
       snapshot: Y.encodeStateAsUpdate(this.doc),
@@ -691,6 +714,7 @@ export class CollaborationRoom {
       return true;
     }
     if (includeContent) {
+      if (isExcalidraw) this.excalidrawDiskContent = content;
       this.persistedContentBaseline = content;
       this.contentDirty = false;
     }
@@ -719,6 +743,9 @@ export class CollaborationRoom {
       return false;
     }
 
+    await this.hydrate();
+    await this.activePersistPromise;
+    if (this.deleted || this.destroyed) return false;
     const content = await this.vaultFileStore.readEditableVaultContent(this.name);
     if (content === null) {
       this.markDeleted();
@@ -771,15 +798,32 @@ export class CollaborationRoom {
     }
 
     if (isExcalidrawRoom(this.name)) {
-      const parsedExcalidrawScene = tryParseExcalidrawSceneJson(content);
-      if (!parsedExcalidrawScene) {
-        return { ok: false, reason: 'invalid-excalidraw' };
+      const scene = tryParseExcalidrawSceneJson(content);
+      const meta = this.doc.getMap(EXCALIDRAW_META_KEY);
+      const localContent = this.getPersistedContent();
+      const localDirty = localContent !== null && localContent !== this.persistedContentBaseline;
+      this.excalidrawDiskContent = content;
+      const externalScene = scene && normalizeExcalidrawRoomScene(scene, { includeDeleted: false });
+      const unchanged = isDeepStrictEqual(externalScene, tryParseExcalidrawSceneJson(this.persistedContentBaseline));
+      const matchesLocal = isDeepStrictEqual(externalScene, tryParseExcalidrawSceneJson(localContent));
+      if (meta.has('externalConflict') || (localDirty && !unchanged && !matchesLocal)) {
+        this.doc.transact(() => {
+          meta.set('externalConflict', { content, invalid: !scene });
+        }, 'workspace-reconcile');
+        this.persistedContentBaseline = externalScene ? JSON.stringify(externalScene) : null;
+        this.schedulePersist();
+        return { ok: true, highlightRange: null, conflict: true };
+      }
+      if (!scene) return { ok: false, reason: 'invalid-excalidraw' };
+      if (unchanged) return { ok: true, skipped: true };
+      if (matchesLocal) {
+        this.resetContentBaseline();
+        return { ok: true, skipped: true };
       }
 
       this.doc.transact(() => {
-        replaceExcalidrawRoomScene(this.doc, parsedExcalidrawScene);
+        replaceExcalidrawRoomScene(this.doc, scene);
       }, 'workspace-reconcile');
-
       this.resetContentBaseline();
       return { ok: true, highlightRange: null };
     }

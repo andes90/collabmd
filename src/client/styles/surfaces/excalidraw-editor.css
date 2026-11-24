@@ -31,6 +31,11 @@ body[data-surface='excalidraw-editor'][data-document-mode='preview'] .disable-vi
   pointer-events: none;
 }
 
+.excalidraw-authority-banner button {
+  margin: var(--space-2) var(--space-1) 0;
+  pointer-events: auto;
+}
+
 .diagram-comments-overlay {
   position: absolute;
   z-index: 25;
