@@ -1126,3 +1126,30 @@ test('GitService passes configured command env to subprocesses', async () => {
     true,
   );
 });
+
+test('GitService pull backs up a staged rename before applying an upstream edit to its source', async (t) => {
+  const { localDir, peerDir } = await createRemotePullFixture(t);
+  await runGit(localDir, ['mv', 'tracked.md', 'renamed.md']);
+  await writeFile(join(peerDir, 'tracked.md'), 'Remote text', 'utf8');
+  await runGit(peerDir, ['commit', '-am', 'Update rename source']);
+  await runGit(peerDir, ['push']);
+
+  const service = new GitService({ vaultDir: localDir });
+  const result = await service.pullBranch();
+  assert.ok(result.pullBackup);
+  assert.equal(await readFile(join(localDir, 'tracked.md'), 'utf8'), 'Remote text');
+  assert.equal((await execFile('git', ['ls-files', '--unmerged'], { cwd: localDir })).stdout, '');
+  assert.equal((await execFile('git', ['stash', 'list'], { cwd: localDir })).stdout, '');
+});
+
+test('GitService stages the exact file when two names differ only by a leading space', async (t) => {
+  const repoDir = await createFixtureRepository();
+  t.after(() => rm(repoDir, { recursive: true, force: true }));
+  await writeFile(join(repoDir, ' plan.md'), 'leading space');
+  await writeFile(join(repoDir, 'plan.md'), 'no leading space');
+  const service = new GitService({ vaultDir: repoDir });
+  await service.stageFile(' plan.md');
+  const status = await service.getStatus();
+  assert.ok(status.sections.find(({ key }) => key === 'staged').files.some(({ path }) => path === ' plan.md'));
+  assert.ok(status.sections.find(({ key }) => key === 'untracked').files.some(({ path }) => path === 'plan.md'));
+});

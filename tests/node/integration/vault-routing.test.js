@@ -206,3 +206,15 @@ test('vault routing scopes git status and commits per vault', async (t) => {
   assert.match(await runGitOutput(betaDir, ['log', '--oneline']), /beta change/);
   assert.doesNotMatch(await runGitOutput(alphaDir, ['log', '--oneline']), /beta change/);
 });
+
+test('disabled Git accepts the status probe and rejects mutations for a Git-backed vault', async (t) => {
+  const app = await startTestServer({ gitEnabled: false });
+  t.after(() => app.close());
+  await runGit(app.vaultDir, ['init']);
+  const status = await httpRequest(`${app.baseUrl}/api/git/status`);
+  assert.equal(status.statusCode, 200);
+  assert.equal(JSON.parse(status.body).isGitRepo, false);
+  const stage = await httpRequest(`${app.baseUrl}/api/git/stage-all`, { method: 'POST' });
+  assert.equal(stage.statusCode, 404);
+  assert.equal(await runGitOutput(app.vaultDir, ['diff', '--cached', '--name-only']), '');
+});

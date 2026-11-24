@@ -120,14 +120,14 @@ export class GitService {
   }) {
     const gitExecFile = execFileImpl ?? execFile;
     this.commandRunner = {
-      async isGitRepo() {
+      async isGitRepo({ requireRoot = false } = {}) {
         if (!enabled) {
           return false;
         }
 
         try {
           await access(join(vaultDir, '.git'));
-          return true;
+          return !requireRoot || (await this.execGit(['rev-parse', '--show-prefix'])).trimEnd() === '';
         } catch {
           return false;
         }
@@ -188,8 +188,8 @@ export class GitService {
     this.pullBackupStore = new PullBackupStore({ vaultDir });
   }
 
-  async isGitRepo() {
-    return this.commandRunner.isGitRepo();
+  async isGitRepo(options) {
+    return this.commandRunner.isGitRepo(options);
   }
 
   invalidateStatusCache() {
@@ -354,11 +354,13 @@ export class GitService {
         env: buildAuthorEnv(author),
       });
     } catch (error) {
-      throw await this.classifyPullError(error);
+      throw await this.classifyPullError(error, pullBackup);
     }
 
-    const afterRef = await this.resolveRef('HEAD');
     this.invalidateStatusCache();
+    if (await this.hasConflictedStatus()) throw this.createPullConflictError(pullBackup);
+
+    const afterRef = await this.resolveRef('HEAD');
     return {
       afterRef,
       beforeRef,
@@ -558,7 +560,7 @@ export class GitService {
         continue;
       }
 
-      await this.restorePathToHead(entry.path);
+      for (const path of entry.touchPaths) await this.restorePathToHead(path);
     }
 
     return pullBackup;
@@ -580,22 +582,20 @@ export class GitService {
   }
 
   async hasConflictedStatus() {
-    const status = await this.getStatus({ force: true });
-    return (status.sections ?? [])
-      .flatMap((section) => section.files ?? [])
-      .some((file) => file?.status === 'conflicted');
+    return Boolean(await this.commandRunner.execGit(['ls-files', '--unmerged', '-z']));
   }
 
-  async classifyPullError(error) {
-    if (await this.hasConflictedStatus()) {
-      return createGitRequestError(
-        409,
-        'Pull applied remote updates, but reapplying local changes caused conflicts. Review the conflicted files and the pull backup summary.',
-        { requestCode: 'pull_conflicted_after_autostash' },
-      );
-    }
+  createPullConflictError(pullBackup) {
+    const message = 'Pull left unresolved conflicts. Review the conflicted files.';
+    return createGitRequestError(
+      409,
+      pullBackup ? `${message} Local changes are available in Git > Pull Backups.` : message,
+      { requestCode: 'pull_conflicted_after_autostash' },
+    );
+  }
 
-    return error;
+  async classifyPullError(error, pullBackup) {
+    return await this.hasConflictedStatus() ? this.createPullConflictError(pullBackup) : error;
   }
 
   async createWorkspaceChangeFromRefs(beforeRef, afterRef) {

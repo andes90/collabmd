@@ -311,3 +311,17 @@ test('prepareConfigForStartup tags origin-mismatch errors with the vault id', as
     /Vault "a": .*does not match configured repo/,
   );
 });
+
+test('prepareConfigForStartup restarts an empty Git-backed vault before its first commit', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'collabmd-empty-remote-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const remote = join(root, 'remote.git');
+  const vault = join(root, 'vault');
+  await runGit(root, ['init', '--bare', remote]);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const config = createBootstrapConfig(vault, remote);
+    await prepareConfigForStartup(config);
+    await config.git.cleanup();
+  }
+  await readFile(join(vault, '.git', 'HEAD'));
+});

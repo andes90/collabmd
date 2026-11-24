@@ -579,7 +579,8 @@ export const gitFeature = {
         }
 
         if (error?.code === 'pull_conflicted_after_autostash') {
-          this.toastController.show('Pull updated the branch, but reapplying local changes caused conflicts. Review the conflicted files and the pull backup summary.', 6000);
+          await this.gitPanel?.refresh?.({ force: true });
+          this.toastController.show(error.message, 6000);
           return;
         }
 

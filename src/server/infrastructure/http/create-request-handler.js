@@ -141,6 +141,7 @@ export function createRequestHandler({
         }),
         git: createGitApiHandler({
           authService,
+          gitEnabled: config.gitEnabled,
           gitService: parts.gitService,
           workspaceMutationCoordinator: parts.workspaceMutationCoordinator,
         }),

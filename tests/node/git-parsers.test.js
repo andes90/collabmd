@@ -4,9 +4,9 @@ import assert from 'node:assert/strict';
 import { parseStatusOutput, parseUnifiedDiff } from '../../src/server/infrastructure/git/parsers.js';
 import { normalizeRelativeGitPath } from '../../src/server/infrastructure/git/path-utils.js';
 
-test('normalizeRelativeGitPath trims and rejects traversal', () => {
-  assert.equal(normalizeRelativeGitPath(' docs/guide.md '), 'docs/guide.md');
-  assert.equal(normalizeRelativeGitPath('"BFI - Biller/sample flow.puml"'), 'BFI - Biller/sample flow.puml');
+test('normalizeRelativeGitPath preserves exact filenames and rejects traversal', () => {
+  assert.equal(normalizeRelativeGitPath(' docs/guide.md '), ' docs/guide.md ');
+  assert.equal(normalizeRelativeGitPath('"plan.md"'), '"plan.md"');
   assert.throws(
     () => normalizeRelativeGitPath('../secrets.txt'),
     /Invalid path parameter/,

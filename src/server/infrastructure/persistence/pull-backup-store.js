@@ -8,12 +8,8 @@ const PULL_BACKUP_STORAGE_ROOT = '.collabmd/pull-backups';
 const BACKUP_METADATA_PREFIX = '<!-- collabmd-pull-backup ';
 const BACKUP_METADATA_SUFFIX = ' -->';
 
-function normalizeRelativePath(pathValue = '') {
-  return String(pathValue).replace(/\\/g, '/');
-}
-
 function createBackupId(headRef = null, createdAt = new Date().toISOString()) {
-  const timestamp = normalizeRelativePath(createdAt)
+  const timestamp = String(createdAt)
     .replace(/[^0-9T]/g, '')
     .replace('T', '-')
     .replace(/Z$/u, '');
@@ -105,7 +101,7 @@ export class PullBackupStore {
   }
 
   resolveStoragePath(path) {
-    const absolute = sanitizeVaultPath(this.vaultDir, path, { allowIgnored: true });
+    const absolute = sanitizeVaultPath(this.vaultDir, path, { allowIgnored: true, preservePath: true });
     if (!absolute) throw new Error('Unsafe pull backup path');
     return absolute;
   }
@@ -141,12 +137,12 @@ export class PullBackupStore {
     await mkdir(patchesRoot, { recursive: true });
 
     for (const entry of entries) {
-      const normalizedPath = normalizeRelativePath(entry?.path);
+      const normalizedPath = String(entry?.path ?? '');
       if (!normalizedPath) {
         continue;
       }
 
-      const absoluteSourcePath = sanitizeVaultPath(this.vaultDir, normalizedPath, { allowIgnored: true });
+      const absoluteSourcePath = sanitizeVaultPath(this.vaultDir, normalizedPath, { allowIgnored: true, preservePath: true });
       if (!absoluteSourcePath) continue;
       const relativeBackupPath = `${PULL_BACKUP_STORAGE_ROOT}/${backupId}/files/${normalizedPath}`;
       const relativeStagedPatchPath = entry?.stagedPatchContent
@@ -162,7 +158,7 @@ export class PullBackupStore {
         const absoluteBackupPath = this.resolveStoragePath(relativeBackupPath);
         await mkdir(dirname(absoluteBackupPath), { recursive: true });
         await copyFile(absoluteSourcePath, absoluteBackupPath);
-        backupPath = normalizeRelativePath(relativeBackupPath);
+        backupPath = relativeBackupPath;
       } catch (error) {
         if (error?.code !== 'ENOENT') {
           throw error;
@@ -183,10 +179,10 @@ export class PullBackupStore {
 
       backupEntries.push({
         backupPath,
-        oldPath: normalizeRelativePath(entry?.oldPath ?? ''),
+        oldPath: entry?.oldPath ?? '',
         path: normalizedPath,
-        stagedPatchPath: relativeStagedPatchPath ? normalizeRelativePath(relativeStagedPatchPath) : null,
-        worktreePatchPath: relativeWorktreePatchPath ? normalizeRelativePath(relativeWorktreePatchPath) : null,
+        stagedPatchPath: relativeStagedPatchPath,
+        worktreePatchPath: relativeWorktreePatchPath,
       });
     }
 
@@ -221,7 +217,7 @@ export class PullBackupStore {
 
   async readSummary(backupId) {
     if (typeof backupId !== 'string' || !/^[a-z0-9-]{1,128}$/iu.test(backupId)) return null;
-    const path = sanitizeVaultPath(this.vaultDir, this.getSummaryPath(backupId), { allowIgnored: true });
+    const path = sanitizeVaultPath(this.vaultDir, this.getSummaryPath(backupId), { allowIgnored: true, preservePath: true });
     if (!path) return null;
     try {
       return await readFile(path, 'utf8');

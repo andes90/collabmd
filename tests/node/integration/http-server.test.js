@@ -844,6 +844,7 @@ test('HTTP server exposes git status and diff endpoints for git-backed vaults', 
 test('HTTP git commands preserve author, managed scope, and reconciliation metadata', async (t) => {
   const app = await startTestServer();
   t.after(() => app.close());
+  await execFile('git', ['init'], { cwd: app.vaultDir });
   const author = { email: 'author@example.com', name: 'Request Author' };
   const calls = [];
   const observations = [];

@@ -50,6 +50,7 @@ async function applyWorkspaceMutationEffects({
 
 export function createGitApiHandler({
   authService = null,
+  gitEnabled = true,
   gitService,
   workspaceMutationCoordinator = null,
 }) {
@@ -129,6 +130,11 @@ export function createGitApiHandler({
   ]);
 
   return async function handleGitApi(req, res, requestUrl) {
+    if (requestUrl.pathname !== '/api/git/status' && !gitEnabled) {
+      jsonResponse(req, res, 404, { error: 'Git integration is unavailable for this vault' });
+      return true;
+    }
+
     if (req.method === 'GET') {
       const queryRoute = queryRoutes.get(requestUrl.pathname);
       if (queryRoute) {
@@ -202,6 +208,10 @@ export function createGitApiHandler({
     }
 
     try {
+      if (!await gitService.isGitRepo({ requireRoot: true })) {
+        jsonResponse(req, res, 404, { error: 'Git repository not found for this vault' });
+        return true;
+      }
       const body = route.bodyField ? await parseJsonBody(req) : {};
       if (route.bodyField && !body?.[route.bodyField]) {
         jsonResponse(req, res, 400, { error: `Missing ${route.bodyField}` });

@@ -113,6 +113,7 @@ function parseRemoteDefaultBranch(output) {
 
 async function resolveRemoteDefaultBranch(repoUrl, options = {}) {
   const output = await execGit(['ls-remote', '--symref', repoUrl, 'HEAD'], options);
+  if (!output.trim() && !(await execGit(['ls-remote', '--refs', repoUrl], options)).trim()) return null;
   return parseRemoteDefaultBranch(output);
 }
 
@@ -167,6 +168,7 @@ async function updateExistingCheckout(vaultDir, repoUrl, options = {}) {
   }
 
   const defaultBranch = await resolveRemoteDefaultBranch(repoUrl, options);
+  if (!defaultBranch) return { syncSkipped: false };
 
   await execGit(['fetch', '--prune', 'origin'], {
     ...options,

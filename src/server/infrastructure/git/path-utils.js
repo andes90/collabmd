@@ -19,23 +19,15 @@ export function decodeQuotedPath(pathValue) {
 }
 
 export function normalizeRelativeGitPath(pathValue) {
-  const normalized = decodeQuotedPath(pathValue)
-    .trim()
-    .replace(/\\/g, '/')
-    .replace(/^\/+/u, '')
-    .split('/')
-    .map((segment) => segment.trim())
-    .filter(Boolean);
-
-  if (normalized.length === 0) {
+  if (typeof pathValue !== 'string' || !pathValue) {
     throw createGitRequestError(400, 'Missing path parameter');
   }
 
-  if (normalized.some((segment) => segment === '.' || segment === '..')) {
+  if (pathValue.includes('\0') || pathValue.split('/').some((segment) => !segment || segment === '.' || segment === '..')) {
     throw createGitRequestError(400, 'Invalid path parameter');
   }
 
-  return normalized.join('/');
+  return pathValue;
 }
 
 
