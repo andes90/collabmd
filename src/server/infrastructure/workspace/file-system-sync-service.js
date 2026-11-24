@@ -5,6 +5,7 @@ import { hasWorkspaceMutation } from '../../../domain/workspace-change.js';
 import {
   deriveIncrementalWorkspaceState,
   detectWorkspaceStateChange,
+  diffWorkspaceEntries,
   readWorkspacePathSnapshot as readWorkspacePathSnapshotFromAdapter,
 } from '../../domain/workspace-state.js';
 import { isIgnoredVaultEntry } from '../persistence/path-utils.js';
@@ -56,10 +57,12 @@ export class FileSystemSyncService {
       vaultDir: vaultFileStore?.vaultDir,
     });
     this.watcher = null;
+    this.watcherRetryTimer = null;
+    this.watcherRetryCount = 0;
     this.debounceTimer = null;
     this.runningFlush = null;
     this.lastState = null;
-    this.pendingEventTypesByPath = new Map();
+    this.pendingPaths = new Set();
     this.forceFullScan = false;
     this.pauseWatchFlush = false;
     this.retryCount = 0;
@@ -73,9 +76,37 @@ export class FileSystemSyncService {
 
   watchVault() {
     if (this.watcher) return;
-    this.watcher = watch(this.vaultFileStore.vaultDir, { recursive: true }, (eventType, filename) => {
-      this.handleWatchEvent(eventType, filename);
-    });
+    try {
+      const watcher = watch(this.vaultFileStore.vaultDir, { recursive: true }, (eventType, filename) => {
+        this.handleWatchEvent(eventType, filename);
+      });
+      this.watcher = watcher;
+      watcher.on('error', (error) => {
+        if (this.watcher !== watcher) return;
+        watcher.close();
+        this.watcher = null;
+        this.handleWatcherFailure(error);
+      });
+    } catch (error) {
+      this.handleWatcherFailure(error);
+    }
+  }
+
+  handleWatcherFailure(error) {
+    console.error('[filesystem-sync] File watcher failed:', error.code ?? error.name);
+    this.forceFullScan = true;
+    this.scheduleWatcherRestart();
+  }
+
+  scheduleWatcherRestart() {
+    if (this.closed || this.pauseWatchFlush || this.watcherRetryTimer || this.watcherRetryCount >= 3) return;
+    this.watcherRetryTimer = setTimeout(() => {
+      this.watcherRetryTimer = null;
+      this.watcherRetryCount += 1;
+      this.watchVault();
+      if (this.watcher) this.scheduleFlush();
+    }, 250 * 2 ** this.watcherRetryCount);
+    this.watcherRetryTimer.unref?.();
   }
 
   async start({ snapshot = null } = {}) {
@@ -83,6 +114,7 @@ export class FileSystemSyncService {
     this.lastState = snapshot ?? this.mutationCoordinator.workspaceState ?? await this.vaultFileStore.scanWorkspaceState();
     this.watchVault();
     this.pauseWatchFlush = false;
+    if (!this.watcher) this.scheduleWatcherRestart();
     await this.flushPendingChanges();
   }
 
@@ -90,7 +122,7 @@ export class FileSystemSyncService {
     this.lastState = snapshot ?? this.mutationCoordinator.workspaceState ?? null;
   }
 
-  handleWatchEvent(eventType, filename) {
+  handleWatchEvent(_eventType, filename) {
     const normalizedPath = normalizeWatchedPath(filename);
     if (!normalizedPath) {
       this.forceFullScan = true;
@@ -103,12 +135,11 @@ export class FileSystemSyncService {
     }
 
     this.retryCount = 0;
+    this.watcherRetryCount = 0;
 
-    const bucket = this.pendingEventTypesByPath.get(normalizedPath) ?? new Set();
-    bucket.add(String(eventType || 'change'));
-    this.pendingEventTypesByPath.set(normalizedPath, bucket);
+    this.pendingPaths.add(normalizedPath);
 
-    if (this.pendingEventTypesByPath.size > MAX_INCREMENTAL_PENDING_PATHS) {
+    if (this.pendingPaths.size > MAX_INCREMENTAL_PENDING_PATHS) {
       this.forceFullScan = true;
     }
 
@@ -136,7 +167,7 @@ export class FileSystemSyncService {
     this.pauseWatchFlush = true;
     clearTimeout(this.debounceTimer);
     this.debounceTimer = null;
-    this.pendingEventTypesByPath.clear();
+    this.pendingPaths.clear();
     this.forceFullScan = false;
 
     try {
@@ -144,7 +175,7 @@ export class FileSystemSyncService {
       this.lastState = snapshot ?? this.mutationCoordinator.workspaceState ?? await this.vaultFileStore.scanWorkspaceState();
     } finally {
       this.pauseWatchFlush = wasPaused;
-      if (this.pendingEventTypesByPath.size || this.forceFullScan) this.scheduleFlush();
+      if (this.pendingPaths.size || this.forceFullScan) this.scheduleFlush();
     }
   }
 
@@ -157,7 +188,7 @@ export class FileSystemSyncService {
       await this.runningFlush;
     }
 
-    if (this.pendingEventTypesByPath.size === 0 && !this.forceFullScan) {
+    if (this.pendingPaths.size === 0 && !this.forceFullScan) {
       return;
     }
 
@@ -171,12 +202,12 @@ export class FileSystemSyncService {
     return readWorkspacePathSnapshotFromAdapter(this.workspaceStateAdapter, pathValue);
   }
 
-  async buildIncrementalResult({ forceFullScan, pendingPaths }) {
+  async buildIncrementalResult({ forceFullScan, pendingPaths, previousState }) {
     return deriveIncrementalWorkspaceState(this.workspaceStateAdapter, {
       forceFullScan,
       maxPendingPaths: MAX_INCREMENTAL_PENDING_PATHS,
       pendingPaths,
-      previousState: this.lastState,
+      previousState,
       readPathSnapshot: (pathValue) => this.readWorkspacePathSnapshot(pathValue),
     });
   }
@@ -185,7 +216,8 @@ export class FileSystemSyncService {
     await this.mutationCoordinator.waitForManagedWrites?.();
     const previousState = this.lastState;
     try {
-      return await this.reconcilePendingChanges();
+      const reconcile = () => this.reconcilePendingChanges();
+      return await (this.mutationCoordinator.runInWorkspaceOrder?.(reconcile) ?? reconcile());
     } catch (error) {
       this.lastState = previousState;
       this.forceFullScan = true;
@@ -195,19 +227,22 @@ export class FileSystemSyncService {
 
   async reconcilePendingChanges() {
     const startedAt = Date.now();
-    const pendingPaths = [...this.pendingEventTypesByPath.keys()];
+    const pendingPaths = [...this.pendingPaths];
     const pendingPathCount = pendingPaths.length;
     const forceFullScan = this.forceFullScan;
-    this.pendingEventTypesByPath.clear();
+    this.pendingPaths.clear();
     this.forceFullScan = false;
-    const { fallbackReason, incrementalResult } = await this.buildIncrementalResult({ forceFullScan, pendingPaths });
-
     const previousWorkspaceState = this.mutationCoordinator.workspaceState;
     const authoritativePreviousState = previousWorkspaceState ?? this.lastState;
+    const { fallbackReason, incrementalResult } = await this.buildIncrementalResult({
+      forceFullScan,
+      pendingPaths,
+      previousState: authoritativePreviousState,
+    });
     let effectiveMode = incrementalResult ? 'incremental' : 'full-scan';
     let effectiveFallbackReason = fallbackReason;
     let nextState = incrementalResult?.nextState ?? await this.vaultFileStore.scanWorkspaceState();
-    let workspaceChange = incrementalResult?.workspaceChange ?? detectWorkspaceStateChange(this.lastState, nextState);
+    let workspaceChange = incrementalResult?.workspaceChange ?? detectWorkspaceStateChange(authoritativePreviousState, nextState);
     this.lastState = nextState;
 
     let filteredChange = this.mutationCoordinator.filterManagedWorkspaceChange(workspaceChange, nextState);
@@ -226,7 +261,9 @@ export class FileSystemSyncService {
     }
 
     if (!filteredChange) {
-      if (this.mutationCoordinator.isGloballySuppressed?.() || hasWorkspaceMutation(workspaceChange)) {
+      const entryPatch = diffWorkspaceEntries(previousWorkspaceState?.entries, nextState.entries);
+      if (entryPatch.upserts.size || entryPatch.deletes.length
+        || this.mutationCoordinator.isGloballySuppressed?.() || hasWorkspaceMutation(workspaceChange)) {
         this.mutationCoordinator.syncWorkspaceEntries(nextState, {
           previousState: previousWorkspaceState,
         });
@@ -264,9 +301,10 @@ export class FileSystemSyncService {
 
   async close() {
     this.closed = true;
+    clearTimeout(this.watcherRetryTimer);
     clearTimeout(this.debounceTimer);
     this.debounceTimer = null;
-    this.pendingEventTypesByPath.clear();
+    this.pendingPaths.clear();
     this.forceFullScan = false;
     if (this.watcher) {
       this.watcher.close();

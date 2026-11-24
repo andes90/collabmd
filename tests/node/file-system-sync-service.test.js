@@ -169,7 +169,7 @@ test('FileSystemSyncService applies single-file content changes without a full w
     vaultFileStore: store,
   });
   service.lastState = baselineState;
-  service.pendingEventTypesByPath.set('README.md', new Set(['change']));
+  service.pendingPaths.add('README.md');
 
   await writeFile(join(vaultDir, 'README.md'), '# Readme\n\nUpdated\n', 'utf8');
   await service.flush();
@@ -213,7 +213,7 @@ test('FileSystemSyncService falls back to a full workspace rescan for rename eve
     vaultFileStore: store,
   });
   service.lastState = baselineState;
-  service.pendingEventTypesByPath.set('README.md', new Set(['rename']));
+  service.pendingPaths.add('README.md');
   service.forceFullScan = true;
 
   await rename(join(vaultDir, 'README.md'), join(vaultDir, 'docs', 'README.md'));
@@ -259,7 +259,7 @@ test('FileSystemSyncService emits gated perf logs for full-scan fallback reasons
     vaultFileStore: store,
   });
   service.lastState = baselineState;
-  service.pendingEventTypesByPath.set('README.md', new Set(['rename']));
+  service.pendingPaths.add('README.md');
   service.forceFullScan = true;
 
   await rename(join(vaultDir, 'README.md'), join(vaultDir, 'docs', 'README.md'));
@@ -304,8 +304,8 @@ test('FileSystemSyncService collapses overlapping pending paths during increment
     vaultFileStore: store,
   });
   service.lastState = baselineState;
-  service.pendingEventTypesByPath.set('docs', new Set(['change']));
-  service.pendingEventTypesByPath.set('docs/guide.md', new Set(['change']));
+  service.pendingPaths.add('docs');
+  service.pendingPaths.add('docs/guide.md');
 
   await writeFile(join(vaultDir, 'docs', 'guide.md'), '# Guide\n\nUpdated\n', 'utf8');
   await service.flush();
@@ -350,7 +350,7 @@ test('FileSystemSyncService preserves asset directory entries when deleting one 
     vaultFileStore: store,
   });
   service.lastState = baselineState;
-  service.pendingEventTypesByPath.set('assets/delete.webp', new Set(['rename']));
+  service.pendingPaths.add('assets/delete.webp');
 
   await rm(join(vaultDir, 'assets', 'delete.webp'));
   await service.flush();
@@ -403,7 +403,7 @@ test('FileSystemSyncService does not reintroduce a deleted file from a stale par
     },
   });
   service.lastState = staleState;
-  service.pendingEventTypesByPath.set('docs', new Set(['change']));
+  service.pendingPaths.add('docs');
   service.readWorkspacePathSnapshot = async () => staleState;
 
   await service.flush();
@@ -458,7 +458,7 @@ test('FileSystemSyncService does not reintroduce a deleted directory tree from a
     },
   });
   service.lastState = staleState;
-  service.pendingEventTypesByPath.set('docs', new Set(['rename']));
+  service.pendingPaths.add('docs');
   service.readWorkspacePathSnapshot = async () => staleState;
 
   await service.flush();
@@ -517,7 +517,7 @@ test('FileSystemSyncService silently rebases workspace state during global suppr
     },
   });
   service.lastState = baselineState;
-  service.pendingEventTypesByPath.set('docs', new Set(['change']));
+  service.pendingPaths.add('docs');
   service.readWorkspacePathSnapshot = async () => externalChangeState;
 
   await service.flush();
@@ -578,7 +578,7 @@ test('FileSystemSyncService silently rebases workspace state for managed writes'
     },
   });
   service.lastState = baselineState;
-  service.pendingEventTypesByPath.set('diagram.excalidraw', new Set(['change']));
+  service.pendingPaths.add('diagram.excalidraw');
   service.readWorkspacePathSnapshot = async () => managedWriteState;
 
   await service.flush();

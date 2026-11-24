@@ -329,3 +329,65 @@ test('a closed text room retains its conflict when the file changes again on dis
   assert.match(flagged, /second change from disk/);
   assert.equal(await app.server.vaultFileStore.readEditableVaultContent(path), 'second change from disk');
 });
+
+test('filesystem observations publish the creation, rename, and removal of an empty folder', async (t) => {
+  const app = await startTestServer();
+  t.after(() => app.close());
+  const workspace = app.server.workspaceMutationCoordinator;
+  const watcher = app.server.fileSystemSyncService;
+  await mkdir(join(app.vaultDir, 'empty'));
+  emitWatchEvents(app, 'empty');
+  await watcher.flushPendingChanges();
+  assert.equal(workspace.workspaceState.entries.has('empty'), true);
+  await rename(join(app.vaultDir, 'empty'), join(app.vaultDir, 'renamed'));
+  emitWatchEvents(app, 'empty', 'renamed');
+  await watcher.flushPendingChanges();
+  assert.equal(workspace.workspaceState.entries.has('empty'), false);
+  assert.equal(workspace.workspaceState.entries.has('renamed'), true);
+  await rm(join(app.vaultDir, 'renamed'), { recursive: true });
+  emitWatchEvents(app, 'renamed');
+  await watcher.flushPendingChanges();
+  assert.equal(workspace.workspaceState.entries.has('renamed'), false);
+});
+
+test('a failed directory listing does not delete an existing note or its comments', async (t) => {
+  const app = await startTestServer();
+  t.after(() => app.close());
+  const { fileSystemSyncService: watcher, vaultFileStore: store, workspaceMutationCoordinator: workspace } = app.server;
+  await workspace.createFile({ path: 'notes/existing.md', content: 'Keep this' });
+  await store.writeCommentThreads('notes/existing.md', [{ id: 'discussion' }]);
+  watcher.lastState = workspace.workspaceState;
+  const readDirectory = watcher.workspaceStateAdapter.readDirectory;
+  t.mock.method(watcher.workspaceStateAdapter, 'readDirectory', async (path) => {
+    if (path === 'notes') throw Object.assign(new Error('Disk read failed'), { code: 'EIO' });
+    return readDirectory(path);
+  });
+  emitWatchEvents(app, 'notes');
+  await assert.rejects(watcher.flushPendingChanges(), { code: 'EIO' });
+  assert.equal(workspace.workspaceState.entries.has('notes/existing.md'), true);
+  assert.deepEqual(await store.readCommentThreads('notes/existing.md'), [{ id: 'discussion' }]);
+});
+
+test('the watcher restarts and scans after an asynchronous watcher error', async (t) => {
+  const app = await startTestServer({ fileWatcherEnabled: true });
+  t.after(() => app.close());
+  t.mock.method(console, 'error', () => {});
+  const { fileSystemSyncService: service, workspaceMutationCoordinator: workspace } = app.server;
+  const original = service.watcher;
+  original.emit('error', Object.assign(new Error('Watcher failed'), { code: 'EMFILE' }));
+  assert.equal(service.watcher, null);
+  await mkdir(join(app.vaultDir, 'created-while-watcher-was-down'));
+  await waitForCondition(() => service.watcher && service.watcher !== original);
+  await waitForCondition(() => workspace.workspaceState.entries.has('created-while-watcher-was-down'));
+});
+
+test('an incremental filesystem observation retains newer API files outside the event paths', async (t) => {
+  const app = await startTestServer();
+  t.after(() => app.close());
+  const { fileSystemSyncService: watcher, workspaceMutationCoordinator: workspace } = app.server;
+  await workspace.createFile({ path: 'api.md', content: 'API content' });
+  await writeFile(join(app.vaultDir, 'test.md'), 'External content');
+  emitWatchEvents(app, 'test.md');
+  await watcher.flushPendingChanges();
+  assert.equal(workspace.workspaceState.entries.has('api.md'), true);
+});

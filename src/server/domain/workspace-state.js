@@ -166,8 +166,13 @@ async function walkWorkspaceDirectory(adapter, directoryPath, entries, metadata,
   let dirEntries;
   try {
     dirEntries = await adapter.readDirectory(directoryPath);
-  } catch {
-    return;
+  } catch (error) {
+    if (directoryPath && ['ENOENT', 'ENOTDIR'].includes(error.code)) {
+      entries.delete(directoryPath);
+      metadata.delete(directoryPath);
+      return;
+    }
+    throw error;
   }
 
   const visitEntry = async (entry) => {

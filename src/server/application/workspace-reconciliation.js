@@ -82,6 +82,7 @@ export class WorkspaceReconciliation {
     this.managedPathMetadata = new Map();
     this.activeManagedWrites = new Set();
     this.activeWorkspaceMutations = 0;
+    this.workspaceQueue = null;
     this.workspaceState = null;
     this.workspaceTree = [];
   }
@@ -167,15 +168,23 @@ export class WorkspaceReconciliation {
     }
   }
 
+  runInWorkspaceOrder(operation) {
+    const pending = this.workspaceQueue ? this.workspaceQueue.catch(() => {}).then(operation) : operation();
+    this.workspaceQueue = pending;
+    return pending.finally(() => {
+      if (this.workspaceQueue === pending) this.workspaceQueue = null;
+    });
+  }
+
   runManagedWorkspaceMutation(operation) {
-    return this.trackManagedWrite(async () => {
+    return this.runInWorkspaceOrder(() => this.trackManagedWrite(async () => {
       this.activeWorkspaceMutations += 1;
       try {
         return await operation();
       } finally {
         this.activeWorkspaceMutations -= 1;
       }
-    });
+    }));
   }
 
   isGloballySuppressed() {
@@ -334,7 +343,7 @@ export class WorkspaceReconciliation {
       return result;
     };
 
-    return pausePaths ? this.runWithPersistencePaused(pausePaths, execute) : execute();
+    return this.runInWorkspaceOrder(() => (pausePaths ? this.runWithPersistencePaused(pausePaths, execute) : execute()));
   }
 
   writeEditableContent({ content, origin = 'api', path, requestId = null, sourceRef = null } = {}) {

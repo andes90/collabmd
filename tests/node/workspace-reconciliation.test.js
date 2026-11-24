@@ -392,3 +392,11 @@ test('WorkspaceReconciliation avoids a full rescan for API directory deletion', 
   assert.equal(harness.coordinator.workspaceState.entries.has('docs/guides/intro.md'), false);
   assert.equal(harness.coordinator.workspaceState.entries.has('docs'), true);
 });
+
+test('concurrent vault creates both reach the explorer without a watcher', async (t) => {
+  const { coordinator } = await createCoordinatorWithVault(t);
+  const paths = ['one.md', 'two.md'];
+  const results = await Promise.all(paths.map((path) => coordinator.createFile({ path, content: path })));
+  assert.ok(results.every(({ ok }) => ok));
+  assert.deepEqual([...coordinator.workspaceState.entries.keys()].sort(), paths);
+});
