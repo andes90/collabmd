@@ -63,28 +63,44 @@
 }
 
 .preview-content .mermaid-shell,
-.mermaid-maximized-root .mermaid-shell {
+.mermaid-maximized-root .mermaid-shell,
+.preview-content .plantuml-shell,
+.plantuml-maximized-root .plantuml-shell {
   display: grid;
   gap: 0;
 }
 
+.preview-content .plantuml-shell,
+.plantuml-maximized-root .plantuml-shell {
+  min-width: 0;
+  width: 100%;
+}
+
 .preview-content .mermaid-placeholder-card,
-.mermaid-maximized-root .mermaid-placeholder-card {
+.mermaid-maximized-root .mermaid-placeholder-card,
+.preview-content .plantuml-placeholder-card,
+.plantuml-maximized-root .plantuml-placeholder-card {
   border-radius: 0;
 }
 
 .preview-content .mermaid-toolbar,
-.mermaid-maximized-root .mermaid-toolbar {
+.mermaid-maximized-root .mermaid-toolbar,
+.preview-content .plantuml-toolbar,
+.plantuml-maximized-root .plantuml-toolbar {
   width: 100%;
 }
 
 .preview-content .mermaid-zoom-btn,
-.mermaid-maximized-root .mermaid-zoom-btn {
+.mermaid-maximized-root .mermaid-zoom-btn,
+.preview-content .plantuml-tool-btn,
+.plantuml-maximized-root .plantuml-tool-btn {
   flex-shrink: 0;
 }
 
 .preview-content .mermaid-zoom-btn:disabled,
-.mermaid-maximized-root .mermaid-zoom-btn:disabled {
+.mermaid-maximized-root .mermaid-zoom-btn:disabled,
+.preview-content .plantuml-tool-btn:disabled,
+.plantuml-maximized-root .plantuml-tool-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -95,92 +111,19 @@
 }
 
 .preview-content .mermaid-frame :is(text, tspan, foreignObject),
-.mermaid-maximized-root .mermaid-frame :is(text, tspan, foreignObject) {
-  cursor: text;
-  user-select: text;
-}
-
-body.mermaid-maximized-open {
-  overflow: hidden;
-}
-
-body.mermaid-maximized-open::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: 170;
-  background: var(--surface-scrim);
-  backdrop-filter: blur(2px);
-}
-
-.mermaid-maximized-root {
-  position: fixed;
-  inset: 0;
-  z-index: 171;
-  pointer-events: none;
-}
-
-.preview-content .mermaid-shell.is-maximized,
-.mermaid-maximized-root .mermaid-shell.is-maximized {
-  position: fixed;
-  inset: var(--space-4);
-  z-index: 171;
-  width: auto;
-  max-width: none;
-  margin: 0;
-  box-shadow: var(--shadow-lg);
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
-.mermaid-maximized-root .mermaid-shell.is-maximized {
-  pointer-events: auto;
-}
-
-.preview-content .mermaid-shell.is-maximized .mermaid-frame,
-.mermaid-maximized-root .mermaid-shell.is-maximized .mermaid-frame {
-  max-height: none;
-  height: 100%;
-}
-
-.preview-content .plantuml-shell,
-.plantuml-maximized-root .plantuml-shell {
-  display: grid;
-  gap: 0;
-  min-width: 0;
-  width: 100%;
-}
-
-.preview-content .plantuml-placeholder-card,
-.plantuml-maximized-root .plantuml-placeholder-card {
-  border-radius: 0;
-}
-
-.preview-content .plantuml-tool-btn:disabled,
-.plantuml-maximized-root .plantuml-tool-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.preview-content .plantuml-toolbar,
-.plantuml-maximized-root .plantuml-toolbar {
-  width: 100%;
-}
-
-.preview-content .plantuml-tool-btn,
-.plantuml-maximized-root .plantuml-tool-btn {
-  flex-shrink: 0;
-}
-
+.mermaid-maximized-root .mermaid-frame :is(text, tspan, foreignObject),
 .preview-content .plantuml-frame :is(text, tspan, foreignObject),
 .plantuml-maximized-root .plantuml-frame :is(text, tspan, foreignObject) {
   cursor: text;
   user-select: text;
 }
 
+body.mermaid-maximized-open,
 body.plantuml-maximized-open {
   overflow: hidden;
 }
 
+body.mermaid-maximized-open::before,
 body.plantuml-maximized-open::before {
   content: '';
   position: fixed;
@@ -190,6 +133,7 @@ body.plantuml-maximized-open::before {
   backdrop-filter: blur(2px);
 }
 
+.mermaid-maximized-root,
 .plantuml-maximized-root {
   position: fixed;
   inset: 0;
@@ -197,6 +141,8 @@ body.plantuml-maximized-open::before {
   pointer-events: none;
 }
 
+.preview-content .mermaid-shell.is-maximized,
+.mermaid-maximized-root .mermaid-shell.is-maximized,
 .preview-content .plantuml-shell.is-maximized,
 .plantuml-maximized-root .plantuml-shell.is-maximized {
   position: fixed;
@@ -210,6 +156,8 @@ body.plantuml-maximized-open::before {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
+.preview-content .mermaid-shell.is-maximized .mermaid-frame,
+.mermaid-maximized-root .mermaid-shell.is-maximized .mermaid-frame,
 .preview-content .plantuml-shell.is-maximized .plantuml-frame,
 .plantuml-maximized-root .plantuml-shell.is-maximized .plantuml-frame {
   max-height: none;

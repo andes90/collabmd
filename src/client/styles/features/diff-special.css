@@ -192,20 +192,20 @@
 
 .diff-excalidraw-preview-loading,
 .diff-excalidraw-preview--empty,
-.diff-excalidraw-preview.is-error {
+.diff-excalidraw-preview.is-error,
+.diff-drawio-preview.is-error {
   color: var(--color-text-faint);
   font-size: var(--text-meta);
-}
-
-.diff-excalidraw-preview.is-error {
   background: var(--color-surface-offset);
 }
 
-.diff-excalidraw-source {
+.diff-excalidraw-source,
+.diff-drawio-source {
   border-top: 1px solid var(--color-divider);
 }
 
-.diff-excalidraw-source summary {
+.diff-excalidraw-source summary,
+.diff-drawio-source summary {
   padding: 8px var(--space-3);
   color: var(--color-text-muted);
   cursor: pointer;
@@ -213,11 +213,13 @@
   font-weight: 600;
 }
 
-.diff-excalidraw-source summary:hover {
+.diff-excalidraw-source summary:hover,
+.diff-drawio-source summary:hover {
   color: var(--color-text);
 }
 
-.diff-excalidraw-source pre {
+.diff-excalidraw-source pre,
+.diff-drawio-source pre {
   max-height: 300px;
   margin: 0;
   padding: var(--space-3);
@@ -256,39 +258,6 @@
   width: 100%;
   color: var(--color-text-faint);
   font-size: var(--text-meta);
-}
-
-.diff-drawio-preview.is-error {
-  background: var(--color-surface-offset);
-}
-
-.diff-drawio-source {
-  border-top: 1px solid var(--color-divider);
-}
-
-.diff-drawio-source summary {
-  padding: 8px var(--space-3);
-  color: var(--color-text-muted);
-  cursor: pointer;
-  font-size: var(--text-meta);
-  font-weight: 600;
-}
-
-.diff-drawio-source summary:hover {
-  color: var(--color-text);
-}
-
-.diff-drawio-source pre {
-  max-height: 300px;
-  margin: 0;
-  padding: var(--space-3);
-  overflow: auto;
-  border-top: 1px solid var(--color-divider);
-  color: var(--color-text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-meta);
-  line-height: 1.55;
-  white-space: pre;
 }
 
 @media (max-width: 768px) {

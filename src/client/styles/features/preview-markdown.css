@@ -1121,7 +1121,6 @@
   display: block;
   width: 100%;
   overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
   padding: var(--space-4);
   background: none;
   color: var(--color-text);
@@ -1152,7 +1151,6 @@
   overflow-x: auto;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  -webkit-overflow-scrolling: touch;
 }
 
 .preview-content table {

@@ -165,21 +165,6 @@
   scrollbar-color: var(--color-surface-dynamic) transparent;
 }
 
-.qs-results::-webkit-scrollbar {
-  width: 8px;
-}
-
-.qs-results::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.qs-results::-webkit-scrollbar-thumb {
-  border: 2px solid transparent;
-  border-radius: var(--radius-full);
-  background: var(--color-surface-dynamic);
-  background-clip: content-box;
-}
-
 .qs-result-item {
   display: flex;
   align-items: center;

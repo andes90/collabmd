@@ -8,9 +8,6 @@
   --canvas-color-4: light-dark(#16a34a, #4ade80);
   --canvas-color-5: light-dark(#0891b2, #22d3ee);
   --canvas-color-6: light-dark(#9333ea, #c084fc);
-  --pdf-highlight-bg: rgb(180 0 170 / 25%);
-  --pdf-highlight-selected-bg: rgb(0 100 0 / 25%);
-  --pdf-selection-bg: rgb(0 90 255 / 25%);
 }
 
 :root,
@@ -36,13 +33,11 @@
   --color-primary-highlight: light-dark(#dbeafe, #172a45);
   --color-comment: light-dark(#2563eb, #60a5fa);
   --color-comment-soft: light-dark(rgba(37, 99, 235, 0.08), rgba(96, 165, 250, 0.1));
-  --color-comment-strong: light-dark(rgba(37, 99, 235, 0.14), rgba(96, 165, 250, 0.16));
   --color-comment-text: light-dark(#1e40af, #bfdbfe);
   --color-error: light-dark(#dc2626, #f87171);
   --color-danger: light-dark(#dc2626, #f87171);
   --color-error-highlight: light-dark(#fce8e8, #2a1a1a);
   --color-success: light-dark(#16a34a, #4ade80);
-  --color-success-highlight: light-dark(#dcfce7, #1a2a1a);
   --color-warning: light-dark(#d97706, #fbbf24);
   --color-warning-highlight: light-dark(#fef3c7, #2a261a);
   --diff-add-bg: light-dark(rgba(22, 163, 74, 0.06), rgba(74, 222, 128, 0.08));
@@ -76,11 +71,9 @@
   --surface-success-soft: color-mix(in oklab, var(--color-success) 14%, transparent);
   --surface-warning-soft: color-mix(in oklab, var(--color-warning) 14%, transparent);
   --surface-danger-soft: color-mix(in oklab, var(--color-error) 14%, transparent);
-  --surface-comment-shell-header: color-mix(in srgb, var(--color-surface) 97%, var(--color-comment) 3%);
   --surface-comment-record-hover: color-mix(in srgb, var(--color-surface-2) 92%, var(--color-comment) 8%);
   --surface-comment-subtle: color-mix(in srgb, var(--color-surface-2) 95%, var(--color-comment) 5%);
   --surface-comment-subtle-strong: color-mix(in srgb, var(--color-surface-2) 92%, var(--color-comment) 8%);
-  --surface-comment-card: color-mix(in srgb, var(--color-surface) 94%, var(--color-comment) 6%);
   --surface-comment-elevated: color-mix(in srgb, var(--color-surface) 96%, var(--color-comment) 4%);
   --surface-comment-offset: color-mix(in srgb, var(--color-surface-offset) 90%, var(--color-comment) 10%);
   --surface-comment-offset-soft: color-mix(in srgb, var(--color-surface-offset) 88%, var(--color-comment) 12%);
@@ -89,7 +82,6 @@
   --surface-comment-highlight-hover: color-mix(in srgb, var(--color-comment-soft) 74%, var(--color-comment) 26%);
   --surface-comment-highlight-active: color-mix(in srgb, var(--color-comment-soft) 62%, var(--color-comment) 38%);
   --surface-comment-selection: color-mix(in srgb, var(--color-surface) 25%, var(--color-comment) 75%);
-  --surface-comment-preview-fade: linear-gradient(180deg, oklch(0 0 0 / 0), color-mix(in srgb, var(--color-surface-2) 95%, var(--color-comment) 5%));
   --border-comment-soft: color-mix(in srgb, var(--color-divider) 90%, var(--color-comment) 10%);
   --border-comment-muted: color-mix(in srgb, var(--color-divider) 88%, var(--color-comment) 12%);
   --border-comment-strong: color-mix(in srgb, var(--color-border) 82%, var(--color-comment) 18%);
@@ -98,11 +90,9 @@
   --surface-warning-toast: var(--color-warning-highlight);
   --border-warning-toast: light-dark(color-mix(in oklab, #f59e0b 84%, #b45309 16%), color-mix(in oklab, #f59e0b 78%, white 10%));
   --text-warning-toast: light-dark(#422006, color-mix(in oklab, white 92%, #fef3c7 8%));
-  --shadow-warning-toast: var(--shadow-md);
   --border-accent-soft: color-mix(in oklab, var(--color-primary) 22%, transparent);
   --border-accent-muted: color-mix(in oklab, var(--color-primary) 24%, var(--color-border));
   --border-accent-strong: color-mix(in oklab, var(--color-primary) 34%, var(--color-border));
-  --border-accent-stronger: color-mix(in oklab, var(--color-primary) 40%, var(--color-border));
   --shadow-accent-inset: inset 0 0 0 1px color-mix(in oklab, var(--color-primary) 14%, transparent);
   --shadow-accent-outline: 0 0 0 1px color-mix(in oklab, var(--color-primary) 16%, transparent);
   --shadow-accent-halo: 0 0 0 3px oklch(from var(--color-primary) l c h / 0.16);

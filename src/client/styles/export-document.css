@@ -17,11 +17,6 @@ body[data-surface='export-document'] {
   scrollbar-width: none;
 }
 
-html[data-surface='export-document']::-webkit-scrollbar,
-body[data-surface='export-document']::-webkit-scrollbar {
-  display: none;
-}
-
 .export-page-shell {
   width: min(960px, calc(100vw - 48px));
   margin: 0 auto;
@@ -211,12 +206,6 @@ body[data-surface='export-document']::-webkit-scrollbar {
     overflow: hidden !important;
     background: var(--color-surface);
     scrollbar-width: none;
-  }
-
-  html[data-surface='export-document']::-webkit-scrollbar,
-  body[data-surface='export-document']::-webkit-scrollbar,
-  .export-content *::-webkit-scrollbar {
-    display: none;
   }
 
   .export-page-shell {

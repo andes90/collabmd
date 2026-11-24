@@ -47,15 +47,8 @@
   overflow-x: hidden;
   overflow-y: auto;
   padding: var(--space-2) 0;
-}
-
-.outline-nav::-webkit-scrollbar {
-  width: 4px;
-}
-
-.outline-nav::-webkit-scrollbar-thumb {
-  background: var(--color-surface-dynamic);
-  border-radius: var(--radius-full);
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-surface-dynamic) transparent;
 }
 
 .outline-item {

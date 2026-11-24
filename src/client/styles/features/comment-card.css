@@ -118,8 +118,7 @@
   justify-content: flex-end;
 }
 
-.ui-input.comment-card-input,
-.ui-input.comment-reply-input {
+.ui-input.comment-card-input {
   padding: var(--space-2) var(--space-3);
   border-color: var(--border-comment-strong);
   background: var(--surface-comment-subtle);
@@ -127,13 +126,11 @@
   line-height: 1.5;
 }
 
-.ui-input.comment-card-input:hover:not(:focus),
-.ui-input.comment-reply-input:hover:not(:focus) {
+.ui-input.comment-card-input:hover:not(:focus) {
   border-color: var(--border-comment-active);
 }
 
-.ui-input.comment-card-input:focus,
-.ui-input.comment-reply-input:focus {
+.ui-input.comment-card-input:focus {
   border-color: var(--color-comment);
   background: var(--surface-comment-elevated);
   box-shadow: var(--shadow-comment-outline), 0 0 0 3px var(--color-comment-soft);

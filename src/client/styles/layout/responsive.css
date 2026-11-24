@@ -376,20 +376,18 @@
     display: inline-flex !important;
   }
 
-  .outline-panel {
+  .outline-panel,
+  .comments-drawer {
     position: absolute;
     inset: 0;
     width: auto;
+    min-width: 0;
     border-top: 1px solid var(--color-divider);
     border-left: none;
     background: oklch(from var(--color-surface) l c h / 0.98);
     backdrop-filter: blur(10px);
     box-shadow: var(--shadow-lg);
     z-index: 6;
-  }
-
-  .outline-panel.hidden {
-    display: none !important;
   }
 
   .outline-close-btn {
@@ -397,23 +395,6 @@
     width: var(--control-h-md);
     min-width: var(--control-h-md);
     height: var(--control-h-md);
-  }
-
-  .comments-drawer {
-    position: absolute;
-    inset: 0;
-    width: auto;
-    min-width: 0;
-    border-left: none;
-    border-top: 1px solid var(--color-divider);
-    background: oklch(from var(--color-surface) l c h / 0.98);
-    backdrop-filter: blur(10px);
-    box-shadow: var(--shadow-lg);
-    z-index: 6;
-  }
-
-  .comments-drawer.hidden {
-    display: none !important;
   }
 
   #outlineToggle:not(.hidden) {
@@ -454,11 +435,7 @@
     min-width: min(240px, calc(100vw - 64px));
   }
 
-  .excalidraw-embed.is-maximized {
-    inset: var(--space-3);
-    width: auto;
-  }
-
+  .excalidraw-embed.is-maximized,
   .drawio-embed.is-maximized {
     inset: var(--space-3);
     width: auto;
@@ -470,27 +447,6 @@
 
   .drawio-embed.is-maximized .drawio-embed-iframe {
     height: auto;
-  }
-
-  .image-lightbox-toolbar {
-    top: var(--space-3);
-    left: var(--space-3);
-    right: var(--space-3);
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .image-lightbox-controls {
-    justify-content: flex-start;
-  }
-
-  .image-lightbox-btn {
-    flex: 0 0 auto;
-  }
-
-  .image-lightbox-image {
-    max-width: calc(100vw - (var(--space-4) * 2));
-    max-height: calc(100vh - (var(--space-4) * 2));
   }
 }
 
