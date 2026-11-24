@@ -1,4 +1,4 @@
-import { createRequestError } from './http-errors.js';
+import { createRequestError } from '../../shared/http-errors.js';
 
 export const REQUEST_BODY_LIMIT_BYTES = 8_388_608;
 

@@ -1,14 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
 import { normalizeEmailAddress } from '../../auth/auth-common.js';
+import { createRequestError } from '../../shared/http-errors.js';
 
 const GITHUB_SETUP_FLOW_TTL_MS = 15 * 60 * 1000;
 
 function createFlowError(statusCode, message, code) {
-  const error = new Error(message);
-  error.statusCode = statusCode;
-  error.code = code;
-  return error;
+  return createRequestError(statusCode, message, { code });
 }
 
 export class GitHubSetupFlow {

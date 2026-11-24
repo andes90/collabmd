@@ -1,4 +1,4 @@
-import { createRequestError as createGitRequestError } from '../http/http-errors.js';
+import { createRequestError as createGitRequestError } from '../../shared/http-errors.js';
 import { getVaultFileKind, isImageAttachmentFilePath } from '../../../domain/file-kind.js';
 import { normalizeRelativeGitPath } from './path-utils.js';
 import { getImageMimeType } from '../../shared/image-mime.js';
@@ -12,6 +12,8 @@ import {
 } from './parsers.js';
 import {
   createEmptyStats,
+  dedupeInFlight,
+  summarizeFileStats,
 } from './responses.js';
 
 const EMPTY_TREE_HASH = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
@@ -99,18 +101,6 @@ function setCachedValue(cache, key, value, ttlMs) {
     value,
   });
   return value;
-}
-
-function createSummaryFromFiles(files = []) {
-  return files.reduce((summary, file) => ({
-    additions: summary.additions + Number(file.stats?.additions || 0),
-    deletions: summary.deletions + Number(file.stats?.deletions || 0),
-    filesChanged: summary.filesChanged + 1,
-  }), {
-    additions: 0,
-    deletions: 0,
-    filesChanged: 0,
-  });
 }
 
 export class GitHistoryService {
@@ -322,7 +312,7 @@ export class GitHistoryService {
 
     return this.runRequest(cacheKey, async () => {
       const meta = await this.loadCommitMetadata(normalizedHash);
-      const summary = createSummaryFromFiles(meta.files);
+      const summary = summarizeFileStats(meta.files);
 
       if (metaOnly) {
         const metaResponse = {
@@ -529,20 +519,7 @@ export class GitHistoryService {
   }
 
   async runRequest(key, callback) {
-    if (this.pendingRequests.has(key)) {
-      return this.pendingRequests.get(key);
-    }
-
-    const requestPromise = callback();
-    this.pendingRequests.set(key, requestPromise);
-
-    try {
-      return await requestPromise;
-    } finally {
-      if (this.pendingRequests.get(key) === requestPromise) {
-        this.pendingRequests.delete(key);
-      }
-    }
+    return dedupeInFlight(this.pendingRequests, key, callback);
   }
 
   async hasHeadCommit() {

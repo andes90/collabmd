@@ -2,6 +2,7 @@ import { fromJsonSchema } from '@modelcontextprotocol/server';
 
 import { getAgentToolDefinition } from '../../../domain/agent-tool-definitions.js';
 import { encodeAgentToolImage } from '../../shared/agent-tool-image.js';
+import { createRequestError } from '../../shared/http-errors.js';
 import { readRequestId } from './http-request-helpers.js';
 import { jsonResponse } from './http-response.js';
 import { parseJsonBody } from './request-body.js';
@@ -10,10 +11,7 @@ const WEBMCP_TOOL_PATH = '/api/agent/tools/';
 const WEBMCP_INPUT_SCHEMAS = new Map();
 
 function createAgentError(code, message, statusCode) {
-  const error = new Error(message);
-  error.code = code;
-  error.statusCode = statusCode;
-  return error;
+  return createRequestError(statusCode, message, { code });
 }
 
 function sendAgentError(req, res, error) {

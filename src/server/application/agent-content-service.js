@@ -24,6 +24,7 @@ import {
   isPublicVideoEmbedCandidate,
 } from '../../domain/video-embed.js';
 import { isPlainObject, parseBaseSource } from '../domain/bases/base-definition.js';
+import { createRequestError } from '../shared/http-errors.js';
 import {
   collectMarkdownImageSources,
   collectMarkdownReferences,
@@ -69,10 +70,7 @@ function toAgentBaseQueryResult(path, { columns, rows, view }, limit) {
 }
 
 function createAgentContentError(code, message, statusCode = 400) {
-  const error = new Error(message);
-  error.code = code;
-  error.statusCode = statusCode;
-  return error;
+  return createRequestError(statusCode, message, { code });
 }
 
 function requireScope(actor, scope) {

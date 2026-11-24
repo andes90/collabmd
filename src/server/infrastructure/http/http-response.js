@@ -23,6 +23,24 @@ export function createSafeAsciiFilename(fileName, fallback = 'attachment') {
   return normalized || fallback;
 }
 
+export function createDownloadHeaders(fileName, contentType, {
+  cacheControl = 'no-store',
+  fallback = 'attachment',
+  inline = false,
+  svgCsp = false,
+} = {}) {
+  const headers = {
+    'Cache-Control': cacheControl,
+    'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="${createSafeAsciiFilename(fileName, fallback)}"; filename*=UTF-8''${encodeContentDispositionFilename(fileName)}`,
+    'Content-Type': contentType,
+    'X-Content-Type-Options': 'nosniff',
+  };
+  if (svgCsp && contentType === 'image/svg+xml') {
+    headers['Content-Security-Policy'] = SVG_ATTACHMENT_CSP;
+  }
+  return headers;
+}
+
 export const SECURITY_HEADERS = {
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'X-Content-Type-Options': 'nosniff',

@@ -1,6 +1,6 @@
-import { createSign } from 'node:crypto';
+import { sign } from 'node:crypto';
 
-import { createRequestError } from '../http/http-errors.js';
+import { createRequestError } from '../../shared/http-errors.js';
 
 function base64UrlJson(value) {
   return Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -21,10 +21,7 @@ function createGitHubAppJwt({ appId, privateKey }, nowSeconds = Math.floor(Date.
     iss: String(appId),
   });
   const signingInput = `${header}.${payload}`;
-  const signer = createSign('RSA-SHA256');
-  signer.update(signingInput);
-  signer.end();
-  return `${signingInput}.${signer.sign(privateKey).toString('base64url')}`;
+  return `${signingInput}.${sign('RSA-SHA256', Buffer.from(signingInput), privateKey).toString('base64url')}`;
 }
 
 function parseRepositoryOwner(repository = {}) {

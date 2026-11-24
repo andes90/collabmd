@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { hash } from 'node:crypto';
 
 import { normalizeEmailAddress } from '../shared/email-address.js';
 
@@ -34,13 +34,12 @@ export function resolveRequestProtocol(req) {
 }
 
 export function hashPassword(value) {
-  return createHash('sha256').update(String(value ?? ''), 'utf8').digest();
+  return hash('sha256', String(value ?? ''), 'buffer');
 }
 
 export function createResponse(statusCode, body, options = {}) {
   return {
     body,
-    kind: options.kind || 'response',
     redirectTo: options.redirectTo || '',
     setCookie: options.setCookie || null,
     statusCode,

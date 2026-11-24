@@ -1,4 +1,4 @@
-import { createRequestError as createGitRequestError } from '../http/http-errors.js';
+import { createRequestError as createGitRequestError } from '../../shared/http-errors.js';
 
 const PATH_ESCAPES = { a: '\x07', b: '\b', f: '\f', n: '\n', r: '\r', t: '\t', v: '\v' };
 

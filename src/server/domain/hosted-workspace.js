@@ -1,12 +1,11 @@
+import { createRequestError } from '../shared/http-errors.js';
+
 export const HOSTED_ROLE_ADMIN = 'admin';
 export const HOSTED_ROLE_COLLABORATOR = 'collaborator';
 const SUPPORTED_ROLES = new Set([HOSTED_ROLE_ADMIN, HOSTED_ROLE_COLLABORATOR]);
 
 export function createHostedError(statusCode, message, code) {
-  const error = new Error(message);
-  error.statusCode = statusCode;
-  error.code = code;
-  return error;
+  return createRequestError(statusCode, message, { code });
 }
 
 export function normalizeHostedRole(value) {

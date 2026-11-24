@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { REQUEST_BODY_LIMIT_BYTES } from '../http/request-body.js';
-import { createRequestError as createGitRequestError } from '../http/http-errors.js';
+import { createRequestError as createGitRequestError } from '../../shared/http-errors.js';
 import { normalizeRelativeGitPath } from './path-utils.js';
 import { GitDiffService } from './diff-service.js';
 import { GitHistoryService } from './history-service.js';
@@ -190,10 +190,6 @@ export class GitService {
 
   async isGitRepo() {
     return this.commandRunner.isGitRepo();
-  }
-
-  async execGit(args) {
-    return this.commandRunner.execGit(args);
   }
 
   invalidateStatusCache() {

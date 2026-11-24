@@ -4,15 +4,12 @@ import { basename } from 'node:path';
 import { getVaultFileKind, isImageAttachmentFilePath } from '../../../domain/file-kind.js';
 import { parseJsonBody } from './request-body.js';
 import {
-  createSafeAsciiFilename,
-  encodeContentDispositionFilename,
+  createDownloadHeaders,
   jsonResponse,
   sendResponse,
   sendStreamResponse,
-  SVG_ATTACHMENT_CSP,
 } from './http-response.js';
 
-const SVG_MIME_TYPE = 'image/svg+xml';
 const DEFAULT_MAX_ARCHIVE_ENTRIES = 10_000;
 const DEFAULT_MAX_DOWNLOAD_FILE_BYTES = 268_435_456;
 
@@ -47,28 +44,15 @@ function createSearchCancellation(req, res) {
 }
 
 function createAttachmentHeaders(attachment) {
-  const fileName = basename(String(attachment?.path ?? 'attachment'));
-  const headers = {
-    'Cache-Control': 'private, max-age=300, stale-while-revalidate=3600',
-    'Content-Disposition': `inline; filename="${createSafeAsciiFilename(fileName)}"; filename*=UTF-8''${encodeContentDispositionFilename(fileName)}`,
-    'Content-Type': attachment.mimeType,
-    'X-Content-Type-Options': 'nosniff',
-  };
-
-  if (attachment?.mimeType === SVG_MIME_TYPE) {
-    headers['Content-Security-Policy'] = SVG_ATTACHMENT_CSP;
-  }
-
-  return headers;
-}
-
-function createDownloadHeaders(fileName, contentType, { inline = false } = {}) {
-  return {
-    'Cache-Control': 'no-store',
-    'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="${createSafeAsciiFilename(fileName)}"; filename*=UTF-8''${encodeContentDispositionFilename(fileName)}`,
-    'Content-Type': contentType,
-    'X-Content-Type-Options': 'nosniff',
-  };
+  return createDownloadHeaders(
+    basename(String(attachment?.path ?? 'attachment')),
+    attachment.mimeType,
+    {
+      cacheControl: 'private, max-age=300, stale-while-revalidate=3600',
+      inline: true,
+      svgCsp: true,
+    },
+  );
 }
 
 async function streamDirectoryArchive(req, res, {
@@ -118,112 +102,65 @@ async function streamDirectoryArchive(req, res, {
 
 // --- Route handlers ---
 
-async function handleBaseQuery(req, res, _requestUrl, { baseQueryService }) {
+async function runBaseOperation(req, res, { baseQueryService }, {
+  buildParams,
+  errorMessage,
+  method,
+  send = (result) => jsonResponse(req, res, 200, { ok: true, result }),
+}) {
   try {
-    if (!baseQueryService?.query) {
+    if (!baseQueryService?.[method]) {
       jsonResponse(req, res, 503, { error: 'Bases query service is unavailable' });
       return;
     }
 
     const body = await parseJsonBody(req);
-    const result = await baseQueryService.query({
+    const result = await baseQueryService[method]({
       activeFilePath: body?.activeFilePath ?? '',
       basePath: body?.path ?? '',
-      search: body?.search ?? '',
       source: typeof body?.source === 'string' ? body.source : null,
       sourcePath: body?.sourcePath ?? '',
       view: body?.view ?? '',
+      ...buildParams(body),
     });
-
-    jsonResponse(req, res, 200, { ok: true, result });
+    send(result, body);
   } catch (error) {
-    console.error('[api] Failed to query base:', error.message);
-    jsonResponse(req, res, 400, { error: error.message || 'Failed to query base' });
+    console.error(`[api] ${errorMessage}:`, error.message);
+    jsonResponse(req, res, 400, { error: error.message || errorMessage });
   }
 }
 
-async function handleBasePropertyValues(req, res, _requestUrl, { baseQueryService }) {
-  try {
-    if (!baseQueryService?.propertyValues) {
-      jsonResponse(req, res, 503, { error: 'Bases query service is unavailable' });
-      return;
-    }
+const handleBaseQuery = (req, res, _u, ctx) => runBaseOperation(req, res, ctx, {
+  buildParams: (body) => ({ search: body?.search ?? '' }),
+  errorMessage: 'Failed to query base',
+  method: 'query',
+});
 
-    const body = await parseJsonBody(req);
-    const result = await baseQueryService.propertyValues({
-      activeFilePath: body?.activeFilePath ?? '',
-      basePath: body?.path ?? '',
-      propertyId: body?.propertyId ?? '',
-      query: body?.query ?? '',
-      source: typeof body?.source === 'string' ? body.source : null,
-      sourcePath: body?.sourcePath ?? '',
-      view: body?.view ?? '',
-    });
+const handleBasePropertyValues = (req, res, _u, ctx) => runBaseOperation(req, res, ctx, {
+  buildParams: (body) => ({ propertyId: body?.propertyId ?? '', query: body?.query ?? '' }),
+  errorMessage: 'Failed to read base property values',
+  method: 'propertyValues',
+});
 
-    jsonResponse(req, res, 200, { ok: true, result });
-  } catch (error) {
-    console.error('[api] Failed to read base property values:', error.message);
-    jsonResponse(req, res, 400, { error: error.message || 'Failed to read base property values' });
-  }
-}
+const handleBaseTransform = (req, res, _u, ctx) => runBaseOperation(req, res, ctx, {
+  buildParams: (body) => ({ mutation: body?.mutation ?? null }),
+  errorMessage: 'Failed to transform base',
+  method: 'transform',
+});
 
-async function handleBaseTransform(req, res, _requestUrl, { baseQueryService }) {
-  try {
-    if (!baseQueryService?.transform) {
-      jsonResponse(req, res, 503, { error: 'Bases query service is unavailable' });
-      return;
-    }
-
-    const body = await parseJsonBody(req);
-    const result = await baseQueryService.transform({
-      activeFilePath: body?.activeFilePath ?? '',
-      basePath: body?.path ?? '',
-      mutation: body?.mutation ?? null,
-      source: typeof body?.source === 'string' ? body.source : null,
-      sourcePath: body?.sourcePath ?? '',
-      view: body?.view ?? '',
-    });
-
-    jsonResponse(req, res, 200, { ok: true, result });
-  } catch (error) {
-    console.error('[api] Failed to transform base:', error.message);
-    jsonResponse(req, res, 400, { error: error.message || 'Failed to transform base' });
-  }
-}
-
-async function handleBaseExport(req, res, _requestUrl, { baseQueryService }) {
-  try {
-    if (!baseQueryService?.query) {
-      jsonResponse(req, res, 503, { error: 'Bases query service is unavailable' });
-      return;
-    }
-
-    const body = await parseJsonBody(req);
-    const result = await baseQueryService.query({
-      activeFilePath: body?.activeFilePath ?? '',
-      basePath: body?.path ?? '',
-      includeCsv: true,
-      search: body?.search ?? '',
-      source: typeof body?.source === 'string' ? body.source : null,
-      sourcePath: body?.sourcePath ?? '',
-      view: body?.view ?? '',
-    });
+const handleBaseExport = (req, res, _u, ctx) => runBaseOperation(req, res, ctx, {
+  buildParams: (body) => ({ includeCsv: true, search: body?.search ?? '' }),
+  errorMessage: 'Failed to export base CSV',
+  method: 'query',
+  send: (result, body) => {
     const fileName = basename(String(body?.path || body?.sourcePath || 'base')).replace(/\.[^.]+$/u, '') || 'base';
     sendResponse(req, res, {
       body: result.csv,
-      headers: {
-        'Cache-Control': 'no-store',
-        'Content-Disposition': `attachment; filename="${createSafeAsciiFilename(`${fileName}.csv`)}"; filename*=UTF-8''${encodeContentDispositionFilename(`${fileName}.csv`)}`,
-        'Content-Type': 'text/csv; charset=utf-8',
-        'X-Content-Type-Options': 'nosniff',
-      },
+      headers: createDownloadHeaders(`${fileName}.csv`, 'text/csv; charset=utf-8'),
       statusCode: 200,
     });
-  } catch (error) {
-    console.error('[api] Failed to export base CSV:', error.message);
-    jsonResponse(req, res, 400, { error: error.message || 'Failed to export base CSV' });
-  }
-}
+  },
+});
 
 async function handleFileTree(req, res, _requestUrl, { workspaceMutationCoordinator }) {
   try {

@@ -1,12 +1,9 @@
 import { createAgentApiHandler } from './create-agent-api-handler.js';
 import { createAgentMcpHandler } from '../mcp/create-agent-mcp-handler.js';
 import { createAgentToolRateLimiter } from '../../shared/agent-tool-rate-limiter.js';
-import { createAuthApiHandler } from './create-auth-api-handler.js';
-import { createGitApiCommandHandler } from './create-git-api-command-handler.js';
-import { createGitApiQueryHandler } from './create-git-api-query-handler.js';
+import { createGitApiHandler } from './create-git-api-handler.js';
 import { createHostedApiHandler } from './create-hosted-api-handler.js';
 import { createStaticHandler } from './create-static-handler.js';
-import { createTestApiHandler } from './create-test-api-handler.js';
 import { createStructurizrApiHandler } from './create-structurizr-api-handler.js';
 import { createVaultApiCommandHandler } from './create-vault-api-command-handler.js';
 import { createVaultApiQueryHandler } from './create-vault-api-query-handler.js';
@@ -24,6 +21,59 @@ import {
   isSameOriginWriteRequest,
   WRITE_METHODS,
 } from './http-response.js';
+
+function applyAuthResponse(req, res, result) {
+  if (result?.setCookie) {
+    res.setHeader('Set-Cookie', result.setCookie);
+  }
+  if (result?.redirectTo) {
+    res.writeHead(result?.statusCode ?? 302, { Location: result.redirectTo });
+    res.end();
+    return true;
+  }
+  jsonResponse(req, res, result?.statusCode ?? 200, result?.body ?? { ok: true });
+  return true;
+}
+
+async function handleAuthApi(req, res, requestUrl, authService) {
+  if (!(requestUrl.pathname === '/api/auth' || requestUrl.pathname.startsWith('/api/auth/'))) {
+    return false;
+  }
+  if (requestUrl.pathname === '/api/auth/status' && req.method === 'GET') {
+    return applyAuthResponse(req, res, authService.getStatus(req));
+  }
+  if (requestUrl.pathname === '/api/auth/oidc/login' && req.method === 'GET') {
+    try {
+      return applyAuthResponse(req, res, await authService.beginOidcLogin(req, requestUrl));
+    } catch (error) {
+      console.error('[api] Failed to start OIDC login:', error.message);
+      jsonResponse(req, res, 500, { error: 'Failed to start OIDC login' });
+      return true;
+    }
+  }
+  if (requestUrl.pathname === '/api/auth/oidc/callback' && req.method === 'GET') {
+    try {
+      return applyAuthResponse(req, res, await authService.completeOidcLogin(req, requestUrl));
+    } catch (error) {
+      console.error('[api] Failed to complete OIDC login:', error.message);
+      jsonResponse(req, res, 500, { error: 'Failed to complete OIDC login' });
+      return true;
+    }
+  }
+  if (requestUrl.pathname === '/api/auth/session' && req.method === 'POST') {
+    try {
+      const body = await parseJsonBody(req);
+      return applyAuthResponse(req, res, await authService.createSession(req, body));
+    } catch (error) {
+      return handleApiError(req, res, error, '[api] Failed to create auth session:', 'Failed to create auth session');
+    }
+  }
+  if (requestUrl.pathname === '/api/auth/session' && req.method === 'DELETE') {
+    return applyAuthResponse(req, res, await authService.clearSession(req));
+  }
+  jsonResponse(req, res, 404, { error: 'Auth endpoint not found' });
+  return true;
+}
 
 async function handlePlantUmlApi(req, res, requestUrl, plantUmlRenderer) {
   if (!(requestUrl.pathname === '/api/plantuml/render' && req.method === 'POST')) {
@@ -74,7 +124,6 @@ export function createRequestHandler({
   vaultRegistry = null,
 }) {
   const handleStaticRequest = createStaticHandler(config, authService, searchService);
-  const handleAuthApi = createAuthApiHandler({ authService });
   const handleHostedApi = createHostedApiHandler({
     authService,
     githubSetupFlow,
@@ -86,19 +135,15 @@ export function createRequestHandler({
     if (!handlers) {
       handlers = {
         command: createVaultApiCommandHandler({
-          backlinkIndex: parts.backlinkIndex,
           maxPdfUploadBytes: config.maxPdfUploadBytes,
           renderDocx,
-          roomRegistry: parts.roomRegistry,
-          vaultFileStore: parts.vaultFileStore,
           workspaceMutationCoordinator: parts.workspaceMutationCoordinator,
         }),
-        gitCommand: createGitApiCommandHandler({
+        git: createGitApiHandler({
           authService,
           gitService: parts.gitService,
           workspaceMutationCoordinator: parts.workspaceMutationCoordinator,
         }),
-        gitQuery: createGitApiQueryHandler({ gitService: parts.gitService }),
         query: createVaultApiQueryHandler({
           baseQueryService: parts.baseQueryService,
           backlinkIndex: parts.backlinkIndex,
@@ -114,7 +159,7 @@ export function createRequestHandler({
   }
   const primaryHandlers = getVaultHandlers(
     vaultRegistry?.getPrimaryContext?.()?.def.id ?? '__primary__',
-    { backlinkIndex, baseQueryService, gitService, roomRegistry, searchService, vaultFileStore, workspaceMutationCoordinator },
+    { backlinkIndex, baseQueryService, gitService, searchService, vaultFileStore, workspaceMutationCoordinator },
   );
   const handleStructurizrApi = createStructurizrApiHandler({
     basePath: config.basePath,
@@ -137,14 +182,30 @@ export function createRequestHandler({
       })
     : async () => false;
 
-  const handleTestEndpoints = createTestApiHandler({
-    backlinkIndex,
-    fileSystemSyncService,
-    nodeEnv: config.nodeEnv,
-    roomRegistry,
-    testControls,
-    workspaceMutationCoordinator,
-  });
+  async function resetTestState() {
+    await fileSystemSyncService?.resetForExternalStateChange?.();
+    await roomRegistry?.reset?.();
+    await backlinkIndex?.build?.();
+    await workspaceMutationCoordinator?.initialize?.();
+    await fileSystemSyncService?.resetForExternalStateChange?.();
+  }
+
+  async function handleTestEndpoints(req, res, requestUrl) {
+    if (config.nodeEnv !== 'test' || req.method !== 'POST') return false;
+    if (requestUrl.pathname === '/api/test/reset-state') {
+      await resetTestState();
+      jsonResponse(req, res, 200, { ok: true });
+      return true;
+    }
+    if (requestUrl.pathname === '/api/test/hydrate-delay') {
+      const body = await parseJsonBody(req).catch(() => ({}));
+      testControls.wsRoomHydrateDelayMs = Math.max(0, Number(body?.delayMs) || 0);
+      await resetTestState();
+      jsonResponse(req, res, 200, { delayMs: testControls.wsRoomHydrateDelayMs, ok: true });
+      return true;
+    }
+    return false;
+  }
 
   async function handleVaultApi(req, res, route, handlers, vaultGitService) {
     if (await handlers.query(req, res, route) || await handlers.command(req, res, route)) {
@@ -155,7 +216,7 @@ export function createRequestHandler({
     }
     if (!vaultGitService) {
       jsonResponse(req, res, 503, { error: 'Git integration is not configured' });
-    } else if (!await handlers.gitQuery(req, res, route) && !await handlers.gitCommand(req, res, route)) {
+    } else if (!await handlers.git(req, res, route)) {
       jsonResponse(req, res, 404, { error: 'Git API endpoint not found' });
     }
     return true;
@@ -267,7 +328,7 @@ export function createRequestHandler({
       return;
     }
 
-    if (await handleAuthApi(req, res, requestUrl)) {
+    if (await handleAuthApi(req, res, requestUrl, authService)) {
       return;
     }
 

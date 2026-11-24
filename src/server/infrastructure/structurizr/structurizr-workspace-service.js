@@ -7,6 +7,7 @@ import {
   isStructurizrFilePath,
   isVaultFilePath,
 } from '../../../domain/file-kind.js';
+import { createRequestError } from '../../shared/http-errors.js';
 import { sanitizeVaultPath } from '../persistence/path-utils.js';
 
 const MANIFEST_FILE_NAME = '.collabmd-manifest.json';
@@ -16,10 +17,7 @@ const SIDECAR_TIMEOUT_MS = 15_000;
 const THUMBNAIL_FALLBACK_PATH = '/static/img/thumbnail-not-available.png';
 
 function createServiceError(message, statusCode, code) {
-  const error = new Error(message);
-  error.statusCode = statusCode;
-  error.requestCode = code;
-  return error;
+  return createRequestError(statusCode, message, { requestCode: code });
 }
 
 function resolveMirrorPath(mirrorDir, pathValue) {

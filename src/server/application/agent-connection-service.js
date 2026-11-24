@@ -1,17 +1,15 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { hash, randomBytes, randomUUID } from 'node:crypto';
+import { createRequestError } from '../shared/http-errors.js';
 
 const ALLOWED_CLIENT_KINDS = new Set(['codex', 'generic', 'pi']);
 const ALLOWED_SCOPES = new Set(['vault:edit', 'vault:read']);
 
 function hashToken(value) {
-  return createHash('sha256').update(String(value ?? ''), 'utf8').digest('hex');
+  return hash('sha256', String(value ?? ''));
 }
 
 function createAccessError(code, message, statusCode = 400) {
-  const error = new Error(message);
-  error.code = code;
-  error.statusCode = statusCode;
-  return error;
+  return createRequestError(statusCode, message, { code });
 }
 
 function publicConnection(connection) {
