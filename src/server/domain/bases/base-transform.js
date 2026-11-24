@@ -1,11 +1,9 @@
-import { dump as dumpYaml } from 'js-yaml';
-
 import {
   findView,
   isPlainObject,
   normalizeBaseDefinition,
   normalizeRawDefinitionForWrite,
-  parseBaseSource,
+  serializeBaseDefinition,
 } from './base-definition.js';
 
 function serializeSort(sort = []) {
@@ -24,10 +22,7 @@ export function transformBaseSource(source = '', mutation = {}) {
   }
 
   const definition = normalizeBaseDefinition(source);
-  const parsedSource = parseBaseSource(source);
-  const rawDefinition = normalizeRawDefinitionForWrite({
-    raw: isPlainObject(parsedSource) ? parsedSource : {},
-  });
+  const rawDefinition = normalizeRawDefinitionForWrite(definition);
 
   const activeView = findView(definition, mutation.view ?? '');
   const viewIndex = definition.views.findIndex((view) => view.id === activeView.id);
@@ -79,5 +74,5 @@ export function transformBaseSource(source = '', mutation = {}) {
   }
 
   rawDefinition.views[viewIndex] = nextView;
-  return `${dumpYaml(normalizeRawDefinitionForWrite(rawDefinition), { lineWidth: -1, noRefs: true }).trim()}\n`;
+  return serializeBaseDefinition(rawDefinition);
 }

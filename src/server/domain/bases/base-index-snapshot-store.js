@@ -8,9 +8,9 @@ import {
 import { extractYamlFrontmatter } from '../../../domain/yaml-frontmatter.js';
 import {
   collectMarkdownReferences,
-  collectReferenceTargetKeysForFilePath,
   createReferenceTargetAliasMap,
 } from '../markdown-reference-extractor.js';
+import { RawTargetSourceIndex } from '../raw-target-source-index.js';
 import { getWorkspaceSnapshotKey } from '../workspace-state.js';
 import { mapWithConcurrency } from '../../shared/async-utils.js';
 import { isPlainObject } from './base-definition.js';
@@ -110,16 +110,6 @@ function createBacklinkEntry(sourcePath = '') {
     display: basename(sourcePath),
     exists: true,
   });
-}
-
-function addRawTargetSourceContribution(snapshot, sourcePath, rawTargetKey) {
-  if (!rawTargetKey) {
-    return;
-  }
-
-  const sources = snapshot.rawTargetSourcesByKey.get(rawTargetKey) ?? new Set();
-  sources.add(sourcePath);
-  snapshot.rawTargetSourcesByKey.set(rawTargetKey, sources);
 }
 
 export class BaseIndexSnapshotStore {
@@ -238,29 +228,6 @@ export class BaseIndexSnapshotStore {
     });
   }
 
-  removeRawTargetSourceContributions(snapshot, sourcePath) {
-    const rawTargetKeys = snapshot.rawTargetKeysBySourcePath.get(sourcePath) ?? new Set();
-    rawTargetKeys.forEach((rawTargetKey) => {
-      const sources = snapshot.rawTargetSourcesByKey.get(rawTargetKey);
-      if (!sources) {
-        return;
-      }
-
-      sources.delete(sourcePath);
-      if (sources.size === 0) {
-        snapshot.rawTargetSourcesByKey.delete(rawTargetKey);
-      }
-    });
-    snapshot.rawTargetKeysBySourcePath.delete(sourcePath);
-  }
-
-  addRawTargetSourceContributions(snapshot, sourcePath, rawTargetKeys = new Set()) {
-    snapshot.rawTargetKeysBySourcePath.set(sourcePath, rawTargetKeys);
-    rawTargetKeys.forEach((rawTargetKey) => {
-      addRawTargetSourceContribution(snapshot, sourcePath, rawTargetKey);
-    });
-  }
-
   addSourceBacklinkContributions(snapshot, sourcePath, affectedTargetPaths = new Set()) {
     if (!snapshot.rowsByPath.has(sourcePath)) {
       return;
@@ -318,8 +285,7 @@ export class BaseIndexSnapshotStore {
 
     const rowsByPath = new Map();
     const forwardLinksByPath = new Map();
-    const rawTargetKeysBySourcePath = new Map();
-    const rawTargetSourcesByKey = new Map();
+    const rawTargets = new RawTargetSourceIndex();
     const nextRowRecordCache = new Map();
     fileEntries.forEach((filePath) => {
       const cachedRowRecord = cachedRowRecords.get(filePath);
@@ -334,12 +300,7 @@ export class BaseIndexSnapshotStore {
       });
       rowsByPath.set(filePath, rowRecord.row);
       forwardLinksByPath.set(filePath, rowRecord.forwardLinks);
-      rawTargetKeysBySourcePath.set(filePath, rowRecord.rawTargetKeys);
-      rowRecord.rawTargetKeys.forEach((rawTargetKey) => {
-        addRawTargetSourceContribution({
-          rawTargetSourcesByKey,
-        }, filePath, rawTargetKey);
-      });
+      rawTargets.set(filePath, rowRecord.rawTargetKeys);
     });
 
     const snapshot = {
@@ -347,8 +308,7 @@ export class BaseIndexSnapshotStore {
       backlinksByPath: new Map(),
       filePaths: fileEntries,
       forwardLinksByPath,
-      rawTargetKeysBySourcePath,
-      rawTargetSourcesByKey,
+      rawTargets,
       rowsByPath,
       wikiTargetIndex,
       workspaceState: resolvedWorkspaceState,
@@ -365,7 +325,7 @@ export class BaseIndexSnapshotStore {
   }
 
   removeSnapshotPath(snapshot, filePath) {
-    this.removeRawTargetSourceContributions(snapshot, filePath);
+    snapshot.rawTargets.remove(filePath);
     snapshot.rowsByPath.delete(filePath);
     snapshot.forwardLinksByPath.delete(filePath);
     snapshot.backlinkSourcesByTarget.delete(filePath);
@@ -383,25 +343,7 @@ export class BaseIndexSnapshotStore {
   }
 
   collectImpactedSourcesForMembershipChanges(snapshot, pathValues = []) {
-    const affectedTargetKeys = new Set();
-    pathValues.forEach((pathValue) => {
-      collectReferenceTargetKeysForFilePath(pathValue).forEach((targetKey) => {
-        affectedTargetKeys.add(targetKey);
-      });
-    });
-
-    if (affectedTargetKeys.size === 0) {
-      return new Set();
-    }
-
-    const impactedPaths = new Set();
-    affectedTargetKeys.forEach((targetKey) => {
-      const sourcePaths = snapshot.rawTargetSourcesByKey.get(targetKey);
-      sourcePaths?.forEach((filePath) => {
-        impactedPaths.add(filePath);
-      });
-    });
-    return impactedPaths;
+    return snapshot.rawTargets.collectImpactedSources(pathValues);
   }
 
   async refreshSnapshotRows(snapshot, workspaceState, pathValues = [], {
@@ -426,10 +368,9 @@ export class BaseIndexSnapshotStore {
         metadataSignature: createRowMetadataSignature(filePath, workspaceState),
         rowRecord: cloneSnapshotRowRecord(rowRecord),
       });
-      this.removeRawTargetSourceContributions(snapshot, filePath);
       snapshot.rowsByPath.set(filePath, rowRecord.row);
       snapshot.forwardLinksByPath.set(filePath, rowRecord.forwardLinks);
-      this.addRawTargetSourceContributions(snapshot, filePath, rowRecord.rawTargetKeys);
+      snapshot.rawTargets.set(filePath, rowRecord.rawTargetKeys);
     });
   }
 

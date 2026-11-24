@@ -45,14 +45,6 @@ function isResolvedThread(thread) {
   return asFiniteNumber(readThreadValue(thread, 'resolvedAt')) !== null;
 }
 
-function readRecordValue(record, key) {
-  if (record instanceof Y.Map) {
-    return record.get(key);
-  }
-
-  return record?.[key];
-}
-
 function normalizeAnchorKind(value) {
   return COMMENT_ANCHOR_KINDS.has(value) ? value : null;
 }
@@ -138,27 +130,27 @@ export function createCommentReactionKey(messageId, emoji, userId) {
 }
 
 function createReactionUserRecord(user) {
-  const userId = asString(readRecordValue(user, 'userId')).trim();
+  const userId = asString(readThreadValue(user, 'userId')).trim();
   if (!userId) {
     return null;
   }
 
   return {
-    reactedAt: asFiniteNumber(readRecordValue(user, 'reactedAt')) ?? Date.now(),
-    userColor: asString(readRecordValue(user, 'userColor')),
+    reactedAt: asFiniteNumber(readThreadValue(user, 'reactedAt')) ?? Date.now(),
+    userColor: asString(readThreadValue(user, 'userColor')),
     userId,
-    userName: asString(readRecordValue(user, 'userName')) || 'Anonymous',
+    userName: asString(readThreadValue(user, 'userName')) || 'Anonymous',
   };
 }
 
 function createReactionGroupRecord(group) {
-  const emoji = normalizeCommentReactionEmoji(readRecordValue(group, 'emoji'));
+  const emoji = normalizeCommentReactionEmoji(readThreadValue(group, 'emoji'));
   if (!emoji) {
     return null;
   }
 
   const usersById = new Map();
-  asArray(readRecordValue(group, 'users')).forEach((user) => {
+  asArray(readThreadValue(group, 'users')).forEach((user) => {
     const normalizedUser = createReactionUserRecord(user);
     if (normalizedUser) {
       usersById.set(normalizedUser.userId, normalizedUser);
@@ -202,19 +194,19 @@ function serializeCommentReactions(reactions) {
 }
 
 function createMessageRecord(message) {
-  const body = normalizeCommentBody(readRecordValue(message, 'body'));
+  const body = normalizeCommentBody(readThreadValue(message, 'body'));
   if (!body) {
     return null;
   }
 
   return {
     body,
-    createdAt: asFiniteNumber(readRecordValue(message, 'createdAt')) ?? Date.now(),
-    id: asString(readRecordValue(message, 'id')) || createCommentId('comment'),
-    peerId: asString(readRecordValue(message, 'peerId')),
-    reactions: serializeCommentReactions(readRecordValue(message, 'reactions')),
-    userColor: asString(readRecordValue(message, 'userColor')),
-    userName: asString(readRecordValue(message, 'userName')) || 'Anonymous',
+    createdAt: asFiniteNumber(readThreadValue(message, 'createdAt')) ?? Date.now(),
+    id: asString(readThreadValue(message, 'id')) || createCommentId('comment'),
+    peerId: asString(readThreadValue(message, 'peerId')),
+    reactions: serializeCommentReactions(readThreadValue(message, 'reactions')),
+    userColor: asString(readThreadValue(message, 'userColor')),
+    userName: asString(readThreadValue(message, 'userName')) || 'Anonymous',
   };
 }
 
@@ -427,13 +419,7 @@ export function serializeCommentThread(thread) {
 }
 
 export function serializeCommentThreads(source) {
-  const items = source instanceof Y.Array
-    ? source.toArray()
-    : Array.isArray(source)
-      ? source
-      : [];
-
-  return items
+  return asArray(source)
     .map((thread) => serializeCommentThread(thread))
     .filter(Boolean);
 }

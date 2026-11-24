@@ -108,14 +108,6 @@ export function getVaultTreeNodeType(filePath) {
     return null;
   }
 
-  if (kind === 'image') {
-    return 'image';
-  }
-
-  if (kind === 'base') {
-    return 'base';
-  }
-
   return kind === 'markdown' ? 'file' : kind;
 }
 

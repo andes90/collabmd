@@ -14,9 +14,9 @@ import { createWikiTargetIndex } from '../../domain/wiki-link-resolver.js';
 import { isMarkdownFilePath } from '../../domain/file-kind.js';
 import {
   collectMarkdownReferences,
-  collectReferenceTargetKeysForFilePath,
   createReferenceTargetAliasMap,
 } from './markdown-reference-extractor.js';
+import { RawTargetSourceIndex } from './raw-target-source-index.js';
 import { mapWithConcurrency } from '../shared/async-utils.js';
 
 const BACKLINK_BUILD_CONCURRENCY = 8;
@@ -38,10 +38,7 @@ export class BacklinkIndex {
     this.reverse = new Map();
     /** @type {Map<string, Map<string, string[]>>} sourcePath → targetPath → contexts[] */
     this.contextsBySource = new Map();
-    /** @type {Map<string, Set<string>>} sourcePath → normalized raw target keys */
-    this.rawTargetKeysBySource = new Map();
-    /** @type {Map<string, Set<string>>} normalized raw target key → source paths */
-    this.rawTargetSources = new Map();
+    this._rawTargets = new RawTargetSourceIndex();
     /** @type {string[]} cached flat target file list for link resolution */
     this._fileList = [];
     /** @type {string[]} cached markdown source file list for content scans */
@@ -137,8 +134,7 @@ export class BacklinkIndex {
     this.forward.clear();
     this.reverse.clear();
     this.contextsBySource.clear();
-    this.rawTargetKeysBySource.clear();
-    this.rawTargetSources.clear();
+    this._rawTargets.clear();
 
     const snapshot = workspaceState ?? await this.vaultFileStore.scanWorkspaceState();
     this._fileList = Array.from(snapshot?.filePaths ?? snapshot?.markdownPaths ?? []);
@@ -245,20 +241,7 @@ export class BacklinkIndex {
       this.contextsBySource.set(newPath, sourceContexts);
     }
 
-    if (this.rawTargetKeysBySource.has(oldPath)) {
-      const rawTargetKeys = this.rawTargetKeysBySource.get(oldPath);
-      this.rawTargetKeysBySource.delete(oldPath);
-      this.rawTargetKeysBySource.set(newPath, rawTargetKeys);
-      rawTargetKeys.forEach((rawTargetKey) => {
-        const sources = this.rawTargetSources.get(rawTargetKey);
-        if (!sources) {
-          return;
-        }
-
-        sources.delete(oldPath);
-        sources.add(newPath);
-      });
-    }
+    this._rawTargets.rename(oldPath, newPath);
 
     // Move forward links
     const oldForward = this.forward.get(oldPath);
@@ -485,17 +468,7 @@ export class BacklinkIndex {
     }
 
     this.contextsBySource.delete(filePath);
-    this._removeRawTargetSourceContributions(filePath);
-
-    if (rawTargetKeys.size > 0) {
-      this.rawTargetKeysBySource.set(filePath, rawTargetKeys);
-      rawTargetKeys.forEach((rawTargetKey) => {
-        if (!this.rawTargetSources.has(rawTargetKey)) {
-          this.rawTargetSources.set(rawTargetKey, new Set());
-        }
-        this.rawTargetSources.get(rawTargetKey).add(filePath);
-      });
-    }
+    this._rawTargets.set(filePath, rawTargetKeys);
 
     if (resolvedTargets.size > 0) {
       this.contextsBySource.set(filePath, contextsByTarget);
@@ -512,7 +485,7 @@ export class BacklinkIndex {
 
   _removeForwardLinks(filePath) {
     this.contextsBySource.delete(filePath);
-    this._removeRawTargetSourceContributions(filePath);
+    this._rawTargets.remove(filePath);
 
     const oldTargets = this.forward.get(filePath);
     if (!oldTargets) return;
@@ -534,41 +507,8 @@ export class BacklinkIndex {
     this._wikiTargetIndex = createWikiTargetIndex(this._fileList);
   }
 
-  _removeRawTargetSourceContributions(filePath) {
-    const rawTargetKeys = this.rawTargetKeysBySource.get(filePath);
-    if (!rawTargetKeys) {
-      return;
-    }
-
-    rawTargetKeys.forEach((rawTargetKey) => {
-      const sources = this.rawTargetSources.get(rawTargetKey);
-      if (!sources) {
-        return;
-      }
-
-      sources.delete(filePath);
-      if (sources.size === 0) {
-        this.rawTargetSources.delete(rawTargetKey);
-      }
-    });
-    this.rawTargetKeysBySource.delete(filePath);
-  }
-
   _collectImpactedSourcesForMembershipChanges(pathValues = []) {
-    const affectedTargetKeys = new Set();
-    pathValues.forEach((pathValue) => {
-      collectReferenceTargetKeysForFilePath(pathValue).forEach((targetKey) => {
-        affectedTargetKeys.add(targetKey);
-      });
-    });
-
-    const impactedSources = new Set();
-    affectedTargetKeys.forEach((targetKey) => {
-      this.rawTargetSources.get(targetKey)?.forEach((sourcePath) => {
-        impactedSources.add(sourcePath);
-      });
-    });
-    return impactedSources;
+    return this._rawTargets.collectImpactedSources(pathValues);
   }
 
   async _refreshImpactedSources(impactedSources = new Set(), {

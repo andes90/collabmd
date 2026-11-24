@@ -155,72 +155,72 @@ function isFileStat(info = {}) {
   return typeof info.isFile === 'function' ? info.isFile() : info.type === 'file';
 }
 
+async function walkWorkspaceDirectory(adapter, directoryPath, entries, metadata, { concurrency = WORKSPACE_SCAN_CONCURRENCY, includeRoot = false } = {}) {
+  if (includeRoot) {
+    const directoryInfo = await readWorkspaceStat(adapter, directoryPath);
+    if (!directoryInfo || !isDirectoryStat(directoryInfo)) return;
+    entries.set(directoryPath, createWorkspaceEntry(directoryPath, 'directory'));
+    metadata.set(directoryPath, createWorkspaceMetadata(directoryPath, 'directory', directoryInfo));
+  }
+
+  let dirEntries;
+  try {
+    dirEntries = await adapter.readDirectory(directoryPath);
+  } catch {
+    return;
+  }
+
+  const visitEntry = async (entry) => {
+    if (adapter.isIgnoredEntry?.(entry.name)) return;
+    const relativePath = [directoryPath, entry.name].filter(Boolean).join('/').replace(/\\/g, '/');
+    const direntKind = getDirectoryEntryKind(entry);
+
+    if (direntKind === 'directory') {
+      entries.set(relativePath, createWorkspaceEntry(relativePath, 'directory'));
+      const info = await readWorkspaceStat(adapter, relativePath);
+      if (info) metadata.set(relativePath, createWorkspaceMetadata(relativePath, 'directory', info));
+      await walkWorkspaceDirectory(adapter, relativePath, entries, metadata, { concurrency });
+      return;
+    }
+
+    if (direntKind === 'file' && !isVaultFilePath(relativePath)) return;
+
+    const info = await readWorkspaceStat(adapter, relativePath);
+    if (!info) {
+      if (direntKind === 'file') {
+        entries.set(relativePath, createWorkspaceEntry(relativePath, 'file'));
+      }
+      return;
+    }
+
+    if (isDirectoryStat(info)) {
+      entries.set(relativePath, createWorkspaceEntry(relativePath, 'directory'));
+      metadata.set(relativePath, createWorkspaceMetadata(relativePath, 'directory', info));
+      await walkWorkspaceDirectory(adapter, relativePath, entries, metadata, { concurrency });
+      return;
+    }
+
+    if (isFileStat(info) && isVaultFilePath(relativePath)) {
+      entries.set(relativePath, createWorkspaceEntry(relativePath, 'file'));
+      metadata.set(relativePath, createWorkspaceMetadata(relativePath, 'file', info));
+    }
+  };
+
+  if (concurrency > 1) {
+    await mapWithConcurrency(sortDirectoryEntries(dirEntries), concurrency, visitEntry);
+  } else {
+    for (const entry of dirEntries) {
+      await visitEntry(entry);
+    }
+  }
+}
+
 export async function scanWorkspaceState(adapter, {
   scannedAt = Date.now(),
 } = {}) {
   const entries = new Map();
   const metadata = new Map();
-
-  const visitDirectory = async (directoryPath = '') => {
-    let dirEntries;
-    try {
-      dirEntries = await adapter.readDirectory(directoryPath);
-    } catch {
-      return;
-    }
-
-    const sorted = sortDirectoryEntries(dirEntries);
-    await mapWithConcurrency(sorted, WORKSPACE_SCAN_CONCURRENCY, async (entry) => {
-      if (adapter.isIgnoredEntry?.(entry.name)) {
-        return;
-      }
-
-      const relativePath = [directoryPath, entry.name]
-        .filter(Boolean)
-        .join('/')
-        .replace(/\\/g, '/');
-      const direntKind = getDirectoryEntryKind(entry);
-
-      if (direntKind === 'directory') {
-        entries.set(relativePath, createWorkspaceEntry(relativePath, 'directory'));
-        const info = await readWorkspaceStat(adapter, relativePath);
-        if (info) {
-          metadata.set(relativePath, createWorkspaceMetadata(relativePath, 'directory', info));
-        }
-        await visitDirectory(relativePath);
-        return;
-      }
-
-      if (direntKind === 'file') {
-        if (!isVaultFilePath(relativePath)) {
-          return;
-        }
-        entries.set(relativePath, createWorkspaceEntry(relativePath, 'file'));
-        const info = await readWorkspaceStat(adapter, relativePath);
-        if (info) {
-          metadata.set(relativePath, createWorkspaceMetadata(relativePath, 'file', info));
-        }
-        return;
-      }
-
-      const info = await readWorkspaceStat(adapter, relativePath);
-      if (!info) {
-        return;
-      }
-      if (isDirectoryStat(info)) {
-        entries.set(relativePath, createWorkspaceEntry(relativePath, 'directory'));
-        metadata.set(relativePath, createWorkspaceMetadata(relativePath, 'directory', info));
-        await visitDirectory(relativePath);
-        return;
-      }
-      if (isFileStat(info) && isVaultFilePath(relativePath)) {
-        entries.set(relativePath, createWorkspaceEntry(relativePath, 'file'));
-        metadata.set(relativePath, createWorkspaceMetadata(relativePath, 'file', info));
-      }
-    });
-  };
-
-  await visitDirectory('');
+  await walkWorkspaceDirectory(adapter, '', entries, metadata);
   return createWorkspaceStateSnapshot(entries, metadata, { scannedAt });
 }
 
@@ -282,58 +282,7 @@ export async function readWorkspacePathSnapshot(adapter, pathValue) {
   }
 
   if (isDirectoryStat(info)) {
-    const visitDirectory = async (directoryPath) => {
-      const directoryInfo = await readWorkspaceStat(adapter, directoryPath);
-      if (!directoryInfo || !isDirectoryStat(directoryInfo)) {
-        return;
-      }
-
-      entries.set(directoryPath, createWorkspaceEntry(directoryPath, 'directory'));
-      metadata.set(directoryPath, createWorkspaceMetadata(directoryPath, 'directory', directoryInfo));
-
-      let dirEntries;
-      try {
-        dirEntries = await adapter.readDirectory(directoryPath);
-      } catch {
-        return;
-      }
-
-      for (const entry of dirEntries) {
-        if (adapter.isIgnoredEntry?.(entry.name)) {
-          continue;
-        }
-
-        const childRelativePath = `${directoryPath}/${entry.name}`.replace(/\\/g, '/');
-        const direntKind = getDirectoryEntryKind(entry);
-        if (direntKind === 'directory') {
-          await visitDirectory(childRelativePath);
-          continue;
-        }
-
-        if (direntKind === 'file' && !isVaultFilePath(childRelativePath)) {
-          continue;
-        }
-
-        const childInfo = await readWorkspaceStat(adapter, childRelativePath);
-        if (!childInfo) {
-          continue;
-        }
-
-        if (isDirectoryStat(childInfo)) {
-          await visitDirectory(childRelativePath);
-          continue;
-        }
-
-        if (!isFileStat(childInfo) || !isVaultFilePath(childRelativePath)) {
-          continue;
-        }
-
-        entries.set(childRelativePath, createWorkspaceEntry(childRelativePath, 'file'));
-        metadata.set(childRelativePath, createWorkspaceMetadata(childRelativePath, 'file', childInfo));
-      }
-    };
-
-    await visitDirectory(normalizedPath);
+    await walkWorkspaceDirectory(adapter, normalizedPath, entries, metadata, { concurrency: 1, includeRoot: true });
     return { entries, metadata };
   }
 
@@ -623,23 +572,8 @@ export function detectWorkspaceStateChange(previousState, nextState) {
     }
   });
 
-  const deletedBySignature = new Map();
-  deletedPaths.forEach((pathValue) => {
-    const metadata = previousMetadata.get(pathValue);
-    const signature = entrySignature(metadata);
-    const bucket = deletedBySignature.get(signature) ?? [];
-    bucket.push(pathValue);
-    deletedBySignature.set(signature, bucket);
-  });
-
-  const addedBySignature = new Map();
-  addedPaths.forEach((pathValue) => {
-    const metadata = nextMetadata.get(pathValue);
-    const signature = entrySignature(metadata);
-    const bucket = addedBySignature.get(signature) ?? [];
-    bucket.push(pathValue);
-    addedBySignature.set(signature, bucket);
-  });
+  const deletedBySignature = Map.groupBy(deletedPaths, (pathValue) => entrySignature(previousMetadata.get(pathValue)));
+  const addedBySignature = Map.groupBy(addedPaths, (pathValue) => entrySignature(nextMetadata.get(pathValue)));
 
   Array.from(deletedBySignature.keys()).forEach((signature) => {
     const removed = deletedBySignature.get(signature) ?? [];

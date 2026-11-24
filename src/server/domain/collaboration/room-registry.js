@@ -73,10 +73,6 @@ export class RoomRegistry {
     return true;
   }
 
-  delete(name) {
-    return this.rooms.delete(name);
-  }
-
   async reset() {
     await Promise.allSettled(
       Array.from(this.rooms.values(), (room) => room.destroy?.()),

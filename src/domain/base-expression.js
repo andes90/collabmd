@@ -14,15 +14,9 @@ function tokenizeExpression(source = '') {
     }
 
     const twoChar = text.slice(index, index + 2);
-    const threeChar = text.slice(index, index + 3);
     if (['&&', '||', '==', '!=', '<=', '>='].includes(twoChar)) {
       tokens.push({ end: index + 2, start, type: 'operator', value: twoChar });
       index += 2;
-      continue;
-    }
-    if (threeChar === '...') {
-      tokens.push({ end: index + 3, start, type: 'operator', value: threeChar });
-      index += 3;
       continue;
     }
     if ('+-*/%!<>()[]{}.,:'.includes(character)) {
