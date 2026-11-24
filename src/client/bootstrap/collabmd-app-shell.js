@@ -275,7 +275,8 @@ export class CollabMdAppShell {
       mobileBreakpointQuery: this.sidebarDrawerQuery,
       onDirectoryExport: (directoryPath, format) => this.handleDirectoryExportRequest(directoryPath, format),
       onFileDelete: () => this.navigation.navigateToFile(null),
-      onFileSelect: (filePath) => this.workspaceRouteController.handleFileSelection(filePath, {
+      onFileSelect: (filePath, options) => this.workspaceRouteController.handleFileSelection(filePath, {
+        ...options,
         closeSidebarOnMobile: true,
       }),
       onShowFileExtensionsChange: (showFileExtensions) => {

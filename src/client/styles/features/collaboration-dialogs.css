@@ -84,6 +84,11 @@
   line-height: 1.5;
 }
 
+.app-dialog-error {
+  color: var(--color-error);
+  font-size: var(--text-sm);
+}
+
 .app-dialog-note {
   overflow-wrap: anywhere;
   padding: var(--space-3);

@@ -22,6 +22,7 @@ export class WorkspaceRouteController {
       ?? null
     ));
     this.setSidebarVisibility = options.setSidebarVisibility ?? (() => {});
+    this.pendingNewNotePath = null;
     this.pendingTreeRevealPath = null;
     this.preserveSidebarTabRoutePath = null;
   }
@@ -32,6 +33,8 @@ export class WorkspaceRouteController {
     }
 
     const route = this.navigation.getHashRoute();
+    const focusNewNote = route.filePath === this.pendingNewNotePath;
+    this.pendingNewNotePath = null;
     this.onRouteChange?.(route.type === 'file' ? route.filePath : null);
     const canLeave = route.type === 'file' || await this.prepareActiveEmbedDisconnect();
     if (!canLeave) {
@@ -100,7 +103,17 @@ export class WorkspaceRouteController {
       );
     }
     this.requestPreviewRouteAnchor?.(route.anchor ?? null, route.filePath);
-    if (this.getCurrentFilePath() === route.filePath) this.onFileRouteOpened?.();
+    if (this.getCurrentFilePath() === route.filePath) {
+      if (focusNewNote) this.focusCreatedNote();
+      this.onFileRouteOpened?.();
+    }
+  }
+
+  focusCreatedNote() {
+    if (this.layoutController.currentView === 'preview') {
+      this.layoutController.setView('editor', { persist: false });
+    }
+    this.workspaceCoordinator.getSession()?.runEditorCommand('cursorDocEnd');
   }
 
   activateViewState({
@@ -261,7 +274,8 @@ export class WorkspaceRouteController {
     this.setSession(this.workspaceCoordinator.getSession());
   }
 
-  handleFileSelection(filePath, { closeSidebarOnMobile = false, revealInTree = false } = {}) {
+  handleFileSelection(filePath, { closeSidebarOnMobile = false, focusNewNote = false, revealInTree = false } = {}) {
+    this.pendingNewNotePath = focusNewNote ? filePath : null;
     const currentRoute = this.navigation.getHashRoute?.() ?? null;
     const isCanonicalCurrentFileRoute = (
       currentRoute?.type === 'file'
@@ -281,7 +295,10 @@ export class WorkspaceRouteController {
       this.closeSidebarOnMobile();
     }
 
-    this.navigation.navigateToFile(filePath);
+    const routeChanged = this.navigation.navigateToFile(filePath);
+    if (!routeChanged && focusNewNote) {
+      void this.handleHashChange();
+    }
   }
 
   revealFileInTree(filePath, { clearSearch = false } = {}) {

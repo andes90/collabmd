@@ -845,6 +845,18 @@ test.describe('mobile sidebar', () => {
     await page.getByRole('button', { name: /Markdown note/i }).click();
     await expect(page.locator('#fileActionDialog')).toBeVisible();
     await expect(page.locator('#fileActionTitle')).toHaveText('Create markdown file');
+    await page.locator('#fileActionInput').fill('mobile-note');
+    await page.locator('#fileActionSubmit').click();
+
+    await expect(page.locator('.cm-content')).toBeFocused();
+    await page.keyboard.insertText('First paragraph');
+    await expect(page.locator('.cm-line')).toHaveText(['# mobile-note', '', 'First paragraph']);
+    await expect(page.locator('#mobileViewToggle')).toHaveText('Preview');
+
+    await ensureMobileSidebarVisible(page);
+    await page.locator('#fileTree [data-path="README.md"]').click();
+    await expect(page.locator('#activeFileName')).toHaveText('README');
+    await expect(page.locator('#editorLayout')).toHaveAttribute('data-view', 'preview');
   });
 });
 

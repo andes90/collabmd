@@ -2,6 +2,7 @@ import { createRandomUuid } from '../../domain/random-uuid.js';
 import { replacePathPrefix } from '../../domain/vault-paths.js';
 import {
   getVaultFileExtension,
+  isMarkdownFilePath,
   isVaultFilePath,
   VAULT_FILE_EXTENSIONS,
 } from '../../domain/file-kind.js';
@@ -89,6 +90,7 @@ export class FileActionController {
     this.actionLabel = document.getElementById('fileActionLabel');
     this.actionInput = document.getElementById('fileActionInput');
     this.actionHint = document.getElementById('fileActionHint');
+    this.actionError = document.getElementById('fileActionError');
     this.actionNote = document.getElementById('fileActionNote');
     this.actionCancelButton = document.getElementById('fileActionCancel');
     this.actionSubmitButton = document.getElementById('fileActionSubmit');
@@ -114,7 +116,13 @@ export class FileActionController {
       event.preventDefault();
       void this.handleActionSubmit();
     });
-    this.actionDialog?.addEventListener('close', () => this.resetActionDialog());
+    this.actionInput?.addEventListener('input', () => this.setActionError(''));
+    this.actionDialog?.addEventListener('cancel', (event) => {
+      if (this.actionBusy) event.preventDefault();
+    });
+    this.actionDialog?.addEventListener('close', () => {
+      if (!this.actionDialog.open) this.resetActionDialog();
+    });
   }
 
   getCreateActions({ parentDir = '' } = {}) {
@@ -326,8 +334,23 @@ export class FileActionController {
     }
   }
 
-  showError(message, error) {
-    this.showToast(error?.message ? `${message}: ${error.message}` : message);
+  setActionError(message) {
+    if (!this.actionError) return;
+    this.actionError.textContent = message;
+    this.actionError.hidden = !message;
+    if (message && this.pendingAction?.requiresInput) {
+      this.actionInput.setAttribute('aria-invalid', 'true');
+    } else {
+      this.actionInput?.removeAttribute('aria-invalid');
+    }
+  }
+
+  showActionError(message) {
+    if (this.actionDialog?.open) {
+      this.setActionError(message);
+    } else {
+      this.showToast(message);
+    }
   }
 
   createPendingWorkspaceRequestId() {
@@ -391,6 +414,7 @@ export class FileActionController {
     }
 
     this.pendingAction = { requiresInput, emptyMessage, onSubmit };
+    this.setActionError('');
     this.createMenu.close({ restoreFocus: false });
     this.fileExplorerOptionsMenu.close({ restoreFocus: false });
     this.view?.removeContextMenu?.();
@@ -517,18 +541,20 @@ export class FileActionController {
     const rawValue = requiresInput ? this.actionInput?.value.trim() ?? '' : undefined;
 
     if (requiresInput && !rawValue) {
-      this.showToast(this.pendingAction.emptyMessage);
+      this.setActionError(this.pendingAction.emptyMessage);
       this.actionInput?.focus();
       return;
     }
 
+    this.setActionError('');
     this.setActionDialogBusy(true);
 
     let shouldClose;
     try {
       shouldClose = await this.pendingAction.onSubmit(rawValue);
     } catch (error) {
-      this.showError('Failed to complete action', error);
+      this.showActionError(error?.message || 'Failed to complete action');
+      shouldClose = false;
     }
 
     this.setActionDialogBusy(false);
@@ -595,12 +621,12 @@ export class FileActionController {
       await this.refresh();
 
       if (openAfterCreate) {
-        this.onFileSelect?.(filePath);
+        this.onFileSelect?.(filePath, { focusNewNote: isMarkdownFilePath(filePath) });
       }
 
       return true;
     } catch (error) {
-      this.showToast(error?.message || errorMessage);
+      this.showActionError(error?.message || errorMessage);
       return false;
     }
   }
@@ -608,7 +634,7 @@ export class FileActionController {
   async createDirectory(pathValue) {
     const directoryPath = normalizeVaultPathInput(pathValue);
     if (!directoryPath) {
-      this.showToast('Folder path is required');
+      this.showActionError('Folder path is required');
       return false;
     }
 
@@ -621,7 +647,7 @@ export class FileActionController {
       await this.refresh();
       return true;
     } catch (error) {
-      this.showToast(error?.message || 'Failed to create folder');
+      this.showActionError(error?.message || 'Failed to create folder');
       return false;
     }
   }
@@ -629,13 +655,13 @@ export class FileActionController {
   async renameVaultFile(filePath, nextName, extension) {
     const normalizedPath = normalizeVaultPathInput(nextName);
     if (!normalizedPath) {
-      this.showToast('File path is required');
+      this.showActionError('File path is required');
       return false;
     }
 
     const requestedExtension = getVaultFileExtension(normalizedPath);
     if (requestedExtension && requestedExtension.toLowerCase() !== String(extension ?? '').toLowerCase()) {
-      this.showToast(`File type changes are not supported during rename. Keep the ${extension} extension.`);
+      this.showActionError(`File type changes are not supported during rename. Keep the ${extension} extension.`);
       return false;
     }
 
@@ -643,7 +669,7 @@ export class FileActionController {
       ? normalizedPath
       : `${normalizedPath}${extension}`;
     if (!getVaultPathLeaf(finalPath)) {
-      this.showToast('File path is required');
+      this.showActionError('File path is required');
       return false;
     }
 
@@ -666,7 +692,7 @@ export class FileActionController {
 
       return true;
     } catch (error) {
-      this.showToast(error?.message || 'Failed to rename');
+      this.showActionError(error?.message || 'Failed to rename');
       return false;
     }
   }
@@ -674,7 +700,7 @@ export class FileActionController {
   async renameDirectory(oldPath, nextPath) {
     const normalizedPath = normalizeVaultPathInput(nextPath);
     if (!normalizedPath) {
-      this.showToast('Folder path is required');
+      this.showActionError('Folder path is required');
       return false;
     }
 
@@ -699,7 +725,7 @@ export class FileActionController {
 
       return true;
     } catch (error) {
-      this.showToast(error?.message || 'Failed to rename folder');
+      this.showActionError(error?.message || 'Failed to rename folder');
       return false;
     }
   }
@@ -716,7 +742,7 @@ export class FileActionController {
 
       return true;
     } catch (error) {
-      this.showToast(error?.message || 'Failed to delete');
+      this.showActionError(error?.message || 'Failed to delete');
       return false;
     }
   }
@@ -738,7 +764,7 @@ export class FileActionController {
 
       return true;
     } catch (error) {
-      this.showToast(error?.message || 'Failed to delete folder');
+      this.showActionError(error?.message || 'Failed to delete folder');
       return false;
     }
   }
@@ -891,7 +917,7 @@ export class FileActionController {
       onSubmit: (value) => {
         const normalizedPath = normalizeVaultPathInput(value);
         if (!normalizedPath) {
-          this.showToast(emptyMessage);
+          this.showActionError(emptyMessage);
           return false;
         }
         const { content, path } = buildFile(composeVaultChildPath(context.normalizedParentDir, normalizedPath));

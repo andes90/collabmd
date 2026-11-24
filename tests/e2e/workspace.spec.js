@@ -1039,10 +1039,24 @@ test('creates files from the sidebar with the custom dialog', async ({ page }) =
   await expect(page.locator('#fileActionDialog')).toBeVisible();
   await expect(page.locator('#fileActionTitle')).toHaveText('Create markdown file');
 
-  await page.locator('#fileActionInput').fill('plans/q1-roadmap');
+  const pathInput = page.getByRole('textbox', { name: 'File path', exact: true });
+  await pathInput.fill('README');
+  await page.locator('#fileActionSubmit').click();
+  const error = page.locator('#fileActionDialog').getByRole('alert');
+  await expect(error).toHaveText('File already exists');
+  await expect(pathInput).toHaveAttribute('aria-invalid', 'true');
+  await expect(pathInput).toHaveAccessibleDescription(/File already exists/);
+  await expect(pathInput).toBeFocused();
+  expect(await pathInput.evaluate((input) => input.value.slice(input.selectionStart, input.selectionEnd))).toBe('README');
+
+  await page.keyboard.insertText('plans/q1-roadmap');
+  await expect(error).toBeHidden();
   await page.locator('#fileActionSubmit').click();
 
   await waitForEditor(page);
+  await expect(page.locator('.cm-content')).toBeFocused();
+  await page.keyboard.insertText('First paragraph');
+  await expect(page.locator('.cm-line')).toHaveText(['# q1-roadmap', '', 'First paragraph']);
   await expect(page.locator('#activeFileName')).toContainText('q1-roadmap');
   await expect(page.locator('#fileTree')).toContainText('plans');
   await expect(page.locator('#fileTree')).toContainText('q1-roadmap');

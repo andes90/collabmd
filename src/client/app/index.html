@@ -758,16 +758,17 @@
     </div>
 
     <dialog class="app-dialog" id="fileActionDialog" aria-labelledby="fileActionTitle">
-      <form class="app-dialog-form" id="fileActionForm" method="dialog">
+      <form class="app-dialog-form" id="fileActionForm" method="dialog" novalidate>
         <div class="app-dialog-header">
           <h2 class="app-dialog-title" id="fileActionTitle">Create file</h2>
           <p class="app-dialog-copy" id="fileActionCopy">Add a new file to the vault.</p>
         </div>
-        <label class="app-dialog-field" id="fileActionField" for="fileActionInput">
-          <span class="app-dialog-label" id="fileActionLabel">Path</span>
-          <input type="text" class="ui-input" id="fileActionInput" name="fileActionValue" autocomplete="off" spellcheck="false" required>
+        <div class="app-dialog-field" id="fileActionField">
+          <label class="app-dialog-label" id="fileActionLabel" for="fileActionInput">Path</label>
+          <input type="text" class="ui-input" id="fileActionInput" aria-describedby="fileActionHint fileActionError" name="fileActionValue" autocomplete="off" spellcheck="false" required>
           <span class="app-dialog-hint" id="fileActionHint" hidden></span>
-        </label>
+        </div>
+        <p class="app-dialog-error" id="fileActionError" role="alert" hidden></p>
         <p class="app-dialog-note" id="fileActionNote" hidden></p>
         <div class="app-dialog-actions">
           <button type="button" class="ui-button ui-button--secondary" id="fileActionCancel">Cancel</button>

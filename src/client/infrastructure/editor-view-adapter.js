@@ -1,5 +1,6 @@
 import { autocompletion, closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import {
+  cursorDocEnd,
   defaultKeymap,
   indentLess,
   indentMore,
@@ -161,6 +162,7 @@ function createSearchNavigationListener(scheduleFrame) {
 }
 
 const EDITOR_COMMANDS = Object.freeze({
+  cursorDocEnd,
   indentLess,
   indentMore,
   openSearch: openSearchPanelPreservingViewport,
