@@ -91,3 +91,10 @@ exit 2
     return true;
   });
 });
+
+test('CLI rejects an unknown option before starting', async () => {
+  await assert.rejects(
+    promisify(execFile)(process.execPath, ['bin/collabmd.js', '--no-tunel', '--version']),
+    /Unknown option.*--no-tunel/u,
+  );
+});

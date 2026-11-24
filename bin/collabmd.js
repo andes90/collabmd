@@ -23,7 +23,7 @@ const { values, positionals } = parseArgs({
     'no-tunnel': { type: 'boolean', default: false },
     version: { type: 'boolean', short: 'v', default: false },
   },
-  strict: false,
+  strict: true,
 });
 
 if (values.version) {
