@@ -5,6 +5,7 @@ import previewStyles from '../styles/features/preview-markdown.css?inline';
 import highlightOverrideStyles from '../styles/overrides/highlightjs.css?inline';
 import exportStyles from '../styles/export-document.css?inline';
 import highlightStyles from '../assets/vendor/highlight/github.min.css?inline';
+import { renderDocxMathPreview } from './docx-math-preview.js';
 import katexExportCss from 'katex/dist/katex.min.css?inline';
 import {
   rasterizeSvgMarkupToPngDataUrl,
@@ -1365,16 +1366,9 @@ function createDocxCodeBlockTable(pre) {
   });
 }
 
-export function buildDocxHtmlDocument(snapshot) {
+export async function buildDocxHtmlDocument(snapshot) {
   const template = document.createElement('template');
   replaceChildrenFromHtml(template.content, snapshot.html);
-
-
-  normalizeDocxWhitespace(template.content);
-
-  template.content.querySelectorAll('input[data-task-checkbox]').forEach((checkbox) => {
-    checkbox.replaceWith(checkbox.hasAttribute('checked') ? '\u2611' : '\u2610');
-  });
 
   // KaTeX lays math out as positioned spans that read out of order as
   // plain text (a stacked fraction extracts as "ba" instead of "a/b").
@@ -1382,11 +1376,13 @@ export function buildDocxHtmlDocument(snapshot) {
   // renders them as real editable math.
   // A lone math block inside a list item would detach from its bullet,
   // so hoist the marker to keep the equation on the bullet paragraph.
-  Array.from(template.content.querySelectorAll('.katex')).forEach((mathElement, docxMathIndex) => {
-    const mathml = mathElement.querySelector('.katex-mathml')?.innerHTML ?? '';
-    if (!mathml.includes('<math')) {
-      return;
-    }
+  const equations = Array.from(template.content.querySelectorAll('.katex'));
+  const styles = equations.length ? await loadKatexExportStyles().catch(() => '') : '';
+  const previews = new Map();
+  for (const [docxMathIndex, mathElement] of equations.entries()) {
+    const math = mathElement.querySelector('.katex-mathml math');
+    if (!math) continue;
+    const mathml = new XMLSerializer().serializeToString(math);
 
     const displayWrapper = mathElement.parentElement;
     let replaceTarget = displayWrapper?.classList?.contains('katex-display') ? displayWrapper : mathElement;
@@ -1395,12 +1391,27 @@ export function buildDocxHtmlDocument(snapshot) {
       replaceTarget = blockParagraph;
     }
 
-    const marker = template.content.ownerDocument.createElement('span');
+    const key = `COLLABMD-MATH-${docxMathIndex}`;
+    if (styles && !previews.has(mathml)) {
+      previews.set(mathml, await renderDocxMathPreview(mathElement, styles).catch(() => null));
+    }
+    const preview = previews.get(mathml);
+    const marker = document.createElement(preview ? 'img' : 'span');
+    if (preview) {
+      Object.assign(marker, preview, { alt: key });
+    } else {
+      marker.textContent = key;
+    }
     marker.className = 'export-math';
     marker.dataset.mml = encodeURIComponent(mathml);
-    marker.textContent = `COLLABMD-MATH-${docxMathIndex}`;
     replaceTarget.replaceWith(marker);
+  }
+  normalizeDocxWhitespace(template.content);
+
+  template.content.querySelectorAll('input[data-task-checkbox]').forEach((checkbox) => {
+    checkbox.replaceWith(checkbox.hasAttribute('checked') ? '\u2611' : '\u2610');
   });
+
   Array.from(template.content.querySelectorAll('.table-wrapper')).forEach((wrapper) => {
     const table = wrapper.querySelector(':scope > table');
     if (!table) {
@@ -1595,7 +1606,7 @@ export async function docxAdapter(snapshot) {
   const response = await fetch(resolveApiUrl('/export/docx'), {
     body: JSON.stringify({
       filePath: snapshot.filePath,
-      html: buildDocxHtmlDocument(snapshot),
+      html: await buildDocxHtmlDocument(snapshot),
       title: snapshot.title,
     }),
     headers: {

@@ -1,17 +1,14 @@
 import { createRequire } from 'node:module';
 
-import { mml2omml } from 'mathml2omml';
+import { convertDocxEquation, MATH_NAMESPACE, parseDocxXml } from './docx-equation.js';
 
 // Use the converter's own parser dependency so both sides interpret HTML alike.
 const converterRequire = createRequire(import.meta.resolve('@turbodocx/html-to-docx'));
 const { Parser } = converterRequire('htmlparser2');
 const JSZip = converterRequire('jszip');
+const MC_NAMESPACE = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
 const EMBEDDED_IMAGE_PATTERN = /^data:image\/(?:png|jpeg|gif|webp|svg\+xml);base64,[a-z0-9+/]+={0,2}$/i;
 const DOCX_MATH_KEY_PATTERN = /^COLLABMD-MATH-\d+$/;
-const MATHML_ANNOTATION_PATTERN = /<annotation\b[^>]*>[\s\S]*?<\/annotation>/g;
-// mpadded is purely presentational padding with no OMML equivalent; unwrap it
-// and let the supported children through instead of dropping the subtree.
-const MATHML_PADDED_TAG = /<\/?mpadded(?=[\s/>])(?:[^>"']|"[^"]*"|'[^']*')*>/gu;
 const DOCX_EXPORTER_CREATOR = 'CollabMD';
 let converterPromise = null;
 
@@ -66,13 +63,12 @@ async function ensureConverter() {
 }
 
 function collectDocxMath(html) {
-  // Markers are generated markup holding only text, so a flat open/text/close
-  // walk is enough; anything unexpected simply fails the key check below.
+  // Current clients send a preview image. Older clients send a text marker.
   const equations = [];
   let current = null;
   const parser = new Parser({
     onopentag(name, attribs = {}) {
-      if (current || name !== 'span') {
+      if (current || (name !== 'span' && name !== 'img')) {
         return;
       }
 
@@ -84,7 +80,11 @@ function collectDocxMath(html) {
       try {
         const mml = decodeURIComponent(attribs['data-mml']);
         if (mml.includes('<math')) {
-          current = { key: '', mml };
+          if (name === 'img') {
+            if (DOCX_MATH_KEY_PATTERN.test(attribs.alt)) equations.push({ key: attribs.alt, mml, picture: true });
+          } else {
+            current = { key: '', mml };
+          }
         }
       } catch {
         current = null;
@@ -102,7 +102,7 @@ function collectDocxMath(html) {
 
       const key = current.key.trim();
       if (DOCX_MATH_KEY_PATTERN.test(key)) {
-        equations.push({ key, mml: current.mml });
+        equations.push({ key, mml: current.mml, picture: false });
       }
       current = null;
     },
@@ -111,157 +111,68 @@ function collectDocxMath(html) {
   return equations;
 }
 
-function escapeDocxXml(text) {
-  return String(text ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
+function centerEquationParagraph(run) {
+  const paragraph = run.parentElement;
+  if (paragraph?.tagName !== 'w:p' || paragraph.getElementsByTagName('w:numPr').length) return;
+  if (Array.from(paragraph.childNodes).some((child) => child.nodeType === 1 && child !== run && child.tagName !== 'w:pPr')) return;
 
-// The OMML converter copies text content verbatim, so raw &/</> and HTML-only
-// entities such as &nbsp; would reach document.xml unescaped and break Word's
-// XML parsing. OMML output only uses m:/w: prefixed tags, so any other <
-// starts text.
-const OMML_TEXT_RUN_PATTERN = />([^<]*(?:<(?!\/?[A-Za-z][\w]*:)[^<]*)*)/g;
-
-function escapeOmmlTextContent(omml) {
-  return String(omml ?? '').replace(OMML_TEXT_RUN_PATTERN, (_match, text) => `>${
-    String(text ?? '')
-      .replace(/&(?!(?:amp|lt|gt|quot|apos|nbsp);|#\d+;|#x[\da-fA-F]+;)/g, '&amp;')
-      .replace(/&nbsp;/g, '&#160;')
-      .replace(/</g, '&lt;')
-  }`);
-}
-
-function extractMathmlAnnotation(mml) {
-  const match = String(mml ?? '').match(/<annotation\b[^>]*>([\s\S]*?)<\/annotation>/);
-  return match?.[1]?.trim() ?? '';
-}
-
-function deduplicateOmmlArgPr(omml) {
-  // The converter emits one m:argPr per transparent ancestor (mstyle, mrow),
-  // but OOXML allows at most one per argument. Adjacent duplicates are never
-  // legitimate, so collapse them; Word drops content after invalid markup.
-  // Both elements must be self-contained (self-closing or self-closing
-  // children only) so the match can never span a run or close tag.
-  const simpleArgPr = '<m:argPr\\b(?![^>]*\\/>)[^>]*>(?:<m:[a-zA-Z]+\\b[^>]*\\/>\\s*)*<\\/m:argPr>|<m:argPr\\b[^>]*\\/>';
-  const duplicatePattern = new RegExp(`(${simpleArgPr})\\s*(${simpleArgPr})`, 'g');
-  let previous = null;
-  let output = omml;
-  while (output !== previous) {
-    previous = output;
-    output = output.replace(duplicatePattern, '$1');
+  const document = run.ownerDocument;
+  const ns = paragraph.namespaceURI;
+  let properties = paragraph.getElementsByTagName('w:pPr')[0];
+  if (!properties) {
+    properties = document.createElementNS(ns, 'w:pPr');
+    paragraph.insertBefore(properties, run);
   }
-  return output;
-}
-
-function convertMathmlToOmml(mml) {
-  try {
-    return escapeOmmlTextContent(deduplicateOmmlArgPr(mml2omml(
-      String(mml ?? '')
-        .replace(MATHML_ANNOTATION_PATTERN, '')
-        .replace(MATHML_PADDED_TAG, ''),
-    )));
-  } catch {
-    return null;
+  if (!properties.getElementsByTagName('w:jc').length) {
+    const justification = document.createElementNS(ns, 'w:jc');
+    justification.setAttributeNS(ns, 'w:val', 'center');
+    const next = Array.from(properties.childNodes).find((child) => ['w:rPr', 'w:sectPr', 'w:pPrChange'].includes(child.tagName));
+    properties.insertBefore(justification, next ?? null);
   }
 }
 
-function enclosingDocxParagraph(documentXml, index) {
-  const paragraphTags = /<(\/?)w:p(?=[\s/>])(?:[^>"']|"[^"]*"|'[^']*')*>/gu;
-  const openParagraphs = [];
-  for (const match of documentXml.matchAll(paragraphTags)) {
-    if (match[1]) {
-      const start = openParagraphs.pop();
-      const end = match.index + match[0].length;
-      if (start !== undefined && start < index && index < match.index) {
-        return { end, start, xml: documentXml.slice(start, end) };
-      }
-    } else if (!match[0].endsWith('/>')) {
-      if (match.index > index && !openParagraphs.length) break;
-      openParagraphs.push(match.index);
-    }
-  }
-  return null;
-}
-
-function isSoleMarkerParagraph(paragraphXml, key) {
-  const texts = [...paragraphXml.matchAll(/<w:t\b[^>]*>([^<]*)<\/w:t>/g)]
-    .map((match) => match[1])
-    .join('');
-  return texts === key;
-}
-
-// Display equations render as centered paragraphs: inline oMath shows in
-// Word, Docs, and Pages, while oMathPara blocks are dropped by several
-// renderers. The justification goes before run/section properties per the
-// OOXML paragraph-property order.
-const DOCX_CENTER_JUSTIFICATION = '<w:jc w:val="center"/>';
-
-function centerDocxParagraph(paragraphXml) {
-  if (/<w:jc\b/.test(paragraphXml)) {
-    return paragraphXml;
-  }
-
-  if (/<w:pPr\b[^>]*>/.test(paragraphXml)) {
-    return paragraphXml.replace(
-      /(<w:pPr\b[^>]*>)([\s\S]*?)(<(?:w:rPr|w:sectPr|w:pPrChange)\b|<\/w:pPr>)/,
-      `$1$2${DOCX_CENTER_JUSTIFICATION}$3`,
-    );
-  }
-
-  return paragraphXml.replace(/<w:p\b[^>]*>/, (match) => `${match}<w:pPr>${DOCX_CENTER_JUSTIFICATION}</w:pPr>`);
-}
-
-function replaceDocxMathMarker(documentXml, { fallbackTex, key, omml }) {
-  const fallbackRun = `<w:r><w:t xml:space="preserve">${escapeDocxXml(fallbackTex || key)}</w:t></w:r>`;
-  const runPattern = new RegExp(`<w:r\\b[^>]*>\\s*(?:<w:rPr\\b(?:/>|>[\\s\\S]*?</w:rPr>)\\s*)?<w:t\\b[^>]*>${key}</w:t>\\s*</w:r>`);
-  const runMatch = runPattern.exec(documentXml);
-
-  if (runMatch) {
-    const paragraph = enclosingDocxParagraph(documentXml, runMatch.index);
-    if (
-      omml
-      && paragraph
-      && !/<w:numPr\b/.test(paragraph.xml)
-      && isSoleMarkerParagraph(paragraph.xml, key)
-    ) {
-      const centered = centerDocxParagraph(paragraph.xml);
-      const innerMatch = runPattern.exec(centered);
-      const withMath = innerMatch
-        ? centered.slice(0, innerMatch.index) + omml + centered.slice(innerMatch.index + innerMatch[0].length)
-        : centered;
-      return documentXml.slice(0, paragraph.start) + withMath + documentXml.slice(paragraph.end);
-    }
-
-    const replacement = omml ?? fallbackRun;
-    return documentXml.slice(0, runMatch.index) + replacement + documentXml.slice(runMatch.index + runMatch[0].length);
-  }
-
-  return documentXml.split(key).join(escapeDocxXml(fallbackTex || key));
+function replaceMathRun(run, equation) {
+  const document = run.ownerDocument;
+  // Word selects Office Math. Readers such as Finder Quick Look select the
+  // fallback drawing (or the source TeX when preview rendering was unavailable).
+  const alternate = document.createElementNS(MC_NAMESPACE, 'mc:AlternateContent');
+  const choice = document.createElementNS(MC_NAMESPACE, 'mc:Choice');
+  choice.setAttribute('Requires', 'm');
+  choice.setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:m', MATH_NAMESPACE);
+  choice.appendChild(document.importNode(equation, true));
+  alternate.appendChild(choice);
+  const fallbackElement = document.createElementNS(MC_NAMESPACE, 'mc:Fallback');
+  alternate.appendChild(fallbackElement);
+  run.parentNode.replaceChild(alternate, run);
+  fallbackElement.appendChild(run);
 }
 
 async function injectDocxMathEquations(docxBuffer, equations) {
-  const conversions = equations.map((equation) => ({
-    fallbackTex: extractMathmlAnnotation(equation.mml),
-    key: equation.key,
-    omml: convertMathmlToOmml(equation.mml),
-  }));
-
   const zip = await JSZip.loadAsync(docxBuffer);
   const documentFile = zip.file('word/document.xml');
-  if (!documentFile) {
-    return docxBuffer;
-  }
+  if (!documentFile) return docxBuffer;
 
-  let documentXml = await documentFile.async('string');
-  for (const conversion of conversions) {
-    documentXml = replaceDocxMathMarker(documentXml, conversion);
+  const xml = parseDocxXml(await documentFile.async('string'));
+  const markers = new Map(equations.map((marker) => [marker.key, marker]));
+  for (const run of Array.from(xml.node.getElementsByTagName('w:r'))) {
+    const picture = run.getElementsByTagName('pic:cNvPr')[0];
+    const text = run.getElementsByTagName('w:t')[0];
+    const key = picture ? picture.getAttribute('descr') : text?.textContent;
+    const marker = markers.get(key);
+    if (!marker || marker.picture !== Boolean(picture)) continue;
+    markers.delete(key);
+    const { equation, tex } = convertDocxEquation(marker.mml);
+    if (picture) {
+      picture.setAttribute('descr', tex);
+      run.getElementsByTagName('wp:docPr')[0]?.setAttribute('descr', tex);
+    } else {
+      text.textContent = tex || equation?.textContent || 'Equation';
+    }
+    centerEquationParagraph(run);
+    if (equation) replaceMathRun(run, equation);
   }
-  zip.file('word/document.xml', documentXml);
-  const regenerated = await zip.generateAsync({ compression: 'DEFLATE', type: 'nodebuffer' });
-  return Buffer.from(regenerated);
+  zip.file('word/document.xml', xml.end());
+  return zip.generateAsync({ compression: 'DEFLATE', type: 'nodebuffer' });
 }
 
 export async function renderDocx({

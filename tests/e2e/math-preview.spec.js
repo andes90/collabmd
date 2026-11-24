@@ -1,3 +1,7 @@
+import { createRequire } from 'node:module';
+
+import sharp from 'sharp';
+
 import {
   expect,
   openFile,
@@ -58,7 +62,7 @@ test('exports math as a self-contained HTML document with inlined fonts', async 
   await expect(popup.locator('#exportStatus')).toContainText('HTML download started.');
 });
 
-test('posts OMML markers for DOCX export', async ({ page, context }) => {
+test('downloads DOCX with editable equations and inline preview pictures', async ({ page, context }) => {
   await openFile(page, 'sample-full.md', { waitFor: 'preview' });
   await replaceEditorContent(
     page,
@@ -67,23 +71,39 @@ test('posts OMML markers for DOCX export', async ({ page, context }) => {
   await waitForPreview(page);
   await expect(page.locator('#previewContent .katex').first()).toBeVisible();
 
-  let exportRequestBody = null;
-  await context.route('**/export/docx', async (route) => {
-    exportRequestBody = route.request().postDataJSON();
-    await route.fulfill({
-      body: Buffer.from('PK\x03\x04'),
-      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      status: 200,
-    });
-  });
-
-  const popupPromise = context.waitForEvent('page');
+  const requestPromise = context.waitForEvent('request', (request) => request.url().endsWith('/export/docx'));
+  const downloadPromise = context.waitForEvent('page').then(async (popup) => ({
+    download: await popup.waitForEvent('download'),
+    popup,
+  }));
   await page.locator('#toolbarOverflowToggle').click();
   await page.locator('#exportMenuGroup > summary').click();
   await page.locator('#exportDocxBtn').click();
-  const popup = await popupPromise;
-
-  await expect.poll(() => exportRequestBody).not.toBeNull();
+  const { download, popup } = await downloadPromise;
+  const exportRequestBody = (await requestPromise).postDataJSON();
+  const JSZip = createRequire(import.meta.resolve('@turbodocx/html-to-docx'))('jszip');
+  const chunks = [];
+  for await (const chunk of await download.createReadStream()) chunks.push(chunk);
+  const zip = await JSZip.loadAsync(Buffer.concat(chunks));
+  const documentXml = await zip.file('word/document.xml').async('string');
+  const equations = await popup.evaluate((xml) => {
+    const document = new DOMParser().parseFromString(xml, 'application/xml');
+    return Array.from(document.getElementsByTagNameNS('*', 'AlternateContent'), (alternate) => ({
+      math: alternate.getElementsByTagNameNS('*', 'Choice')[0].textContent,
+      image: alternate.getElementsByTagNameNS('*', 'Fallback')[0].getElementsByTagNameNS('*', 'blip')[0]?.getAttribute('r:embed'),
+      paragraph: alternate.parentNode.textContent.trim(),
+    }));
+  }, documentXml);
+  expect(equations.map(({ math }) => math)).toEqual(['E=mc2', 'ab']);
+  expect(equations.every(({ image }) => image)).toBe(true);
+  expect(equations[0].paragraph).toMatch(/Inline.*here\./);
+  const pictures = zip.file(/^word\/media\/.+\.png$/);
+  expect(pictures).toHaveLength(2);
+  for (const picture of pictures) {
+    const { channels } = await sharp(await picture.async('nodebuffer')).stats();
+    expect(channels[3].min).toBe(0);
+    expect(channels[3].max).toBeGreaterThan(0);
+  }
   expect(exportRequestBody.html).toContain('COLLABMD-MATH-');
   expect(exportRequestBody.html).toContain('data-mml="%3Cmath');
   expect(exportRequestBody.html).not.toContain('katex-html');

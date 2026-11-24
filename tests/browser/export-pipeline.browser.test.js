@@ -130,7 +130,7 @@ describe('export pipeline browser helpers', () => {
     expect(image?.getAttribute('data-export-docx-src')).toMatch(/^data:image\/png;base64,/);
     expect(snapshot.warnings).toHaveLength(0);
 
-    const docxHtml = buildDocxHtmlDocument({
+    const docxHtml = await buildDocxHtmlDocument({
       html: container.innerHTML,
       title: 'README',
     });
@@ -182,7 +182,7 @@ describe('export pipeline browser helpers', () => {
     expect(image?.getAttribute('data-export-docx-src')).toMatch(/^data:image\/png;base64,/);
     expect(snapshot.warnings).toHaveLength(0);
 
-    const docxHtml = buildDocxHtmlDocument({
+    const docxHtml = await buildDocxHtmlDocument({
       html: container.innerHTML,
       title: 'README',
     });
@@ -301,7 +301,7 @@ describe('export pipeline browser helpers', () => {
     expect(figure?.getAttribute('data-export-docx-src')).toMatch(/^data:image\/svg\+xml;charset=utf-8,/);
     expect(snapshot.warnings).toHaveLength(0);
 
-    const docxHtml = buildDocxHtmlDocument({
+    const docxHtml = await buildDocxHtmlDocument({
       html: container.innerHTML,
       title: 'README',
     });
@@ -427,8 +427,8 @@ describe('export pipeline browser helpers', () => {
     expect(snapshot.warnings).toHaveLength(0);
   });
 
-  it('flattens video posters into DOCX-friendly markup with image and link preserved', () => {
-    const html = buildDocxHtmlDocument({
+  it('flattens video posters into DOCX-friendly markup with image and link preserved', async () => {
+    const html = await buildDocxHtmlDocument({
       html: [
         '<figure class="export-video-poster">',
         '  <div class="export-video-poster-card">',
@@ -490,8 +490,8 @@ describe('export pipeline browser helpers', () => {
     expect(html).toContain('.katex{font:1em KaTeX_Main;}');
   });
 
-  it('reshapes DOCX tables, blockquotes, and figures into border-friendly markup', () => {
-    const html = buildDocxHtmlDocument({
+  it('reshapes DOCX tables, blockquotes, and figures into border-friendly markup', async () => {
+    const html = await buildDocxHtmlDocument({
       html: [
         '<div class="table-wrapper">',
         '  <table>',
@@ -521,8 +521,8 @@ describe('export pipeline browser helpers', () => {
     expect(html).not.toContain('<figure><img');
   });
 
-  it('replaces rendered math with OMML markers in DOCX markup', () => {
-    const html = buildDocxHtmlDocument({
+  it('replaces rendered math with OMML markers in DOCX markup', async () => {
+    const html = await buildDocxHtmlDocument({
       html: [
         '<p>Inline <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>E</mi></mrow><annotation encoding="application/x-tex">E = mc^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true">E = mc2</span></span> here.</p>',
         '<ul><li><p class="katex-block"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mfrac><mi>a</mi><mi>b</mi></mfrac></mrow><annotation encoding="application/x-tex">\\frac{a}{b}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true">ba</span></span></span></p></li></ul>',
@@ -539,8 +539,8 @@ describe('export pipeline browser helpers', () => {
     expect(html).not.toContain('katex-block');
   });
 
-  it('flattens task list labels to ballot-box text in DOCX markup', () => {
-    const html = buildDocxHtmlDocument({
+  it('flattens task list labels to ballot-box text in DOCX markup', async () => {
+    const html = await buildDocxHtmlDocument({
       ...compilePreviewDocument({ markdownText: '- [x] **:rocket: Done task**\n- [ ] Open task' }),
       title: 'Tasks',
     });
@@ -552,8 +552,8 @@ describe('export pipeline browser helpers', () => {
     expect(doc.querySelector('input')).toBeNull();
   });
 
-  it('drops insignificant whitespace but preserves pre blocks in DOCX markup', () => {
-    const html = buildDocxHtmlDocument({
+  it('drops insignificant whitespace but preserves pre blocks in DOCX markup', async () => {
+    const html = await buildDocxHtmlDocument({
       html: [
         '<h2>Title</h2>',
         '<ul>',
@@ -572,8 +572,8 @@ describe('export pipeline browser helpers', () => {
     expect(html).toContain('line&nbsp;three');
   });
 
-  it('emits a compact DOCX wrapper without phantom whitespace', () => {
-    const html = buildDocxHtmlDocument({ html: '<p>Hi</p>', title: 'A & B' });
+  it('emits a compact DOCX wrapper without phantom whitespace', async () => {
+    const html = await buildDocxHtmlDocument({ html: '<p>Hi</p>', title: 'A & B' });
 
     expect(html).not.toContain('<!DOCTYPE');
     expect(html).toContain('<title>A &amp; B</title>');

@@ -125,3 +125,20 @@ test('DOCX emits at most one argument-properties element per math argument', asy
   assert.ok(documentXml.includes('After math.'), 'expected trailing content');
   assert.ok(documentXml.includes('<w:jc w:val="center"/>'), 'expected centered display paragraph');
 });
+
+test('DOCX preserves integrands, styled symbols and literal text around equations', async () => {
+  const result = await renderDocx({
+    html: '<p>Before &amp; &lt;tag&gt; and literal &amp;lt;.</p>'
+      + '<p>' + mathMarker('COLLABMD-MATH-0', '\\int_a^b f(x)\\,dx + \\mathbb{R} + \\boldsymbol{\\alpha+\\beta}', true) + '</p>'
+      + '<p>After &amp;.</p>',
+  });
+  const zip = await JSZip.loadAsync(result);
+  const xml = await zip.file('word/document.xml').async('string');
+  assert.match(xml, /Before &amp; &lt;tag&gt; and literal &amp;lt;\./);
+  assert.match(xml, /After &amp;\./);
+  assert.match(xml, /<m:t[^>]*>\(x\)<\/m:t>/);
+  assert.match(xml, /<m:t[^>]*>\u2009<\/m:t>/u);
+  assert.match(xml, /<m:scr m:val="double-struck"\/>/);
+  assert.match(xml, /<m:sty m:val="bi"\/>/);
+  assert.doesNotMatch(xml, /m:scrLvl|m:val="undefined"|COLLABMD-MATH/);
+});
