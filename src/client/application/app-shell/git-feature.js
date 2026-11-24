@@ -239,11 +239,12 @@ export const gitFeature = {
     await this.fileHistoryView.openFileHistory({ filePath });
   },
 
-  async _loadGitFileSnapshot({ hash, filePath, resolvedCurrentFilePath }) {
+  async _loadGitFileSnapshot({ hash, filePath, resolvedCurrentFilePath, loadToken }) {
     const data = await this.gitApiClient.readFileSnapshot({
       hash,
       path: filePath,
     });
+    if (loadToken !== this.sessionLoadToken) return;
     this.setStaticPreviewDocument?.({
       ...data,
       currentFilePath: resolvedCurrentFilePath,
@@ -304,10 +305,11 @@ export const gitFeature = {
     });
     this.syncFileHistoryButton({ filePath: resolvedCurrentFilePath, mode: 'history-preview' });
 
+    const loadToken = this.sessionLoadToken;
     try {
-      await this._loadGitFileSnapshot({ hash, filePath, resolvedCurrentFilePath });
+      await this._loadGitFileSnapshot({ hash, filePath, resolvedCurrentFilePath, loadToken });
     } catch (error) {
-      this._handleGitFilePreviewError(error, resolvedCurrentFilePath);
+      if (loadToken === this.sessionLoadToken) this._handleGitFilePreviewError(error, resolvedCurrentFilePath);
     }
   },
 

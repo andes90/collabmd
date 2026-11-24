@@ -416,3 +416,28 @@ test('gitFeature opens history preview against the current workspace file when t
     && event[2] === 'history-preview'
   )));
 });
+
+test('a slow history response cannot replace the newly selected revision', async () => {
+  const old = Promise.withResolvers();
+  const rendered = [];
+  const { context } = createContext({
+    sessionLoadToken: 0,
+    gitApiClient: {
+      readFileSnapshot: ({ hash }) => hash === 'old'
+        ? old.promise
+        : Promise.resolve({ content: 'New revision', fileKind: 'markdown' }),
+    },
+    layoutController: { setView() {} },
+    previewRenderer: { beginDocumentLoad() {}, queueRender() {} },
+    setStaticPreviewDocument: (document) => rendered.push(document.content),
+    syncFileHistoryButton() {},
+    syncMainChrome() {},
+    workspaceRouteController: { showPreviewOnlyState() { context.sessionLoadToken += 1; } },
+  });
+
+  const previous = context.showGitFilePreview({ filePath: 'README.md', hash: 'old' });
+  await context.showGitFilePreview({ filePath: 'README.md', hash: 'new' });
+  old.resolve({ content: 'Old revision', fileKind: 'markdown' });
+  await previous;
+  assert.deepEqual(rendered, ['New revision']);
+});
