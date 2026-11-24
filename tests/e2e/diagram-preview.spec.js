@@ -545,10 +545,20 @@ test('opens drawio files with a maximizable direct preview', async ({ page }) =>
   expect(maximizedBounds.right).toBeLessThanOrEqual(maximizedBounds.innerWidth);
 });
 
-test('direct drawio preview validates message origin and preserves the frame during resize', async ({ page }) => {
-  let frameDocumentRequests = 0;
+async function holdDrawioLeaseSync(page) {
+  const leaseSync = Promise.withResolvers();
+  await page.routeWebSocket(/__drawio__/, (socket) => {
+    socket.connectToServer().onMessage(async (message) => {
+      await leaseSync.promise;
+      socket.send(message);
+    });
+  });
+  return leaseSync.resolve;
+}
+
+async function stubDrawioEditor(page, onRequest = () => {}) {
   await page.route('https://embed.diagrams.net/**', async (route) => {
-    frameDocumentRequests += 1;
+    onRequest();
     await route.fulfill({
       body: `
         <!doctype html>
@@ -562,6 +572,7 @@ test('direct drawio preview validates message origin and preserves the frame dur
               window.addEventListener('message', (event) => {
                 const payload = JSON.parse(event.data || '{}');
                 if (payload.action === 'load') {
+                  document.body.dataset.firstAutosave ??= String(payload.autosave);
                   document.body.dataset.loadCount = String(Number(document.body.dataset.loadCount || '0') + 1);
                 }
               });
@@ -574,6 +585,22 @@ test('direct drawio preview validates message origin and preserves the frame dur
       status: 200,
     });
   });
+}
+
+test('direct drawio preview validates message origin and preserves the frame during resize', async ({ page }) => {
+  // Exercise the ordering where the embed initializes before the editing lease arrives.
+  const releaseLease = await holdDrawioLeaseSync(page);
+  await page.exposeFunction('releaseDrawioLeaseSync', releaseLease);
+  await page.addInitScript(() => {
+    if (!location.pathname.endsWith('/drawio-editor.html')) return;
+    window.addEventListener('message', (event) => {
+      if (event.origin === 'https://embed.diagrams.net' && event.data === '{"event":"init"}') {
+        void window.releaseDrawioLeaseSync();
+      }
+    });
+  });
+  let frameDocumentRequests = 0;
+  await stubDrawioEditor(page, () => { frameDocumentRequests += 1; });
 
   await writeVaultFileAndResetCollab(page, {
     path: 'sample-drawio.drawio',
@@ -608,6 +635,7 @@ test('direct drawio preview validates message origin and preserves the frame dur
     const frame = getFakeDrawioFrame();
     return frame?.evaluate(() => document.body.dataset.loadCount || '0').catch(() => '0') ?? '0';
   }, { timeout: 60000 }).toBe('1');
+  await expect(getFakeDrawioFrame().locator('body')).toHaveAttribute('data-first-autosave', '1');
   expect(frameDocumentRequests).toBe(1);
 
   const drawioHost = page.frames().find((frame) => new URL(frame.url()).pathname === '/drawio-editor.html');
@@ -669,6 +697,23 @@ test('direct drawio preview validates message origin and preserves the frame dur
   await expect(page.locator('#activeFileName')).toContainText('README');
   const savedFile = await page.request.get('/api/file?path=sample-drawio.drawio');
   expect((await savedFile.json()).content).toBe('<mxfile>final-change</mxfile>');
+});
+
+test('direct drawio preview stays readable while offline and enables editing when the lease arrives', async ({ page }) => {
+  const releaseLease = await holdDrawioLeaseSync(page);
+  await stubDrawioEditor(page);
+  await writeVaultFileAndResetCollab(page, { path: 'offline.drawio', content: '<mxfile/>' });
+  await openFile(page, 'offline.drawio', { waitFor: 'preview' });
+
+  const host = page.frameLocator('#previewContent .drawio-embed-iframe');
+  const diagram = host.frameLocator('.drawio-frame').locator('body');
+  await expect(diagram).toHaveAttribute('data-first-autosave', '0');
+  await expect(host.locator('#drawioModePill')).toHaveText('Read-only');
+  await expect(diagram).toHaveAttribute('data-load-count', '1');
+
+  releaseLease();
+  await expect(host.locator('#drawioModePill')).toHaveText('Editing');
+  await expect(diagram).toHaveAttribute('data-load-count', '2');
 });
 
 test('embedded drawio uses the shared diagram preview header chrome', async ({ page }) => {

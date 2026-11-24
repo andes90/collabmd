@@ -14,6 +14,7 @@ import { vaultApiClient } from './infrastructure/vault-api-client.js';
 
 const AUTOSAVE_DEBOUNCE_MS = 1000;
 const IFRAME_BOOT_TIMEOUT_MS = 15000;
+const INITIAL_LEASE_WAIT_MS = 4000;
 const parentOrigin = window.location.origin;
 const params = new URLSearchParams(window.location.search);
 const filePath = params.get('file') || '';
@@ -29,6 +30,7 @@ let runtimeConfig = getRuntimeConfig();
 let currentXml = '';
 let currentTheme = themeParam;
 let currentLeaseState = null;
+let waitingForInitialLease = requestedMode === 'edit' && Boolean(leaseRoom);
 let drawioFrame = null;
 let drawioOrigin = null;
 let drawioFrameReady = false;
@@ -192,6 +194,8 @@ function postAction(action, payload = {}) {
 }
 
 function loadDiagramIntoFrame() {
+  if (!drawioFrameReady || waitingForInitialLease) return false;
+
   const payload = createDrawioFrameLoadPayload({
     currentTheme,
     currentXml,
@@ -206,8 +210,20 @@ function loadDiagramIntoFrame() {
   const posted = postAction('load', payload);
   if (posted) {
     lastFrameLoadSignature = signature;
+    if (!hasPostedReadyToParent) {
+      hasPostedReadyToParent = true;
+      postToParent('ready', { filePath, instanceMode: state.isEditor ? 'edit' : 'view' });
+    }
   }
   return posted;
+}
+
+function finishInitialLeaseWait() {
+  waitingForInitialLease = false;
+  if (drawioFrameReady) {
+    clearFrameBootTimer();
+    loadDiagramIntoFrame();
+  }
 }
 
 function updateFrameMode() {
@@ -347,15 +363,14 @@ function attachDrawioFrame(url = buildDrawioFrameUrl()) {
     }
 
     if (payload.event === 'ready' || payload.event === 'init') {
+      if (drawioFrameReady) return;
       drawioFrameReady = true;
       clearFrameBootTimer();
-      loadDiagramIntoFrame();
-      if (!hasPostedReadyToParent) {
-        hasPostedReadyToParent = true;
-        postToParent('ready', {
-          filePath,
-          instanceMode: state.isEditor ? 'edit' : 'view',
-        });
+      if (waitingForInitialLease) {
+        // An unavailable collaboration connection still permits read-only viewing.
+        drawioFrameBootTimer = window.setTimeout(finishInitialLeaseWait, INITIAL_LEASE_WAIT_MS);
+      } else {
+        loadDiagramIntoFrame();
       }
       return;
     }
@@ -427,6 +442,7 @@ function handleLeaseState(nextState) {
 
   updateBanner();
 
+  if (waitingForInitialLease && nextState.synced) finishInitialLeaseWait();
   const modeChanged = previousState?.isEditor !== nextState.isEditor;
   const savedVersionChanged = nextState.savedVersion !== lastSavedVersion;
   lastSavedVersion = nextState.savedVersion;
