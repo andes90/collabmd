@@ -1,4 +1,8 @@
 import { findElementByDataset } from '../browser-utils.js';
+import {
+  applyEmbedOverlayPositionStyles,
+  ensureEmbedOverlayRoot,
+} from './diagram-embed-helpers.js';
 import { reconcileEmbedEntries } from './excalidraw-embed-reconciler.js';
 
 const DEFAULT_ASPECT_RATIO = 16 / 9;
@@ -189,29 +193,19 @@ export class VideoEmbedController {
     entry.inlineHeightPx = height;
 
     setStyleIfChanged(placeholder, 'height', `${height}px`);
-
-    setStyleIfChanged(entry.wrapper, 'position', 'absolute');
-    setStyleIfChanged(entry.wrapper, 'top', `${placeholder.offsetTop}px`);
-    setStyleIfChanged(entry.wrapper, 'left', `${placeholder.offsetLeft}px`);
-    setStyleIfChanged(entry.wrapper, 'width', `${placeholder.offsetWidth}px`);
+    applyEmbedOverlayPositionStyles(entry.wrapper, placeholder);
     setStyleIfChanged(entry.wrapper, 'height', `${height}px`);
-    setStyleIfChanged(entry.wrapper, 'margin', '0');
     setStyleIfChanged(entry.wrapper, 'pointerEvents', 'auto');
 
     this._hydrateEntryMedia(entry);
   }
 
   _ensureOverlayRoot() {
-    let overlayRoot = this.previewElement?.querySelector('[data-video-overlay-root="true"]');
-    if (!overlayRoot) {
-      overlayRoot = document.createElement('div');
-      overlayRoot.dataset.videoOverlayRoot = 'true';
-      overlayRoot.className = 'video-embed-overlay-root';
-      this.previewElement?.appendChild(overlayRoot);
-    }
-
-    this.overlayRoot = overlayRoot;
-    return overlayRoot;
+    this.overlayRoot = ensureEmbedOverlayRoot(this.previewElement, this.overlayRoot, {
+      className: 'video-embed-overlay-root',
+      datasetKey: 'videoOverlayRoot',
+    });
+    return this.overlayRoot;
   }
 
   _hydrateEntryMedia(entry) {

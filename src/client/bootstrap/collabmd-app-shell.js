@@ -157,7 +157,6 @@ export class CollabMdAppShell {
     this.fileExplorerReadyPromise = Promise.resolve();
     this.mobileBreakpointQuery = window.matchMedia('(max-width: 768px)');
     this.pendingWorkspaceRequestIds = new Set();
-    this._fileOpenPerf = null;
     this.versionMonitor = new AppVersionMonitor({
       currentBuildId: this.runtimeConfig.build?.id,
       onUpdateAvailable: (payload) => this.promptForVersionReload(payload),
@@ -375,10 +374,6 @@ export class CollabMdAppShell {
       },
       getSourceFilePath: () => this.currentFilePath,
       onAfterRenderCommit: (_previewElement, stats) => {
-        this.recordFileOpenMetric('preview_committed', {
-          chars: stats?.chars ?? 0,
-          renderVersion: stats?.renderVersion ?? 0,
-        });
         this.videoEmbed.reconcileEmbeds(this.elements.previewContent);
         this.basesPreview.reconcileEmbeds(this.elements.previewContent);
         this.drawioEmbed.reconcileEmbeds(this.elements.previewContent);
@@ -696,7 +691,6 @@ export class CollabMdAppShell {
       },
       onSelectionChange: (anchor) => this.handleCommentSelectionChange(anchor),
       onImagePaste: (file) => this.handleEditorImageInsert(file),
-      onFileOpenMetric: (name, payload) => this.recordFileOpenMetric(name, payload),
       onSessionAssigned: (session) => {
         this.session = session;
         this.commentUi.attachSession(session);
@@ -804,58 +798,6 @@ export class CollabMdAppShell {
   set session(value) {
     this._session = value;
     void this.webMcpTools?.refresh();
-  }
-
-  publishFileOpenPerf() {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    window.__COLLABMD_PERF__ ??= {};
-    window.__COLLABMD_PERF__.fileOpen = this._fileOpenPerf
-      ? {
-        ...this._fileOpenPerf,
-        details: { ...this._fileOpenPerf.details },
-        marks: { ...this._fileOpenPerf.marks },
-      }
-      : null;
-  }
-
-  recordFileOpenMetric(name, payload = {}) {
-    if (name === 'open_started') {
-      this._fileOpenPerf = {
-        details: {
-          filePath: payload.filePath || this.currentFilePath || '',
-          loadToken: payload.loadToken ?? 0,
-        },
-        marks: {
-          open_started: performance.now(),
-        },
-      };
-      this.publishFileOpenPerf();
-      return;
-    }
-
-    if (!this._fileOpenPerf) {
-      return;
-    }
-
-    const metricLoadToken = payload.loadToken ?? this._fileOpenPerf.details.loadToken;
-    if (metricLoadToken !== this._fileOpenPerf.details.loadToken) {
-      return;
-    }
-
-    this._fileOpenPerf.marks[name] = performance.now();
-    if (payload.filePath) {
-      this._fileOpenPerf.details.filePath = payload.filePath;
-    }
-    Object.entries(payload).forEach(([key, value]) => {
-      if (key === 'filePath' || key === 'loadToken') {
-        return;
-      }
-      this._fileOpenPerf.details[key] = value;
-    });
-    this.publishFileOpenPerf();
   }
 
   loadEditorSessionClass() {

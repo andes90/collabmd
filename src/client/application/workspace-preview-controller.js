@@ -239,6 +239,26 @@ export class WorkspacePreviewController {
     }
   }
 
+  finalizeFilePreview(previewElement, {
+    clearBacklinks = false,
+    outline = 'close',
+    reconcileDrawio = false,
+    reconcileExcalidraw = false,
+    reconcileVideo = true,
+    scheduleLayout = true,
+  } = {}) {
+    previewElement.dataset.renderPhase = 'ready';
+    if (outline === 'refresh') this.outlineController.refresh();
+    else this.outlineController.close();
+    if (clearBacklinks) this.backlinksPanel.clear();
+    this.scrollSyncController.setLargeDocumentMode(false);
+    this.scrollSyncController.invalidatePreviewBlocks();
+    if (reconcileVideo) this.videoEmbed?.reconcileEmbeds(previewElement);
+    if (reconcileDrawio) this.drawioEmbed.reconcileEmbeds(previewElement);
+    if (reconcileExcalidraw) this.excalidrawEmbed.reconcileEmbeds(previewElement, { isLargeDocument: false });
+    if (scheduleLayout) this.schedulePreviewLayoutSync({ delayMs: 0 });
+  }
+
   renderCanvasFilePreview(filePath) {
     const preview = this.prepareFilePreview('is-canvas-file-preview');
     if (!preview) return;
@@ -246,13 +266,11 @@ export class WorkspacePreviewController {
 
     if (renderHost) renderHost.style.minHeight = '';
     this.canvasEmbed?.mount(filePath, renderHost);
-    previewElement.dataset.renderPhase = 'ready';
-    this.outlineController.close();
-    this.scrollSyncController.setLargeDocumentMode(false);
-    this.scrollSyncController.invalidatePreviewBlocks();
-    this.videoEmbed?.reconcileEmbeds(previewElement);
-    this.drawioEmbed.reconcileEmbeds(previewElement);
-    this.excalidrawEmbed.reconcileEmbeds(previewElement, { isLargeDocument: false });
+    this.finalizeFilePreview(previewElement, {
+      reconcileDrawio: true,
+      reconcileExcalidraw: true,
+      scheduleLayout: false,
+    });
   }
 
   renderExcalidrawFilePreview(filePath) {
@@ -271,13 +289,12 @@ export class WorkspacePreviewController {
     placeholder.appendChild(loadingShell);
     this.commitFilePreview(renderHost, placeholder);
 
-    previewElement.dataset.renderPhase = 'ready';
-    this.outlineController.refresh();
-    this.scrollSyncController.setLargeDocumentMode(false);
-    this.scrollSyncController.invalidatePreviewBlocks();
-    this.videoEmbed?.reconcileEmbeds(previewElement);
-    this.drawioEmbed.reconcileEmbeds(previewElement);
-    this.excalidrawEmbed.reconcileEmbeds(previewElement, { isLargeDocument: false });
+    this.finalizeFilePreview(previewElement, {
+      outline: 'refresh',
+      reconcileDrawio: true,
+      reconcileExcalidraw: true,
+      scheduleLayout: false,
+    });
     this.drawioEmbed.hydrateVisibleEmbeds();
     this.excalidrawEmbed.hydrateVisibleEmbeds();
     this.schedulePreviewLayoutSync({ delayMs: 0 });
@@ -301,12 +318,11 @@ export class WorkspacePreviewController {
 
     this.commitFilePreview(renderHost, placeholder);
 
-    previewElement.dataset.renderPhase = 'ready';
-    this.outlineController.refresh();
-    this.scrollSyncController.setLargeDocumentMode(false);
-    this.scrollSyncController.invalidatePreviewBlocks();
-    this.videoEmbed?.reconcileEmbeds(previewElement);
-    this.drawioEmbed.reconcileEmbeds(previewElement);
+    this.finalizeFilePreview(previewElement, {
+      outline: 'refresh',
+      reconcileDrawio: true,
+      scheduleLayout: false,
+    });
     this.drawioEmbed.hydrateVisibleEmbeds();
     this.schedulePreviewLayoutSync({ delayMs: 0 });
   }
@@ -326,13 +342,7 @@ export class WorkspacePreviewController {
     shell.appendChild(image);
 
     this.commitFilePreview(renderHost, shell);
-
-    previewElement.dataset.renderPhase = 'ready';
-    this.outlineController.refresh();
-    this.scrollSyncController.setLargeDocumentMode(false);
-    this.scrollSyncController.invalidatePreviewBlocks();
-    this.videoEmbed?.reconcileEmbeds(previewElement);
-    this.schedulePreviewLayoutSync({ delayMs: 0 });
+    this.finalizeFilePreview(previewElement, { outline: 'refresh' });
   }
 
   renderPdfFilePreview(filePath) {
@@ -348,13 +358,7 @@ export class WorkspacePreviewController {
       renderHost.style.minHeight = '';
     }
 
-    previewElement.dataset.renderPhase = 'ready';
-    this.outlineController.close();
-    this.backlinksPanel.clear();
-    this.scrollSyncController.setLargeDocumentMode(false);
-    this.scrollSyncController.invalidatePreviewBlocks();
-    this.videoEmbed?.reconcileEmbeds(previewElement);
-    this.schedulePreviewLayoutSync({ delayMs: 0 });
+    this.finalizeFilePreview(previewElement, { clearBacklinks: true });
   }
 
   renderHtmlFilePreview({ content = '' } = {}) {
@@ -413,13 +417,7 @@ export class WorkspacePreviewController {
     this.setHtmlPreviewMaximized(wasMaximized);
 
     this.commitFilePreview(renderHost, shell);
-
-    previewElement.dataset.renderPhase = 'ready';
-    this.outlineController.close();
-    this.backlinksPanel.clear();
-    this.scrollSyncController.setLargeDocumentMode(false);
-    this.scrollSyncController.invalidatePreviewBlocks();
-    this.schedulePreviewLayoutSync({ delayMs: 0 });
+    this.finalizeFilePreview(previewElement, { clearBacklinks: true, reconcileVideo: false });
   }
 
   async renderBaseFilePreview(filePath, { source = null } = {}) {
@@ -439,12 +437,7 @@ export class WorkspacePreviewController {
         : (this.getSession()?.getText?.() ?? null),
     });
 
-    previewElement.dataset.renderPhase = 'ready';
-    this.outlineController.close();
-    this.scrollSyncController.setLargeDocumentMode(false);
-    this.scrollSyncController.invalidatePreviewBlocks();
-    this.videoEmbed?.reconcileEmbeds(previewElement);
-    this.schedulePreviewLayoutSync({ delayMs: 0 });
+    this.finalizeFilePreview(previewElement);
   }
 
   async renderStructurizrFilePreview(filePath, { source = null } = {}) {
@@ -461,13 +454,7 @@ export class WorkspacePreviewController {
       source: typeof source === 'string' ? source : (this.getSession()?.getText?.() ?? ''),
     });
 
-    previewElement.dataset.renderPhase = 'ready';
-    this.outlineController.close();
-    this.backlinksPanel.clear();
-    this.scrollSyncController.setLargeDocumentMode(false);
-    this.scrollSyncController.invalidatePreviewBlocks();
-    this.videoEmbed?.reconcileEmbeds(previewElement);
-    this.schedulePreviewLayoutSync({ delayMs: 0 });
+    this.finalizeFilePreview(previewElement, { clearBacklinks: true });
   }
 
   renderTextFilePreview({ content = '' } = {}) {
@@ -484,14 +471,7 @@ export class WorkspacePreviewController {
     shell.appendChild(pre);
 
     this.commitFilePreview(renderHost, shell);
-
-    previewElement.dataset.renderPhase = 'ready';
-    this.outlineController.close();
-    this.backlinksPanel.clear();
-    this.scrollSyncController.setLargeDocumentMode(false);
-    this.scrollSyncController.invalidatePreviewBlocks();
-    this.videoEmbed?.reconcileEmbeds(previewElement);
-    this.schedulePreviewLayoutSync({ delayMs: 0 });
+    this.finalizeFilePreview(previewElement, { clearBacklinks: true });
   }
 
   createResizeHandler(restoreSidebarState) {

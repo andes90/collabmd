@@ -863,11 +863,6 @@ function handleThemeChange(theme) {
 
 function handleConnectionChange(state) {
   this.connectionState = state;
-  if (state?.firstConnection) {
-    this.recordFileOpenMetric?.('ws_connected', {
-      status: state.status,
-    });
-  }
   this.renderPresence();
   this.renderChat({ messagesChanged: false });
 

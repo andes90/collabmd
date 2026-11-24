@@ -103,97 +103,87 @@ export class WorkspaceRouteController {
     if (this.getCurrentFilePath() === route.filePath) this.onFileRouteOpened?.();
   }
 
-  showEmptyState() {
-    this.gitDiffView.hide();
-    this.fileHistoryView?.hide?.();
-    this.workspaceCoordinator.cleanupSession();
-    this.clearStaticPreviewDocument?.();
-    this.setSession(null);
-    this.setSessionLoadToken(this.getSessionLoadToken() + 1);
-    this.clearInitialFileBootstrap();
-    this.resetPreviewMode();
-    this.elements.outlineToggle?.classList.remove('hidden');
-    this.elements.markdownToolbar?.classList.add('hidden');
-    this.setCurrentFilePath(null);
-    this.lobby.setCurrentFile(null);
-    this.fileExplorer.setActiveFile(null);
-
-    this.elements.emptyState?.classList.remove('hidden');
-    this.elements.editorPage?.classList.add('hidden');
-    this.elements.diffPage?.classList.add('hidden');
-    this.resetPreviewSurface();
-
-    this.renderAvatars();
-    this.renderPresence();
-    this.backlinksPanel.clear();
-
-    if (this.elements.activeFileName) {
-      this.elements.activeFileName.textContent = 'CollabMD';
+  activateViewState({
+    activePage,
+    cleanupBeforeToken = false,
+    filePath = null,
+    hideDiff = true,
+    hideHistory = true,
+    hideOutlineToggle = null,
+    resetLayout = true,
+    title = null,
+  }) {
+    if (hideDiff) this.gitDiffView.hide();
+    if (hideHistory) this.fileHistoryView?.hide?.();
+    if (cleanupBeforeToken) {
+      this.workspaceCoordinator.cleanupSession();
+      this.clearStaticPreviewDocument?.();
+      this.setSession(null);
+      this.setSessionLoadToken(this.getSessionLoadToken() + 1);
+      this.clearInitialFileBootstrap();
+    } else {
+      this.setSessionLoadToken(this.getSessionLoadToken() + 1);
+      this.clearInitialFileBootstrap();
+      this.clearStaticPreviewDocument?.();
+      this.workspaceCoordinator.cleanupSession();
+      this.setSession(null);
     }
-  }
-
-  prepareGitView(filePath = null) {
-    this.setSessionLoadToken(this.getSessionLoadToken() + 1);
-    this.clearInitialFileBootstrap();
-    this.clearStaticPreviewDocument?.();
-    this.workspaceCoordinator.cleanupSession();
-    this.setSession(null);
     this.resetPreviewMode();
-    this.layoutController.reset();
+    if (resetLayout) this.layoutController.reset();
     this.setCurrentFilePath(filePath);
     this.lobby.setCurrentFile(null);
     this.fileExplorer.setActiveFile(filePath);
+
+    this.elements.emptyState?.classList[activePage !== 'empty' ? 'add' : 'remove']('hidden');
+    this.elements.editorPage?.classList[activePage !== 'editor' ? 'add' : 'remove']('hidden');
+    this.elements.diffPage?.classList[activePage !== 'diff' ? 'add' : 'remove']('hidden');
+    this.resetPreviewSurface();
+
+    if (hideOutlineToggle !== null) {
+      this.elements.outlineToggle?.classList[hideOutlineToggle ? 'add' : 'remove']('hidden');
+    }
+    this.elements.markdownToolbar?.classList.add('hidden');
+
+    this.renderAvatars();
+    this.renderPresence();
+    this.backlinksPanel.clear();
+    if (title !== null && this.elements.activeFileName) {
+      this.elements.activeFileName.textContent = title;
+    }
+  }
+
+  showEmptyState() {
+    this.activateViewState({
+      activePage: 'empty',
+      cleanupBeforeToken: true,
+      hideOutlineToggle: false,
+      resetLayout: false,
+      title: 'CollabMD',
+    });
   }
 
   showDiffState() {
-    this.fileHistoryView?.hide?.();
-    this.prepareGitView();
-
-    this.elements.emptyState?.classList.add('hidden');
-    this.elements.editorPage?.classList.add('hidden');
-    this.elements.diffPage?.classList.remove('hidden');
-    this.resetPreviewSurface();
-
-    this.elements.outlineToggle?.classList.add('hidden');
-    this.elements.markdownToolbar?.classList.add('hidden');
-
-    this.renderAvatars();
-    this.renderPresence();
-    this.backlinksPanel.clear();
+    this.activateViewState({
+      activePage: 'diff',
+      hideDiff: false,
+      hideOutlineToggle: true,
+    });
   }
 
   showFileHistoryState(filePath) {
-    this.gitDiffView.hide();
-    this.prepareGitView(filePath);
-
-    this.elements.emptyState?.classList.add('hidden');
-    this.elements.editorPage?.classList.add('hidden');
-    this.elements.diffPage?.classList.remove('hidden');
-    this.resetPreviewSurface();
-
-    this.elements.outlineToggle?.classList.add('hidden');
-    this.elements.markdownToolbar?.classList.add('hidden');
-
-    this.renderAvatars();
-    this.renderPresence();
-    this.backlinksPanel.clear();
+    this.activateViewState({
+      activePage: 'diff',
+      filePath,
+      hideHistory: false,
+      hideOutlineToggle: true,
+    });
   }
 
   showPreviewOnlyState(filePath) {
-    this.gitDiffView.hide();
-    this.fileHistoryView?.hide?.();
-    this.prepareGitView(filePath);
-
-    this.elements.emptyState?.classList.add('hidden');
-    this.elements.editorPage?.classList.remove('hidden');
-    this.elements.diffPage?.classList.add('hidden');
-    this.resetPreviewSurface();
-
-    this.elements.markdownToolbar?.classList.add('hidden');
-
-    this.renderAvatars();
-    this.renderPresence();
-    this.backlinksPanel.clear();
+    this.activateViewState({
+      activePage: 'editor',
+      filePath,
+    });
   }
 
   async openFile(filePath, options = {}) {

@@ -12,6 +12,7 @@ import {
   resetEmbedPlaceholderLayout,
 } from './diagram-embed-helpers.js';
 import { renderDrawioViewer } from './drawio-viewer.js';
+import { reconcileEmbedEntries } from './excalidraw-embed-reconciler.js';
 import {
   cancelIdleRender,
   findElementByDataset,
@@ -109,31 +110,27 @@ export class DrawioEmbedController {
       placeholder,
     }));
 
-    const nextEntries = new Map();
-    descriptors.forEach((descriptor) => {
-      const existingEntry = this.embedEntries.get(descriptor.key) || null;
-      const nextEntry = existingEntry && this.entryMatchesDescriptor(existingEntry, descriptor)
-        ? existingEntry
-        : this.createEntry(descriptor);
-
-      if (existingEntry && existingEntry !== nextEntry) {
-        this.destroyEntry(existingEntry);
-      }
-
-      nextEntry.filePath = descriptor.filePath;
-      nextEntry.key = descriptor.key;
-      nextEntry.label = descriptor.label;
-      nextEntry.mode = descriptor.mode;
-      nextEntry.placeholder = descriptor.placeholder;
-      nextEntries.set(descriptor.key, nextEntry);
-    });
-
-    this.embedEntries.forEach((entry, key) => {
-      if (!nextEntries.has(key)) {
+    const { nextEntries, removedEntries } = reconcileEmbedEntries(this.embedEntries, descriptors);
+    removedEntries.forEach((entry) => this.destroyEntry(entry));
+    nextEntries.forEach((entry, key) => {
+      const descriptor = descriptors.find((item) => item.key === key);
+      if (entry.mode && descriptor && entry.mode !== descriptor.mode) {
         this.destroyEntry(entry);
+        nextEntries.set(key, this.createEntry(descriptor));
+        return;
+      }
+      if (!Object.hasOwn(entry, 'mode')) {
+        Object.assign(entry, {
+          iframe: null,
+          inlineHeightPx: null,
+          instanceId: '',
+          mode: descriptor?.mode || 'view',
+          queued: false,
+          viewerElement: null,
+          wrapper: null,
+        });
       }
     });
-
     this.embedEntries = nextEntries;
 
     this._disconnectPlaceholderObserver();
@@ -158,21 +155,12 @@ export class DrawioEmbedController {
     return {
       ...descriptor,
       iframe: null,
-      imageElement: null,
       inlineHeightPx: null,
       instanceId: '',
       queued: false,
       viewerElement: null,
       wrapper: null,
     };
-  }
-
-  entryMatchesDescriptor(entry, descriptor) {
-    return Boolean(
-      entry
-        && entry.filePath === descriptor.filePath
-        && entry.mode === descriptor.mode
-    );
   }
 
   hydrateVisibleEmbeds() {
@@ -607,8 +595,6 @@ export class DrawioEmbedController {
     entry.wrapper.style.minHeight = '';
 
     removeMaximizeSpacer(entry);
-    entry.restoreParent = null;
-    entry.restoreNextSibling = null;
     this.maximizedEntry = null;
     document.body.classList.toggle('drawio-maximized-open', Boolean(document.body.querySelector('.drawio-embed.is-maximized')));
     this.overlayRoot?.classList.remove('has-maximized-entry');
@@ -685,19 +671,11 @@ export class DrawioEmbedController {
     }
 
     if (payload.type === 'fallback-text') {
-      if (entry.mode === 'view') {
-        this.renderViewerFallback(entry, 'Failed to render draw.io preview');
-        return;
-      }
       this.onOpenTextFile?.(entry.filePath);
       return;
     }
 
     if (payload.type === 'error') {
-      if (entry.mode === 'view') {
-        this.renderViewerFallback(entry, payload.message || 'Failed to load draw.io preview');
-        return;
-      }
       this.toastController?.show?.(payload.message || 'Failed to load draw.io');
       return;
     }

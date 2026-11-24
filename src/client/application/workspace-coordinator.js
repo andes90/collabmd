@@ -28,7 +28,6 @@ export class WorkspaceCoordinator {
     this.getVimModeEnabled = options.getVimModeEnabled ?? (() => false);
     this.loadBootstrapContent = options.loadBootstrapContent ?? null;
     this.loadEditorSessionClassPort = options.loadEditorSessionClass;
-    this.onFileOpenMetric = options.onFileOpenMetric ?? null;
     this.onSessionAssigned = options.onSessionAssigned ?? null;
     this.shouldUseDrawioPreview = options.shouldUseDrawioPreview ?? (() => true);
     this.session = null;
@@ -47,14 +46,6 @@ export class WorkspaceCoordinator {
       requestAnimationFrame(() => {
         requestAnimationFrame(resolve);
       });
-    });
-  }
-
-  reportFileOpenMetric(name, loadToken, data = {}) {
-    this.onFileOpenMetric?.(name, {
-      filePath: this.stateStore.currentFilePath,
-      loadToken,
-      ...data,
     });
   }
 
@@ -159,7 +150,6 @@ export class WorkspaceCoordinator {
       drawioMode: normalizedDrawioMode,
       resetConnectionState: !isDrawio && !isExcalidraw && !isImage && !isPdf,
     });
-    this.reportFileOpenMetric('open_started', loadToken, { filePath });
 
     if (isDrawio || isExcalidraw || isCanvas || isImage || isPdf) {
       this.onSessionAssigned?.(null);
@@ -185,22 +175,7 @@ export class WorkspaceCoordinator {
     let fileOpenReady = false;
     let liveSyncComplete = false;
     const bootstrapPromise = this.loadBootstrapContent
-      ? (async () => {
-        this.reportFileOpenMetric('bootstrap_fetch_started', loadToken);
-        try {
-          const content = await this.loadBootstrapContent(filePath);
-          this.reportFileOpenMetric('bootstrap_fetch_completed', loadToken, {
-            found: content !== null,
-          });
-          return content;
-        } catch (error) {
-          this.reportFileOpenMetric('bootstrap_fetch_completed', loadToken, {
-            error: error.message,
-            found: false,
-          });
-          return null;
-        }
-      })()
+      ? this.loadBootstrapContent(filePath).catch(() => null)
       : Promise.resolve(null);
 
     const EditorSession = await this.loadEditorSessionClass();
@@ -240,7 +215,7 @@ export class WorkspaceCoordinator {
 
     try {
       let fileOpenFinalized = false;
-      const readySession = async (reason) => {
+      const readySession = async () => {
         if (fileOpenReady || loadToken !== this.stateStore.sessionLoadToken) {
           return;
         }
@@ -249,7 +224,6 @@ export class WorkspaceCoordinator {
         this.attachEditorScroller(this.scrollContainerForSession(session));
         session.applyTheme(this.getTheme());
         this.onFileOpenReady(session);
-        this.reportFileOpenMetric('editor_ready', loadToken, { reason });
         session.requestMeasure();
         await this.waitForNextPaint();
 
@@ -286,10 +260,9 @@ export class WorkspaceCoordinator {
         session.activateCollaborativeView?.();
         this.attachEditorScroller(this.scrollContainerForSession(session));
         session.applyTheme(this.getTheme());
-        this.reportFileOpenMetric('initial_sync_complete', loadToken);
         session.ensureInitialContent?.();
         if (!fileOpenReady) {
-          await readySession('live-sync');
+          await readySession();
         } else {
           session.requestMeasure();
         }
@@ -335,8 +308,7 @@ export class WorkspaceCoordinator {
           return false;
         }
 
-        this.reportFileOpenMetric('bootstrap_shown', loadToken);
-        await readySession('bootstrap');
+        await readySession();
         return true;
       })();
 
@@ -354,7 +326,7 @@ export class WorkspaceCoordinator {
 
       if (!fileOpenReady) {
         session.ensureInitialContent?.();
-        await readySession('post-initialize');
+        await readySession();
       }
       return true;
     } catch (error) {

@@ -14,6 +14,7 @@ import { reconcileEmbedEntries } from './excalidraw-embed-reconciler.js';
 import { getActiveVaultId, getClientRuntimeConfig, resolveAppPath, resolveAppUrl, resolveWsServerOverride } from '../domain/runtime-paths.js';
 import {
   cancelIdleRender,
+  findElementByDataset,
   isNearViewport,
   requestIdleRender,
 } from '../browser-utils.js';
@@ -27,10 +28,7 @@ const MIN_HEIGHT = 200;
 const EDITOR_IFRAME_PATH = '/excalidraw-editor.html';
 
 function findEmbedPlaceholder(previewElement, key) {
-  const placeholders = previewElement?.querySelectorAll?.(
-    '.excalidraw-embed-placeholder[data-embed-key]',
-  );
-  return Array.from(placeholders || []).find((placeholder) => placeholder.dataset?.embedKey === key) || null;
+  return findElementByDataset(previewElement, '.excalidraw-embed-placeholder[data-embed-key]', 'embedKey', key);
 }
 
 export class ExcalidrawEmbedController {
@@ -1208,14 +1206,7 @@ export class ExcalidrawEmbedController {
     }
 
     if (msg.type === 'disconnect-blocked') {
-      entry.authorityState = msg.state || 'reconnecting-readonly';
       this.toastController?.show?.('Waiting for the diagram to reconnect before leaving');
-      return;
-    }
-
-    if (msg.type === 'excalidraw-authority-state') {
-      entry.authorityState = msg.state || 'closed';
-      entry.hasPendingWrites = Boolean(msg.hasPendingWrites);
     }
   }
 
