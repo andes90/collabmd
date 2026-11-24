@@ -66,7 +66,6 @@ test('comment overview clears pending focus and refresh timers when leaving the 
   t.mock.timers.tick(15_000);
   assert.equal(context._pendingCommentOverviewFocus, null);
   assert.equal(context._commentOverviewRefreshTimer, null);
-  assert.equal(context._commentOverviewStale, true);
 });
 
 test('comment overview tree changes refresh only while comments tab is active', () => {
@@ -78,7 +77,6 @@ test('comment overview tree changes refresh only while comments tab is active', 
 
   commentsFeature.handleCommentOverviewWorkspaceTreeChange.call(filesContext);
 
-  assert.equal(filesContext._commentOverviewStale, true);
   assert.deepEqual(calls, []);
 
   const commentsContext = {
@@ -88,14 +86,12 @@ test('comment overview tree changes refresh only while comments tab is active', 
 
   commentsFeature.handleCommentOverviewWorkspaceTreeChange.call(commentsContext);
 
-  assert.equal(commentsContext._commentOverviewStale, true);
   assert.deepEqual(calls, [['comments-refresh', { delayMs: 0 }]]);
 });
 
-test('comment overview sidebar open clears stale state and refreshes', () => {
+test('comment overview refreshes when its sidebar opens', () => {
   const calls = [];
   const context = {
-    _commentOverviewStale: true,
     commentsOverview: {
       refresh: () => calls.push(['refresh']),
     },
@@ -103,6 +99,5 @@ test('comment overview sidebar open clears stale state and refreshes', () => {
 
   commentsFeature.refreshCommentOverviewForSidebarOpen.call(context);
 
-  assert.equal(context._commentOverviewStale, false);
   assert.deepEqual(calls, [['refresh']]);
 });

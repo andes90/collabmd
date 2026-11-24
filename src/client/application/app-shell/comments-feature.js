@@ -66,20 +66,17 @@ export const commentsFeature = {
     clearTimeout(this._commentOverviewRefreshTimer);
     this._commentOverviewRefreshTimer = setTimeout(() => {
       this._commentOverviewRefreshTimer = null;
-      this._commentOverviewStale = false;
       void this.commentsOverview?.refresh?.();
     }, delayMs);
   },
 
   handleCommentOverviewWorkspaceTreeChange() {
-    this._commentOverviewStale = true;
     if (this.activeSidebarTab === 'comments') {
       this.scheduleCommentOverviewRefresh({ delayMs: 0 });
     }
   },
 
   refreshCommentOverviewForSidebarOpen() {
-    this._commentOverviewStale = false;
     if (globalThis.document) {
       this._deferredCollabStylesPromise ??= import('../../styles/deferred-collab.css');
     }
@@ -115,7 +112,6 @@ export const commentsFeature = {
     if (this._commentOverviewRefreshTimer != null) {
       clearTimeout(this._commentOverviewRefreshTimer);
       this._commentOverviewRefreshTimer = null;
-      this._commentOverviewStale = true;
     }
     if (this._pendingCommentOverviewFocus?.filePath !== filePath) this.clearPendingCommentOverviewFocus();
   },
