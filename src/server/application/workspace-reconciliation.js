@@ -346,12 +346,12 @@ export class WorkspaceReconciliation {
     return this.runInWorkspaceOrder(() => (pausePaths ? this.runWithPersistencePaused(pausePaths, execute) : execute()));
   }
 
-  writeEditableContent({ content, origin = 'api', path, requestId = null, sourceRef = null } = {}) {
+  writeEditableContent({ content, expectedContent, origin = 'api', path, requestId = null, sourceRef = null } = {}) {
     return this.runMutation({
       action: 'write-file',
       buildChange: createWorkspaceChange({ changedPaths: [path] }),
       origin,
-      perform: () => this.vaultFileStore.writeEditableVaultContent(path, content),
+      perform: () => this.vaultFileStore.writeEditableVaultContent(path, content, { expectedContent }),
       requestId,
       sourceRef,
     });

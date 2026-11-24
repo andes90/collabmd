@@ -375,7 +375,7 @@ export class VaultFileStore {
     return this.readContentFile(filePath);
   }
 
-  async writeEditableVaultContent(filePath, content, { invalidateCollaborationSnapshot = true } = {}) {
+  async writeEditableVaultContent(filePath, content, { expectedContent, invalidateCollaborationSnapshot = true } = {}) {
     const resolved = this.resolveAdapter(filePath);
     if (!resolved) {
       return {
@@ -390,14 +390,30 @@ export class VaultFileStore {
 
     try {
       await this.runManagedWrite([filePath], async () => {
-        await mkdir(dirname(resolved.absolute), { recursive: true });
-        await writeFile(resolved.absolute, content, 'utf-8');
+        if (expectedContent === undefined) {
+          await mkdir(dirname(resolved.absolute), { recursive: true });
+          await writeFile(resolved.absolute, content, 'utf-8');
+        } else {
+          const tempPath = join(dirname(resolved.absolute), `.collabmd-tmp-${globalThis.crypto.randomUUID()}`);
+          try {
+            const previous = await stat(resolved.absolute, { throwIfNoEntry: false });
+            if (!previous?.isFile()) throw new VaultContentChanged(null);
+            await writeFile(tempPath, content, { encoding: 'utf-8', flag: 'wx', mode: previous.mode & 0o777 });
+            await chmod(tempPath, previous.mode & 0o777);
+            const current = await this.readEditableVaultContent(filePath);
+            if (current !== expectedContent) throw new VaultContentChanged(current);
+            await rename(tempPath, resolved.absolute);
+          } finally {
+            await rm(tempPath, { force: true }).catch(() => {});
+          }
+        }
         if (invalidateCollaborationSnapshot) {
           await this.deleteCollaborationSnapshot(filePath);
         }
       }, String(content));
       return { ok: true };
-    } catch {
+    } catch (error) {
+      if (error instanceof VaultContentChanged) return { ok: false, diskChanged: true, statusCode: 409 };
       return { ok: false, error: 'Could not update vault content', statusCode: 500 };
     }
   }

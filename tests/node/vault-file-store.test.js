@@ -1043,3 +1043,15 @@ test('recursive deletion leaves a mixed folder intact', async (t) => {
   assert.equal(await store.readMarkdownFile('notes/daily.md'), '# Daily\n');
   assert.deepEqual(await store.readCommentThreads('notes/daily.md'), [{ id: 'retained' }]);
 });
+
+test('conditional file writes preserve an intervening external save', async (t) => {
+  const { store, vaultDir, cleanup } = await createVaultStore();
+  t.after(cleanup);
+  const expectedContent = await store.readMarkdownFile('README.md');
+  await writeFile(join(vaultDir, 'README.md'), 'External save');
+
+  assert.equal((await store.writeEditableVaultContent('README.md', 'Agent edit', { expectedContent })).diskChanged, true);
+  assert.equal(await store.readMarkdownFile('README.md'), 'External save');
+  assert.equal((await store.writeEditableVaultContent('README.md', 'Agent edit', { expectedContent: 'External save' })).ok, true);
+  assert.equal(await store.readMarkdownFile('README.md'), 'Agent edit');
+});

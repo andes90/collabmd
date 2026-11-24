@@ -680,11 +680,15 @@ export class AgentContentService {
       } else {
         const result = await this.workspaceMutationCoordinator.writeEditableContent({
           content: nextContent,
+          expectedContent: content,
           origin: getMutationOrigin(actor),
           path: normalizedPath,
           requestId: actor.requestId,
           sourceRef: createAgentSourceRef(actor),
         });
+        if (result.diskChanged) {
+          throw createAgentContentError('AGENT_REVISION_CONFLICT', 'Document changed; read it again before editing', 409);
+        }
         if (!result.ok) throw createAgentContentError('AGENT_WRITE_FAILED', result.error, 400);
       }
       return {
@@ -809,6 +813,9 @@ export class AgentContentService {
       const room = this.roomRegistry?.get?.(normalizedPath);
       let nextContent;
       if (room) {
+        if (room.getPersistedContent() !== content) {
+          throw createAgentContentError('AGENT_REVISION_CONFLICT', 'Document changed; read it again before editing', 409);
+        }
         room.applyExcalidrawScene(scene, {
           origin: createCollaborationOrigin(actor),
         });
@@ -821,11 +828,15 @@ export class AgentContentService {
         nextContent = JSON.stringify(storedScene);
         const result = await this.workspaceMutationCoordinator.writeEditableContent({
           content: nextContent,
+          expectedContent: content,
           origin: getMutationOrigin(actor),
           path: normalizedPath,
           requestId: actor.requestId,
           sourceRef: createAgentSourceRef(actor),
         });
+        if (result.diskChanged) {
+          throw createAgentContentError('AGENT_REVISION_CONFLICT', 'Document changed; read it again before editing', 409);
+        }
         if (!result.ok) throw createAgentContentError('AGENT_WRITE_FAILED', result.error, 400);
       }
       const storedScene = JSON.parse(nextContent);
