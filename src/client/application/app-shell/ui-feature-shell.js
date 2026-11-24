@@ -837,6 +837,14 @@ function syncToolbarOverflowVisibility() {
   toggle.classList.remove('hidden');
   toggle.hidden = false;
   toggle.setAttribute('aria-hidden', 'false');
+
+  const { reviewFileChangesButton, mobileViewToggle, toolbarOverflowMenu } = this.elements;
+  if (reviewFileChangesButton && mobileViewToggle && toolbarOverflowMenu) {
+    const parent = this.mobileBreakpointQuery.matches ? toolbarOverflowMenu : mobileViewToggle.parentElement;
+    if (reviewFileChangesButton.parentElement !== parent) {
+      parent.prepend(reviewFileChangesButton);
+    }
+  }
 }
 
 function closeToolbarOverflowMenu() {

@@ -53,6 +53,12 @@ test.describe('ui visual regression', () => {
     });
     await openFile(page, 'README.md', { userName: 'Audit User', waitFor: 'preview' });
 
+    const headingColor = await page.locator('#previewContent h1').evaluate((heading) => getComputedStyle(heading).color);
+    const hintColor = await page.locator('.toolbar-search-kbd').evaluate((hint) => getComputedStyle(hint).color);
+    const sourceHeading = page.locator('.cm-line').filter({ hasText: '# My Vault' });
+    await expect(sourceHeading.getByText('My Vault', { exact: true })).toHaveCSS('color', headingColor);
+    await expect(sourceHeading.getByText('#', { exact: true })).toHaveCSS('color', hintColor);
+
     await page.locator('#sidebarCreateBtn').click();
     await expect(page.locator('.create-menu')).toBeVisible();
     await expect(page).toHaveScreenshot('desktop-dark-create-menu.png', {

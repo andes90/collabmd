@@ -80,6 +80,14 @@
     min-width: 0;
   }
 
+  .toolbar-right {
+    gap: var(--space-1);
+  }
+
+  .toolbar-status-cluster:not(:has(> :not(.hidden))) {
+    display: none;
+  }
+
   .toolbar-room-info {
     gap: var(--space-1);
   }
@@ -114,36 +122,8 @@
     text-overflow: ellipsis;
   }
 
-  .toolbar-presence-cluster {
-    display: inline-flex;
-    align-items: center;
-    min-width: 0;
-  }
-
-  .toolbar-presence-cluster .user-avatar {
-    width: 24px;
-    height: 24px;
-    margin-left: 2px;
-    border-width: 1.5px;
-  }
-
-  .toolbar-presence-cluster .user-avatar.is-local {
-    width: 24px;
-    min-width: 24px;
-    margin-right: 0;
-    padding: 0;
-    gap: 0;
-  }
-
-  .toolbar-presence-cluster .user-avatar.is-local .user-avatar-initial {
-    width: auto;
-    height: auto;
-    background: transparent;
-    font-size: var(--text-meta);
-  }
-
-  .toolbar-presence-cluster .user-avatar-self-label {
-    display: none;
+  .mobile-view-toggle .ui-toolbar-button-label {
+    display: inline;
   }
 
   .toolbar-overflow-toggle {
@@ -479,5 +459,17 @@
 @media (min-width: 769px) {
   .mobile-view-toggle {
     display: none !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .toolbar-left > .ui-button--toolbar,
+  .toolbar-right > .ui-button--toolbar,
+  .chat-toggle-btn.ui-button--toolbar {
+    padding-inline: var(--space-1);
+  }
+
+  .mobile-view-toggle > svg {
+    display: none;
   }
 }

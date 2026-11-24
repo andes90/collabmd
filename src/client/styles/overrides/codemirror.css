@@ -4,6 +4,14 @@
   font-variant-ligatures: none;
 }
 
+.editor-container .cm-markdown-heading {
+  color: var(--color-text);
+}
+
+.editor-container .cm-markdown-heading.cm-markdown-mark {
+  color: var(--color-text-muted);
+}
+
 .cm-tooltip-autocomplete {
   width: min(420px, calc(100vw - 24px));
   max-width: calc(100vw - 24px);

@@ -466,7 +466,7 @@ test.describe('mobile presence', () => {
     viewport: { width: 390, height: 844 },
   });
 
-  test('shows collaborator avatars in the mobile header', async ({ browser }) => {
+  test('keeps the filename visible and exposes collaborators through the mobile presence count', async ({ browser }) => {
     const viewport = { width: 390, height: 844 };
     const ownerContext = await browser.newContext({ viewport });
     const teammateContext = await browser.newContext({ viewport });
@@ -478,10 +478,16 @@ test.describe('mobile presence', () => {
     await openFile(teammatePage, 'projects/collabmd.md', { userName: 'Teammate', waitFor: 'preview' });
 
     await expect(ownerPage.locator('#userCount')).toHaveText('2 online');
-    await expect(ownerPage.locator('#userAvatars')).toBeVisible();
-    await expect(ownerPage.locator('#userAvatars .user-avatar').first()).toBeVisible();
-    await expect(ownerPage.locator('#userAvatars .user-avatar-button').first()).toBeVisible();
-    await expect(ownerPage.locator('#userAvatars .user-avatar-button').first()).toHaveAttribute('aria-label', /Follow Teammate/);
+    await expect(ownerPage.locator('#userAvatars')).toBeHidden();
+    await expect(ownerPage.getByRole('button', { name: 'Edit document' })).toHaveText('Edit');
+    const filenameFits = () => ownerPage.locator('#activeFileName').evaluate(
+      (element) => element.clientWidth > 0 && element.scrollWidth === element.clientWidth,
+    );
+    await expect.poll(filenameFits).toBe(true);
+    await ownerPage.setViewportSize({ width: 320, height: 640 });
+    await ownerPage.getByRole('button', { name: 'Edit document' }).click();
+    await expect.poll(filenameFits).toBe(true);
+    await ownerPage.getByRole('button', { name: 'Preview document' }).click();
 
     await ownerPage.locator('#userCount').click();
     await expect(ownerPage.locator('#presencePanel')).toBeVisible();
@@ -907,10 +913,12 @@ test.describe('mobile comments and header chrome', () => {
     await expect(page.locator('#toolbarOverflowToggle')).toBeVisible();
     await expect(page.locator('#editNameBtn')).toBeHidden();
     await expect(page.locator('#shareBtn')).toBeHidden();
+    await expect(page.locator('#reviewFileChangesBtn')).toBeHidden();
 
     await page.locator('#toolbarOverflowToggle').click();
 
     await expect(page.locator('#searchFilesBtn')).toBeVisible();
+    await expect(page.locator('#toolbarOverflowMenu #reviewFileChangesBtn')).toBeVisible();
     await expect(page.locator('#editNameBtn')).toBeVisible();
     await expect(page.locator('#shareBtn')).toBeVisible();
     await expect(page.locator('#exportMenuGroup')).toBeVisible();

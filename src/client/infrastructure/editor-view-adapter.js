@@ -14,6 +14,7 @@ import {
   foldGutter,
   foldKeymap,
   forceParsing,
+  HighlightStyle,
   indentOnInput,
   syntaxHighlighting,
 } from '@codemirror/language';
@@ -41,6 +42,7 @@ import {
   lineNumbers,
   rectangularSelection,
 } from '@codemirror/view';
+import { tags } from '@lezer/highlight';
 import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next';
 
 import {
@@ -77,6 +79,13 @@ const markdownCodeLanguages = [
   mermaidLanguageDescription,
   plantUmlLanguageDescription,
   structurizrLanguageDescription,
+];
+const darkSyntaxTheme = [
+  oneDark,
+  syntaxHighlighting(HighlightStyle.define([
+    { tag: tags.heading, class: 'cm-markdown-heading' },
+    { tag: tags.processingInstruction, class: 'cm-markdown-mark' },
+  ], { scope: markdownLanguage })),
 ];
 const pairedMatchingBracketMark = Decoration.mark({ class: 'cm-matchingBracket cm-matchingBracket-paired' });
 const nonmatchingBracketMark = Decoration.mark({ class: 'cm-nonmatchingBracket' });
@@ -522,7 +531,7 @@ export class EditorViewAdapter {
       }),
       createLanguageExtension(filePath),
       this.themeCompartment.of(createEditorTheme(this.initialTheme)),
-      this.syntaxThemeCompartment.of(this.initialTheme === 'dark' ? oneDark : []),
+      this.syntaxThemeCompartment.of(this.initialTheme === 'dark' ? darkSyntaxTheme : []),
       this.lineWrappingCompartment.of(this.lineWrappingEnabled ? EditorView.lineWrapping : []),
       remoteUpdateFlashField,
       this.createUpdateListener(),
@@ -675,7 +684,7 @@ export class EditorViewAdapter {
     this.editorView.dispatch({
       effects: [
         this.themeCompartment.reconfigure(createEditorTheme(theme)),
-        this.syntaxThemeCompartment.reconfigure(theme === 'dark' ? oneDark : []),
+        this.syntaxThemeCompartment.reconfigure(theme === 'dark' ? darkSyntaxTheme : []),
       ],
     });
   }

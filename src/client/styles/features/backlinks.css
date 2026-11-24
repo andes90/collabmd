@@ -30,13 +30,12 @@
   border: 1px solid var(--color-divider);
   border-radius: var(--radius-lg);
   background: var(--surface-overlay);
-  box-shadow: var(--shadow-floating-soft);
   backdrop-filter: blur(16px);
   pointer-events: auto;
   transition: box-shadow 160ms ease, transform 160ms ease, background-color 160ms ease, border-color 160ms ease;
 }
 
-.backlinks-panel-dock:hover {
+.backlinks-panel-dock.expanded {
   box-shadow: var(--shadow-floating-soft);
 }
 

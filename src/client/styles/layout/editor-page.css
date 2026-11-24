@@ -107,6 +107,7 @@
 }
 
 .toolbar {
+  container: workspace-toolbar / inline-size;
   z-index: 10;
   display: flex;
   align-items: center;
@@ -184,7 +185,7 @@
   border: 1px solid var(--color-divider);
   border-radius: var(--radius-xs);
   background: var(--color-surface);
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   font-family: var(--font-body);
   font-size: var(--text-meta);
   font-weight: 600;
@@ -210,6 +211,20 @@
   align-items: center;
   gap: var(--space-3);
   flex-shrink: 0;
+}
+
+.view-toggle .ui-segmented-btn[aria-pressed='true'] {
+  border-color: var(--border-accent-muted);
+  background: var(--color-primary-highlight);
+  color: var(--color-primary);
+}
+
+@container workspace-toolbar (max-width: 900px) {
+  .toolbar-search-kbd,
+  .toolbar-presence-cluster .user-avatars,
+  .toolbar-right > #reviewFileChangesBtn .ui-toolbar-button-label {
+    display: none;
+  }
 }
 
 .toolbar-overflow-toggle {

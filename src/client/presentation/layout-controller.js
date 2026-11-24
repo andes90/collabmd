@@ -79,7 +79,6 @@ export class LayoutController {
       : this.preferredView;
 
     this.applyView(nextView);
-    this.updateMobileToggleButton(this.mobileShowsEditor ? 'Preview' : 'Editor');
   }
 
   applyView(view) {
@@ -87,6 +86,7 @@ export class LayoutController {
     this.currentView = view;
     this.editorLayout?.setAttribute('data-view', view);
     this.syncViewButtons();
+    this.updateMobileToggleButton(view === 'preview' ? 'Edit' : 'Preview');
     this.onViewChange?.(view);
   }
 
@@ -108,7 +108,7 @@ export class LayoutController {
   }
 
   toggleMobileView() {
-    const nextShowsEditor = !this.mobileShowsEditor;
+    const nextShowsEditor = this.currentView === 'preview';
     const nextView = nextShowsEditor ? 'split' : 'preview';
     if (this.onViewRequest?.(nextView) === false) {
       return;
@@ -116,7 +116,6 @@ export class LayoutController {
 
     this.mobileShowsEditor = nextShowsEditor;
     this.applyView(nextView);
-    this.updateMobileToggleButton(this.mobileShowsEditor ? 'Preview' : 'Editor');
 
     if (this.mobileShowsEditor) {
       this.scheduleEditorMeasure();
@@ -150,7 +149,9 @@ export class LayoutController {
 
     // Icons and labels are fixed application-owned markup.
     // pi-lens-ignore: no-inner-html-js
-    this.mobileToggleButton.innerHTML = `${label === 'Editor' ? editorIcon : previewIcon}<span class="ui-toolbar-button-label">${label}</span>`;
+    this.mobileToggleButton.innerHTML = `${label === 'Edit' ? editorIcon : previewIcon}<span class="ui-toolbar-button-label">${label}</span>`;
+    this.mobileToggleButton.setAttribute('aria-label', `${label} document`);
+    this.mobileToggleButton.title = `${label} document`;
   }
 
   syncViewButtons() {
