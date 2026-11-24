@@ -3,7 +3,7 @@ name: collabmd
 description: A Helm chart for deploying CollabMD on Kubernetes
 type: application
 version: 0.1.0
-appVersion: "0.1.21"
+appVersion: "v0.1.58"
 home: https://github.com/andes90/collabmd
 sources:
   - https://github.com/andes90/collabmd

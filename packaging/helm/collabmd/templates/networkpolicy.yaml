@@ -9,6 +9,7 @@ spec:
   podSelector:
     matchLabels:
       {{- include "collabmd.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: app
   policyTypes:
     - Ingress
     - Egress

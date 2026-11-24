@@ -17,3 +17,4 @@ spec:
       name: http
   selector:
     {{- include "collabmd.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: app
