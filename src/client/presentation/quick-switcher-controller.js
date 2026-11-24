@@ -170,6 +170,10 @@ export class QuickSwitcherController {
     });
 
     this.input?.addEventListener('keydown', (e) => {
+      if (this.fileFilterTimer !== null && this.mode === 'files'
+        && ['ArrowDown', 'ArrowUp', 'Enter', 'Tab'].includes(e.key)) {
+        this.filterFiles();
+      }
       switch (e.key) {
         case 'ArrowDown':
           e.preventDefault();

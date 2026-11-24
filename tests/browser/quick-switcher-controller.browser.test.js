@@ -108,4 +108,26 @@ describe('QuickSwitcherController file results', () => {
     expect(document.querySelector('.qs-result-name')).toHaveTextContent('guide.pdf');
     expect(document.querySelector('.qs-result-name mark')).toHaveTextContent('pdf');
   });
+
+  it('confirms the current query when Enter precedes the filename filter', () => {
+    const onFileSelect = vi.fn();
+    const controller = new QuickSwitcherController({
+      getFileList: () => ['old.md', 'docs/guide.md'],
+      onFileSelect,
+    });
+    controller.open();
+    expect(controller.filteredFiles[0]).toBe('old.md');
+
+    controller.input.value = 'absent';
+    controller.input.dispatchEvent(new Event('input'));
+    controller.input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    expect(onFileSelect).not.toHaveBeenCalled();
+    expect(controller.overlay.open).toBe(true);
+
+    controller.input.value = 'guide';
+    controller.input.dispatchEvent(new Event('input'));
+    controller.input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    expect(onFileSelect).toHaveBeenCalledWith('docs/guide.md');
+    expect(controller.overlay.open).toBe(false);
+  });
 });
