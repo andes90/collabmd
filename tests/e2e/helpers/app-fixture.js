@@ -422,6 +422,7 @@ export async function appendEditorContent(page, content) {
 
 export async function replaceEditorContent(page, content) {
   const editor = page.locator('.cm-content').first();
+  await expect(editor).toBeEditable({ timeout: 15000 });
   await editor.click();
   await page.keyboard.press('Meta+A');
   await page.keyboard.insertText(content);

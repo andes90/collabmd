@@ -4,6 +4,7 @@ import {
   resolveApiUrl,
   resolveAppPath,
   resolveAppUrl,
+  resolveVaultAppUrl,
   resolveWsBaseUrl,
   setActiveVaultId,
 } from '../domain/runtime-paths.js';
@@ -18,7 +19,7 @@ export function getRuntimeConfig() {
   return getClientRuntimeConfig();
 }
 
-export { getActiveVaultId, resolveApiUrl, resolveAppPath, resolveAppUrl, resolveWsBaseUrl, setActiveVaultId };
+export { getActiveVaultId, resolveApiUrl, resolveAppPath, resolveAppUrl, resolveVaultAppUrl, resolveWsBaseUrl, setActiveVaultId };
 export { createFileRouteHash, isCollabMdHashRoute };
 
 export function initializeWorkspaceUrl() {

@@ -1357,8 +1357,10 @@ test('downloads files and directories from the sidebar context menu', async ({ p
   expect(directoryDownload.suggestedFilename()).toBe('daily.zip');
 });
 
-test('exports a folder as one self-contained HTML document', async ({ page, context }) => {
+test('exports a folder with the saved note while its Git history is open', async ({ page, context }) => {
   await openHome(page);
+  await page.evaluate(() => { window.location.hash = 'git-file-history=daily%2F2026-03-05.md'; });
+  await expect(page.locator('#activeFileName')).toHaveText('2026-03-05');
 
   const popupDownloadPromise = context.waitForEvent('page').then(async (popup) => ({
     download: await popup.waitForEvent('download'),
@@ -1375,6 +1377,7 @@ test('exports a folder as one self-contained HTML document', async ({ page, cont
 
   expect(download.suggestedFilename()).toBe('daily.html');
   expect(html).toContain('daily/2026-03-05.md');
+  expect(html).toContain('Working on the CollabMD vault pivot today.');
   expect(html).toContain('export-document-section');
   await expect(popup.locator('#exportStatus')).toContainText('HTML download started.');
 });

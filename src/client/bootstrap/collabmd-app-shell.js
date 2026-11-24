@@ -830,9 +830,11 @@ export class CollabMdAppShell {
 
   async handleDirectoryExportRequest(directoryPath, format) {
     try {
+      const session = this.session;
+      const hasCurrentBuffer = session?.activeFilePath === this.currentFilePath && session?.isInitialSyncComplete();
       await exportDirectory({
-        currentFilePath: this.currentFilePath,
-        currentMarkdownText: this.session?.getText?.() ?? '',
+        currentFilePath: hasCurrentBuffer ? this.currentFilePath : '',
+        currentMarkdownText: hasCurrentBuffer ? session.getText() : '',
         directoryPath,
         fileList: this.fileExplorer?.flatDocumentFiles ?? [],
         format,

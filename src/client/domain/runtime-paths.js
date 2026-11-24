@@ -177,6 +177,13 @@ export function resolveAppUrl(pathValue = '/', config = getClientRuntimeConfig()
   return new URL(resolveAppPath(pathValue, config), window.location.origin).toString();
 }
 
+export function resolveVaultAppUrl(pathValue, config = getClientRuntimeConfig()) {
+  const url = new URL(resolveAppUrl(pathValue, config));
+  const vaultId = getActiveVaultId(config);
+  if (vaultId) url.searchParams.set('vault', vaultId);
+  return url.toString();
+}
+
 export function resolveApiUrl(pathValue = '/', config = getClientRuntimeConfig()) {
   const normalizedPath = String(pathValue ?? '').trim();
   if (!normalizedPath || normalizedPath === '/') {

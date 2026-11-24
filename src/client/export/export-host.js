@@ -1,5 +1,5 @@
 import { createRandomUuid } from '../../domain/random-uuid.js';
-import { resolveAppUrl } from '../infrastructure/runtime-config.js';
+import { resolveVaultAppUrl } from '../infrastructure/runtime-config.js';
 
 const EXPORT_PAGE_SOURCE = 'collabmd-export-page';
 const EXPORT_HOST_SOURCE = 'collabmd-export-host';
@@ -123,7 +123,7 @@ export function initializeExportBridge({
 
 async function startExport(payload) {
   const jobId = createJobId();
-  const url = new URL(resolveAppUrl('/export-document.html'));
+  const url = new URL(resolveVaultAppUrl('/export-document.html'));
   url.searchParams.set('job', jobId);
   const exportWindow = globalThis.open(url.href, '_blank');
   if (!exportWindow) {

@@ -24,7 +24,7 @@ import { escapeHtml } from '../domain/vault-utils.js';
 import { hasRenderedMath } from '../domain/markdown-math.js';
 import { prepareMermaidRenderSource } from '../domain/mermaid-source.js';
 import { downloadBlob, replaceChildrenFromHtml } from '../browser-utils.js';
-import { resolveApiUrl, resolveAppUrl } from '../infrastructure/runtime-config.js';
+import { resolveApiUrl, resolveVaultAppUrl } from '../infrastructure/runtime-config.js';
 import { parseApiResponse } from '../infrastructure/api-client-utils.js';
 
 const EXPORT_PAGE_SOURCE = 'collabmd-export-page';
@@ -378,21 +378,17 @@ async function fetchAsDataUrl(src, {
 }
 
 function buildWikiLinkHref(target) {
-  const baseUrl = new URL(resolveAppUrl('/'), window.location.origin);
+  const baseUrl = new URL(resolveVaultAppUrl('/'), window.location.origin);
   baseUrl.hash = new URLSearchParams({ file: target }).toString();
   return baseUrl.toString();
 }
 
 function createVideoPosterElement(element, {
-  assetId = '',
   docxPosterDataUrl = '',
   posterDataUrl = '',
 } = {}) {
   const wrapper = document.createElement('figure');
   wrapper.className = 'export-video-poster';
-  if (assetId) {
-    wrapper.setAttribute('data-export-asset-id', assetId);
-  }
 
   const card = document.createElement('div');
   card.className = 'export-video-poster-card';
@@ -578,21 +574,11 @@ async function resolveVideoPosterDataUrl(element) {
   return captureVideoFrameDataUrl(originalUrl);
 }
 
-async function resolveVideoPoster(snapshot, shell) {
+async function resolveVideoPoster(shell) {
   const posterDataUrl = await resolveVideoPosterDataUrl(shell);
   const docxPosterDataUrl = await imageDataUrlToPngDataUrl(posterDataUrl).catch(() => posterDataUrl);
-  const assetId = registerAsset(snapshot, {
-    dataUrl: posterDataUrl,
-    id: createAssetId('video-poster'),
-    kind: 'video-poster',
-    mimeType: posterDataUrl.startsWith('data:image/webp') ? 'image/webp' : 'image/png',
-    variants: {
-      docx: docxPosterDataUrl,
-    },
-  });
 
   shell.replaceWith(createVideoPosterElement(shell, {
-    assetId,
     docxPosterDataUrl,
     posterDataUrl,
   }));
@@ -623,7 +609,6 @@ function createImageFallbackElement({
 
 function createDiagramFigureElement({
   alt,
-  assetId,
   className,
   dataUrl,
   docxDataUrl,
@@ -631,7 +616,6 @@ function createDiagramFigureElement({
 }) {
   const figure = document.createElement('figure');
   figure.className = `export-diagram ${className}`.trim();
-  figure.setAttribute('data-export-asset-id', assetId);
   figure.setAttribute('data-export-label', alt);
   if (docxDataUrl) {
     figure.setAttribute('data-export-docx-src', docxDataUrl);
@@ -787,7 +771,7 @@ async function renderDrawioToPngDataUrl(filePath) {
     const iframe = document.createElement('iframe');
     iframe.className = 'drawio-export-iframe';
     iframe.src = (() => {
-      const url = new URL(resolveAppUrl('/drawio-editor.html'), window.location.origin);
+      const url = new URL(resolveVaultAppUrl('/drawio-editor.html'), window.location.origin);
       url.searchParams.set('file', filePath);
       url.searchParams.set('hostMode', 'export-image');
       url.searchParams.set('instanceId', instanceId);
@@ -835,12 +819,7 @@ async function renderDrawioToPngDataUrl(filePath) {
   });
 }
 
-function registerAsset(snapshot, asset) {
-  snapshot.assets[asset.id] = asset;
-  return asset.id;
-}
-
-async function resolveDiagramShell(snapshot, shell, { label, prefix, render }) {
+async function resolveDiagramShell(shell, { label, prefix, render }) {
   let source = shell.querySelector(`.${prefix}-source`)?.textContent ?? '';
   const target = shell.dataset[`${prefix}Target`];
   if (!source.trim() && target) {
@@ -853,20 +832,9 @@ async function resolveDiagramShell(snapshot, shell, { label, prefix, render }) {
   const svgMarkup = await render(source, target);
   const svgDataUrl = encodeSvgDataUrl(svgMarkup);
   const docxDataUrl = await rasterizeSvgMarkupToPngDataUrl(svgMarkup).catch(() => svgDataUrl);
-  const assetId = registerAsset(snapshot, {
-    dataUrl: svgDataUrl,
-    id: createAssetId(prefix),
-    kind: 'svg',
-    mimeType: 'image/svg+xml',
-    text: svgMarkup,
-    variants: {
-      docx: docxDataUrl,
-    },
-  });
 
   shell.replaceWith(createDiagramFigureElement({
     alt: label,
-    assetId,
     className: `export-diagram--${prefix}`,
     dataUrl: svgDataUrl,
     docxDataUrl,
@@ -965,7 +933,7 @@ async function resolveBaseEmbed(snapshot, placeholder) {
   placeholder.replaceWith(shell);
 }
 
-async function resolveExcalidrawEmbed(snapshot, placeholder) {
+async function resolveExcalidrawEmbed(placeholder) {
   const target = String(placeholder.dataset.embedTarget ?? '').trim();
   if (!target) {
     throw new Error('Missing Excalidraw file path');
@@ -974,20 +942,9 @@ async function resolveExcalidrawEmbed(snapshot, placeholder) {
   const svgMarkup = await renderExcalidrawToSvgMarkup(target);
   const svgDataUrl = encodeSvgDataUrl(svgMarkup);
   const docxDataUrl = await rasterizeSvgMarkupToPngDataUrl(svgMarkup).catch(() => svgDataUrl);
-  const assetId = registerAsset(snapshot, {
-    dataUrl: svgDataUrl,
-    id: createAssetId('excalidraw'),
-    kind: 'svg',
-    mimeType: 'image/svg+xml',
-    text: svgMarkup,
-    variants: {
-      docx: docxDataUrl,
-    },
-  });
 
   placeholder.replaceWith(createDiagramFigureElement({
     alt: placeholder.dataset.embedLabel || 'Excalidraw diagram',
-    assetId,
     className: 'export-diagram--excalidraw',
     dataUrl: svgDataUrl,
     docxDataUrl,
@@ -995,23 +952,16 @@ async function resolveExcalidrawEmbed(snapshot, placeholder) {
   }));
 }
 
-async function resolveDrawioEmbed(snapshot, placeholder) {
+async function resolveDrawioEmbed(placeholder) {
   const target = String(placeholder.dataset.drawioTarget ?? '').trim();
   if (!target) {
     throw new Error('Missing draw.io file path');
   }
 
   const pngDataUrl = await renderDrawioToPngDataUrl(target);
-  const assetId = registerAsset(snapshot, {
-    dataUrl: pngDataUrl,
-    id: createAssetId('drawio'),
-    kind: 'png',
-    mimeType: 'image/png',
-  });
 
   placeholder.replaceWith(createDiagramFigureElement({
     alt: placeholder.dataset.drawioLabel || 'draw.io diagram',
-    assetId,
     className: 'export-diagram--drawio',
     dataUrl: pngDataUrl,
     docxDataUrl: pngDataUrl,
@@ -1040,14 +990,7 @@ async function resolveImageAssets(snapshot, container) {
       const docxDataUrl = await createDocxImageDataUrl(dataUrl, {
         warnings: snapshot.warnings,
       });
-      const assetId = registerAsset(snapshot, {
-        dataUrl,
-        id: createAssetId('image'),
-        kind: 'image',
-        mimeType: getDataUrlMimeType(dataUrl) || 'application/octet-stream',
-      });
       imageNode.src = dataUrl;
-      imageNode.setAttribute('data-export-asset-id', assetId);
       imageNode.setAttribute('data-export-docx-src', docxDataUrl);
     } catch (error) {
       const message = error instanceof Error ? error.message : `Failed to inline ${src}`;
@@ -1089,7 +1032,7 @@ export async function resolveExportAssets(snapshot, {
   const videoShells = Array.from(container.querySelectorAll('.video-embed-placeholder[data-video-embed-key]'));
   for (const shell of videoShells) {
     try {
-      await resolveVideoPoster(snapshot, shell);
+      await resolveVideoPoster(shell);
     } catch (error) {
       snapshot.warnings.push(error instanceof Error ? error.message : 'Failed to render video poster');
       shell.replaceWith(createVideoPosterElement(shell));
@@ -1099,7 +1042,7 @@ export async function resolveExportAssets(snapshot, {
   const mermaidShells = Array.from(container.querySelectorAll('.mermaid-shell[data-mermaid-key]'));
   for (const shell of mermaidShells) {
     try {
-      await resolveDiagramShell(snapshot, shell, {
+      await resolveDiagramShell(shell, {
         label: shell.dataset.mermaidLabel || 'Mermaid diagram',
         prefix: 'mermaid',
         render: (source) => renderMermaidToSvgMarkup(source),
@@ -1116,7 +1059,7 @@ export async function resolveExportAssets(snapshot, {
   const plantUmlShells = Array.from(container.querySelectorAll('.plantuml-shell[data-plantuml-key]'));
   for (const shell of plantUmlShells) {
     try {
-      await resolveDiagramShell(snapshot, shell, {
+      await resolveDiagramShell(shell, {
         label: shell.dataset.plantumlLabel || 'PlantUML diagram',
         prefix: 'plantuml',
         render: (source) => renderPlantUmlToSvgMarkup(source),
@@ -1147,7 +1090,7 @@ export async function resolveExportAssets(snapshot, {
   const excalidrawEmbeds = Array.from(container.querySelectorAll('.excalidraw-embed-placeholder[data-embed-key]'));
   for (const placeholder of excalidrawEmbeds) {
     try {
-      await resolveExcalidrawEmbed(snapshot, placeholder);
+      await resolveExcalidrawEmbed(placeholder);
     } catch (error) {
       snapshot.warnings.push(error instanceof Error ? error.message : 'Failed to render Excalidraw diagram');
       placeholder.replaceWith(Object.assign(document.createElement('p'), {
@@ -1160,7 +1103,7 @@ export async function resolveExportAssets(snapshot, {
   const drawioEmbeds = Array.from(container.querySelectorAll('.drawio-embed-placeholder[data-drawio-key]'));
   for (const placeholder of drawioEmbeds) {
     try {
-      await resolveDrawioEmbed(snapshot, placeholder);
+      await resolveDrawioEmbed(placeholder);
     } catch (error) {
       snapshot.warnings.push(error instanceof Error ? error.message : 'Failed to render draw.io diagram');
       placeholder.replaceWith(Object.assign(document.createElement('p'), {
@@ -1185,7 +1128,6 @@ export async function prepareExportSnapshot({
   const normalizedFilePath = String(filePath ?? '').trim();
   const normalizedMarkdown = String(markdownText ?? '');
   const snapshot = {
-    assets: {},
     filePath: normalizedFilePath,
     generatedAt: new Date().toISOString(),
     html: '',
@@ -1265,7 +1207,6 @@ export async function prepareDirectoryExportSnapshot({
   ].join('');
 
   return {
-    assets: {},
     filePath: normalizedDirectoryPath,
     generatedAt: new Date().toISOString(),
     html,

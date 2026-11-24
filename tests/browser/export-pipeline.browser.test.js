@@ -25,12 +25,16 @@ function bytesFromBase64(value) {
 describe('export pipeline browser helpers', () => {
   const originalFetch = globalThis.fetch;
   const originalOpen = window.open;
+  const originalUrl = window.location.href;
+  const originalConfig = window.__COLLABMD_CONFIG__;
 
   afterEach(() => {
     document.body.innerHTML = '';
     delete document.documentElement.dataset.theme;
     globalThis.fetch = originalFetch;
     window.open = originalOpen;
+    window.history.replaceState(window.history.state, '', originalUrl);
+    window.__COLLABMD_CONFIG__ = originalConfig;
     vi.restoreAllMocks();
     vi.useRealTimers();
   });
@@ -59,7 +63,6 @@ describe('export pipeline browser helpers', () => {
     expect(image).not.toBeNull();
     expect(image?.getAttribute('src')).toMatch(/^data:image\/png;base64,/);
     expect(image?.getAttribute('data-export-docx-src')).toMatch(/^data:image\/png;base64,/);
-    expect(Object.keys(snapshot.assets)).toHaveLength(1);
     expect(snapshot.warnings).toHaveLength(0);
   });
 
@@ -125,7 +128,6 @@ describe('export pipeline browser helpers', () => {
     expect(image).not.toBeNull();
     expect(image?.getAttribute('src')).toMatch(/^data:image\/webp;base64,/);
     expect(image?.getAttribute('data-export-docx-src')).toMatch(/^data:image\/png;base64,/);
-    expect(Object.values(snapshot.assets)[0]?.mimeType).toBe('image/webp');
     expect(snapshot.warnings).toHaveLength(0);
 
     const docxHtml = buildDocxHtmlDocument({
@@ -150,7 +152,6 @@ describe('export pipeline browser helpers', () => {
     expect(image).not.toBeNull();
     expect(image?.getAttribute('src')).toBe(TINY_WEBP_DATA_URL);
     expect(image?.getAttribute('data-export-docx-src')).toMatch(/^data:image\/png;base64,/);
-    expect(Object.keys(snapshot.assets)).toHaveLength(0);
     expect(snapshot.warnings).toHaveLength(0);
   });
 
@@ -179,7 +180,6 @@ describe('export pipeline browser helpers', () => {
     expect(image).not.toBeNull();
     expect(image?.getAttribute('src')).toMatch(/^data:image\/gif;base64,/);
     expect(image?.getAttribute('data-export-docx-src')).toMatch(/^data:image\/png;base64,/);
-    expect(Object.values(snapshot.assets)[0]?.mimeType).toBe('image/gif');
     expect(snapshot.warnings).toHaveLength(0);
 
     const docxHtml = buildDocxHtmlDocument({
@@ -204,7 +204,6 @@ describe('export pipeline browser helpers', () => {
     expect(image).not.toBeNull();
     expect(image?.getAttribute('src')).toBe(TINY_GIF_DATA_URL);
     expect(image?.getAttribute('data-export-docx-src')).toMatch(/^data:image\/png;base64,/);
-    expect(Object.keys(snapshot.assets)).toHaveLength(0);
     expect(snapshot.warnings).toHaveLength(0);
   });
 
@@ -365,7 +364,6 @@ describe('export pipeline browser helpers', () => {
     expect(image).not.toBeNull();
     expect(image?.getAttribute('src')).toMatch(/^data:image\/jpeg;base64,/);
     expect(container.querySelector('.export-video-link')?.getAttribute('href')).toBe('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
-    expect(Object.keys(snapshot.assets)).toHaveLength(1);
     expect(snapshot.warnings).toHaveLength(0);
   });
 
@@ -426,7 +424,6 @@ describe('export pipeline browser helpers', () => {
     const image = container.querySelector('.export-video-poster-image');
     expect(image?.getAttribute('src')).toBe('data:image/png;base64,video-frame');
     expect(container.querySelector('.export-video-link')?.getAttribute('href')).toBe('https://cdn.example.com/demo.mp4');
-    expect(Object.keys(snapshot.assets)).toHaveLength(1);
     expect(snapshot.warnings).toHaveLength(0);
   });
 
@@ -619,7 +616,11 @@ describe('export pipeline browser helpers', () => {
     }));
   }
 
-  it('opens folder exports with the selected directory in the bootstrap payload', async () => {
+  it('opens folder exports in the selected vault with the directory in the bootstrap payload', async () => {
+    window.__COLLABMD_CONFIG__ = { vaults: [{ id: 'alpha' }, { id: 'beta' }] };
+    const activeUrl = new URL(window.location.href);
+    activeUrl.searchParams.set('vault', 'beta');
+    window.history.replaceState(window.history.state, '', activeUrl);
     const exportWindow = { focus: vi.fn(), postMessage: vi.fn() };
     window.open = vi.fn(() => exportWindow);
     document.documentElement.dataset.theme = 'dark';
@@ -631,6 +632,7 @@ describe('export pipeline browser helpers', () => {
     expect(target).toBe('_blank');
     expect(url.pathname).toMatch(/\/export-document\.html$/u);
     expect(url.searchParams.get('job')).toBe(jobId);
+    expect(url.searchParams.get('vault')).toBe('beta');
     dispatchExportMessage({}, jobId, 'ready');
     expect(exportWindow.postMessage).not.toHaveBeenCalled();
     dispatchExportMessage(exportWindow, jobId, 'ready');
