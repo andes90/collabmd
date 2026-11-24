@@ -1,5 +1,5 @@
 import { createReadStream } from 'fs';
-import { chmod, copyFile, link, mkdir, mkdtemp, readFile, readdir, rename, rm, rmdir, stat, unlink, writeFile } from 'fs/promises';
+import { chmod, copyFile, link, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, rmdir, stat, unlink, writeFile } from 'fs/promises';
 import { basename, dirname, extname, join, relative, resolve } from 'path';
 import sharp from 'sharp';
 
@@ -698,7 +698,7 @@ export class VaultFileStore {
     return { ok: true };
   }
 
-  async listWorkspacePathsUnder(pathValue) {
+  async listWorkspacePathsUnder(pathValue, { rejectUnlisted = false } = {}) {
     const normalizedRoot = String(pathValue ?? '').replace(/\\/g, '/').trim();
     if (!normalizedRoot) {
       return [];
@@ -728,7 +728,14 @@ export class VaultFileStore {
       const sortedEntries = dirEntries.sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }));
 
       for (const entry of sortedEntries) {
-        if (isIgnoredVaultEntry(entry.name) || entry.isSymbolicLink()) {
+        const isListed = !isIgnoredVaultEntry(entry.name) && !entry.name.includes('\\')
+          && (entry.isDirectory() || (entry.isFile() && isVaultFilePath(entry.name)));
+        if (!isListed) {
+          if (rejectUnlisted) {
+            const error = new Error('Folder contains entries that are hidden from the vault explorer');
+            error.code = 'UNLISTED_ENTRIES';
+            throw error;
+          }
           continue;
         }
 
@@ -942,8 +949,6 @@ export class VaultFileStore {
       return { ok: false, error, statusCode: 400 };
     }
 
-    const managedPaths = await this.listWorkspacePathsUnder(dirPath);
-
     try {
       const info = await stat(absolute);
       if (!info.isDirectory()) {
@@ -958,6 +963,7 @@ export class VaultFileStore {
     }
 
     try {
+      const managedPaths = await this.listWorkspacePathsUnder(dirPath, { rejectUnlisted: recursive });
       if (!recursive) {
         const contents = await readdir(absolute);
         if (contents.length > 0) {
@@ -967,7 +973,18 @@ export class VaultFileStore {
 
       await this.runManagedWrite(expandManagedPaths([dirPath, ...managedPaths]), async () => {
         if (recursive) {
-          await rm(absolute, { force: true, recursive: true });
+          for (const filePath of [...managedPaths].reverse()) {
+            const target = sanitizeVaultPath(this.vaultDir, filePath, { preservePath: true });
+            if (!target) throw new Error('Folder contents changed');
+            const info = await lstat(target, { throwIfNoEntry: false });
+            if (info?.isDirectory()) await rmdir(target);
+            else if (info?.isFile()) await unlink(target);
+            else if (info) {
+              const error = new Error('Folder contents changed. Review the folder and try again.');
+              error.code = 'UNLISTED_ENTRIES';
+              throw error;
+            }
+          }
         } else {
           await rmdir(absolute);
         }
@@ -977,6 +994,9 @@ export class VaultFileStore {
       });
       return { ok: true };
     } catch (deleteError) {
+      if (deleteError.code === 'UNLISTED_ENTRIES') {
+        return { ok: false, error: deleteError.message, statusCode: 409 };
+      }
       if (deleteError.code === 'ENOTEMPTY' || deleteError.code === 'EEXIST') {
         return { ok: false, error: 'Directory is not empty', statusCode: 409 };
       }

@@ -1031,3 +1031,15 @@ test('VaultFileStore includes the file count in workspace state scans', async (t
   const snapshot = await store.scanWorkspaceState();
   assert.equal(snapshot.vaultFileCount, 2);
 });
+
+test('recursive deletion leaves a mixed folder intact', async (t) => {
+  const { store, vaultDir, cleanup } = await createVaultStore();
+  t.after(cleanup);
+  await writeFile(join(vaultDir, 'notes/original.csv'), 'original');
+  await store.writeCommentThreads('notes/daily.md', [{ id: 'retained' }]);
+
+  assert.equal((await store.deleteDirectory('notes', { recursive: true })).statusCode, 409);
+  assert.equal(await readFile(join(vaultDir, 'notes/original.csv'), 'utf8'), 'original');
+  assert.equal(await store.readMarkdownFile('notes/daily.md'), '# Daily\n');
+  assert.deepEqual(await store.readCommentThreads('notes/daily.md'), [{ id: 'retained' }]);
+});
