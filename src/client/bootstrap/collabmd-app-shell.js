@@ -245,7 +245,9 @@ export class CollabMdAppShell {
           activePath,
         };
       },
-      getIsTabActive: () => this.isTabActive,
+      getIsTabActive: () => this.isTabActive && (
+        !this.runtimeConfig.vaults.length || getActiveVaultId(this.runtimeConfig) === this.runtimeConfig.vaults[0].id
+      ),
       onDidMutate: () => {
         this.toastController.show('Agent-assisted Vault change applied. Review it before committing.');
       },

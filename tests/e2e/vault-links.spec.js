@@ -158,12 +158,17 @@ test('vault URLs, copied file links, and switching preserve the requested vault'
     });
     await context.addInitScript(() => {
       localStorage.setItem('collabmd-user-name', 'Link tester');
+      window.testWebMcpTools = [];
+      Object.defineProperty(document, 'modelContext', {
+        value: { registerTool: (tool) => { window.testWebMcpTools.push(tool.name); } },
+      });
       localStorage.setItem('collabmd.activeVault', 'alpha');
     });
     const page = await context.newPage();
     await page.goto(`${server.appBaseUrl}/?vault=beta&file=test.md`);
     await expect(page.locator('.cm-content')).toContainText('Beta note');
     await expect(page).toHaveURL(`${server.appBaseUrl}/?vault=beta#file=test.md`);
+    expect(await page.evaluate(() => window.testWebMcpTools)).toEqual([]);
     await page.locator('.file-tree-item[data-path="test.md"]').click({ button: 'right' });
     await page.getByText('Copy as URL', { exact: true }).click();
     const copied = await page.evaluate(() => navigator.clipboard.readText());
@@ -183,6 +188,7 @@ test('vault URLs, copied file links, and switching preserve the requested vault'
     await page.getByRole('menuitem', { name: 'alpha', exact: true }).click();
     await expect(page.locator('.cm-content')).toContainText('Alpha note');
     await expect(page).toHaveURL(`${server.appBaseUrl}/?vault=alpha#file=test.md`);
+    await expect.poll(() => page.evaluate(() => window.testWebMcpTools)).toContain('collabmd_read_document');
     await recipient.reload();
     await expect(recipient.locator('.cm-content')).toContainText('Beta note');
   } finally {

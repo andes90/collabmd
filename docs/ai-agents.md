@@ -112,6 +112,7 @@ differ. During initial sync, or for documents over 1,000,000 characters, text
 selection context is unavailable. Existing active-diagram context remains
 available for Excalidraw.
 
-Browser tool availability depends on WebMCP support in the client. Browser
+Browser tool availability depends on WebMCP support in the client. In a multi-vault
+workspace, browser tools are available on the primary vault. Browser
 read-only, untrusted-content, and consequential hints supplement server
 authorization and revision checks; they do not replace them.
