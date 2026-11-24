@@ -335,53 +335,25 @@ export class QuickSwitcherController {
       this.fileMatchCount = this.fileCorpus.length;
     } else {
       const ranked = [];
-      let fileMatchCount = 0;
-      this.fileCorpus.forEach((entry) => {
+      for (const entry of this.fileCorpus) {
         const match = findFileSearchMatch(entry, query);
-        if (!match) {
-          return;
-        }
-
-        fileMatchCount += 1;
+        if (!match) continue;
         this.fileMatches.set(entry.filePath, match);
-        const rankedEntry = {
+        ranked.push({
           filePath: entry.filePath,
           lowerPath: entry.lowerPath,
           recentRank: recentRanks.get(entry.filePath) ?? NO_RECENT_FILE_RANK,
           score: match.score,
-        };
-        let inserted = false;
-        for (let index = 0; index < ranked.length; index += 1) {
-          const current = ranked[index];
-          const isBetter = rankedEntry.score > current.score
-            || (
-              rankedEntry.score === current.score
-              && (
-                rankedEntry.recentRank < current.recentRank
-                || (
-                  rankedEntry.recentRank === current.recentRank
-                  && rankedEntry.lowerPath < current.lowerPath
-                )
-              )
-            );
-          if (isBetter) {
-            ranked.splice(index, 0, rankedEntry);
-            inserted = true;
-            break;
-          }
-        }
+        });
+      }
+      ranked.sort((left, right) => (
+        right.score - left.score
+        || left.recentRank - right.recentRank
+        || (left.lowerPath < right.lowerPath ? -1 : left.lowerPath > right.lowerPath ? 1 : 0)
+      ));
 
-        if (!inserted && ranked.length < MAX_VISIBLE_RESULTS) {
-          ranked.push(rankedEntry);
-        }
-
-        if (ranked.length > MAX_VISIBLE_RESULTS) {
-          ranked.length = MAX_VISIBLE_RESULTS;
-        }
-      });
-
-      this.filteredFiles = ranked.map((entry) => entry.filePath);
-      this.fileMatchCount = fileMatchCount;
+      this.filteredFiles = ranked.slice(0, MAX_VISIBLE_RESULTS).map((entry) => entry.filePath);
+      this.fileMatchCount = ranked.length;
     }
 
     this.fileResultsTruncated = this.fileMatchCount > MAX_VISIBLE_RESULTS;
@@ -606,27 +578,17 @@ export class QuickSwitcherController {
   updateSelection() {
     if (!this.resultsList) return;
 
-    if (this.mode === 'text') {
-      const items = this.resultsList.querySelectorAll('.qs-text-item');
-      items.forEach((item, i) => {
-        const isSelected = i === this.selectedTextIndex;
-        item.classList.toggle('selected', isSelected);
-        item.setAttribute('aria-selected', isSelected ? 'true' : 'false');
-      });
-      items[this.selectedTextIndex]?.scrollIntoView({ block: 'nearest' });
-      this.setActiveDescendant(items[this.selectedTextIndex]?.id ?? '');
-      return;
-    }
-
-    const items = this.resultsList.querySelectorAll('.qs-result-item');
+    const isTextMode = this.mode === 'text';
+    const selectedIndex = isTextMode ? this.selectedTextIndex : this.selectedIndex;
+    const items = this.resultsList.querySelectorAll(isTextMode ? '.qs-text-item' : '.qs-result-item');
     items.forEach((item, i) => {
-      const isSelected = i === this.selectedIndex;
+      const isSelected = i === selectedIndex;
       item.classList.toggle('selected', isSelected);
       item.setAttribute('aria-selected', isSelected ? 'true' : 'false');
     });
 
-    items[this.selectedIndex]?.scrollIntoView({ block: 'nearest' });
-    this.setActiveDescendant(items[this.selectedIndex]?.id ?? '');
+    items[selectedIndex]?.scrollIntoView({ block: 'nearest' });
+    this.setActiveDescendant(items[selectedIndex]?.id ?? '');
   }
 
   setActiveDescendant(id = '') {

@@ -230,13 +230,10 @@ function waitForAnimationFrame() {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
 
-function blobToDataUrl(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.addEventListener('load', () => resolve(String(reader.result ?? '')));
-    reader.addEventListener('error', () => reject(reader.error ?? new Error('Failed to read blob')));
-    reader.readAsDataURL(blob);
-  });
+async function blobToDataUrl(blob) {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const mimeType = blob.type || 'application/octet-stream';
+  return `data:${mimeType};base64,${bytes.toBase64()}`;
 }
 
 async function imageDataUrlToPngDataUrl(dataUrl) {

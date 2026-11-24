@@ -3,12 +3,6 @@ import { isImageAttachmentFilePath } from '../../domain/file-kind.js';
 import { createRandomUuid } from '../../domain/random-uuid.js';
 import { resolveApiUrl } from '../domain/runtime-paths.js';
 import { escapeHtml } from '../domain/vault-utils.js';
-import {
-  buttonClassNames,
-  inputClassNames,
-  segmentedButtonClassNames,
-  segmentedControlClassNames,
-} from './components/ui/button.js';
 import { downloadBlob, findElementByDataset, parseDownloadFileName, replaceChildrenFromHtml } from '../browser-utils.js';
 
 function createShellKey() {
@@ -102,11 +96,11 @@ function renderValue(cell = {}) {
       return `<a class="bases-link" href="${escapeHtml(cell.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(formatCellText(cell))}</a>`;
     }
     if (cell.path) {
-      return `<button type="button" class="${escapeHtml(buttonClassNames({ variant: 'secondary', size: 'compact', pill: true, extra: ['bases-link', 'bases-link-button'] }))}" data-base-open-file="${escapeHtml(cell.path)}">${escapeHtml(formatCellText(cell))}</button>`;
+      return `<button type="button" class="ui-button ui-button--secondary ui-button--compact ui-button--pill bases-link bases-link-button" data-base-open-file="${escapeHtml(cell.path)}">${escapeHtml(formatCellText(cell))}</button>`;
     }
   }
   if (type === 'file' && cell.path) {
-    return `<button type="button" class="${escapeHtml(buttonClassNames({ variant: 'secondary', size: 'compact', pill: true, extra: ['bases-link', 'bases-link-button'] }))}" data-base-open-file="${escapeHtml(cell.path)}">${escapeHtml(formatCellText(cell))}</button>`;
+    return `<button type="button" class="ui-button ui-button--secondary ui-button--compact ui-button--pill bases-link bases-link-button" data-base-open-file="${escapeHtml(cell.path)}">${escapeHtml(formatCellText(cell))}</button>`;
   }
 
   const text = formatCellText(cell);
@@ -121,7 +115,7 @@ function renderRowValue(column, row) {
     && cell.type !== 'empty'
     && (column.id === 'file.name' || column.id === 'file.basename')
   ) {
-    return `<button type="button" class="${escapeHtml(buttonClassNames({ variant: 'secondary', size: 'compact', pill: true, extra: ['bases-link', 'bases-link-button'] }))}" data-base-open-file="${escapeHtml(row.path)}">${escapeHtml(formatCellText(cell))}</button>`;
+    return `<button type="button" class="ui-button ui-button--secondary ui-button--compact ui-button--pill bases-link bases-link-button" data-base-open-file="${escapeHtml(row.path)}">${escapeHtml(formatCellText(cell))}</button>`;
   }
 
   return renderValue(cell);
@@ -200,7 +194,7 @@ function renderViewBody(result) {
 
 function renderViewTabs(result) {
   return (result.views ?? []).map((view) => (
-    `<button type="button" class="${escapeHtml(segmentedButtonClassNames({ active: view.id === result.view.id, extra: 'bases-view-tab' }))}" data-base-view="${escapeHtml(view.id)}">${escapeHtml(view.name)}</button>`
+    `<button type="button" class="${view.id === result.view.id ? 'ui-segmented-btn active bases-view-tab' : 'ui-segmented-btn bases-view-tab'}" data-base-view="${escapeHtml(view.id)}">${escapeHtml(view.name)}</button>`
   )).join('');
 }
 
@@ -253,7 +247,7 @@ function isStandaloneBaseEntry(entry) {
 function buildToolbarButton(label, panel, entry, result) {
   const active = entry.ui?.openPanel === panel;
   const editable = Boolean(getMeta(result).editable);
-  return `<button type="button" class="${escapeHtml(buttonClassNames({ variant: active ? 'primary' : 'secondary', pill: true, extra: ['bases-toolbar-btn', active ? 'is-active' : ''] }))}" data-base-panel="${escapeHtml(panel)}"${editable ? '' : ' disabled'}>${escapeHtml(label)}</button>`;
+  return `<button type="button" class="ui-button ui-button--${active ? 'primary' : 'secondary'} ui-button--pill bases-toolbar-btn${active ? ' is-active' : ''}" data-base-panel="${escapeHtml(panel)}"${editable ? '' : ' disabled'}>${escapeHtml(label)}</button>`;
 }
 
 function pruneFilterGroupByProperty(group, propertyId = '') {
@@ -339,13 +333,13 @@ function renderSortPanel(result) {
       <div class="bases-panel-section">
         <div class="bases-panel-title">Group by</div>
         <div class="bases-sort-row">
-          <select class="${escapeHtml(inputClassNames({ extra: 'bases-select bases-sort-property' }))}" data-base-group-by-property aria-label="Group by property">
+          <select class="ui-input bases-select bases-sort-property" data-base-group-by-property aria-label="Group by property">
             ${createSelectOptions(result, { allowBlank: true, selected: viewConfig.groupBy?.property ?? '' })}
           </select>
-          <select class="${escapeHtml(inputClassNames({ extra: 'bases-select bases-sort-direction' }))}" data-base-group-by-direction aria-label="Group direction"${viewConfig.groupBy?.property ? '' : ' disabled'}>
+          <select class="ui-input bases-select bases-sort-direction" data-base-group-by-direction aria-label="Group direction"${viewConfig.groupBy?.property ? '' : ' disabled'}>
             ${groupDirections.map((direction) => `<option value="${escapeHtml(direction.id)}"${direction.id === (viewConfig.groupBy?.direction ?? 'asc') ? ' selected' : ''}>${escapeHtml(direction.label)}</option>`).join('')}
           </select>
-          <button type="button" class="${escapeHtml(buttonClassNames({ variant: 'secondary', size: 'compact' }))}" data-base-clear-group-by${viewConfig.groupBy?.property ? '' : ' disabled'}>Clear</button>
+          <button type="button" class="ui-button ui-button--secondary ui-button--compact" data-base-clear-group-by${viewConfig.groupBy?.property ? '' : ' disabled'}>Clear</button>
         </div>
       </div>
       <div class="bases-panel-section">
@@ -359,20 +353,20 @@ function renderSortPanel(result) {
     ];
     return `
               <div class="bases-sort-row">
-                <select class="${escapeHtml(inputClassNames({ extra: 'bases-select bases-sort-property' }))}" data-base-sort-property="${index}" aria-label="Sort rule ${index + 1} property">
+                <select class="ui-input bases-select bases-sort-property" data-base-sort-property="${index}" aria-label="Sort rule ${index + 1} property">
                   ${createSelectOptions(result, { selected: sortConfig.property })}
                 </select>
-                <select class="${escapeHtml(inputClassNames({ extra: 'bases-select bases-sort-direction' }))}" data-base-sort-direction="${index}" aria-label="Sort rule ${index + 1} direction">
+                <select class="ui-input bases-select bases-sort-direction" data-base-sort-direction="${index}" aria-label="Sort rule ${index + 1} direction">
                   ${directions.map((direction) => `<option value="${escapeHtml(direction.id)}"${direction.id === sortConfig.direction ? ' selected' : ''}>${escapeHtml(direction.label)}</option>`).join('')}
                 </select>
-                <button type="button" class="${escapeHtml(buttonClassNames({ variant: 'secondary', size: 'compact' }))}" data-base-sort-move="${index}:up" aria-label="Move sort rule ${index + 1} up"${index === 0 ? ' disabled' : ''}>↑</button>
-                <button type="button" class="${escapeHtml(buttonClassNames({ variant: 'secondary', size: 'compact' }))}" data-base-sort-move="${index}:down" aria-label="Move sort rule ${index + 1} down"${index === sorts.length - 1 ? ' disabled' : ''}>↓</button>
-                <button type="button" class="${escapeHtml(buttonClassNames({ variant: 'secondary', size: 'compact' }))}" data-base-sort-delete="${index}" aria-label="Delete sort rule ${index + 1}">Delete</button>
+                <button type="button" class="ui-button ui-button--secondary ui-button--compact" data-base-sort-move="${index}:up" aria-label="Move sort rule ${index + 1} up"${index === 0 ? ' disabled' : ''}>↑</button>
+                <button type="button" class="ui-button ui-button--secondary ui-button--compact" data-base-sort-move="${index}:down" aria-label="Move sort rule ${index + 1} down"${index === sorts.length - 1 ? ' disabled' : ''}>↓</button>
+                <button type="button" class="ui-button ui-button--secondary ui-button--compact" data-base-sort-delete="${index}" aria-label="Delete sort rule ${index + 1}">Delete</button>
               </div>
             `;
   }).join('')}
         </div>
-        <button type="button" class="${escapeHtml(buttonClassNames({ variant: 'secondary', size: 'compact' }))}" data-base-sort-add>Add sort</button>
+        <button type="button" class="ui-button ui-button--secondary ui-button--compact" data-base-sort-add>Add sort</button>
       </div>
     </section>
   `;
@@ -530,26 +524,17 @@ function parseFilterNode(filterNode) {
     return null;
   }
 
-  if (Array.isArray(filterNode.and)) {
-    const children = filterNode.and.map((child) => parseFilterNode(child)).flatMap((child) => (
-      child?.type === 'group' && child.conjunction === 'and' && child.children?.length === 1 && child.children[0]?.type === 'rule'
-        ? child.children
-        : [child]
-    ));
-    return children.every(Boolean)
-      ? { children, conjunction: 'and', type: 'group' }
-      : null;
-  }
-
-  if (Array.isArray(filterNode.or)) {
-    const children = filterNode.or.map((child) => parseFilterNode(child)).flatMap((child) => (
-      child?.type === 'group' && child.conjunction === 'and' && child.children?.length === 1 && child.children[0]?.type === 'rule'
-        ? child.children
-        : [child]
-    ));
-    return children.every(Boolean)
-      ? { children, conjunction: 'or', type: 'group' }
-      : null;
+  for (const conjunction of ['and', 'or']) {
+    if (Array.isArray(filterNode[conjunction])) {
+      const children = filterNode[conjunction].map((child) => parseFilterNode(child)).flatMap((child) => (
+        child?.type === 'group' && child.conjunction === 'and' && child.children?.length === 1 && child.children[0]?.type === 'rule'
+          ? child.children
+          : [child]
+      ));
+      return children.every(Boolean)
+        ? { children, conjunction, type: 'group' }
+        : null;
+    }
   }
 
   if (filterNode.not != null) {
@@ -692,11 +677,9 @@ function buildFilterValuePresentation(result, rule, path, entry) {
       : propertyValueOptions;
   const suggestionsEnabled = valueSuggestions.length > 0 && !['is empty', 'is not empty'].includes(rule.operator);
   const suggestionListId = `bases-filter-suggestions-${escapeHtml(entry.key)}-${escapeHtml(encodedPath.replace(/\./g, '-'))}`;
-  const valueInputClasses = inputClassNames({
-    extra: suggestionsEnabled
-      ? 'bases-filter-value bases-filter-value--suggestions'
-      : 'bases-filter-value',
-  });
+  const valueInputClasses = suggestionsEnabled
+    ? 'ui-input bases-filter-value bases-filter-value--suggestions'
+    : 'ui-input bases-filter-value';
   return {
     encodedPath,
     operators,
@@ -749,14 +732,14 @@ function renderFilterRule(result, rule, path, entry) {
 
   return `
     <div class="bases-filter-row">
-      <select class="${escapeHtml(inputClassNames({ extra: 'bases-select bases-filter-property' }))}" data-base-filter-property="${escapeHtml(presentation.encodedPath)}" aria-label="${filterLabel} property">
+      <select class="ui-input bases-select bases-filter-property" data-base-filter-property="${escapeHtml(presentation.encodedPath)}" aria-label="${filterLabel} property">
         ${getPropertyOptionsMarkup(result, rule.propertyId)}
       </select>
-      <select class="${escapeHtml(inputClassNames({ extra: 'bases-select bases-filter-operator' }))}" data-base-filter-operator="${escapeHtml(presentation.encodedPath)}" aria-label="${filterLabel} operator">
+      <select class="ui-input bases-select bases-filter-operator" data-base-filter-operator="${escapeHtml(presentation.encodedPath)}" aria-label="${filterLabel} operator">
         ${presentation.operators.map((operator) => `<option value="${escapeHtml(operator)}"${operator === rule.operator ? ' selected' : ''}>${escapeHtml(operator)}</option>`).join('')}
       </select>
       ${renderFilterValueCombobox(result, rule, path, entry)}
-      <button type="button" class="${escapeHtml(buttonClassNames({ variant: 'secondary', size: 'compact' }))}" data-base-filter-remove="${escapeHtml(presentation.encodedPath)}" aria-label="Delete ${filterLabel.toLowerCase()}">Delete</button>
+      <button type="button" class="ui-button ui-button--secondary ui-button--compact" data-base-filter-remove="${escapeHtml(presentation.encodedPath)}" aria-label="Delete ${filterLabel.toLowerCase()}">Delete</button>
     </div>
   `;
 }
@@ -829,14 +812,14 @@ function renderFilterGroup(result, group, path, entry, { isRoot = false } = {}) 
   return `
     <div class="bases-filter-group"${isRoot ? ' data-base-filter-root' : ''}>
       <div class="bases-filter-group-header">
-        <select class="${escapeHtml(inputClassNames({ extra: 'bases-select bases-filter-conjunction' }))}" data-base-filter-conjunction="${escapeHtml(encodedPath)}" aria-label="${groupLabel} condition">
+        <select class="ui-input bases-select bases-filter-conjunction" data-base-filter-conjunction="${escapeHtml(encodedPath)}" aria-label="${groupLabel} condition">
           ${['and', 'or', 'not'].map((conjunction) => `<option value="${conjunction}"${group.conjunction === conjunction ? ' selected' : ''}>${escapeHtml({
     and: 'All the following are true',
     not: 'None of the following are true',
     or: 'Any of the following are true',
   }[conjunction])}</option>`).join('')}
         </select>
-        ${isRoot ? '' : `<button type="button" class="${escapeHtml(buttonClassNames({ variant: 'secondary', size: 'compact' }))}" data-base-filter-remove="${escapeHtml(encodedPath)}" aria-label="Delete ${groupLabel.toLowerCase()}">Delete group</button>`}
+        ${isRoot ? '' : `<button type="button" class="ui-button ui-button--secondary ui-button--compact" data-base-filter-remove="${escapeHtml(encodedPath)}" aria-label="Delete ${groupLabel.toLowerCase()}">Delete group</button>`}
       </div>
       <div class="bases-filter-children">
         ${(group.children ?? []).map((child, index) => (
@@ -846,8 +829,8 @@ function renderFilterGroup(result, group, path, entry, { isRoot = false } = {}) 
   )).join('')}
       </div>
       <div class="bases-filter-actions-row">
-        <button type="button" class="${escapeHtml(buttonClassNames({ variant: 'secondary', size: 'compact' }))}" data-base-filter-add-rule="${escapeHtml(encodedPath)}" aria-label="Add filter to ${groupLabel.toLowerCase()}">Add filter</button>
-        <button type="button" class="${escapeHtml(buttonClassNames({ variant: 'secondary', size: 'compact' }))}" data-base-filter-add-group="${escapeHtml(encodedPath)}" aria-label="Add filter group to ${groupLabel.toLowerCase()}">Add filter group</button>
+        <button type="button" class="ui-button ui-button--secondary ui-button--compact" data-base-filter-add-rule="${escapeHtml(encodedPath)}" aria-label="Add filter to ${groupLabel.toLowerCase()}">Add filter</button>
+        <button type="button" class="ui-button ui-button--secondary ui-button--compact" data-base-filter-add-group="${escapeHtml(encodedPath)}" aria-label="Add filter group to ${groupLabel.toLowerCase()}">Add filter group</button>
       </div>
     </div>
   `;
@@ -868,8 +851,8 @@ function renderFilterPanel(result, entry) {
         <div class="bases-panel-title">This view</div>
         ${parsed ? `
           <div class="bases-toggle-row">
-            <button type="button" class="${escapeHtml(buttonClassNames({ variant: mode === 'builder' ? 'primary' : 'secondary', size: 'compact' }))}" data-base-filter-mode="builder">Builder</button>
-            <button type="button" class="${escapeHtml(buttonClassNames({ variant: mode === 'advanced' ? 'primary' : 'secondary', size: 'compact' }))}" data-base-filter-mode="advanced">Advanced</button>
+            <button type="button" class="ui-button ui-button--${mode === 'builder' ? 'primary' : 'secondary'} ui-button--compact" data-base-filter-mode="builder">Builder</button>
+            <button type="button" class="ui-button ui-button--${mode === 'advanced' ? 'primary' : 'secondary'} ui-button--compact" data-base-filter-mode="advanced">Advanced</button>
           </div>
         ` : ''}
       </div>
@@ -877,10 +860,10 @@ function renderFilterPanel(result, entry) {
       ? `
         <label class="bases-filter-advanced-label">
           <span class="bases-panel-title">Filter expression</span>
-          <textarea class="${escapeHtml(inputClassNames({ extra: 'bases-filter-advanced' }))}" data-base-filter-advanced>${escapeHtml(rawText)}</textarea>
+          <textarea class="ui-input bases-filter-advanced" data-base-filter-advanced>${escapeHtml(rawText)}</textarea>
         </label>
         <div class="bases-filter-actions-row">
-          <button type="button" class="${escapeHtml(buttonClassNames({ variant: 'primary', size: 'compact' }))}" data-base-filter-save-advanced>Save filter</button>
+          <button type="button" class="ui-button ui-button--primary ui-button--compact" data-base-filter-save-advanced>Save filter</button>
         </div>
       `
       : renderFilterGroup(result, parsed ?? createEmptyFilterGroup('and'), [], entry, { isRoot: true })}
@@ -900,7 +883,7 @@ function renderPropertiesPanel(result, entry) {
   return `
     <section class="bases-panel-card">
       <label class="bases-properties-search">
-        <input class="${escapeHtml(inputClassNames({ extra: 'bases-properties-search-input' }))}" type="search" value="${escapeHtml(entry.ui.propertySearch ?? '')}" placeholder="Find property" data-base-properties-search>
+        <input class="ui-input bases-properties-search-input" type="search" value="${escapeHtml(entry.ui.propertySearch ?? '')}" placeholder="Find property" data-base-properties-search>
       </label>
       <div class="bases-properties-list" data-base-properties-list>
         ${properties.map((property) => `
@@ -1029,7 +1012,7 @@ function renderShellHtml(result, entry) {
     <section class="bases-shell" data-base-shell-key="${escapeHtml(entry.key)}">
       <header class="bases-toolbar">
         <div class="bases-toolbar-main">
-          <div class="${escapeHtml(segmentedControlClassNames({ pill: true, extra: 'bases-tabs' }))}" data-base-tabs>
+          <div class="ui-segmented-control ui-segmented-control--pill bases-tabs" data-base-tabs>
             ${renderViewTabs(result)}
           </div>
           <div class="bases-meta" data-base-meta>${escapeHtml(String(result.totalRows ?? 0))} results</div>
@@ -1041,9 +1024,9 @@ function renderShellHtml(result, entry) {
               <circle cx="11" cy="11" r="7"></circle>
               <path d="m20 20-3.5-3.5"></path>
             </svg>
-            <input class="${escapeHtml(inputClassNames({ extra: 'bases-search-input' }))}" type="search" value="${escapeHtml(entry.search)}" placeholder="Search this base" aria-label="Search this base">
+            <input class="ui-input bases-search-input" type="search" value="${escapeHtml(entry.search)}" placeholder="Search this base" aria-label="Search this base">
           </label>
-          <button type="button" class="${escapeHtml(buttonClassNames({ variant: 'secondary', pill: true, extra: 'bases-export-btn' }))}">Export CSV</button>
+          <button type="button" class="ui-button ui-button--secondary ui-button--pill bases-export-btn">Export CSV</button>
         </div>
       </header>
       <div class="bases-panels" data-base-panel-slot>${renderPanel(result, entry)}</div>

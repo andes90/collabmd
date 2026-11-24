@@ -70,7 +70,7 @@ function setCurrentFile(filePath, { fileKind = 'markdown', supported = false } =
   this.currentFile = filePath;
   this.fileKind = fileKind;
   this.supported = Boolean(filePath && supported);
-  if (didChangeFile) {
+  if (didChangeFile || !this.supported) {
     this.drawerOpen = false;
     this.threads = [];
     this.selectionAnchor = null;
@@ -79,22 +79,6 @@ function setCurrentFile(filePath, { fileKind = 'markdown', supported = false } =
     this.clearSelectionRevealTimer();
     this.pointerSelecting = false;
     this.activeCard = null;
-    this.updateHoveredEditorGroups([]);
-    this.updateHoveredPreviewGroups([]);
-    this.previewHoverRegions = [];
-    this.lastPreviewPointerPosition = null;
-    this.previewSelection = null;
-    this.reactionPicker = null;
-  }
-  if (!this.supported) {
-    this.drawerOpen = false;
-    this.activeCard = null;
-    this.threads = [];
-    this.selectionAnchor = null;
-    this.pendingSelectionAnchor = null;
-    this.committedSelectionAnchor = null;
-    this.clearSelectionRevealTimer();
-    this.pointerSelecting = false;
     this.updateHoveredEditorGroups([]);
     this.updateHoveredPreviewGroups([]);
     this.previewHoverRegions = [];
@@ -108,16 +92,7 @@ function setCurrentFile(filePath, { fileKind = 'markdown', supported = false } =
 /** @this {CommentUiStateContext} */
 function setSelectionAnchor(anchor) {
   this.selectionAnchor = this.supported ? anchor : null;
-  if (!this.supported || !this.selectionAnchor) {
-    this.pendingSelectionAnchor = null;
-    this.committedSelectionAnchor = null;
-    this.clearSelectionRevealTimer();
-    this.renderToolbar();
-    this.scheduleLayoutRefresh();
-    return;
-  }
-
-  if (!isTextSelectionAnchor(this.selectionAnchor)) {
+  if (!this.supported || !this.selectionAnchor || !isTextSelectionAnchor(this.selectionAnchor)) {
     this.pendingSelectionAnchor = null;
     this.committedSelectionAnchor = null;
     this.clearSelectionRevealTimer();

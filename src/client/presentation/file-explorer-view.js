@@ -7,7 +7,6 @@ import { escapeHtml } from '../domain/vault-utils.js';
 import { findFuzzyMatch } from '../domain/file-search.js';
 import { getActiveVaultId } from '../domain/runtime-paths.js';
 import { getVaultPathLeaf, getVaultPathParent } from '../domain/vault-paths.js';
-import { buttonClassNames } from './components/ui/button.js';
 
 
 function findNodeByPath(nodes = [], pathValue = '') {
@@ -1195,10 +1194,9 @@ export class FileExplorerView {
     items.forEach((item) => {
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = buttonClassNames({
-        variant: 'secondary',
-        extra: ['file-action-sheet-item', item.danger ? 'file-context-danger' : ''],
-      });
+      button.className = item.danger
+        ? 'ui-button ui-button--secondary file-action-sheet-item file-context-danger'
+        : 'ui-button ui-button--secondary file-action-sheet-item';
       button.textContent = item.label;
       if (item.searchText) button.dataset.searchText = item.searchText;
       button.addEventListener('click', () => {
@@ -1210,10 +1208,7 @@ export class FileExplorerView {
 
     const cancelButton = document.createElement('button');
     cancelButton.type = 'button';
-    cancelButton.className = buttonClassNames({
-      variant: 'ghost',
-      extra: 'file-action-sheet-item',
-    });
+    cancelButton.className = 'ui-button ui-button--ghost file-action-sheet-item';
     cancelButton.textContent = 'Cancel';
     cancelButton.addEventListener('click', () => {
       this.removeContextMenu();

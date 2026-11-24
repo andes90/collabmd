@@ -21,7 +21,6 @@ import {
 } from '../domain/vault-paths.js';
 import { createFileRouteHash } from '../domain/hash-routes.js';
 import { getActiveVaultId } from '../domain/runtime-paths.js';
-import { buttonClassNames } from './components/ui/button.js';
 import { CreateMenuPresenter } from './create-menu-presenter.js';
 
 function formatCount(value, singularLabel, pluralLabel) {
@@ -474,7 +473,7 @@ export class FileActionController {
     if (this.actionSubmitButton) {
       this.actionSubmitButton.textContent = 'Save';
       this.actionSubmitButton.disabled = false;
-      this.actionSubmitButton.className = buttonClassNames({ variant: 'primary' });
+      this.actionSubmitButton.className = 'ui-button ui-button--primary';
     }
     if (this.actionCancelButton) {
       this.actionCancelButton.disabled = false;
@@ -865,63 +864,76 @@ export class FileActionController {
     });
   }
 
-  handleNewFile({ parentDir = '' } = {}) {
+  openCreateFileDialog({
+    buildFile,
+    copy,
+    emptyMessage,
+    errorMessage,
+    hintSuffix,
+    labelPrefix,
+    nestedCopy = copy,
+    nestedPlaceholder,
+    parentDir = '',
+    placeholder,
+    submitLabel,
+    title,
+  }) {
     const context = this.getCreateContext(parentDir);
-
     this.openActionDialog({
-      title: 'Create markdown file',
-      copy: context.normalizedParentDir
-        ? 'Add a new note inside the selected folder. It opens immediately after creation.'
-        : 'Add a new note to the vault. It opens immediately after creation.',
-      label: `File ${context.inputLabelSuffix}`,
-      hint: `${context.hintPrefix} ".md" is added automatically.`,
+      title,
+      copy: context.normalizedParentDir ? nestedCopy : copy,
+      label: `${labelPrefix} ${context.inputLabelSuffix}`,
+      hint: `${context.hintPrefix} ${hintSuffix}`,
       note: context.note,
-      placeholder: context.normalizedParentDir ? 'my-note' : 'notes/my-note',
-      submitLabel: 'Create file',
-      emptyMessage: 'File path is required',
+      placeholder: context.normalizedParentDir ? nestedPlaceholder : placeholder,
+      submitLabel,
+      emptyMessage,
       onSubmit: (value) => {
         const normalizedPath = normalizeVaultPathInput(value);
         if (!normalizedPath) {
-          this.showToast('File path is required');
+          this.showToast(emptyMessage);
           return false;
         }
-
-        const filePath = ensureVaultExtension(composeVaultChildPath(context.normalizedParentDir, normalizedPath), '.md');
-        return this.createVaultFile(filePath, createMarkdownStarter(filePath), {
-          errorMessage: 'Failed to create file',
-          openAfterCreate: true,
-        });
+        const { content, path } = buildFile(composeVaultChildPath(context.normalizedParentDir, normalizedPath));
+        return this.createVaultFile(path, content, { errorMessage, openAfterCreate: true });
       },
     });
   }
 
-  handleNewBase({ parentDir = '' } = {}) {
-    const context = this.getCreateContext(parentDir);
-
-    this.openActionDialog({
-      title: 'Create base file',
-      copy: context.normalizedParentDir
-        ? 'Add a new `.base` file inside the selected folder. It opens immediately after creation.'
-        : 'Add a new `.base` file to the vault. It opens immediately after creation.',
-      label: `Base ${context.inputLabelSuffix}`,
-      hint: `${context.hintPrefix} ".base" is added automatically.`,
-      note: context.note,
-      placeholder: context.normalizedParentDir ? 'table-view' : 'views/table-view',
-      submitLabel: 'Create base',
-      emptyMessage: 'Base path is required',
-      onSubmit: (value) => {
-        const normalizedPath = normalizeVaultPathInput(value);
-        if (!normalizedPath) {
-          this.showToast('Base path is required');
-          return false;
-        }
-
-        const starter = createBaseStarter(composeVaultChildPath(context.normalizedParentDir, normalizedPath));
-        return this.createVaultFile(starter.path, starter.content, {
-          errorMessage: 'Failed to create base file',
-          openAfterCreate: true,
-        });
+  handleNewFile({ parentDir = '' } = {}) {
+    this.openCreateFileDialog({
+      buildFile: (target) => {
+        const path = ensureVaultExtension(target, '.md');
+        return { content: createMarkdownStarter(path), path };
       },
+      copy: 'Add a new note to the vault. It opens immediately after creation.',
+      emptyMessage: 'File path is required',
+      errorMessage: 'Failed to create file',
+      hintSuffix: '".md" is added automatically.',
+      labelPrefix: 'File',
+      nestedCopy: 'Add a new note inside the selected folder. It opens immediately after creation.',
+      nestedPlaceholder: 'my-note',
+      parentDir,
+      placeholder: 'notes/my-note',
+      submitLabel: 'Create file',
+      title: 'Create markdown file',
+    });
+  }
+
+  handleNewBase({ parentDir = '' } = {}) {
+    this.openCreateFileDialog({
+      buildFile: createBaseStarter,
+      copy: 'Add a new `.base` file to the vault. It opens immediately after creation.',
+      emptyMessage: 'Base path is required',
+      errorMessage: 'Failed to create base file',
+      hintSuffix: '".base" is added automatically.',
+      labelPrefix: 'Base',
+      nestedCopy: 'Add a new `.base` file inside the selected folder. It opens immediately after creation.',
+      nestedPlaceholder: 'table-view',
+      parentDir,
+      placeholder: 'views/table-view',
+      submitLabel: 'Create base',
+      title: 'Create base file',
     });
   }
 
@@ -944,178 +956,103 @@ export class FileActionController {
   }
 
   handleNewCanvas({ parentDir = '' } = {}) {
-    const context = this.getCreateContext(parentDir);
-    this.openActionDialog({
-      title: 'Create canvas',
+    this.openCreateFileDialog({
+      buildFile: (target) => ({ content: '{"nodes":[],"edges":[]}\n', path: ensureVaultExtension(target, '.canvas') }),
       copy: 'Create a canvas for connected notes, files, links, and groups.',
-      label: `Canvas ${context.inputLabelSuffix}`,
-      hint: `${context.hintPrefix} ".canvas" is added automatically.`,
-      note: context.note,
-      placeholder: context.normalizedParentDir ? 'ideas' : 'diagrams/ideas',
-      submitLabel: 'Create canvas',
       emptyMessage: 'Canvas path is required',
-      onSubmit: (value) => {
-        const normalizedPath = normalizeVaultPathInput(value);
-        if (!normalizedPath) {
-          this.showToast('Canvas path is required');
-          return false;
-        }
-        const filePath = ensureVaultExtension(composeVaultChildPath(context.normalizedParentDir, normalizedPath), '.canvas');
-        return this.createVaultFile(filePath, '{"nodes":[],"edges":[]}\n', {
-          errorMessage: 'Failed to create canvas',
-          openAfterCreate: true,
-        });
-      },
+      errorMessage: 'Failed to create canvas',
+      hintSuffix: '".canvas" is added automatically.',
+      labelPrefix: 'Canvas',
+      nestedPlaceholder: 'ideas',
+      parentDir,
+      placeholder: 'diagrams/ideas',
+      submitLabel: 'Create canvas',
+      title: 'Create canvas',
     });
   }
 
   handleNewDrawing({ parentDir = '' } = {}) {
-    const context = this.getCreateContext(parentDir);
-
-    this.openActionDialog({
-      title: 'Create Excalidraw drawing',
-      copy: context.normalizedParentDir
-        ? 'Start a new drawing inside the selected folder.'
-        : 'Start a new drawing file in the vault.',
-      label: `Drawing ${context.inputLabelSuffix}`,
-      hint: `${context.hintPrefix} ".excalidraw" is added automatically.`,
-      note: context.note,
-      placeholder: context.normalizedParentDir ? 'architecture' : 'diagrams/architecture',
-      submitLabel: 'Create drawing',
+    this.openCreateFileDialog({
+      buildFile: (target) => ({ content: createEmptyExcalidrawScene(), path: ensureVaultExtension(target, '.excalidraw') }),
+      copy: 'Start a new drawing file in the vault.',
       emptyMessage: 'Drawing path is required',
-      onSubmit: (value) => {
-        const normalizedPath = normalizeVaultPathInput(value);
-        if (!normalizedPath) {
-          this.showToast('Drawing path is required');
-          return false;
-        }
-
-        const filePath = ensureVaultExtension(composeVaultChildPath(context.normalizedParentDir, normalizedPath), '.excalidraw');
-        return this.createVaultFile(filePath, createEmptyExcalidrawScene(), {
-          errorMessage: 'Failed to create drawing',
-          openAfterCreate: true,
-        });
-      },
+      errorMessage: 'Failed to create drawing',
+      hintSuffix: '".excalidraw" is added automatically.',
+      labelPrefix: 'Drawing',
+      nestedCopy: 'Start a new drawing inside the selected folder.',
+      nestedPlaceholder: 'architecture',
+      parentDir,
+      placeholder: 'diagrams/architecture',
+      submitLabel: 'Create drawing',
+      title: 'Create Excalidraw drawing',
     });
   }
 
   handleNewMermaid({ parentDir = '' } = {}) {
-    const context = this.getCreateContext(parentDir);
-
-    this.openActionDialog({
-      title: 'Create Mermaid diagram',
-      copy: context.normalizedParentDir
-        ? 'Create a new `.mmd` or `.mermaid` file inside the selected folder.'
-        : 'Create a new `.mmd` or `.mermaid` file with starter diagram content.',
-      label: `Diagram ${context.inputLabelSuffix}`,
-      hint: `${context.hintPrefix} ".mmd" is added automatically unless you enter ".mermaid".`,
-      note: context.note,
-      placeholder: context.normalizedParentDir ? 'flow' : 'diagrams/flow',
-      submitLabel: 'Create diagram',
+    this.openCreateFileDialog({
+      buildFile: createMermaidStarter,
+      copy: 'Create a new `.mmd` or `.mermaid` file with starter diagram content.',
       emptyMessage: 'Diagram path is required',
-      onSubmit: (value) => {
-        const normalizedPath = normalizeVaultPathInput(value);
-        if (!normalizedPath) {
-          this.showToast('Diagram path is required');
-          return false;
-        }
-
-        const starter = createMermaidStarter(composeVaultChildPath(context.normalizedParentDir, normalizedPath));
-        return this.createVaultFile(starter.path, starter.content, {
-          errorMessage: 'Failed to create Mermaid diagram',
-          openAfterCreate: true,
-        });
-      },
+      errorMessage: 'Failed to create Mermaid diagram',
+      hintSuffix: '".mmd" is added automatically unless you enter ".mermaid".',
+      labelPrefix: 'Diagram',
+      nestedCopy: 'Create a new `.mmd` or `.mermaid` file inside the selected folder.',
+      nestedPlaceholder: 'flow',
+      parentDir,
+      placeholder: 'diagrams/flow',
+      submitLabel: 'Create diagram',
+      title: 'Create Mermaid diagram',
     });
   }
 
   handleNewDrawio({ parentDir = '' } = {}) {
-    const context = this.getCreateContext(parentDir);
-
-    this.openActionDialog({
-      title: 'Create draw.io diagram',
-      copy: context.normalizedParentDir
-        ? 'Create a new `.drawio` diagram inside the selected folder.'
-        : 'Create a new `.drawio` diagram with a native starter document.',
-      label: `Diagram ${context.inputLabelSuffix}`,
-      hint: `${context.hintPrefix} ".drawio" is added automatically.`,
-      note: context.note,
-      placeholder: context.normalizedParentDir ? 'architecture' : 'diagrams/architecture',
-      submitLabel: 'Create diagram',
+    this.openCreateFileDialog({
+      buildFile: createDrawioStarter,
+      copy: 'Create a new `.drawio` diagram with a native starter document.',
       emptyMessage: 'Diagram path is required',
-      onSubmit: (value) => {
-        const normalizedPath = normalizeVaultPathInput(value);
-        if (!normalizedPath) {
-          this.showToast('Diagram path is required');
-          return false;
-        }
-
-        const starter = createDrawioStarter(composeVaultChildPath(context.normalizedParentDir, normalizedPath));
-        return this.createVaultFile(starter.path, starter.content, {
-          errorMessage: 'Failed to create draw.io diagram',
-          openAfterCreate: true,
-        });
-      },
+      errorMessage: 'Failed to create draw.io diagram',
+      hintSuffix: '".drawio" is added automatically.',
+      labelPrefix: 'Diagram',
+      nestedCopy: 'Create a new `.drawio` diagram inside the selected folder.',
+      nestedPlaceholder: 'architecture',
+      parentDir,
+      placeholder: 'diagrams/architecture',
+      submitLabel: 'Create diagram',
+      title: 'Create draw.io diagram',
     });
   }
 
   handleNewPlantUml({ parentDir = '' } = {}) {
-    const context = this.getCreateContext(parentDir);
-
-    this.openActionDialog({
-      title: 'Create PlantUML diagram',
-      copy: context.normalizedParentDir
-        ? 'Create a new `.puml` or `.plantuml` file inside the selected folder.'
-        : 'Create a new `.puml` or `.plantuml` file with starter diagram content.',
-      label: `Diagram ${context.inputLabelSuffix}`,
-      hint: `${context.hintPrefix} ".puml" is added automatically unless you enter ".plantuml".`,
-      note: context.note,
-      placeholder: context.normalizedParentDir ? 'sequence-flow' : 'diagrams/sequence-flow',
-      submitLabel: 'Create diagram',
+    this.openCreateFileDialog({
+      buildFile: createPlantUmlStarter,
+      copy: 'Create a new `.puml` or `.plantuml` file with starter diagram content.',
       emptyMessage: 'Diagram path is required',
-      onSubmit: (value) => {
-        const normalizedPath = normalizeVaultPathInput(value);
-        if (!normalizedPath) {
-          this.showToast('Diagram path is required');
-          return false;
-        }
-
-        const starter = createPlantUmlStarter(composeVaultChildPath(context.normalizedParentDir, normalizedPath));
-        return this.createVaultFile(starter.path, starter.content, {
-          errorMessage: 'Failed to create PlantUML diagram',
-          openAfterCreate: true,
-        });
-      },
+      errorMessage: 'Failed to create PlantUML diagram',
+      hintSuffix: '".puml" is added automatically unless you enter ".plantuml".',
+      labelPrefix: 'Diagram',
+      nestedCopy: 'Create a new `.puml` or `.plantuml` file inside the selected folder.',
+      nestedPlaceholder: 'sequence-flow',
+      parentDir,
+      placeholder: 'diagrams/sequence-flow',
+      submitLabel: 'Create diagram',
+      title: 'Create PlantUML diagram',
     });
   }
 
   handleNewStructurizr({ parentDir = '' } = {}) {
-    const context = this.getCreateContext(parentDir);
-
-    this.openActionDialog({
-      title: 'Create Structurizr workspace',
-      copy: context.normalizedParentDir
-        ? 'Create a collaborative C4 workspace inside the selected folder.'
-        : 'Create a collaborative C4 workspace in the vault.',
-      label: `Workspace ${context.inputLabelSuffix}`,
-      hint: `${context.hintPrefix} ".dsl" is added automatically. workspace.dsl is conventional; any workspace .dsl file can render.`,
-      note: context.note,
+    this.openCreateFileDialog({
+      buildFile: createStructurizrStarter,
+      copy: 'Create a collaborative C4 workspace in the vault.',
+      emptyMessage: 'Workspace path is required',
+      errorMessage: 'Failed to create Structurizr workspace',
+      hintSuffix: '".dsl" is added automatically. workspace.dsl is conventional; any workspace .dsl file can render.',
+      labelPrefix: 'Workspace',
+      nestedCopy: 'Create a collaborative C4 workspace inside the selected folder.',
+      nestedPlaceholder: 'workspace',
+      parentDir,
       placeholder: 'workspace',
       submitLabel: 'Create workspace',
-      emptyMessage: 'Workspace path is required',
-      onSubmit: (value) => {
-        const normalizedPath = normalizeVaultPathInput(value);
-        if (!normalizedPath) {
-          this.showToast('Workspace path is required');
-          return false;
-        }
-
-        const starter = createStructurizrStarter(composeVaultChildPath(context.normalizedParentDir, normalizedPath));
-        return this.createVaultFile(starter.path, starter.content, {
-          errorMessage: 'Failed to create Structurizr workspace',
-          openAfterCreate: true,
-        });
-      },
+      title: 'Create Structurizr workspace',
     });
   }
 

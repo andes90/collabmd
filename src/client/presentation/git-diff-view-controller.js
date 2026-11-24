@@ -8,7 +8,6 @@ import {
 import { getVaultPathLeaf, getVaultPathParent } from '../domain/vault-paths.js';
 import { resolveApiUrl } from '../domain/runtime-paths.js';
 import { renderDrawioViewer } from './drawio-viewer.js';
-import { buttonClassNames } from './components/ui/button.js';
 import { getVaultFileKind } from '../../domain/file-kind.js';
 
 const IMAGE_MIME_LABELS = Object.freeze({
@@ -979,7 +978,7 @@ export class GitDiffViewController {
     };
     const hasSceneData = Boolean(scenes.before || scenes.after);
     const loadButton = file.tooLarge && file.canLoadFullPatch
-      ? `<button class="${buttonClassNames({ variant: 'secondary', extra: 'diff-load-full-btn' })}" type="button" data-load-full-diff data-diff-file-path="${escapeHtml(file.path)}">Load full diff</button>`
+      ? `<button class="ui-button ui-button--secondary diff-load-full-btn" type="button" data-load-full-diff data-diff-file-path="${escapeHtml(file.path)}">Load full diff</button>`
       : '';
 
     return `
@@ -1102,7 +1101,7 @@ export class GitDiffViewController {
         ? `${stats.afterCount} drawable cells`
         : 'Source-level comparison';
     const loadButton = file.tooLarge && file.canLoadFullPatch
-      ? `<button class="${buttonClassNames({ variant: 'secondary', extra: 'diff-load-full-btn' })}" type="button" data-load-full-diff data-diff-file-path="${escapeHtml(file.path)}">Load full diff</button>`
+      ? `<button class="ui-button ui-button--secondary diff-load-full-btn" type="button" data-load-full-diff data-diff-file-path="${escapeHtml(file.path)}">Load full diff</button>`
       : '';
 
     return `
@@ -1284,7 +1283,7 @@ export class GitDiffViewController {
         <div class="diff-limit-card">
           <strong>Large diff withheld</strong>
           <span>This file diff is large enough to impact rendering performance.</span>
-          <button class="${buttonClassNames({ variant: 'secondary', extra: 'diff-load-full-btn' })}" type="button" data-load-full-diff data-diff-file-path="${escapeHtml(detail.path)}">Load full diff</button>
+          <button class="ui-button ui-button--secondary diff-load-full-btn" type="button" data-load-full-diff data-diff-file-path="${escapeHtml(detail.path)}">Load full diff</button>
         </div>
       `;
     }

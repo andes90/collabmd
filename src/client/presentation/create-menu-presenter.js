@@ -1,5 +1,3 @@
-import { buttonClassNames } from './components/ui/button.js';
-
 function getDefaultMobileBreakpointQuery() {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
     return { matches: false };
@@ -139,10 +137,7 @@ export class CreateMenuPresenter {
 
     const cancelButton = document.createElement('button');
     cancelButton.type = 'button';
-    cancelButton.className = buttonClassNames({
-      variant: 'ghost',
-      extra: ['file-action-sheet-item', 'create-action-sheet-cancel'],
-    });
+    cancelButton.className = 'ui-button ui-button--ghost file-action-sheet-item create-action-sheet-cancel';
     cancelButton.textContent = 'Cancel';
     cancelButton.addEventListener('click', () => {
       this.close();
@@ -186,10 +181,7 @@ export class CreateMenuPresenter {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = mobile
-        ? buttonClassNames({
-          variant: 'ghost',
-          extra: ['file-action-sheet-item', 'create-action-sheet-item', 'create-action-sheet-option'],
-        })
+        ? 'ui-button ui-button--ghost file-action-sheet-item create-action-sheet-item create-action-sheet-option'
         : 'create-menu-item';
       button.setAttribute('role', mobile ? 'button' : 'menuitem');
       button.dataset.actionId = item.id;
