@@ -72,6 +72,7 @@ const ELEMENT_IDS = {
   hostedGate: 'hostedGate',
   htmlPreviewMaximizeButton: 'htmlPreviewMaximize',
   lineInfo: 'lineInfo',
+  mainContent: 'mainContent',
   markdownToolbar: 'markdownToolbar',
   mobileViewToggle: 'mobileViewToggle',
   outlineToggle: 'outlineToggle',

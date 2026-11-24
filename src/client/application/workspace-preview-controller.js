@@ -474,12 +474,11 @@ export class WorkspacePreviewController {
     this.finalizeFilePreview(previewElement, { clearBacklinks: true });
   }
 
-  createResizeHandler(restoreSidebarState) {
+  createResizeHandler() {
     let resizeTimer = null;
     return () => {
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
-        restoreSidebarState?.();
         this.schedulePreviewLayoutSync({ delayMs: 0 });
       }, 100);
     };

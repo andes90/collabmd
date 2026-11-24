@@ -39,7 +39,7 @@ function createSidebarContext({ gitRepoAvailable = true, mobile = false } = {}) 
     },
     refreshCommentOverviewForSidebarOpen: vi.fn(),
     gitRepoAvailable,
-    mobileBreakpointQuery: { matches: mobile },
+    sidebarDrawerQuery: { matches: mobile },
     preferences: {
       getSidebarVisible: () => null,
       setSidebarVisible: vi.fn(),
@@ -778,7 +778,7 @@ describe('uiFeature browser helpers', () => {
 
     const context = {
       fileExplorer: { flatFiles: ['README.md'] },
-      isMobileViewport: () => true,
+      sidebarDrawerQuery: { matches: true },
       loadQuickSwitcherController: vi.fn()
         .mockRejectedValueOnce(loadError)
         .mockResolvedValueOnce(TestQuickSwitcher),

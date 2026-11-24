@@ -33,7 +33,7 @@
     <a href="#editorContainer" class="sr-only skip-link" id="skipToEditor">Skip to editor</a>
 
     <div class="app-shell" id="appShell">
-      <aside id="sidebar" class="sidebar">
+      <div id="sidebar" class="sidebar" role="complementary" aria-label="Workspace navigation">
         <div class="sidebar-header">
           <div class="sidebar-brand">
             <svg width="20" height="20" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -152,12 +152,13 @@
           tabindex="0"
           title="Drag to resize sidebar"
         ></div>
-      </aside>
+      </div>
 
       <button
         type="button"
         class="sidebar-backdrop"
         id="sidebarBackdrop"
+        tabindex="-1"
         aria-label="Close navigation"
         aria-hidden="true"
         hidden
@@ -166,7 +167,7 @@
       <main class="main-area" id="mainContent">
         <header class="toolbar" role="banner">
           <div class="toolbar-left">
-            <button class="ui-button ui-button--ghost ui-button--toolbar" id="sidebarToggle" aria-label="Toggle sidebar" title="Toggle sidebar">
+            <button class="ui-button ui-button--ghost ui-button--toolbar" id="sidebarToggle" aria-controls="sidebar" aria-label="Toggle sidebar" title="Toggle sidebar">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <line x1="3" y1="6" x2="21" y2="6"></line>
                 <line x1="3" y1="12" x2="21" y2="12"></line>

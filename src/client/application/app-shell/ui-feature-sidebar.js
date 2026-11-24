@@ -32,7 +32,7 @@ function initializeSidebarResizer() {
   applyWidth(SIDEBAR_DEFAULT_WIDTH);
 
   resizer.addEventListener('pointerdown', (event) => {
-    if (this.isMobileViewport() || sidebar.classList.contains('collapsed')) return;
+    if (this.sidebarDrawerQuery.matches || sidebar.classList.contains('collapsed')) return;
 
     pointerId = event.pointerId;
     startX = event.clientX;
@@ -54,7 +54,7 @@ function initializeSidebarResizer() {
   resizer.addEventListener('lostpointercapture', finishResize);
 
   resizer.addEventListener('keydown', (event) => {
-    if (this.isMobileViewport() || sidebar.classList.contains('collapsed')) return;
+    if (this.sidebarDrawerQuery.matches || sidebar.classList.contains('collapsed')) return;
 
     if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
       event.preventDefault();
@@ -69,13 +69,9 @@ function initializeSidebarResizer() {
   });
 }
 
-function isMobileViewport() {
-  return this.mobileBreakpointQuery.matches;
-}
-
 function closeSidebarOnMobile() {
   const sidebar = this.elements.sidebar;
-  if (!sidebar || !this.isMobileViewport()) return;
+  if (!sidebar || !this.sidebarDrawerQuery.matches) return;
   if (sidebar.classList.contains('collapsed')) return;
 
   this.setSidebarVisibility(false);
@@ -92,44 +88,66 @@ function restoreSidebarState() {
   const sidebar = this.elements.sidebar;
   if (!sidebar) return;
 
-  const isMobile = this.isMobileViewport();
-  const stored = this.preferences.getSidebarVisible();
-  let showSidebar = true;
-  if (stored === 'true') {
-    showSidebar = true;
-  } else if (stored === 'false') {
-    showSidebar = false;
-  } else if (isMobile) {
-    showSidebar = false;
-  }
-
-  this.applySidebarVisibility(showSidebar);
+  this.applySidebarVisibility(!this.sidebarDrawerQuery.matches && this.preferences.getSidebarVisible() !== 'false');
 }
 
 function setSidebarVisibility(showSidebar) {
+  if (!this.sidebarDrawerQuery.matches) {
+    this.preferences.setSidebarVisible(showSidebar);
+  }
   this.applySidebarVisibility(showSidebar);
-  this.preferences.setSidebarVisible(showSidebar);
 }
 
 function applySidebarVisibility(showSidebar) {
-  const sidebar = this.elements.sidebar;
+  const { sidebar, sidebarBackdrop, sidebarClose, sidebarToggle, mainContent, skipToEditor } = this.elements;
   if (!sidebar) return;
 
-  const isMobile = this.isMobileViewport();
-  const isCollapsed = !showSidebar;
-  const hideForMobile = isCollapsed && isMobile;
-  const showBackdrop = showSidebar && isMobile;
+  const compact = this.sidebarDrawerQuery.matches;
+  const drawerOpen = compact && showSidebar;
+  const wasDrawer = sidebar.getAttribute('aria-modal') === 'true';
+  const hadFocus = sidebar.contains(document.activeElement) || document.activeElement === sidebarBackdrop;
 
-  sidebar.classList.toggle('collapsed', isCollapsed);
-  sidebar.toggleAttribute('hidden', hideForMobile);
-  sidebar.setAttribute('aria-hidden', isCollapsed ? 'true' : 'false');
-  sidebar.inert = isCollapsed;
+  sidebar.classList.toggle('collapsed', !showSidebar);
+  sidebar.toggleAttribute('hidden', compact && !showSidebar);
+  sidebar.inert = !showSidebar;
+  sidebar.setAttribute('aria-hidden', String(!showSidebar));
+  sidebarToggle?.setAttribute('aria-expanded', String(showSidebar));
+  sidebar.setAttribute('role', drawerOpen ? 'dialog' : 'complementary');
+  if (drawerOpen) sidebar.setAttribute('aria-modal', 'true');
+  else sidebar.removeAttribute('aria-modal');
 
-  const backdrop = this.elements.sidebarBackdrop;
-  backdrop?.toggleAttribute('hidden', !showBackdrop);
-  backdrop?.setAttribute('aria-hidden', showBackdrop ? 'false' : 'true');
-  if (backdrop) {
-    backdrop.inert = !showBackdrop;
+  sidebarBackdrop?.toggleAttribute('hidden', !drawerOpen);
+  sidebarBackdrop?.setAttribute('aria-hidden', String(!drawerOpen));
+  mainContent?.toggleAttribute('inert', drawerOpen);
+  skipToEditor?.toggleAttribute('inert', drawerOpen);
+
+  if (drawerOpen && !wasDrawer) {
+    sidebarClose?.focus();
+  } else if (!showSidebar && (wasDrawer || hadFocus)) {
+    sidebarToggle?.focus();
+  } else if (wasDrawer && document.activeElement === sidebarClose) {
+    sidebarToggle?.focus();
+  }
+}
+
+function handleSidebarDrawerKeydown(event) {
+  const sidebar = this.elements.sidebar;
+  if (!this.sidebarDrawerQuery.matches || event.defaultPrevented) return;
+
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    this.closeSidebarOnMobile();
+    return;
+  }
+
+  if (event.key !== 'Tab') return;
+  const controls = Array.from(sidebar.querySelectorAll('button, input, select, textarea, a[href], summary, [tabindex]'));
+  const isTabStop = (element) => element.tabIndex >= 0 && !element.matches(':disabled') && element.checkVisibility();
+  const first = controls.find(isTabStop);
+  const last = controls.findLast(isTabStop);
+  if (event.target === (event.shiftKey ? first : last)) {
+    event.preventDefault();
+    (event.shiftKey ? last : first)?.focus();
   }
 }
 
@@ -193,9 +211,9 @@ function setSidebarTab(tab) {
 export const uiFeatureSidebarMethods = {
   applySidebarVisibility,
   closeSidebarOnMobile,
+  handleSidebarDrawerKeydown,
   handleSidebarTabsKeydown,
   initializeSidebarResizer,
-  isMobileViewport,
   restoreSidebarState,
   setSidebarTab,
   setSidebarVisibility,

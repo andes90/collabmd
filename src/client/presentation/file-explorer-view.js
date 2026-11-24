@@ -136,6 +136,7 @@ export class FileExplorerView {
         onSelect: () => (onVaultSelect ?? this.onVaultSelect)?.(vault.id),
       })), {
         alignToAnchor: true,
+        label: 'Switch vault',
         searchPlaceholder: 'Filter vaults…',
       });
     });
@@ -1079,7 +1080,7 @@ export class FileExplorerView {
   }
 
   showContextMenu(event, items, options) {
-    const { alignToAnchor = false, searchPlaceholder = '' } = options ?? {};
+    const { alignToAnchor = false, label = 'File actions', searchPlaceholder = '' } = options ?? {};
     this.removeContextMenu();
 
     if (!Array.isArray(items) || items.length === 0) {
@@ -1089,14 +1090,14 @@ export class FileExplorerView {
     const contextAnchor = event.currentTarget instanceof Element ? event.currentTarget : event.target;
     this.contextMenuAnchor = contextAnchor instanceof HTMLElement ? contextAnchor : null;
     if (this.isMobileViewport()) {
-      this.showActionSheet(items, { searchPlaceholder });
+      this.showActionSheet(items, { label, searchPlaceholder });
       return;
     }
 
     const menu = document.createElement('div');
     menu.className = 'file-context-menu';
     menu.setAttribute('role', 'menu');
-    menu.setAttribute('aria-label', 'File actions');
+    menu.setAttribute('aria-label', label);
     const searchInput = searchPlaceholder
       ? createMenuFilterInput({ container: menu, itemSelector: '[role="menuitem"]', placeholder: searchPlaceholder })
       : null;
@@ -1180,10 +1181,10 @@ export class FileExplorerView {
   }
 
   showActionSheet(items, options) {
-    const { searchPlaceholder = '' } = options ?? {};
+    const { label = 'File actions', searchPlaceholder = '' } = options ?? {};
     const sheet = document.createElement('dialog');
     sheet.className = 'file-action-sheet';
-    sheet.setAttribute('aria-label', 'File actions');
+    sheet.setAttribute('aria-label', label);
     // Native light-dismiss where supported; the cancel/click handlers below
     // cover older browsers and the close listener funnels both paths here.
     sheet.setAttribute('closedby', 'any');

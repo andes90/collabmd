@@ -123,7 +123,7 @@ export const workspaceFeature = {
   },
 
   createResizeHandler() {
-    return this.workspacePreviewController.createResizeHandler(() => this.restoreSidebarState());
+    return this.workspacePreviewController.createResizeHandler();
   },
 
   initializePreviewLayoutObserver() {

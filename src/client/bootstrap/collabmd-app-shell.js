@@ -156,6 +156,7 @@ export class CollabMdAppShell {
     this.quickSwitcherModulePromise = null;
     this.fileExplorerReadyPromise = Promise.resolve();
     this.mobileBreakpointQuery = window.matchMedia('(max-width: 768px)');
+    this.sidebarDrawerQuery = window.matchMedia('(max-width: 1024px)');
     this.pendingWorkspaceRequestIds = new Set();
     this.versionMonitor = new AppVersionMonitor({
       currentBuildId: this.runtimeConfig.build?.id,
@@ -271,7 +272,7 @@ export class CollabMdAppShell {
       },
     });
     this.fileExplorer = new FileExplorerController({
-      mobileBreakpointQuery: this.mobileBreakpointQuery,
+      mobileBreakpointQuery: this.sidebarDrawerQuery,
       onDirectoryExport: (directoryPath, format) => this.handleDirectoryExportRequest(directoryPath, format),
       onFileDelete: () => this.navigation.navigateToFile(null),
       onFileSelect: (filePath) => this.workspaceRouteController.handleFileSelection(filePath, {

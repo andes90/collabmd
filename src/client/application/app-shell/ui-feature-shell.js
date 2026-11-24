@@ -49,6 +49,7 @@ async function initialize() {
   this.bindEvents();
   this.initializeSidebarResizer?.();
   this.restoreSidebarState();
+  this.sidebarDrawerQuery?.addEventListener('change', () => this.restoreSidebarState());
   this.initializeVersionMonitoring();
   this.tabActivityLock.initialize();
   this.tabActivityLock.tryActivate();
@@ -368,6 +369,8 @@ function bindEvents() {
     this.closeToolbarOverflowMenu();
     this.toggleSidebar();
   });
+
+  this.elements.sidebar?.addEventListener('keydown', (event) => this.handleSidebarDrawerKeydown(event));
 
   this.elements.sidebarClose?.addEventListener('click', () => {
     this.closeSidebarOnMobile();

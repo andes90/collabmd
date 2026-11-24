@@ -711,6 +711,60 @@ test.describe('mobile sidebar', () => {
     await expect(sidebar).toBeHidden();
   });
 
+  test('keeps keyboard focus in the navigation drawer and restores it on Escape', async ({ page }) => {
+    await openHome(page);
+    const toggle = page.locator('#sidebarToggle');
+    await toggle.focus();
+    await page.keyboard.press('Enter');
+
+    const drawer = page.getByRole('dialog', { name: 'Workspace navigation' });
+    const close = drawer.getByRole('button', { name: 'Close sidebar' });
+    await expect(close).toBeFocused();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await page.keyboard.press('Shift+Tab');
+    await expect(drawer.locator('#fileTree button:visible').last()).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(close).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(drawer.getByRole('button', { name: 'Create', exact: true })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.create-action-sheet')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(drawer).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(drawer).toBeHidden();
+    await expect(toggle).toBeFocused();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  test('keeps desktop sidebar preferences independent of the tablet drawer', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openFile(page, 'README.md');
+    const sidebar = page.locator('#sidebar');
+    const toggle = page.locator('#sidebarToggle');
+    await toggle.click();
+    await toggle.click();
+    await expect(sidebar).toHaveAttribute('aria-hidden', 'false');
+
+    await page.setViewportSize({ width: 820, height: 900 });
+    await expect(sidebar).toBeHidden();
+    await expect(page.locator('#editorPane')).toBeVisible();
+    await expect(page.locator('#previewPane')).toBeVisible();
+    await toggle.click();
+    await expect(sidebar).toHaveAttribute('aria-modal', 'true');
+    await expect(page.locator('#mainContent')).toHaveAttribute('inert', '');
+    await page.setViewportSize({ width: 815, height: 900 });
+    await expect(sidebar).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(sidebar).toBeHidden();
+    await expect(toggle).toBeFocused();
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(sidebar).toBeVisible();
+    await expect(sidebar).toHaveAttribute('aria-hidden', 'false');
+    await expect(page.locator('#mainContent')).not.toHaveAttribute('inert', '');
+  });
+
   test('dims the workspace and closes the sidebar when tapping the backdrop', async ({ page }) => {
     await openHome(page);
 

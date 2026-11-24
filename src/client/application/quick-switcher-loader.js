@@ -27,7 +27,7 @@ export async function ensureQuickSwitcherInstance(host) {
       getSearchConfig: () => host.runtimeConfig.search ?? {},
       onFileSelect: (filePath) => host.workspaceRouteController.handleFileSelection(filePath, {
         closeSidebarOnMobile: true,
-        revealInTree: !host.isMobileViewport(),
+        revealInTree: !host.sidebarDrawerQuery.matches,
       }),
       onTextMatchSelect: (match) => {
         if (!match?.file) {

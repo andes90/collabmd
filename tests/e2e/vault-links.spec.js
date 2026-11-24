@@ -126,16 +126,20 @@ test('mobile vault popup searches IDs and restores focus on Escape', async ({ pa
     if (!await page.locator('.vault-switcher-button').isVisible()) {
       await page.locator('#sidebarToggle').click();
     }
-    await page.locator('.vault-switcher-button').click();
-    await page.getByRole('searchbox', { name: 'Filter vaults…' }).fill('bt');
-    await expect(page.getByRole('dialog').getByRole('button', { name: 'Cool project' })).toBeHidden();
-    await expect(page.getByRole('dialog').getByRole('button', { name: 'Team notes' })).toBeVisible();
+    const switcher = page.getByRole('button', { name: 'Switch vault (current: Cool project)', exact: true });
+    const picker = page.getByRole('dialog', { name: 'Switch vault', exact: true });
+    const filter = picker.getByRole('searchbox', { name: 'Filter vaults…' });
+    await switcher.click();
+    await expect(picker.getByRole('button', { name: 'Cool project', exact: true })).toBeVisible();
+    await filter.fill('bt');
+    await expect(picker.getByRole('button', { name: 'Cool project', exact: true })).toBeHidden();
+    await expect(picker.getByRole('button', { name: 'Team notes', exact: true })).toBeVisible();
     await page.keyboard.press('Escape');
-    await expect(page.getByRole('dialog')).toBeHidden();
-    await expect(page.locator('.vault-switcher-button')).toBeFocused();
-    await page.locator('.vault-switcher-button').click();
-    await page.getByRole('searchbox', { name: 'Filter vaults…' }).fill('beta');
-    await page.keyboard.press('Enter');
+    await expect(picker).toBeHidden();
+    await expect(switcher).toBeFocused();
+    await switcher.click();
+    await filter.fill('beta');
+    await filter.press('Enter');
     await expect(page).toHaveURL(`${server.appBaseUrl}/?vault=beta`);
     await expect(page.locator('#workspaceLoading')).toHaveCount(0);
   } finally {
