@@ -158,7 +158,7 @@ export const gitFeature = {
 
   syncMainChrome({ badgeLabel = '', mode, title = null } = {}) {
     const isSpecialMode = mode === 'diff' || mode === 'history' || mode === 'history-preview';
-    const hideViewToggle = isSpecialMode || (mode === 'editor' && this.isCanvasFile?.(this.currentFilePath));
+    const hideViewToggle = isSpecialMode || mode === 'error' || (mode === 'editor' && this.isCanvasFile?.(this.currentFilePath));
     this.elements.toolbarViewToggle?.classList.toggle('hidden', Boolean(hideViewToggle));
     this.elements.mobileViewToggle?.classList.toggle('hidden', Boolean(hideViewToggle));
     this.elements.userCount?.classList.toggle('hidden', isSpecialMode);

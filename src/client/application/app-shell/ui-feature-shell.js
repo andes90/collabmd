@@ -149,6 +149,7 @@ function bindToolbarEvents() {
 
   this.elements.toolbarSearchButton?.addEventListener('click', openQuickSwitcher);
   this.elements.searchFilesButton?.addEventListener('click', openQuickSwitcher);
+  this.elements.fileOpenErrorSearch?.addEventListener('click', openQuickSwitcher);
 
   this.elements.exportHtmlButton?.addEventListener('click', () => {
     void this.handleExportRequest?.('html');
@@ -995,19 +996,6 @@ function hideEditorLoading() {
   this.elements.editorContainer.querySelector('#editorLoading')?.remove();
 }
 
-function showEditorLoadError(message = 'Failed to load file') {
-  if (!this.elements.editorContainer) return;
-  const loading = document.createElement('div');
-  const text = document.createElement('span');
-  loading.className = 'editor-loading';
-  loading.id = 'editorLoading';
-  text.className = 'loading-text';
-  text.textContent = message;
-  loading.appendChild(text);
-  this.elements.editorContainer.classList.remove('is-loading-editor');
-  this.elements.editorContainer.replaceChildren(loading);
-}
-
 function clearInitialFileBootstrap() {
   document.documentElement.removeAttribute('data-initial-file-requested');
 }
@@ -1039,7 +1027,6 @@ export const uiFeatureShellMethods = {
   promptForVersionReload,
   requestPreviewRouteAnchor,
   scheduleBacklinkRefresh,
-  showEditorLoadError,
   showEditorLoading,
   syncPreviewHeadingFoldButtons,
   syncPreviewControls,

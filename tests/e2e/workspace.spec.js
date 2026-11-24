@@ -137,7 +137,7 @@ async function dragFileTreeFileToRoot(page, { sourceFilePath }) {
 test('shows empty state when no file is selected', async ({ page }) => {
   await openHome(page);
   await expect(page.locator('#emptyState')).toBeVisible();
-  await expect(page.locator('.empty-state-title')).toContainText('Welcome to CollabMD');
+  await expect(page.locator('#emptyState .empty-state-title')).toContainText('Welcome to CollabMD');
   await expect(page.locator('#sidebarCreateBtn')).toBeVisible();
   await expect(page.locator('#refreshFilesBtn')).toHaveCount(0);
   await expect(page).toHaveTitle('CollabMD — Collaborative Markdown Vault');
@@ -179,7 +179,9 @@ test('missing and invalid file routes do not mount phantom editors', async ({ pa
     await page.evaluate((filePath) => {
       window.location.hash = `file=${encodeURIComponent(filePath)}`;
     }, route);
-    await expect(page.locator('#editorLoading')).toContainText('File not found');
+    await expect(page.getByRole('heading', { name: 'File not found' })).toBeVisible();
+    await expect(page.locator('#fileOpenErrorPath')).toHaveText(route || 'The link is missing a file path.');
+    await expect(page.locator('#previewContent')).toBeEmpty();
     await expect(page.locator('.cm-editor')).toHaveCount(0);
     await expect(page).toHaveTitle('CollabMD — Collaborative Markdown Vault');
 
@@ -197,7 +199,7 @@ test('keeps missing-file feedback after cancelling a pending editor sync', async
     await expect(page.locator('#editorContainer')).toHaveAttribute('data-editor-mode', 'provisional');
 
     await page.evaluate(() => { window.location.hash = 'file=__qa_missing_file__.md'; });
-    await expect(page.locator('#editorLoading')).toContainText('File not found');
+    await expect(page.getByRole('heading', { name: 'File not found' })).toBeVisible();
     await expect(page.locator('.cm-editor')).toHaveCount(0);
     await expect(page).toHaveTitle('CollabMD — Collaborative Markdown Vault');
 

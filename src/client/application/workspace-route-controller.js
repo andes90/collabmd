@@ -134,9 +134,7 @@ export class WorkspaceRouteController {
     this.lobby.setCurrentFile(null);
     this.fileExplorer.setActiveFile(filePath);
 
-    this.elements.emptyState?.classList[activePage !== 'empty' ? 'add' : 'remove']('hidden');
-    this.elements.editorPage?.classList[activePage !== 'editor' ? 'add' : 'remove']('hidden');
-    this.elements.diffPage?.classList[activePage !== 'diff' ? 'add' : 'remove']('hidden');
+    this.setActivePage(activePage);
     this.resetPreviewSurface();
 
     if (hideOutlineToggle !== null) {
@@ -150,6 +148,21 @@ export class WorkspaceRouteController {
     if (title !== null && this.elements.activeFileName) {
       this.elements.activeFileName.textContent = title;
     }
+  }
+
+  setActivePage(activePage) {
+    this.elements.emptyState?.classList[activePage !== 'empty' ? 'add' : 'remove']('hidden');
+    this.elements.editorPage?.classList[activePage !== 'editor' ? 'add' : 'remove']('hidden');
+    this.elements.diffPage?.classList[activePage !== 'diff' ? 'add' : 'remove']('hidden');
+    this.elements.fileOpenError?.classList[activePage !== 'error' ? 'add' : 'remove']('hidden');
+  }
+
+  showFileOpenError({ code, filePath }) {
+    this.activateViewState({ activePage: 'error', resetLayout: false });
+    this.elements.fileOpenErrorTitle.textContent = code === 'not-found' ? 'File not found' : 'Failed to open file';
+    this.elements.fileOpenErrorPath.textContent = filePath || 'The link is missing a file path.';
+    this.syncMainChrome({ mode: 'error', title: 'CollabMD' });
+    this.elements.exportMenuGroup?.classList.add('hidden');
   }
 
   showEmptyState() {
@@ -291,6 +304,7 @@ export class WorkspaceRouteController {
   }
 
   resetPreviewSurface() {
+    this.previewRenderer.resetDocument();
     if (this.elements.previewContent) {
       this.elements.previewContent.innerHTML = '';
       this.elements.previewContent.dataset.renderPhase = 'ready';

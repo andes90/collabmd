@@ -151,6 +151,25 @@ test.describe('mobile outline', () => {
     viewport: { width: 390, height: 844 },
   });
 
+  test('recovers from a missing file in preview and after reload', async ({ page }) => {
+    await openFile(page, 'README.md', { waitFor: 'preview' });
+    await expect(page.locator('#previewContent')).toContainText('My Vault');
+    await page.evaluate(() => { window.location.hash = 'file=missing-note.md'; });
+
+    const error = page.locator('#fileOpenError');
+    await expect(error).toBeVisible();
+    await expect(error).toContainText('missing-note.md');
+    await expect(page.locator('#previewContent')).toBeEmpty();
+    await page.reload();
+    await expect(error.getByRole('heading', { name: 'File not found' })).toBeVisible();
+    await expect(error).toContainText('missing-note.md');
+    await error.getByRole('button', { name: 'Search vault' }).click();
+    await page.getByRole('combobox', { name: 'Search files' }).fill('README');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#previewContent')).toContainText('My Vault');
+    await expect(error).toBeHidden();
+  });
+
   test('closes the outline after selecting a section on mobile', async ({ page }) => {
     await openFile(page, 'README.md', { waitFor: 'preview' });
     await expect(page.locator('#editorLayout')).toHaveAttribute('data-view', 'preview');

@@ -60,6 +60,10 @@
   margin-top: var(--space-5);
 }
 
+.file-open-error-path {
+  overflow-wrap: anywhere;
+}
+
 .empty-state-btn {
   justify-content: flex-start;
   min-height: var(--control-h-lg);

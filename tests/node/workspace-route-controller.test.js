@@ -68,6 +68,7 @@ function createController(overrides = {}) {
       navigateToFile: (filePath) => events.push(['navigate', filePath]),
     },
     previewRenderer: {
+      resetDocument() {},
       setHydrationPaused: (value) => events.push(['preview-hydration', value]),
     },
     renderAvatars: () => events.push(['render-avatars']),

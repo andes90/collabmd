@@ -636,9 +636,7 @@ export class CollabMdAppShell {
         this.commentUi.attachSession(null);
         this.layoutController.reset();
         this.workspacePreviewController.resetPreviewMode();
-        this.elements.emptyState?.classList.add('hidden');
-        this.elements.editorPage?.classList.remove('hidden');
-        this.elements.diffPage?.classList.add('hidden');
+        this.workspaceRouteController.setActivePage('editor');
         this.clearInitialFileBootstrap();
       },
       onConnectionChange: (state) => this.handleConnectionChange(state),
@@ -680,13 +678,7 @@ export class CollabMdAppShell {
       },
       onCommentsChange: (threads) => this.handleCommentThreadsChange(threads),
       onFileAwarenessChange: (users) => this.updateFileAwareness(users),
-      onFileOpenError: ({ code } = {}) => {
-        this.currentFilePath = null;
-        const notFound = code === 'not-found';
-        this.showEditorLoadError(notFound ? 'File not found' : 'Failed to load file');
-        this.syncWrapToggle();
-        this.toastController.show(notFound ? 'File not found' : 'Failed to initialize editor');
-      },
+      onFileOpenError: (error) => this.workspaceRouteController.showFileOpenError(error),
       onFileOpenReady: () => {
         this.hideEditorLoading();
         if (this.currentFilePath) {

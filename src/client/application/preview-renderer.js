@@ -218,7 +218,7 @@ export class PreviewRenderer {
     return Math.max(Math.round(currentRenderHeight), Math.round(containerHeight), 320);
   }
 
-  beginDocumentLoad() {
+  resetDocument() {
     this.renderScheduler.cancel();
     this.mermaidHydrator.cancelHydration();
     this.plantUmlHydrator.cancelHydration();
@@ -235,6 +235,10 @@ export class PreviewRenderer {
     if (this.renderExecutor.hasPendingJob()) {
       this.renderExecutor.reset('Document changed');
     }
+  }
+
+  beginDocumentLoad() {
+    this.resetDocument();
     const renderHost = this.ensureRenderHost();
     this.normalizePreviewChildren(renderHost);
     const reservedHeight = this.getReservedPreviewHeight();
