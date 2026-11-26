@@ -27,10 +27,10 @@
   display: flex;
   flex-direction: column-reverse;
   overflow: hidden;
-  border: 1px solid var(--color-divider);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  background: var(--surface-overlay);
-  backdrop-filter: blur(16px);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-md);
   pointer-events: auto;
   transition: box-shadow 160ms ease, transform 160ms ease, background-color 160ms ease, border-color 160ms ease;
 }
@@ -90,7 +90,7 @@
 
 .backlinks-panel-dock .backlinks-header {
   padding: var(--space-3) var(--space-4);
-  background: var(--surface-overlay-header);
+  background: var(--color-surface-raised);
 }
 
 .backlinks-header-empty {
@@ -128,6 +128,7 @@
   text-align: center;
   font-size: var(--text-xs);
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .backlinks-count:empty {

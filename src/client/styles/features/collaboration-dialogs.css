@@ -6,9 +6,9 @@
   padding: 0;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
-  background: var(--color-surface);
+  background: var(--color-surface-raised);
   color: var(--color-text);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-lg), var(--shadow-sheet-inset);
   opacity: 0;
   transform: scale(0.95);
   transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), display 0.2s cubic-bezier(0.16, 1, 0.3, 1) allow-discrete;
@@ -71,11 +71,10 @@
 }
 
 .app-dialog-label {
-  color: var(--color-text-muted);
-  font-size: var(--text-meta);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0;
 }
 
 .app-dialog-hint {
@@ -153,9 +152,7 @@
 .tab-lock-kicker {
   color: var(--color-primary);
   font-size: var(--text-xs);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-weight: 600;
 }
 
 .tab-lock-title {

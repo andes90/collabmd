@@ -12,7 +12,7 @@ body[data-surface='export-document'] {
   overflow-x: hidden;
   overflow-y: hidden;
   overscroll-behavior: auto;
-  background: var(--color-bg);
+  background: var(--color-surface);
   color: var(--color-text);
   scrollbar-width: none;
 }
