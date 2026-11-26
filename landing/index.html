@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f6f8fa">
-  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#f6f7f9">
+  <meta name="color-scheme" content="light dark">
   <title>CollabMD | Work together. Keep your files.</title>
   <meta name="description" content="Collaborate on Markdown, diagrams, and git-backed docs in the browser. Keep your files, connect AI agents, and run it yourself.">
   <link rel="canonical" href="https://collabmd.app/">
@@ -54,70 +54,77 @@
     <section class="hero" aria-labelledby="hero-title">
       <div class="wrap hero-inner">
         <div class="hero-copy">
-          <p class="eyebrow hero-enter">Open source. Ready for your folder.</p>
           <h1 id="hero-title" class="hero-title hero-enter">CollabMD</h1>
-          <p class="hero-promise hero-enter">Work together.<br>Keep <em>your files.</em></p>
-          <p class="hero-sub hero-enter">Turn your Markdown folder into a shared workspace for docs, diagrams, and decisions. No migration required.</p>
+          <p class="hero-promise hero-enter">Work together. Keep your files.</p>
+          <p class="hero-sub hero-enter">Turn any Markdown folder into a shared workspace for docs, diagrams, and decisions.</p>
           <div class="hero-actions hero-enter">
             <a class="landing-button landing-button-primary" href="https://demo.collabmd.app/#file=README.md" target="_blank" rel="noopener">Try live demo <span aria-hidden="true">↗</span></a>
-            <a class="text-link" href="#install">Run it yourself <span aria-hidden="true">→</span></a>
           </div>
-          <p class="hero-note hero-enter">Plain files on disk. A shared space in the browser.</p>
         </div>
         <figure class="hero-shot hero-enter">
-          <div class="preview-label"><span>YOUR FOLDER, OPEN TOGETHER</span><span aria-hidden="true">↗</span></div>
           <img src="assets/collabmd-hero-1280.webp"
                srcset="assets/collabmd-hero-640.webp 640w, assets/collabmd-hero-1280.webp 1280w, assets/collabmd-hero.webp 2000w"
-               sizes="(max-width: 900px) calc(100vw - 40px), 60vw"
+               sizes="(max-width: 900px) calc(100vw - 40px), min(1240px, 92vw)"
                alt="CollabMD workspace with a file explorer, Markdown source, diagram preview, and collaborator presence."
                width="2000" height="1250" fetchpriority="high" decoding="async">
-          <figcaption>A real workspace. Markdown, diagrams, and people in one view.</figcaption>
+          <figcaption>Plain files on disk, shared live in the browser with Markdown, diagrams, and collaborator presence.</figcaption>
         </figure>
       </div>
     </section>
 
     <section class="section" id="features" aria-labelledby="features-title">
       <div class="wrap">
-        <header class="section-head reveal">
-          <p class="eyebrow">Keep what works. Add each other.</p>
-          <h2 id="features-title">Your knowledge already has a home.<br>Now it has room for your team.</h2>
-        </header>
-        <div class="benefits">
-          <article class="benefit reveal">
-            <span class="feature-index" aria-hidden="true">01 / FILES</span>
-            <h3>Start where your docs live.</h3>
-            <p>Open an Obsidian vault, a docs repo, or a plain Markdown folder. Keep editing in your favorite tools; external file changes appear in the workspace.</p>
-            <p class="benefit-detail">Opening a file leaves its contents untouched.</p>
-          </article>
-          <article class="benefit reveal">
-            <span class="feature-index" aria-hidden="true">02 / COLLABORATION</span>
-            <h3>Get to the decision together.</h3>
-            <p>Edit Markdown in realtime. Follow a collaborator, talk in chat, and anchor feedback to a passage or an Excalidraw element.</p>
-            <p class="benefit-detail">Find open discussions in the comment overview.</p>
-          </article>
-          <article class="benefit reveal">
-            <span class="feature-index" aria-hidden="true">03 / AI AGENTS</span>
-            <h3>Give your agent the context.</h3>
-            <p>Connect an MCP client to search, read, edit, and create supported files. Query Bases and inspect or update Excalidraw diagrams.</p>
-            <a class="text-link" href="https://github.com/andes90/collabmd/blob/master/docs/ai-agents.md">Connect AI agents <span aria-hidden="true">↗</span></a>
-          </article>
-        </div>
-        <div class="workflow-detail reveal">
-          <div>
-            <p class="eyebrow">More than a page of text</p>
-            <h3>Keep the diagram<br>beside the decision.</h3>
-            <p>Write the RFC, sketch the architecture, and review both in the same workspace.</p>
+        <div class="features-split">
+          <header class="section-head reveal">
+            <h2 id="features-title">Your knowledge already has a home. Now it has room for your team.</h2>
+            <p>Keep the folders, editors, and Git history you rely on while giving teammates and AI agents a live shared surface.</p>
+          </header>
+          <div class="benefits">
+            <article class="benefit reveal">
+              <h3>Start where your docs live</h3>
+              <p>Open an Obsidian vault, a docs repository, or a plain Markdown folder. External edits appear in the workspace, and opening a file leaves its bytes untouched.</p>
+            </article>
+            <article class="benefit reveal">
+              <h3>Get to the decision together</h3>
+              <p>Edit Markdown in realtime, follow a collaborator, talk in room chat, and anchor comment threads to any passage or Excalidraw element.</p>
+            </article>
+            <article class="benefit reveal">
+              <h3>Give your agent the context</h3>
+              <p>Connect an MCP client to search, read, edit, and create supported files, query Bases, and inspect or update Excalidraw diagrams.</p>
+              <a class="text-link" href="https://github.com/andes90/collabmd/blob/master/docs/ai-agents.md">Connect AI agents <span aria-hidden="true">↗</span></a>
+            </article>
           </div>
-          <dl class="format-list">
-            <div><dt>Write &amp; connect</dt><dd>Markdown, wiki-links, backlinks, HTML, and Bases</dd></div>
-            <div><dt>Diagram &amp; explain</dt><dd>Mermaid, PlantUML, Structurizr, Excalidraw, and draw.io</dd></div>
-            <div><dt>Share &amp; take away</dt><dd>PDF previews; HTML, DOCX, PDF, and source ZIP exports</dd></div>
-          </dl>
         </div>
-        <div class="capability-rail">
-          <article class="capability reveal"><p class="eyebrow">Multiple vaults</p><h3>Separate projects. One place.</h3><p>Switch between configured vaults from the sidebar. Each keeps its own files, search, and Git context.</p></article>
-          <article class="capability reveal"><p class="eyebrow">Git review</p><h3>See what changed.</h3><p>Review diffs, stage files, and create a commit from the browser when your changes are ready.</p></article>
-          <article class="capability reveal"><p class="eyebrow">Scoped agent access</p><h3>Choose what AI can do.</h3><p>Protected workspaces use named Agent Connections with read or edit scopes, expiry, and revocation.</p></article>
+      </div>
+
+      <div class="workflow-band">
+        <div class="wrap">
+          <div class="workflow-detail reveal">
+            <div>
+              <h2>Keep the diagram beside the decision</h2>
+              <p>Write the RFC, sketch the architecture, and review both in one workspace without exporting screenshots back and forth.</p>
+            </div>
+            <dl class="format-list">
+              <div><dt>Write and connect</dt><dd>Markdown, wiki-links, backlinks, HTML, and Bases</dd></div>
+              <div><dt>Diagram and explain</dt><dd>Mermaid, PlantUML, Structurizr, Excalidraw, and draw.io</dd></div>
+              <div><dt>Share and take away</dt><dd>PDF previews; HTML, DOCX, PDF, and source ZIP exports</dd></div>
+            </dl>
+          </div>
+
+          <div class="capability-rail">
+            <article class="capability reveal">
+              <h3>Multiple vaults</h3>
+              <p>Switch between configured vaults from the sidebar. Each keeps its own files, search index, and Git context.</p>
+            </article>
+            <article class="capability reveal">
+              <h3>Git review</h3>
+              <p>Inspect diffs, stage files, and create commits directly from the browser when your changes are ready.</p>
+            </article>
+            <article class="capability reveal">
+              <h3>Scoped agent access</h3>
+              <p>Protected workspaces use named Agent Connections with read or edit scopes, expiry, and instant revocation.</p>
+            </article>
+          </div>
         </div>
       </div>
     </section>
@@ -125,15 +132,13 @@
     <section class="section demo-section" id="demo" aria-labelledby="demo-title">
       <div class="wrap demo-layout">
         <div class="demo-copy reveal">
-          <p class="eyebrow">See the shared workspace</p>
-          <h2 id="demo-title">Less back-and-forth.<br>More side by side.</h2>
-          <p>Watch the editor and preview work together, then open the public demo and try it in your browser.</p>
+          <h2 id="demo-title">Less back-and-forth. More side by side.</h2>
+          <p>Watch the editor and live preview work together, then open the public sandbox to edit Markdown and diagrams yourself.</p>
           <a class="landing-button landing-button-primary" href="https://demo.collabmd.app/#file=README.md" target="_blank" rel="noopener">Try live demo <span aria-hidden="true">↗</span></a>
-          <p class="demo-note">Prefer your own files? <a href="#install">Start locally.</a></p>
         </div>
         <figure class="demo-frame reveal">
           <video src="assets/collabmd-demo.webm" poster="assets/collabmd-demo-poster.webp" controls muted loop playsinline preload="none" aria-label="CollabMD demo: editing Markdown with live preview and browsing diagrams."></video>
-          <figcaption>Markdown and diagrams, with a live preview as you work.</figcaption>
+          <figcaption>Live Markdown editing, synced preview, and diagram browsing in one workspace.</figcaption>
         </figure>
       </div>
     </section>
@@ -141,59 +146,57 @@
     <section class="section" id="install" aria-labelledby="install-title">
       <div class="wrap install-layout">
         <header class="section-head">
-          <p class="eyebrow">Your folder is the starting point</p>
-          <h2 id="install-title">Bring a folder.<br>Open a browser.</h2>
-          <p>Start on your machine, then share a protected workspace with your collaborators.</p>
-          <p class="install-requirements">macOS, Linux, or Windows via WSL2.<br>Requires Node.js 26.12.1 or newer for npx; ripgrep for global search. Docker includes the runtime and ripgrep.</p>
+          <h2 id="install-title">Bring a folder. Open a browser.</h2>
+          <p>Start on your machine in seconds, then share a protected workspace with your collaborators.</p>
+          <p class="install-requirements">macOS, Linux, or Windows via WSL2. Requires Node.js 26.12.1 or newer for npx and ripgrep for global search. Docker includes the runtime and ripgrep.</p>
           <a class="text-link" href="https://github.com/andes90/collabmd/blob/master/docs/installation.md">Full installation guide <span aria-hidden="true">↗</span></a>
         </header>
         <div>
-        <div class="install">
-          <div class="install-tabs" role="tablist" aria-label="Install methods">
-            <button class="install-tab is-active" role="tab" id="tab-npx" aria-selected="true" aria-controls="panel-npx" type="button">npx</button>
-            <button class="install-tab" role="tab" id="tab-brew" aria-selected="false" aria-controls="panel-brew" type="button" tabindex="-1">Homebrew</button>
-            <button class="install-tab" role="tab" id="tab-docker" aria-selected="false" aria-controls="panel-docker" type="button" tabindex="-1">Docker</button>
-          </div>
-
-          <div class="install-panel is-active" role="tabpanel" id="panel-npx" tabindex="0" aria-labelledby="tab-npx">
-            <div class="install-code">
-              <pre><code>npx collabmd@latest ~/my-vault --no-tunnel</code></pre>
-              <button class="landing-button landing-button-secondary copy-btn" type="button" data-copy="npx collabmd@latest ~/my-vault --no-tunnel">
-                <svg viewBox="0 0 16 16" aria-hidden="true" class="icon"><path fill="currentColor" d="M5 2a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-.5v-1H12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1v.5H5V2Zm-3 4a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6Zm2-1a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1H4Z" transform="translate(1 1)"/></svg>
-                <span class="copy-label" aria-live="polite">Copy</span>
-              </button>
+          <div class="install">
+            <div class="install-tabs" role="tablist" aria-label="Install methods">
+              <button class="install-tab is-active" role="tab" id="tab-npx" aria-selected="true" aria-controls="panel-npx" type="button">npx</button>
+              <button class="install-tab" role="tab" id="tab-brew" aria-selected="false" aria-controls="panel-brew" type="button" tabindex="-1">Homebrew</button>
+              <button class="install-tab" role="tab" id="tab-docker" aria-selected="false" aria-controls="panel-docker" type="button" tabindex="-1">Docker</button>
             </div>
-            <p class="install-note">Then open <code>http://localhost:1234</code>. No global install required.</p>
-          </div>
 
-          <div class="install-panel" role="tabpanel" id="panel-brew" tabindex="0" aria-labelledby="tab-brew" hidden>
-            <div class="install-code">
-              <pre><code>brew install andes90/tap/collabmd
+            <div class="install-panel is-active" role="tabpanel" id="panel-npx" tabindex="0" aria-labelledby="tab-npx">
+              <div class="install-code">
+                <pre><code>npx collabmd@latest ~/my-vault --no-tunnel</code></pre>
+                <button class="landing-button landing-button-secondary copy-btn" type="button" data-copy="npx collabmd@latest ~/my-vault --no-tunnel">
+                  <svg viewBox="0 0 16 16" aria-hidden="true" class="icon"><path fill="currentColor" d="M5 2a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-.5v-1H12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1v.5H5V2Zm-3 4a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6Zm2-1a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1H4Z" transform="translate(1 1)"/></svg>
+                  <span class="copy-label" aria-live="polite">Copy</span>
+                </button>
+              </div>
+              <p class="install-note">Then open <code>http://localhost:1234</code>. No global install required.</p>
+            </div>
+
+            <div class="install-panel" role="tabpanel" id="panel-brew" tabindex="0" aria-labelledby="tab-brew" hidden>
+              <div class="install-code">
+                <pre><code>brew install andes90/tap/collabmd
 collabmd ~/my-vault --no-tunnel</code></pre>
-              <button class="landing-button landing-button-secondary copy-btn" type="button" data-copy="brew install andes90/tap/collabmd && collabmd ~/my-vault --no-tunnel">
-                <svg viewBox="0 0 16 16" aria-hidden="true" class="icon"><path fill="currentColor" d="M5 2a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-.5v-1H12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1v.5H5V2Zm-3 4a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6Zm2-1a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1H4Z" transform="translate(1 1)"/></svg>
-                <span class="copy-label" aria-live="polite">Copy</span>
-              </button>
+                <button class="landing-button landing-button-secondary copy-btn" type="button" data-copy="brew install andes90/tap/collabmd && collabmd ~/my-vault --no-tunnel">
+                  <svg viewBox="0 0 16 16" aria-hidden="true" class="icon"><path fill="currentColor" d="M5 2a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-.5v-1H12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1v.5H5V2Zm-3 4a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6Zm2-1a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1H4Z" transform="translate(1 1)"/></svg>
+                  <span class="copy-label" aria-live="polite">Copy</span>
+                </button>
+              </div>
+              <p class="install-note">Then open <code>http://localhost:1234</code>.</p>
             </div>
-            <p class="install-note">Then open <code>http://localhost:1234</code>.</p>
-          </div>
 
-          <div class="install-panel" role="tabpanel" id="panel-docker" tabindex="0" aria-labelledby="tab-docker" hidden>
-            <div class="install-code">
-              <pre><code>docker run --rm -p 127.0.0.1:1234:1234 \
+            <div class="install-panel" role="tabpanel" id="panel-docker" tabindex="0" aria-labelledby="tab-docker" hidden>
+              <div class="install-code">
+                <pre><code>docker run --rm -p 127.0.0.1:1234:1234 \
   -v "$PWD:/data" \
   ghcr.io/andes90/collabmd:latest</code></pre>
-              <button class="landing-button landing-button-secondary copy-btn" type="button" data-copy="docker run --rm -p 127.0.0.1:1234:1234 -v &quot;$PWD:/data&quot; ghcr.io/andes90/collabmd:latest">
-                <svg viewBox="0 0 16 16" aria-hidden="true" class="icon"><path fill="currentColor" d="M5 2a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-.5v-1H12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1v.5H5V2Zm-3 4a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6Zm2-1a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1H4Z" transform="translate(1 1)"/></svg>
-                <span class="copy-label" aria-live="polite">Copy</span>
-              </button>
+                <button class="landing-button landing-button-secondary copy-btn" type="button" data-copy="docker run --rm -p 127.0.0.1:1234:1234 -v &quot;$PWD:/data&quot; ghcr.io/andes90/collabmd:latest">
+                  <svg viewBox="0 0 16 16" aria-hidden="true" class="icon"><path fill="currentColor" d="M5 2a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-.5v-1H12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1v.5H5V2Zm-3 4a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6Zm2-1a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1H4Z" transform="translate(1 1)"/></svg>
+                  <span class="copy-label" aria-live="polite">Copy</span>
+                </button>
+              </div>
+              <p class="install-note">Run this from the vault directory, then open <code>http://localhost:1234</code>. The image includes ripgrep.</p>
             </div>
-            <p class="install-note">Run this from the vault directory, then open <code>http://localhost:1234</code>. The image includes ripgrep.</p>
           </div>
-        </div>
 
-
-          <p class="share-note">Ready to invite someone? <a href="https://github.com/andes90/collabmd/blob/master/docs/auth-and-access.md">Set up password or Google sign-in</a>, then use a tunnel or your own deployment.</p>
+          <p class="share-note">Ready to invite someone? <a href="https://github.com/andes90/collabmd/blob/master/docs/auth-and-access.md">Set up password or Google sign-in</a>, then share through a tunnel or your own deployment.</p>
         </div>
       </div>
     </section>
@@ -201,29 +204,33 @@ collabmd ~/my-vault --no-tunnel</code></pre>
     <section class="section docs-section" id="docs" aria-labelledby="docs-title">
       <div class="wrap docs-layout">
         <header class="section-head">
-          <p class="eyebrow">Documentation</p>
-          <h2 id="docs-title">From first run<br>to your team's setup.</h2>
-          <p>Pick the guide for your next step.</p>
-          <span class="docs-source">Guides maintained in the GitHub repository <span aria-hidden="true">↗</span></span>
+          <h2 id="docs-title">From first run to your team's setup</h2>
+          <p>Guides maintained in the GitHub repository for installation, configuration, access, and deployment.</p>
         </header>
         <nav class="docs-list" aria-label="Documentation guides">
-          <a href="https://github.com/andes90/collabmd/blob/master/docs/installation.md"><span><strong>Get started</strong><small>Requirements, npx, Homebrew, and source installs</small></span><span aria-hidden="true">↗</span></a>
-          <a href="https://github.com/andes90/collabmd/blob/master/docs/configuration.md"><span><strong>Configure your workspace</strong><small>CLI options, multiple vaults, and environment variables</small></span><span aria-hidden="true">↗</span></a>
-          <a href="https://github.com/andes90/collabmd/blob/master/docs/auth-and-access.md"><span><strong>Share with your team</strong><small>Password protection and Google sign-in</small></span><span aria-hidden="true">↗</span></a>
-          <a href="https://github.com/andes90/collabmd/blob/master/docs/deployment.md"><span><strong>Deploy on your infrastructure</strong><small>Docker, Coolify, Helm, and private Git repositories</small></span><span aria-hidden="true">↗</span></a>
-          <a href="https://github.com/andes90/collabmd/blob/master/docs/ai-agents.md"><span><strong>Connect an AI agent</strong><small>MCP setup, supported tools, and scoped access</small></span><span aria-hidden="true">↗</span></a>
-          <a href="https://github.com/andes90/collabmd/blob/master/docs/troubleshooting.md"><span><strong>Find a fix</strong><small>Common setup and runtime problems</small></span><span aria-hidden="true">↗</span></a>
+          <a href="https://github.com/andes90/collabmd/blob/master/docs/installation.md"><span><strong>Get started</strong><small>Requirements, npx, Homebrew, and source installs</small></span><span class="docs-arrow" aria-hidden="true">↗</span></a>
+          <a href="https://github.com/andes90/collabmd/blob/master/docs/configuration.md"><span><strong>Configure your workspace</strong><small>CLI options, multiple vaults, and environment variables</small></span><span class="docs-arrow" aria-hidden="true">↗</span></a>
+          <a href="https://github.com/andes90/collabmd/blob/master/docs/auth-and-access.md"><span><strong>Share with your team</strong><small>Password protection and Google sign-in</small></span><span class="docs-arrow" aria-hidden="true">↗</span></a>
+          <a href="https://github.com/andes90/collabmd/blob/master/docs/deployment.md"><span><strong>Deploy on your infrastructure</strong><small>Docker, Coolify, Helm, and private Git repositories</small></span><span class="docs-arrow" aria-hidden="true">↗</span></a>
+          <a href="https://github.com/andes90/collabmd/blob/master/docs/ai-agents.md"><span><strong>Connect an AI agent</strong><small>MCP setup, supported tools, and scoped access</small></span><span class="docs-arrow" aria-hidden="true">↗</span></a>
+          <a href="https://github.com/andes90/collabmd/blob/master/docs/troubleshooting.md"><span><strong>Find a fix</strong><small>Common setup and runtime problems</small></span><span class="docs-arrow" aria-hidden="true">↗</span></a>
         </nav>
       </div>
     </section>
 
     <section class="closing">
       <div class="wrap closing-inner reveal">
-        <div><p class="eyebrow">Your files. Your tools. Your people.</p><h2>Make room for<br>working together.</h2></div>
-        <div class="closing-actions"><a class="landing-button landing-button-primary" href="https://demo.collabmd.app/#file=README.md" target="_blank" rel="noopener">Try live demo <span aria-hidden="true">↗</span></a><a class="text-link" href="#install">Run CollabMD yourself <span aria-hidden="true">→</span></a></div>
+        <div>
+          <h2>Make room for working together.</h2>
+          <p>Your files stay plain Markdown and diagrams on disk. Open the public sandbox to try the full workspace now.</p>
+        </div>
+        <div class="closing-actions">
+          <a class="landing-button landing-button-primary" href="https://demo.collabmd.app/#file=README.md" target="_blank" rel="noopener">Try live demo <span aria-hidden="true">↗</span></a>
+        </div>
       </div>
     </section>
   </main>
+
   <footer class="footer">
     <div class="wrap footer-inner">
       <a class="footer-brand" href="#top">
@@ -233,7 +240,12 @@ collabmd ~/my-vault --no-tunnel</code></pre>
         </picture>
       </a>
       <p>Open source. MIT licensed. Files first.</p>
-      <nav aria-label="Footer"><a href="#docs">Docs</a><a href="https://github.com/andes90/collabmd">GitHub</a><a href="https://github.com/andes90/collabmd/issues">Issues</a><a href="https://github.com/andes90/collabmd/blob/master/docs/dev/development.md">Contribute</a></nav>
+      <nav aria-label="Footer">
+        <a href="#docs">Docs</a>
+        <a href="https://github.com/andes90/collabmd">GitHub</a>
+        <a href="https://github.com/andes90/collabmd/issues">Issues</a>
+        <a href="https://github.com/andes90/collabmd/blob/master/docs/dev/development.md">Contribute</a>
+      </nav>
     </div>
   </footer>
   <script src="main.js" defer></script>
