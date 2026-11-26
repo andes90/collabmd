@@ -64,7 +64,7 @@ export function createStructurizrApiHandler({ basePath = '', service = null } = 
         }
         jsonResponse(req, res, statusCode, {
           code: error?.requestCode,
-          error: error instanceof Error ? error.message : 'Failed to sync Structurizr workspace',
+          error: Number.isInteger(error?.statusCode) ? error.message : 'Failed to sync Structurizr workspace',
         });
       }
       return true;
@@ -131,7 +131,7 @@ export function createStructurizrApiHandler({ basePath = '', service = null } = 
     } catch (error) {
       const statusCode = Number(error?.statusCode) || 502;
       console.error('[http] Failed to proxy Structurizr request:', error.message);
-      textResponse(req, res, statusCode, error.message || 'Structurizr renderer unavailable');
+      textResponse(req, res, statusCode, Number.isInteger(error?.statusCode) ? error.message : 'Structurizr renderer unavailable');
     }
 
     return true;

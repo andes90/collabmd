@@ -126,6 +126,7 @@ See [Multi-vault](#multi-vault) below for the `COLLABMD_VAULTS` format and per-v
 | `COLLABMD_VAULT_NAME_<VAULT_ID>` | Display name; uppercase the ID and replace punctuation with `_`, as for per-vault git remotes | Vault ID | No |
 | `COLLABMD_VAULT_DISCOVERY` | Discover immediate subfolders: `all` or `marked` (requires `.collabmd`). Explicit list or CLI directory wins. | Disabled | No |
 | `COLLABMD_VAULT_DASHBOARD` | Show the vault chooser at the root URL when multiple vaults are configured (self-hosted only) | `false` | No |
+| `COLLABMD_FILE_WATCHER_ENABLED` | Watch the vault directory for external filesystem changes; set to `false` to disable | `true` | No |
 | `COLLABMD_GIT_ENABLED` | Enable or disable git integration in the UI and API | `true` | No |
 | `COLLABMD_GIT_REPO_URL` | Remote git repository used to bootstrap the vault checkout | | Only to bootstrap from a remote |
 | `COLLABMD_GIT_REPO_URL_<VAULT_ID>` | Per-vault remote; id uppercased with non-alphanumerics as `_`. Wins over the shared URL for that vault; the shared URL stays the primary vault's fallback. | | Only to bootstrap that vault from a remote |
@@ -149,6 +150,8 @@ See [Multi-vault](#multi-vault) below for the `COLLABMD_VAULTS` format and per-v
 | `AUTH_OIDC_CLIENT_SECRET` | Google OAuth client secret used for `AUTH_STRATEGY=oidc` | | Yes, with `oidc` |
 | `AUTH_OIDC_ALLOWED_EMAILS` | Comma-separated exact email allowlist for `AUTH_STRATEGY=oidc` | | No |
 | `AUTH_OIDC_ALLOWED_DOMAINS` | Comma-separated email domain allowlist for `AUTH_STRATEGY=oidc` | | No |
+| `AUTH_OIDC_ISSUER_URL` | OIDC issuer URL override | `https://accounts.google.com` | No |
+| `AUTH_OIDC_FLOW_COOKIE_NAME` | Signed cookie name for the OIDC login state flow | `collabmd_auth_flow` | No |
 
 ### Hosted workspace
 
@@ -194,6 +197,10 @@ See [Multi-vault](#multi-vault) below for the `COLLABMD_VAULTS` format and per-v
 | `COLLABMD_SEARCH_MAX_FILE_SIZE` | Maximum size of each file considered by global text search; supports bytes or `K`, `M`, and `G` suffixes | `1M` | No |
 | `COLLABMD_SEARCH_MAX_BUFFER_BYTES` | Maximum ripgrep output buffer for one global text search | `2097152` | No |
 | `COLLABMD_MAX_PDF_UPLOAD_BYTES` | Maximum size of a PDF upload in bytes; other uploads remain limited to the default 8 MiB request-body limit | `52428800` | No |
+| `COLLABMD_MAX_ARCHIVE_ENTRIES` | Maximum number of files/directories allowed in a single ZIP directory download | `10000` | No |
+| `COLLABMD_MAX_BASE_QUERY_ROWS` | Maximum rows returned by a single Base query | `5000` | No |
+| `COLLABMD_MAX_DOWNLOAD_FILE_BYTES` | Maximum file size in bytes for single-file downloads and image attachments | `268435456` | No |
+| `COLLABMD_MAX_INITIAL_SYNC_BYTES` | Maximum initial Yjs sync payload size in bytes | `16777216` | No |
 
 ### Realtime and timeouts
 
@@ -205,7 +212,7 @@ See [Multi-vault](#multi-vault) below for the `COLLABMD_VAULTS` format and per-v
 | `HTTP_HEADERS_TIMEOUT_MS` | Header read timeout | `60000` | No |
 | `HTTP_REQUEST_TIMEOUT_MS` | Request timeout | `30000` | No |
 | `WS_HEARTBEAT_INTERVAL_MS` | Heartbeat interval for evicting dead clients | `30000` | No |
-| `WS_ROOM_IDLE_GRACE_MS` | Delay before closing empty collaboration rooms to disk | `15000` | No |
+| `WS_ROOM_IDLE_GRACE_MS` | Delay before closing empty collaboration rooms to disk | `60000` | No |
 | `WS_MAX_BUFFERED_AMOUNT_BYTES` | Max outbound buffer per WebSocket | `16777216` | No |
 | `WS_MAX_PAYLOAD_BYTES` | Max inbound WebSocket frame | `16777216` | No |
 

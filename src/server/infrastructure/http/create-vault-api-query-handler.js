@@ -125,8 +125,9 @@ async function runBaseOperation(req, res, { baseQueryService }, {
     });
     send(result, body);
   } catch (error) {
+    const statusCode = typeof error?.code === 'string' ? 500 : 400;
     console.error(`[api] ${errorMessage}:`, error.message);
-    jsonResponse(req, res, 400, { error: error.message || errorMessage });
+    jsonResponse(req, res, statusCode, { error: statusCode >= 500 ? errorMessage : (error.message || errorMessage) });
   }
 }
 
@@ -377,7 +378,7 @@ async function handleSearch(req, res, requestUrl, { searchService }) {
     const statusCode = Number(error?.statusCode) || 500;
     console.error('[api] Failed to search vault:', error.message);
     jsonResponse(req, res, statusCode, {
-      error: error.message || 'Failed to search vault',
+      error: Number.isInteger(error?.statusCode) ? (error.message || 'Failed to search vault') : 'Failed to search vault',
       ok: false,
       search: error.search ?? searchService?.getClientConfig?.() ?? {
         available: false,

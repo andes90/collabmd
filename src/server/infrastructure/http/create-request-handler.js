@@ -96,7 +96,7 @@ async function handlePlantUmlApi(req, res, requestUrl, plantUmlRenderer) {
       res,
       error,
       '[api] Failed to render PlantUML:',
-      error instanceof Error ? error.message : 'Failed to render PlantUML',
+      'Failed to render PlantUML',
       502,
     );
   }
@@ -249,7 +249,11 @@ export function createRequestHandler({
     try {
       context = await vaultRegistry.getOrCreateContextAsync(scope.vaultId);
     } catch (error) {
-      jsonResponse(req, res, error?.statusCode || 500, { error: error?.message || 'Vault unavailable' });
+      const statusCode = Number(error?.statusCode) || 500;
+      if (statusCode >= 500) {
+        console.error('[api] Failed to resolve vault context:', error.message);
+      }
+      jsonResponse(req, res, statusCode, { error: statusCode >= 500 ? 'Vault unavailable' : (error?.message || 'Vault unavailable') });
       return true;
     }
     const route = { pathname: scope.subPath, searchParams: requestUrl.searchParams };
