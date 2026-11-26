@@ -30,7 +30,7 @@
   box-shadow: var(--shadow-md);
 }
 
-.empty-state-logo svg {
+.empty-state-logo img {
   display: block;
 }
 

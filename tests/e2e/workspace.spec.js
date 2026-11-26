@@ -138,6 +138,9 @@ test('shows empty state when no file is selected', async ({ page }) => {
   await openHome(page);
   await expect(page.locator('#emptyState')).toBeVisible();
   await expect(page.locator('#emptyState .empty-state-title')).toContainText('Welcome to CollabMD');
+  for (const selector of ['.sidebar-brand img', '.empty-state-logo img']) {
+    await expect.poll(() => page.locator(selector).evaluate((img) => img.naturalWidth)).toBeGreaterThan(0);
+  }
   await expect(page.locator('#sidebarCreateBtn')).toBeVisible();
   await expect(page.locator('#refreshFilesBtn')).toHaveCount(0);
   await expect(page).toHaveTitle('CollabMD — Collaborative Markdown Vault');

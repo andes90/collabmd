@@ -83,6 +83,7 @@ test('optional vault dashboard searches names, preserves light theme, and bypass
     });
     await page.goto(`${server.appBaseUrl}/`);
     await expect(page.getByRole('heading', { name: 'Choose a vault' })).toBeVisible();
+    await expect.poll(() => page.locator('.vault-dashboard-header .sidebar-brand img').evaluate((img) => img.naturalWidth)).toBeGreaterThan(0);
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
     expect(connections).toEqual([]);
     await expect(page.locator('#appShell')).toBeHidden();

@@ -47,6 +47,7 @@ export default defineConfig(({ command }) => ({
       },
     },
   },
+  publicDir: resolve(projectRoot, 'landing/assets/brand'),
   root: clientAppRoot,
   server: {
     fs: {

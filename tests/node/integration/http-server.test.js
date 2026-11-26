@@ -270,6 +270,30 @@ test('HTTP server serves health, runtime config, and static assets', async (t) =
   assert.match(gunzipSync(compressedAssetResponse.bodyBuffer).toString('utf8'), /--color-bg/);
 });
 
+test('app entries use the shared favicons when served under a base path', async (t) => {
+  const app = await startTestServer({ basePath: '/docs' });
+  t.after(() => app.close());
+
+  const assets = [
+    ['collabmd-favicon-16.png', 'image/png'],
+    ['collabmd-mark.svg', 'image/svg+xml'],
+  ];
+  for (const entry of ['', 'canvas-editor.html', 'drawio-editor.html', 'excalidraw-editor.html', 'export-document.html']) {
+    const page = await httpRequest(`${app.appBaseUrl}/${entry}`);
+    assert.equal(page.statusCode, 200);
+    for (const [file, type] of assets) {
+      assert.ok(page.body.includes(`rel="icon" type="${type}"`));
+      assert.ok(page.body.includes(`href="./${file}"`));
+    }
+  }
+  for (const [file, type] of assets) {
+    const response = await httpRequest(`${app.appBaseUrl}/${file}`);
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.headers['content-type'], type);
+    assert.deepEqual(response.bodyBuffer, await readFile(resolve(rootDir, 'landing/assets/brand', file)));
+  }
+});
+
 test('HTTP server compresses large JSON API responses without changing payloads', async (t) => {
   const app = await startTestServer();
   t.after(() => app.close());

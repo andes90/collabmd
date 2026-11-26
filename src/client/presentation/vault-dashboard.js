@@ -7,11 +7,7 @@ export function renderVaultDashboard({ container, vaults, getVaultUrl, onSelect 
     <main class="vault-dashboard-card" aria-labelledby="vaultDashboardTitle">
       <header class="vault-dashboard-header">
         <div class="sidebar-brand">
-          <svg width="28" height="28" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-            <rect x="3" y="4" width="17" height="24" rx="3" stroke="var(--color-primary)" stroke-width="2"></rect>
-            <rect x="12" y="4" width="17" height="24" rx="3" fill="var(--color-primary)"></rect>
-            <path d="M17 12h7m-7 4h7m-7 4h4" stroke="var(--color-primary-contrast)" stroke-width="1.5"></path>
-          </svg>
+          <img src="./collabmd-mark.svg" width="28" height="28" alt="">
           <span class="sidebar-title">CollabMD</span>
         </div>
         <h1 id="vaultDashboardTitle">Choose a vault</h1>
