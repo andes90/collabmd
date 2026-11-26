@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { foldable } from '@codemirror/language';
 import * as Y from 'yjs';
 
 import '../../src/client/styles/foundation/themes.css';
@@ -241,6 +242,52 @@ describe('EditorViewAdapter search', () => {
     const selection = adapter.getState().selection.main;
     expect(adapter.getState().sliceDoc(selection.from, selection.to)).toBe('needle');
     expect(scroller.scrollTop).toBeGreaterThan(4000);
+    adapter.destroy();
+  });
+});
+
+describe('EditorViewAdapter markdown heading folding', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('folds the entire markdown heading section beyond the initial viewport parse range', () => {
+    document.body.innerHTML = '<div id="editor" style="height: 300px; overflow: hidden;"></div>';
+    const adapter = new EditorViewAdapter({
+      editorContainer: document.getElementById('editor'),
+      initialTheme: 'dark',
+    });
+
+    const bodyLines = Array.from({ length: 180 }, (_, index) => `Paragraph line ${index + 1} with enough content to exceed lazy parse length.`);
+    const content = [
+      '# Top Document',
+      '',
+      '## First Section',
+      ...bodyLines.slice(0, 90),
+      '```bash',
+      '# comment inside fence',
+      'echo ok',
+      '```',
+      ...bodyLines.slice(90),
+      '## Second Section',
+      'Trailing text',
+    ].join('\n');
+
+    adapter.initializeProvisional({ content, filePath: 'long.md' });
+    const state = adapter.getState();
+
+    const topLine = state.doc.line(1);
+    const topFold = foldable(state, topLine.from, topLine.to);
+    expect(topFold).toEqual({ from: topLine.to, to: state.doc.length });
+
+    const firstSectionLine = state.doc.line(3);
+    const secondSectionLine = state.doc.line(state.doc.lines - 1);
+    const firstFold = foldable(state, firstSectionLine.from, firstSectionLine.to);
+    expect(firstFold).toEqual({
+      from: firstSectionLine.to,
+      to: state.doc.line(secondSectionLine.number - 1).to,
+    });
+
     adapter.destroy();
   });
 });

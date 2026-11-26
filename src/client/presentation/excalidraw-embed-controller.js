@@ -9,6 +9,7 @@ import {
   postHostMessageToEntry,
   removeMaximizeSpacer,
   resetEmbedPlaceholderLayout,
+  syncEmbedOverlayHidden,
 } from './diagram-embed-helpers.js';
 import { reconcileEmbedEntries } from './excalidraw-embed-reconciler.js';
 import { getActiveVaultId, getClientRuntimeConfig, resolveAppPath, resolveAppUrl, resolveWsServerOverride } from '../domain/runtime-paths.js';
@@ -1068,6 +1069,7 @@ export class ExcalidrawEmbedController {
     placeholder.style.pointerEvents = 'none';
 
     const isMaximized = entry.wrapper.classList.contains('is-maximized');
+    if (syncEmbedOverlayHidden(entry.wrapper, placeholder, isMaximized)) return;
     const headerHeight = entry.wrapper.querySelector('.excalidraw-embed-header')?.offsetHeight || 0;
     const iframeHeight = entry.iframe?.offsetHeight
       || Number.parseFloat(entry.iframe?.style.height || '')

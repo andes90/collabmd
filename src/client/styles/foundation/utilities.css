@@ -1,6 +1,7 @@
 /* ===== FOUNDATION / UTILITIES ===== */
 
-.hidden {
+.hidden,
+[hidden] {
   display: none !important;
 }
 

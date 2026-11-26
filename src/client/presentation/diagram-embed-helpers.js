@@ -46,6 +46,12 @@ export function applyEmbedMaximizedBoxStyles(wrapper, { margin = '' } = {}) {
   wrapper.style.margin = margin;
 }
 
+export function syncEmbedOverlayHidden(wrapper, placeholder, isMaximized = false) {
+  const hidden = !isMaximized && (!placeholder || Boolean(placeholder.closest?.('[hidden], .hidden')));
+  if (wrapper) wrapper.hidden = hidden;
+  return hidden;
+}
+
 export function applyEmbedOverlayPositionStyles(wrapper, placeholder, { clearHeight = false } = {}) {
   if (!wrapper?.style || !placeholder) {
     return;

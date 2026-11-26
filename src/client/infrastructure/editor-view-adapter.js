@@ -12,12 +12,15 @@ import { yaml } from '@codemirror/lang-yaml';
 import {
   bracketMatching,
   defaultHighlightStyle,
+  ensureSyntaxTree,
   foldGutter,
   foldKeymap,
+  foldService,
   forceParsing,
   HighlightStyle,
   indentOnInput,
   syntaxHighlighting,
+  syntaxTree,
 } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
 import {
@@ -402,6 +405,25 @@ function createEditorTheme(theme) {
   }, { dark: theme === 'dark' });
 }
 
+const MARKDOWN_HEADING_NODE_PATTERN = /^(?:ATX|Setext)Heading(\d)$/;
+
+const markdownHeadingFoldService = Prec.high(foldService.of((state, lineStart, lineEnd) => {
+  const tree = ensureSyntaxTree(state, state.doc.length, 50) ?? syntaxTree(state);
+  for (let node = tree.resolveInner(lineEnd, -1); node; node = node.parent) {
+    if (node.from < lineStart) break;
+    const level = Number(MARKDOWN_HEADING_NODE_PATTERN.exec(node.name)?.[1]);
+    if (!level) continue;
+    let last = node;
+    for (let next = last.nextSibling; next; next = last.nextSibling) {
+      const nextLevel = Number(MARKDOWN_HEADING_NODE_PATTERN.exec(next.name)?.[1]);
+      if (nextLevel && nextLevel <= level) break;
+      last = next;
+    }
+    return last.to > lineEnd ? { from: lineEnd, to: last.to } : null;
+  }
+  return null;
+}));
+
 export function createLanguageExtension(filePath) {
   if (isHtmlFilePath(filePath)) {
     return html();
@@ -423,7 +445,10 @@ export function createLanguageExtension(filePath) {
     return yaml();
   }
 
-  return markdown({ base: markdownLanguage, codeLanguages: markdownCodeLanguages });
+  return [
+    markdownHeadingFoldService,
+    markdown({ base: markdownLanguage, codeLanguages: markdownCodeLanguages }),
+  ];
 }
 
 function getSelectionBounds(selection) {

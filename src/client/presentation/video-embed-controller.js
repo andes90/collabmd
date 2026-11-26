@@ -2,6 +2,7 @@ import { findElementByDataset } from '../browser-utils.js';
 import {
   applyEmbedOverlayPositionStyles,
   ensureEmbedOverlayRoot,
+  syncEmbedOverlayHidden,
 } from './diagram-embed-helpers.js';
 import { reconcileEmbedEntries } from './excalidraw-embed-reconciler.js';
 
@@ -184,6 +185,7 @@ export class VideoEmbedController {
     }
 
     entry.placeholder = placeholder;
+    if (syncEmbedOverlayHidden(entry.wrapper, placeholder)) return;
     const width = placeholder.offsetWidth || placeholder.clientWidth || 0;
     if (width <= 0 && entry.inlineHeightPx) {
       return;

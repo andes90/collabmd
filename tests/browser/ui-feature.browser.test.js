@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import '../../src/client/styles/foundation/utilities.css';
+import '../../src/client/styles/features/embedded-preview.css';
 import { gitFeature } from '../../src/client/application/app-shell/git-feature.js';
 import { uiFeatureIdentityMethods } from '../../src/client/application/app-shell/ui-feature-identity.js';
 import { uiFeatureShellMethods } from '../../src/client/application/app-shell/ui-feature-shell.js';
 import { uiFeatureSidebarMethods } from '../../src/client/application/app-shell/ui-feature-sidebar.js';
 import { uiFeatureToolbarMethods } from '../../src/client/application/app-shell/ui-feature-toolbar.js';
 import { ensureQuickSwitcherInstance } from '../../src/client/application/quick-switcher-loader.js';
+import { syncEmbedOverlayHidden } from '../../src/client/presentation/diagram-embed-helpers.js';
 
 function createSidebarContext({ gitRepoAvailable = true, mobile = false } = {}) {
   document.body.innerHTML = `
@@ -1061,6 +1064,58 @@ describe('uiFeature browser helpers', () => {
     expect(document.getElementById('section-a-content').hidden).toBe(false);
     expect(document.getElementById('section-b-content').hidden).toBe(false);
     expect(context.scrollSyncController.invalidatePreviewBlocks).toHaveBeenCalledTimes(5);
+  });
+
+  it('hides diagram, base, and overlay embed content inside a folded heading section', () => {
+    document.body.innerHTML = `
+      <div id="preview-content" class="preview-content">
+        <div data-preview-render-host="true">
+          <h2>Diagrams</h2>
+          <div id="mermaid-block" class="mermaid-shell diagram-preview-shell">Mermaid</div>
+          <div id="plantuml-block" class="plantuml-shell diagram-preview-shell">PlantUML</div>
+          <div id="base-block" class="bases-embed-placeholder diagram-preview-shell">Base</div>
+          <p id="embed-paragraph"><span id="embed-placeholder" class="excalidraw-embed-placeholder">Excalidraw</span></p>
+          <h2>After</h2>
+          <p id="after-paragraph">Still visible</p>
+        </div>
+      </div>
+    `;
+
+    const previewContent = document.getElementById('preview-content');
+    const context = {
+      elements: { previewContent },
+      refreshCommentUiLayout: vi.fn(),
+      schedulePreviewLayoutSync: vi.fn(),
+      scrollSyncController: { invalidatePreviewBlocks: vi.fn() },
+    };
+    Object.assign(context, uiFeatureShellMethods);
+    context.syncPreviewControls();
+
+    const diagramsHeading = previewContent.querySelector('h2');
+    const foldButton = diagramsHeading.querySelector('.preview-heading-fold-button');
+    context.handlePreviewContentClick({
+      preventDefault: vi.fn(),
+      target: foldButton,
+    });
+
+    for (const id of ['mermaid-block', 'plantuml-block', 'base-block', 'embed-paragraph']) {
+      const element = document.getElementById(id);
+      expect(element.hidden).toBe(true);
+      expect(getComputedStyle(element).display).toBe('none');
+    }
+    const overlayWrapper = document.createElement('div');
+    const embedPlaceholder = document.getElementById('embed-placeholder');
+    expect(syncEmbedOverlayHidden(overlayWrapper, embedPlaceholder)).toBe(true);
+    expect(overlayWrapper.hidden).toBe(true);
+    expect(document.getElementById('after-paragraph').hidden).toBe(false);
+
+    context.handlePreviewContentClick({
+      preventDefault: vi.fn(),
+      target: foldButton,
+    });
+    expect(syncEmbedOverlayHidden(overlayWrapper, embedPlaceholder)).toBe(false);
+    expect(overlayWrapper.hidden).toBe(false);
+    expect(getComputedStyle(document.getElementById('mermaid-block')).display).toBe('grid');
   });
 
   it('copies preview heading links and applies pending route anchors', async () => {

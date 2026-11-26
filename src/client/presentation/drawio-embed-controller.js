@@ -10,6 +10,7 @@ import {
   postHostMessageToEntry,
   removeMaximizeSpacer,
   resetEmbedPlaceholderLayout,
+  syncEmbedOverlayHidden,
 } from './diagram-embed-helpers.js';
 import { renderDrawioViewer } from './drawio-viewer.js';
 import { reconcileEmbedEntries } from './excalidraw-embed-reconciler.js';
@@ -496,6 +497,7 @@ export class DrawioEmbedController {
     placeholder.style.pointerEvents = 'none';
 
     const isMaximized = entry.wrapper.classList.contains('is-maximized');
+    if (syncEmbedOverlayHidden(entry.wrapper, placeholder, isMaximized)) return;
     const wrapperHeight = entry.wrapper.offsetHeight
       || Math.ceil(entry.wrapper.getBoundingClientRect?.().height || 0)
       || entry.inlineHeightPx
