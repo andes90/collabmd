@@ -41,6 +41,9 @@ jobs:
         run: npm run test:e2e:prebuilt -- tests/e2e/collaboration.spec.js
           --grep overview
 
+      - name: Verify auth and security regressions
+        run: npm run test:e2e:prebuilt -- tests/e2e/auth.spec.js tests/e2e/security-regressions.spec.js
+
       - name: Verify Excalidraw interaction sync regressions
         run: >-
           npm run test:e2e:prebuilt -- tests/e2e/excalidraw-reliability.spec.js
