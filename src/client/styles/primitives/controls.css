@@ -27,13 +27,13 @@
 
 .ui-button--primary {
   background: var(--color-primary);
-  color: var(--color-text-inverse);
-  box-shadow: var(--shadow-sm);
+  color: var(--color-primary-contrast);
+  box-shadow: var(--shadow-sm), inset 0 1px 0 oklch(1 0 0 / 0.14);
 }
 
 .ui-button--primary:not(:disabled):hover {
   background: var(--color-primary-hover);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-md), inset 0 1px 0 oklch(1 0 0 / 0.16);
 }
 
 .ui-button--secondary {
@@ -44,7 +44,7 @@
 
 .ui-button--secondary:not(:disabled):hover {
   background: var(--color-surface-offset);
-  border-color: color-mix(in oklab, var(--color-border) 72%, var(--color-text-faint) 28%);
+  border-color: color-mix(in oklab, var(--color-border) 66%, var(--color-text-faint) 34%);
 }
 
 .ui-button--danger {
@@ -154,7 +154,7 @@
   border: 1px solid transparent;
   border-radius: calc(var(--radius-md) - 2px);
   background: transparent;
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
   white-space: nowrap;
   transition:
     transform var(--transition-interactive),
@@ -171,13 +171,14 @@
 }
 
 .ui-segmented-btn:not(:disabled):hover {
-  color: var(--color-text-muted);
+  color: var(--color-text);
 }
 
 .ui-segmented-btn.active,
 .ui-segmented-btn.is-active,
 .ui-segmented-btn[aria-pressed='true'],
 .ui-segmented-btn[aria-selected='true'] {
+  border-color: color-mix(in oklab, var(--color-border) 75%, transparent);
   background: var(--color-surface);
   color: var(--color-text);
   box-shadow: var(--shadow-sm);

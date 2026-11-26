@@ -29,7 +29,7 @@
   text-align: left;
   box-shadow: var(--ui-record-shadow);
   transition:
-    transform 140ms ease,
+    transform var(--transition-interactive),
     border-color var(--transition-interactive),
     background var(--transition-interactive),
     box-shadow var(--transition-interactive),
