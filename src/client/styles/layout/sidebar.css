@@ -97,11 +97,18 @@
 .sidebar-create-btn {
   min-height: 28px;
   padding: 0 10px 0 8px;
+  border-color: var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
   font-size: var(--text-xs);
   font-weight: 600;
+}
+
+.sidebar-create-btn:hover {
+  border-color: var(--border-accent-muted);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
 }
 
 .sidebar-create-btn[aria-expanded='true'],
@@ -355,6 +362,10 @@ body.is-file-tree-dragging * {
   font-weight: 600;
 }
 
+.file-tree-file.active .file-tree-icon {
+  opacity: 0.9;
+}
+
 .file-tree-chevron,
 .file-tree-icon {
   flex-shrink: 0;
@@ -502,7 +513,7 @@ body.is-file-tree-dragging * {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-surface-raised);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-lg), var(--shadow-sheet-inset);
 }
 
 .create-menu-group,

@@ -30,9 +30,13 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-surface-raised);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-md), var(--shadow-sheet-inset);
   pointer-events: auto;
-  transition: box-shadow 160ms ease, transform 160ms ease, background-color 160ms ease, border-color 160ms ease;
+  transition:
+    box-shadow var(--transition-interactive),
+    transform var(--transition-interactive),
+    background-color var(--transition-interactive),
+    border-color var(--transition-interactive);
 }
 
 .backlinks-panel-dock.expanded {

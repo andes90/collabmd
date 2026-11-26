@@ -24,10 +24,10 @@
   width: 72px;
   height: 72px;
   margin-bottom: var(--space-4);
-  border: 1px solid var(--color-divider);
+  border: 1px solid var(--border-accent-soft);
   border-radius: var(--radius-xl);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-md);
+  background: var(--surface-accent-subtle);
+  box-shadow: var(--shadow-md), var(--shadow-sheet-inset);
 }
 
 .empty-state-logo img {
@@ -159,15 +159,16 @@
 .toolbar-search-trigger {
   flex-shrink: 0;
   min-height: 30px;
-  padding-inline: var(--space-2);
-  border-color: var(--color-divider);
+  padding-inline: 10px;
+  border-color: var(--color-border);
+  border-radius: var(--radius-md);
   background: var(--color-surface-2);
   color: var(--color-text-muted);
   box-shadow: none;
 }
 
 .toolbar-search-trigger:hover {
-  border-color: var(--color-border);
+  border-color: var(--border-accent-muted);
   background: var(--color-surface-offset);
   color: var(--color-text);
 }
@@ -251,7 +252,7 @@
   align-items: stretch;
   gap: 0;
   background: var(--color-surface-raised);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-lg), var(--shadow-sheet-inset);
   position-try-fallbacks: flip-block, flip-inline;
 }
 

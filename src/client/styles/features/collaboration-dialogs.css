@@ -8,10 +8,10 @@
   border-radius: var(--radius-xl);
   background: var(--color-surface-raised);
   color: var(--color-text);
-  box-shadow: var(--shadow-lg), var(--shadow-sheet-inset);
+  box-shadow: var(--shadow-card-strong), var(--shadow-sheet-inset);
   opacity: 0;
-  transform: scale(0.95);
-  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), display 0.2s cubic-bezier(0.16, 1, 0.3, 1) allow-discrete;
+  transform: scale(0.96);
+  transition: opacity 180ms cubic-bezier(0.22, 1, 0.36, 1), transform 180ms cubic-bezier(0.22, 1, 0.36, 1), display 180ms cubic-bezier(0.22, 1, 0.36, 1) allow-discrete;
 }
 
 .app-dialog[open] {
@@ -143,20 +143,17 @@
   gap: var(--space-4);
   width: min(520px, 100%);
   padding: var(--space-6);
-  border: 1px solid oklch(from var(--color-primary) l c h / 0.25);
+  border: 1px solid var(--border-accent-muted);
   border-radius: var(--radius-xl);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-lg);
-}
-
-.tab-lock-kicker {
-  color: var(--color-primary);
-  font-size: var(--text-xs);
-  font-weight: 600;
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-card-strong), var(--shadow-sheet-inset);
 }
 
 .tab-lock-title {
+  font-family: var(--font-display);
   font-size: var(--text-lg);
+  font-weight: 680;
+  letter-spacing: -0.025em;
   line-height: 1.2;
 }
 

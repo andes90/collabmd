@@ -43,9 +43,8 @@
   margin-top: 2px;
   color: var(--color-comment);
   font-size: var(--text-meta);
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0;
 }
 
 .comment-card-anchor-note {

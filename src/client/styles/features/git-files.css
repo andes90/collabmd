@@ -12,11 +12,10 @@
   padding: var(--space-2) var(--space-3);
   background: transparent;
   color: var(--color-text-muted);
-  font-size: var(--text-meta);
+  font-size: var(--text-xs);
   font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
   text-align: left;
+  transition: background var(--transition-interactive), color var(--transition-interactive);
 }
 
 .git-section-header:hover {

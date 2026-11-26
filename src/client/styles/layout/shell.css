@@ -19,16 +19,20 @@ html[data-workspace-loading] .skip-link {
 .vault-dashboard {
   place-items: center;
   place-content: normal;
+  background:
+    radial-gradient(58% 48% at 50% 0%, var(--surface-accent-soft) 0%, transparent 72%),
+    radial-gradient(40% 34% at 80% 10%, var(--surface-teal-soft) 0%, transparent 72%),
+    var(--color-bg);
 }
 
 .vault-dashboard-card {
   width: min(100%, 520px);
   padding: clamp(var(--space-5), 4vw, var(--space-8));
-  border: 1px solid var(--border-accent-soft);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
-  background: var(--color-surface);
+  background: var(--color-surface-raised);
   color: var(--color-text);
-  box-shadow: var(--shadow-card-strong);
+  box-shadow: var(--shadow-card-strong), var(--shadow-sheet-inset);
 }
 
 .vault-dashboard-header .sidebar-brand {
@@ -94,7 +98,8 @@ html[data-workspace-loading] .skip-link {
 
 .vault-dashboard-link.ui-record-surface {
   --ui-record-gap: var(--space-3);
-  --ui-record-border-hover: var(--border-accent-soft);
+  --ui-record-border-hover: var(--border-accent-muted);
+  --ui-record-hover-transform: translateY(-1px);
   flex-direction: row;
   align-items: center;
   color: var(--color-text);

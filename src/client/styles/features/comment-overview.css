@@ -153,11 +153,9 @@
 
 .comment-overview-thread-section-label {
   color: var(--color-comment);
-  font-size: var(--text-micro);
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  line-height: 1.2;
-  text-transform: uppercase;
+  font-size: var(--text-caption);
+  font-weight: 600;
+  line-height: 1.25;
 }
 
 .comment-overview-thread-quote,

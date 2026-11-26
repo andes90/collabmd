@@ -6,7 +6,10 @@
   align-items: center;
   justify-content: center;
   padding: var(--space-6);
-  background: oklch(from var(--color-bg) l c h / 0.94);
+  background:
+    radial-gradient(56% 48% at 50% 0%, var(--surface-accent-soft) 0%, transparent 72%),
+    radial-gradient(40% 34% at 82% 16%, var(--surface-teal-soft) 0%, transparent 72%),
+    oklch(from var(--color-bg) l c h / 0.96);
   backdrop-filter: blur(12px);
 }
 

@@ -97,15 +97,14 @@
 }
 
 .user-avatar-self-label {
-  padding: 2px 4px;
+  padding: 2px 5px;
   border-radius: var(--radius-full);
   background: var(--surface-avatar-label);
   color: var(--color-text-on-dark);
   font-size: var(--text-micro);
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   line-height: 1;
-  text-transform: uppercase;
 }
 
 .user-avatar-button {
@@ -300,9 +299,8 @@
   background: var(--surface-avatar-label);
   color: var(--color-text-on-dark);
   font-size: var(--text-micro);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 .presence-panel-user-file {
