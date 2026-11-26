@@ -1,5 +1,5 @@
-import { readFile } from 'fs/promises';
-import { extname, normalize, resolve } from 'path';
+import { readFile } from 'node:fs/promises';
+import { extname, normalize, resolve } from 'node:path';
 
 import { jsonResponse, sendResponse, textResponse } from './http-response.js';
 

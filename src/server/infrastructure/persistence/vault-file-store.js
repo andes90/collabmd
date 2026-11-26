@@ -1,6 +1,6 @@
-import { createReadStream } from 'fs';
-import { chmod, copyFile, link, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, rmdir, stat, unlink, writeFile } from 'fs/promises';
-import { basename, dirname, extname, join, relative, resolve } from 'path';
+import { createReadStream } from 'node:fs';
+import { chmod, copyFile, link, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, rmdir, stat, unlink, writeFile } from 'node:fs/promises';
+import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import sharp from 'sharp';
 
 import {

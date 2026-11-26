@@ -1,5 +1,5 @@
-import { dirname, relative, resolve } from 'path';
-import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'fs/promises';
+import { dirname, relative, resolve } from 'node:path';
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 
 import { resolveVaultFilePath, sanitizeVaultPath, toVaultRelativePath } from './path-utils.js';

@@ -1,4 +1,4 @@
-import { createServer } from 'http';
+import { createServer } from 'node:http';
 import { resolve } from 'node:path';
 
 import { loadConfig } from './config/env.js';

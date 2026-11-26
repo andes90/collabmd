@@ -1,5 +1,5 @@
 import { lstatSync } from 'node:fs';
-import { isAbsolute, join, normalize, relative, resolve, sep } from 'path';
+import { isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
 
 import { getVaultFileKind, isVaultFilePath } from '../../../domain/file-kind.js';
 

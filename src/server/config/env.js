@@ -1,4 +1,4 @@
-import { basename, isAbsolute, relative, resolve, sep } from 'path';
+import { basename, isAbsolute, relative, resolve, sep } from 'node:path';
 import { lstatSync, readdirSync, readFileSync } from 'node:fs';
 
 import {
