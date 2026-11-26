@@ -12,25 +12,25 @@
 
 :root,
 [data-theme="light"] {
-  --color-bg: light-dark(#f6f8fa, #0b0f14);
-  --color-surface: light-dark(#ffffff, #11161d);
-  --color-surface-2: light-dark(#fbfcfd, #171d26);
-  --color-surface-offset: light-dark(#f0f3f6, #141a22);
-  --color-surface-offset-2: light-dark(#e8edf2, #1c2530);
-  --color-surface-dynamic: light-dark(#dde3ea, #253140);
-  --color-surface-raised: light-dark(#ffffff, #1a222c);
+  --color-bg: light-dark(#f7f8fa, #0c1016);
+  --color-surface: light-dark(#ffffff, #121821);
+  --color-surface-2: light-dark(#f3f5f8, #0f141c);
+  --color-surface-offset: light-dark(#eef1f5, #171f2b);
+  --color-surface-offset-2: light-dark(#e5eaf0, #1e2736);
+  --color-surface-dynamic: light-dark(#dce2ea, #273345);
+  --color-surface-raised: light-dark(#ffffff, #18202c);
   --color-surface-ink: light-dark(#0b1118, #030608);
-  --color-divider: light-dark(#e3e8ee, #242e3a);
-  --color-border: light-dark(#cbd4df, #303c4b);
-  --color-text: light-dark(#17212b, #e6edf3);
-  --color-text-muted: light-dark(#596675, #9aa7b4);
-  --color-text-faint: light-dark(#8391a1, #687584);
+  --color-divider: light-dark(#e4e8ef, #212b38);
+  --color-border: light-dark(#cfd7e3, #2e3a4b);
+  --color-text: light-dark(#111827, #e8eef5);
+  --color-text-muted: light-dark(#526071, #96a4b5);
+  --color-text-faint: light-dark(#7b8898, #677688);
   --color-text-inverse: light-dark(#f8fafc, #0b0f14);
   --color-primary: light-dark(#2563eb, #60a5fa);
   --color-primary-hover: light-dark(#1d4ed8, #3b82f6);
   --color-primary-active: light-dark(#1e40af, #2563eb);
   --color-primary-contrast: light-dark(#ffffff, #07111f);
-  --color-primary-highlight: light-dark(#dbeafe, #172a45);
+  --color-primary-highlight: light-dark(#e8f0fe, #172947);
   --color-comment: light-dark(#2563eb, #60a5fa);
   --color-comment-soft: light-dark(rgba(37, 99, 235, 0.08), rgba(96, 165, 250, 0.1));
   --color-comment-text: light-dark(#1e40af, #bfdbfe);
@@ -112,9 +112,9 @@
   --interactive-border: light-dark(color-mix(in oklab, var(--color-primary) 22%, transparent), color-mix(in oklab, var(--color-primary) 32%, transparent));
   --interactive-surface: light-dark(color-mix(in oklab, var(--color-primary) 14%, transparent), color-mix(in oklab, var(--color-primary) 18%, transparent));
   --color-text-on-dark: #ffffff;
-  --shadow-sm: light-dark(0 1px 2px oklch(0.2 0.02 260 / 0.06), 0 1px 2px oklch(0 0 0 / 0.22));
-  --shadow-md: light-dark(0 4px 12px oklch(0.2 0.02 260 / 0.08), 0 4px 12px oklch(0 0 0 / 0.3));
-  --shadow-lg: light-dark(0 12px 32px oklch(0.2 0.02 260 / 0.12), 0 16px 40px oklch(0 0 0 / 0.45));
+  --shadow-sm: light-dark(0 1px 2px oklch(0.18 0.02 255 / 0.05), 0 1px 2px oklch(0 0 0 / 0.28));
+  --shadow-md: light-dark(0 4px 12px oklch(0.18 0.02 255 / 0.07), 0 6px 16px oklch(0 0 0 / 0.36));
+  --shadow-lg: light-dark(0 12px 28px oklch(0.18 0.02 255 / 0.11), 0 18px 42px oklch(0 0 0 / 0.5));
 }
 
 [data-theme="light"] {
