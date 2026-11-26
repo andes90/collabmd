@@ -1,4 +1,9 @@
-# CollabMD
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="landing/assets/brand/collabmd-logo-dark.svg">
+    <img src="landing/assets/brand/collabmd-logo-light.svg" alt="CollabMD" width="281" height="64">
+  </picture>
+</h1>
 
 Realtime collaboration for Markdown folders, diagrams, and git-backed docs, without migrating your files.
 

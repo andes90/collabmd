@@ -1,4 +1,4 @@
-import { access } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 
 import { expect, test } from '@playwright/test';
 
@@ -11,6 +11,14 @@ test('landing entrance settles and respects reduced motion', async ({ page }) =>
   });
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.goto(landingUrl);
+  const mark = await readFile(new URL('assets/brand/collabmd-mark.svg', landingUrl), 'utf8');
+  const usesSharedMark = await page.locator('.nav-mark').evaluate((navMark, source) => {
+    const sharedMark = new DOMParser().parseFromString(source, 'image/svg+xml').documentElement;
+    return navMark.getAttribute('viewBox') === sharedMark.getAttribute('viewBox')
+      && [...navMark.children].every((part, index) => part.isEqualNode(sharedMark.querySelectorAll('path')[index]))
+      && navMark.children.length === sharedMark.querySelectorAll('path').length;
+  }, mark);
+  expect(usesSharedMark).toBe(true);
   await expect.poll(() => page.evaluate(() => window.finishedEntrances)).toEqual(expect.arrayContaining([
     'landing-page-back', 'landing-page-front', 'landing-enter', 'landing-preview-enter',
   ]));
@@ -28,6 +36,17 @@ test('landing entrance settles and respects reduced motion', async ({ page }) =>
   expect(animations.every((name) => name === 'none')).toBe(true);
   await expect(page.locator('.hero-shot')).toHaveCSS('opacity', '1');
   await expect(page.locator('.hero-actions')).toHaveCSS('transform', 'none');
+});
+
+test('landing footer loads the wordmark for the preferred color scheme', async ({ page }) => {
+  await page.goto(landingUrl);
+  const logo = page.getByRole('contentinfo').getByRole('img', { name: 'CollabMD', exact: true });
+  for (const colorScheme of ['light', 'dark']) {
+    await page.emulateMedia({ colorScheme });
+    const wordmarkUrl = new URL(`assets/brand/collabmd-logo-${colorScheme}.svg`, landingUrl);
+    await expect(logo).toHaveJSProperty('currentSrc', wordmarkUrl.href);
+    await logo.evaluate((img) => img.decode());
+  }
 });
 
 test('landing explains current workflows and links to maintained documentation', async ({ page }) => {

@@ -23,7 +23,8 @@
   <meta name="twitter:description" content="Realtime collaboration for Markdown folders and diagram workspaces. Work with people and AI agents while your files stay on disk.">
   <meta name="twitter:image" content="https://collabmd.app/assets/collabmd-hero.png">
   <meta name="twitter:image:alt" content="CollabMD editing Markdown and diagrams in a shared browser workspace.">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none'><rect x='3' y='4' width='17' height='24' rx='3' stroke='%232563eb' stroke-width='2'/><rect x='12' y='4' width='17' height='24' rx='3' fill='%232563eb'/><path d='M17 12h7m-7 4h7m-7 4h4' stroke='white' stroke-width='1.5'/></svg>">
+  <link rel="icon" type="image/png" sizes="16x16" href="assets/brand/collabmd-favicon-16.png">
+  <link rel="icon" type="image/svg+xml" sizes="any" href="assets/brand/collabmd-mark.svg">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -31,7 +32,10 @@
   <header class="nav" id="top">
     <div class="wrap nav-inner">
       <a class="nav-brand" href="#top" aria-label="CollabMD home">
-        <svg class="nav-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect x="3" y="4" width="17" height="24" rx="3" stroke="currentColor" stroke-width="2"/><rect x="12" y="4" width="17" height="24" rx="3" fill="currentColor"/><path d="M17 12h7m-7 4h7m-7 4h4" stroke="var(--color-primary-contrast)" stroke-width="1.5"/></svg>
+        <svg class="nav-mark" viewBox="0 0 64 64" aria-hidden="true">
+          <path fill="#2d55f4" d="M31 10H14q-7 0-7 7v30q0 7 7 7h13l10-10H17V20h4Z"/>
+          <path fill="#009985" d="M33 54h17q7 0 7-7V17q0-7-7-7H37L27 20h20v24h-4Z"/>
+        </svg>
         CollabMD
       </a>
       <nav class="nav-links" id="primary-nav" aria-label="Primary">
@@ -222,7 +226,13 @@ collabmd ~/my-vault --no-tunnel</code></pre>
   </main>
   <footer class="footer">
     <div class="wrap footer-inner">
-      <a class="nav-brand" href="#top">CollabMD</a><p>Open source. MIT licensed. Files first.</p>
+      <a class="footer-brand" href="#top">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="assets/brand/collabmd-logo-dark.svg">
+          <img src="assets/brand/collabmd-logo-light.svg" width="123" height="28" alt="CollabMD">
+        </picture>
+      </a>
+      <p>Open source. MIT licensed. Files first.</p>
       <nav aria-label="Footer"><a href="#docs">Docs</a><a href="https://github.com/andes90/collabmd">GitHub</a><a href="https://github.com/andes90/collabmd/issues">Issues</a><a href="https://github.com/andes90/collabmd/blob/master/docs/dev/development.md">Contribute</a></nav>
     </div>
   </footer>
