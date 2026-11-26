@@ -336,7 +336,7 @@
 
   .markdown-toolbar {
     position: sticky;
-    top: 30px;
+    top: 34px;
     z-index: 7;
     overflow-x: auto;
     flex-wrap: nowrap;

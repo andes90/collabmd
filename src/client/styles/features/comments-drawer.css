@@ -4,7 +4,7 @@
   width: var(--preview-floating-comments-width, var(--panel-comments-width));
   min-width: var(--panel-comments-min-width);
   border-left: 1px solid var(--color-divider);
-  background: var(--color-surface);
+  background: var(--color-surface-2);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -13,15 +13,14 @@
 .comments-drawer-header {
   padding: var(--space-3);
   border-bottom: 1px solid var(--color-divider);
-  background: var(--color-surface);
+  background: var(--color-surface-2);
 }
 
 .comments-drawer-title {
-  color: var(--color-comment);
-  font-size: var(--text-label);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .comments-drawer-empty {

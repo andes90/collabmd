@@ -20,6 +20,7 @@
   background: transparent;
   padding-inline: var(--space-1);
   min-height: auto;
+  font-variant-numeric: tabular-nums;
 }
 
 .toolbar-badge-button {

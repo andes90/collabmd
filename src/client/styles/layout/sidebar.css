@@ -9,7 +9,7 @@
   max-width: var(--sidebar-width);
   overflow: hidden;
   border-right: 1px solid var(--color-divider);
-  background: var(--color-surface);
+  background: var(--color-surface-2);
   transition: width 180ms cubic-bezier(0.16, 1, 0.3, 1), min-width 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -73,9 +73,10 @@
 
 .sidebar-title {
   white-space: nowrap;
-  font-size: var(--text-sm);
+  font-family: var(--font-display);
+  font-size: var(--text-title-sm);
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
 }
 
 .sidebar-actions {
@@ -96,7 +97,9 @@
 .sidebar-create-btn {
   min-height: 28px;
   padding: 0 10px 0 8px;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
   font-size: var(--text-xs);
   font-weight: 600;
 }
@@ -121,9 +124,9 @@
   width: 100%;
   min-height: var(--control-h-sm);
   padding: var(--space-1) var(--space-3);
-  border: 1px solid transparent;
+  border: 1px solid var(--color-divider);
   border-radius: var(--radius-md);
-  background: var(--color-surface-offset);
+  background: var(--color-surface);
   color: var(--color-text);
   outline: none;
   transition: border-color var(--transition-interactive), background var(--transition-interactive), box-shadow var(--transition-interactive);
@@ -131,11 +134,12 @@
 }
 
 .sidebar-search-input::placeholder {
-  color: var(--color-text-muted);
+  color: var(--color-text-faint);
 }
 
 .sidebar-search-input:hover:not(:focus) {
-  background: var(--color-surface-offset-2);
+  border-color: var(--color-border);
+  background: var(--color-surface);
 }
 
 .sidebar-search-input:focus {
@@ -282,9 +286,9 @@ body.is-file-tree-dragging .file-tree-root-drop-zone {
   gap: var(--space-1);
   width: 100%;
   overflow: hidden;
-  padding-top: 4px;
+  padding-top: 5px;
   padding-right: 8px;
-  padding-bottom: 4px;
+  padding-bottom: 5px;
   padding-left: calc(8px + var(--depth, 0) * 12px);
   border: none;
   border-radius: var(--radius-md);
@@ -295,7 +299,7 @@ body.is-file-tree-dragging .file-tree-root-drop-zone {
   user-select: none;
   text-overflow: ellipsis;
   content-visibility: auto;
-  contain-intrinsic-size: auto 28px;
+  contain-intrinsic-size: auto 30px;
   transition: background var(--transition-interactive), color var(--transition-interactive);
   font-family: var(--font-body);
   font-size: var(--text-ui-sm);
@@ -493,29 +497,29 @@ body.is-file-tree-dragging * {
   inset: auto;
   margin: 0;
   z-index: 1010;
-  width: min(240px, calc(100vw - 24px));
+  width: min(244px, calc(100vw - 24px));
   padding: 6px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  background: oklch(from var(--color-surface) l c h / 0.98);
+  background: var(--color-surface-raised);
   box-shadow: var(--shadow-lg);
-  backdrop-filter: blur(12px);
 }
 
 .create-menu-group,
 .create-action-sheet-group,
 .create-action-sheet-header {
-  padding: 0 10px;
+  padding: 6px 10px 4px;
   color: var(--color-text-faint);
-  font-size: var(--text-meta);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: var(--text-caption);
+  font-weight: 600;
+  letter-spacing: 0;
 }
 
 .create-menu-group:not(:first-child),
 .create-action-sheet-group:not(:first-child) {
-  margin-top: 10px;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-divider);
 }
 
 .create-action-sheet-header {

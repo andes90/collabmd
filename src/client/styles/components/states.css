@@ -15,6 +15,7 @@
 .ui-pill-badge--count {
   min-width: 20px;
   padding-inline: 6px;
+  font-variant-numeric: tabular-nums;
 }
 
 .ui-pill-badge--accent {

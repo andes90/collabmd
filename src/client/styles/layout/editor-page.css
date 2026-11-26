@@ -21,17 +21,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 80px;
-  height: 80px;
+  width: 72px;
+  height: 72px;
   margin-bottom: var(--space-4);
-  border: 1px solid var(--border-accent-soft);
-  border-radius: calc(var(--radius-xl-plus) + var(--radius-sm));
-  background:
-    radial-gradient(circle at top, var(--interactive-border), transparent 70%),
-    linear-gradient(180deg, var(--surface-overlay-raised), var(--surface-overlay-soft));
-  box-shadow:
-    var(--shadow-floating-soft),
-    var(--shadow-sheet-inset);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
 }
 
 .empty-state-logo svg {
@@ -40,9 +36,10 @@
 
 .empty-state-title {
   margin: 0;
+  font-family: var(--font-display);
   font-size: var(--text-lg);
   font-weight: 650;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
 }
 
 .empty-state-desc {
@@ -164,14 +161,14 @@
   min-height: 30px;
   padding-inline: var(--space-2);
   border-color: var(--color-divider);
-  background: var(--color-surface-offset);
+  background: var(--color-surface-2);
   color: var(--color-text-muted);
   box-shadow: none;
 }
 
 .toolbar-search-trigger:hover {
   border-color: var(--color-border);
-  background: var(--color-surface-dynamic);
+  background: var(--color-surface-offset);
   color: var(--color-text);
 }
 
@@ -200,9 +197,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-family: var(--font-display);
   font-size: var(--text-sm);
   font-weight: 650;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 
 .toolbar-badge {
@@ -218,9 +216,10 @@
 }
 
 .view-toggle .ui-segmented-btn[aria-pressed='true'] {
-  border-color: var(--border-accent-muted);
-  background: var(--color-primary-highlight);
+  border-color: var(--color-border);
+  background: var(--color-surface);
   color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
 }
 
 @container workspace-toolbar (max-width: 900px) {
@@ -251,9 +250,8 @@
   flex-direction: column;
   align-items: stretch;
   gap: 0;
-  background: oklch(from var(--color-surface) l c h / 0.98);
+  background: var(--color-surface-raised);
   box-shadow: var(--shadow-lg);
-  backdrop-filter: blur(12px);
   position-try-fallbacks: flip-block, flip-inline;
 }
 
@@ -367,7 +365,7 @@
   min-height: 36px;
   padding: 2px 6px;
   border-bottom: 1px solid var(--color-divider);
-  background: var(--color-surface);
+  background: var(--color-surface-2);
 }
 
 .markdown-toolbar-group,
