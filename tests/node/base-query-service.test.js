@@ -721,7 +721,7 @@ test('BaseQueryService creates one row evaluation context per candidate row', as
   }
 
   const vaultFileStore = new VaultFileStore({ vaultDir });
-  let workspaceState = await vaultFileStore.scanWorkspaceState();
+  const workspaceState = await vaultFileStore.scanWorkspaceState();
   const service = new CountingQueryService({
     vaultFileStore,
     workspaceStateProvider: () => workspaceState,
@@ -749,7 +749,7 @@ test('BaseQueryService reuses the in-memory snapshot for repeated queries', asyn
   ].join('\n'));
 
   const vaultFileStore = new VaultFileStore({ vaultDir });
-  let workspaceState = await vaultFileStore.scanWorkspaceState();
+  const workspaceState = await vaultFileStore.scanWorkspaceState();
   const service = new BaseQueryService({
     vaultFileStore,
     workspaceStateProvider: () => workspaceState,
@@ -842,7 +842,7 @@ test('BaseQueryService full snapshot rebuild reuses cached unchanged markdown ro
   let workspaceState = await vaultFileStore.scanWorkspaceState();
   await service.snapshotStore.buildIndexSnapshot(workspaceState);
 
-  let readPaths = [];
+  const readPaths = [];
   const originalReadMarkdownFile = vaultFileStore.readMarkdownFile.bind(vaultFileStore);
   vaultFileStore.readMarkdownFile = async (filePath, ...args) => {
     readPaths.push(filePath);
@@ -894,7 +894,7 @@ test('BaseQueryService refreshes only changed rows for content updates', async (
   await service.snapshotStore.initializeFromWorkspaceState(workspaceState);
   await service.query({ basePath: 'views/tasks.base' });
 
-  let readPaths = [];
+  const readPaths = [];
   const originalReadMarkdownFile = vaultFileStore.readMarkdownFile.bind(vaultFileStore);
   vaultFileStore.readMarkdownFile = async (filePath, ...args) => {
     readPaths.push(filePath);
@@ -945,7 +945,7 @@ test('BaseQueryService refreshes rename membership changes incrementally', async
   await service.snapshotStore.initializeFromWorkspaceState(workspaceState);
   await service.query({ basePath: 'views/tasks.base' });
 
-  let readPaths = [];
+  const readPaths = [];
   const originalReadMarkdownFile = vaultFileStore.readMarkdownFile.bind(vaultFileStore);
   vaultFileStore.readMarkdownFile = async (filePath, ...args) => {
     readPaths.push(filePath);

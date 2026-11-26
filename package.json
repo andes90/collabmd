@@ -31,7 +31,7 @@
     "dev:client": "vite",
     "dev:server": "node bin/collabmd.js --no-tunnel",
     "homebrew:formula": "node scripts/render-homebrew-formula.mjs",
-    "lint": "eslint .",
+    "lint": "eslint --max-warnings 43 .",
     "plantuml:up": "node scripts/local-compose.mjs plantuml up",
     "plantuml:down": "node scripts/local-compose.mjs plantuml down",
     "structurizr:up": "node scripts/local-compose.mjs structurizr up",

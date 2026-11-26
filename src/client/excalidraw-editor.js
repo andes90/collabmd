@@ -71,7 +71,7 @@ const appPath = resolveAppPath('/');
 const appUrl = resolveAppUrl('/');
 const syncTimeoutMs = Number.parseInt((allowTestOptions && params.get('syncTimeoutMs')) || '', 10);
 
-let currentDocument = {
+const currentDocument = {
   filePath: params.get('file') || '',
   mode: normalizeDocumentMode(params.get('mode')),
 };
