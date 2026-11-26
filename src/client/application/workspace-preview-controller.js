@@ -489,11 +489,39 @@ export class WorkspacePreviewController {
       return null;
     }
 
+    let overlaySyncFrame = null;
     const observer = new ResizeObserver(() => {
+      if (overlaySyncFrame === null && typeof requestAnimationFrame === 'function') {
+        overlaySyncFrame = requestAnimationFrame(() => {
+          overlaySyncFrame = null;
+          this.syncOverlayEmbedLayouts();
+        });
+      }
       onSchedule();
     });
     observer.observe(this.elements.previewContent);
+    const originalDisconnect = observer.disconnect.bind(observer);
+    observer.disconnect = () => {
+      if (overlaySyncFrame !== null && typeof cancelAnimationFrame === 'function') {
+        cancelAnimationFrame(overlaySyncFrame);
+        overlaySyncFrame = null;
+      }
+      originalDisconnect();
+    };
     return observer;
+  }
+
+  syncOverlayEmbedLayouts() {
+    if (this.previewHydrationPaused || !this.elements.previewContent) {
+      return;
+    }
+    if (this.elements.previewContent.dataset.renderPhase === 'shell') {
+      return;
+    }
+
+    this.videoEmbed?.syncLayout();
+    this.drawioEmbed.syncLayout();
+    this.excalidrawEmbed.syncLayout();
   }
 
   resetPreviewLayoutSync() {
@@ -541,6 +569,14 @@ export class WorkspacePreviewController {
       this.scrollSyncController.warmPreviewBlocks({
         onReady: () => {
           if (!this.getSession()) {
+            return;
+          }
+
+          if (
+            this.scrollSyncController.lastInteractionSource === 'preview'
+            && this.outlineController?.reanchorPinnedHeading?.()
+          ) {
+            this.scrollSyncController.syncEditorToPreview();
             return;
           }
 

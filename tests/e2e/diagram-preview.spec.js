@@ -973,7 +973,8 @@ test('embedded excalidraw edit button navigates to the diagram file', async ({ p
 test('embedded excalidraw maximize then edit clears the stale modal overlay', async ({ page }) => {
   test.slow();
 
-  await openSampleFull(page);
+  await openSampleFull(page, { waitFor: 'preview' });
+  await expect(page.locator('#previewContent .mermaid-frame svg').first()).toBeVisible({ timeout: 60000 });
   await expect.poll(async () => (
     page.locator('#previewContent .excalidraw-embed-btn[aria-label="Edit in Excalidraw"]').count()
   ), { timeout: 60000 }).toBeGreaterThan(0);

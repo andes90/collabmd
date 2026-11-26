@@ -275,6 +275,13 @@ export class ScrollSyncController {
     runRealignment();
   }
 
+  notePreviewNavigation(durationMs = 250) {
+    this.lastInteractionSource = 'preview';
+    this.scrollInputSource = null;
+    this.pendingSync = null;
+    this.suspendSync(durationMs);
+  }
+
   suspendSync(durationMs = 250) {
     this.suspendedUntil = performance.now() + durationMs;
   }

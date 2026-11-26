@@ -1,5 +1,7 @@
 import { revealDisclosureAncestors } from '../browser-utils.js';
 
+const PREVIEW_SCROLL_INPUT_EVENTS = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
+
 export class OutlineController {
   constructor({
     mobileBreakpointQuery = window.matchMedia('(max-width: 768px)'),
@@ -11,6 +13,7 @@ export class OutlineController {
     this.activeHeadingId = null;
     this.headings = [];
     this.pinnedHeadingId = null;
+    this.userScrolledSincePin = false;
     this.onNavigateToHeading = onNavigateToHeading;
     this.onWillOpen = onWillOpen;
     this.panel = document.getElementById('outlinePanel');
@@ -20,6 +23,9 @@ export class OutlineController {
     this.toggleButton = document.getElementById('outlineToggle');
     this.mobileBreakpointQuery = mobileBreakpointQuery;
     this.handlePreviewScroll = () => this.scheduleActiveHeadingUpdate();
+    this.handlePreviewScrollInput = () => {
+      this.userScrolledSincePin = true;
+    };
     this.handleDocumentPointerDown = (event) => {
       if (!this.outlineOpen) {
         return;
@@ -133,9 +139,13 @@ export class OutlineController {
     }
 
     this.previewContainer?.removeEventListener('scroll', this.handlePreviewScroll);
+    PREVIEW_SCROLL_INPUT_EVENTS.forEach((type) => {
+      this.previewContainer?.removeEventListener(type, this.handlePreviewScrollInput);
+    });
     this.headings = [];
     if (!preservePinnedHeading) {
       this.pinnedHeadingId = null;
+      this.userScrolledSincePin = false;
     }
   }
 
@@ -163,6 +173,9 @@ export class OutlineController {
 
     this.headings = headings;
     this.previewContainer.addEventListener('scroll', this.handlePreviewScroll, { passive: true });
+    PREVIEW_SCROLL_INPUT_EVENTS.forEach((type) => {
+      this.previewContainer.addEventListener(type, this.handlePreviewScrollInput, { passive: true });
+    });
 
     const pinnedHeading = this.getPinnedHeading();
     if (pinnedHeading) {
@@ -193,7 +206,7 @@ export class OutlineController {
     }
 
     const pinnedHeading = this.getPinnedHeading();
-    if (pinnedHeading && this.shouldKeepPinnedHeadingActive(pinnedHeading)) {
+    if (pinnedHeading && (!this.userScrolledSincePin || this.shouldKeepPinnedHeadingActive(pinnedHeading))) {
       this.setActiveItem(pinnedHeading.id, {
         behavior: 'auto',
         scrollIntoView: true,
@@ -202,6 +215,7 @@ export class OutlineController {
     }
 
     this.pinnedHeadingId = null;
+    this.userScrolledSincePin = false;
     const focusLine = this.previewContainer.scrollTop;
     let activeHeading = this.headings[0];
 
@@ -268,9 +282,28 @@ export class OutlineController {
     }
 
     this.pinnedHeadingId = headingId;
+    this.userScrolledSincePin = false;
     this.notifyHeadingNavigation(target, headingId);
     this.scrollHeadingIntoView(target, { behavior });
     this.setActiveItem(headingId, { behavior });
+    return true;
+  }
+
+  reanchorPinnedHeading() {
+    if (this.userScrolledSincePin) {
+      return false;
+    }
+
+    const pinnedHeading = this.getPinnedHeading();
+    if (!pinnedHeading || !pinnedHeading.isConnected || !this.previewContainer) {
+      return false;
+    }
+
+    this.scrollHeadingIntoView(pinnedHeading, { behavior: 'auto' });
+    this.setActiveItem(pinnedHeading.id, {
+      behavior: 'auto',
+      scrollIntoView: true,
+    });
     return true;
   }
 

@@ -600,3 +600,53 @@ test('WorkspacePreviewController coalesces HTML input and cancels it on a previe
   t.mock.timers.tick(120);
   assert.deepEqual(committed, ['first', 'latest']);
 });
+
+test('WorkspacePreviewController reanchors a pinned outline heading after preview layout hydration', async () => {
+  const events = [];
+  const controller = createController({
+    elements: {
+      previewContent: {
+        classList: { contains: () => false },
+        dataset: { renderPhase: 'ready' },
+      },
+    },
+    outlineController: {
+      reanchorPinnedHeading() {
+        events.push('reanchor-pinned-heading');
+        return true;
+      },
+      scheduleActiveHeadingUpdate() {
+        events.push('schedule-active-heading');
+      },
+    },
+    scrollSyncController: {
+      invalidatePreviewBlocks() {
+        events.push('invalidate-blocks');
+      },
+      lastInteractionSource: 'preview',
+      realignAfterLayoutChange() {
+        events.push('realign-layout');
+      },
+      syncEditorToPreview() {
+        events.push('sync-editor-to-preview');
+      },
+      warmPreviewBlocks({ onReady }) {
+        events.push('warm-blocks');
+        onReady();
+      },
+    },
+    session: { id: 'markdown-session' },
+  });
+
+  await new Promise((resolve) => {
+    controller.schedulePreviewLayoutSync({ delayMs: 0 });
+    setTimeout(resolve, 0);
+  });
+
+  assert.deepEqual(events, [
+    'invalidate-blocks',
+    'warm-blocks',
+    'reanchor-pinned-heading',
+    'sync-editor-to-preview',
+  ]);
+});

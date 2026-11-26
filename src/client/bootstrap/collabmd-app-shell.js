@@ -338,7 +338,7 @@ export class CollabMdAppShell {
           this.unfoldPreviewHeading(heading);
         }
         if (!Number.isFinite(sourceLine)) return;
-        this.scrollSyncController.suspendSync(250);
+        this.scrollSyncController.notePreviewNavigation(250);
         this.session?.scrollToLine(sourceLine, 0);
       },
       onWillOpen: () => this.commentUi?.closeDrawer(),
